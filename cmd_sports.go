@@ -36,10 +36,18 @@ func init() {
 				return errMissing("sport type or id")
 			}
 			ss := SportSettings{}
-			if v := IntFlag(flags, "ftp", -1); v >= 0 { ss.FTP = v }
-			if v := IntFlag(flags, "lthr", -1); v >= 0 { ss.LTHR = v }
-			if v := IntFlag(flags, "max-hr", -1); v >= 0 { ss.MaxHR = v }
-			if v := IntFlag(flags, "indoor-ftp", -1); v >= 0 { ss.IndoorFTP = v }
+			if v := IntFlag(flags, "ftp", -1); v >= 0 {
+				ss.FTP = v
+			}
+			if v := IntFlag(flags, "lthr", -1); v >= 0 {
+				ss.LTHR = v
+			}
+			if v := IntFlag(flags, "max-hr", -1); v >= 0 {
+				ss.MaxHR = v
+			}
+			if v := IntFlag(flags, "indoor-ftp", -1); v >= 0 {
+				ss.IndoorFTP = v
+			}
 			var result SportSettings
 			if err := client.Put("sport-settings", []string{args[0]}, map[string]string{"recalcHrZones": "false"}, ss, &result); err != nil {
 				return err

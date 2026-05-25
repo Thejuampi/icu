@@ -47,7 +47,7 @@ func (c *Client) Download(resource string, parts []string, query map[string]stri
 	path := BuildPath(c.athleteID, resource, parts...)
 	url := c.buildFullURL(path, query)
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

@@ -38,8 +38,12 @@ func init() {
 				return errMissing("folder id")
 			}
 			f := FolderCreate{}
-			if v := flags["name"]; v != "" { f.Name = v }
-			if v := flags["desc"]; v != "" { f.Description = v }
+			if v := flags["name"]; v != "" {
+				f.Name = v
+			}
+			if v := flags["desc"]; v != "" {
+				f.Description = v
+			}
 			var result Folder
 			if err := client.Put("folders", []string{args[0]}, nil, f, &result); err != nil {
 				return err

@@ -21,7 +21,9 @@ func queryFromFlags(flags map[string]string, keys ...string) map[string]string {
 func floatFlagVal(flags map[string]string, name string, defaultVal float64) float64 {
 	if v, ok := flags[name]; ok && v != "" {
 		var f float64
-		fmt.Sscanf(v, "%f", &f)
+		if _, err := fmt.Sscanf(v, "%f", &f); err != nil {
+			return defaultVal
+		}
 		return f
 	}
 	return defaultVal

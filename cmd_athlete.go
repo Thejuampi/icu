@@ -2,7 +2,7 @@ package main
 
 func init() {
 	RegisterCommand("athlete", "show", &Command{
-		Usage: "athlete show",
+		Usage:       "athlete show",
 		Description: "Get athlete profile with sportSettings.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			var a Athlete
@@ -14,12 +14,14 @@ func init() {
 	})
 
 	RegisterCommand("athlete", "update", &Command{
-		Usage: "athlete update --weight 81 --icu-weight 81 --height 1.81",
+		Usage:       "athlete update --weight 81 --icu-weight 81 --height 1.81",
 		Description: "Update athlete profile fields.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			u := AthleteUpdate{}
 			setIf := func(key string, set func()) {
-				if _, ok := flags[key]; ok { set() }
+				if _, ok := flags[key]; ok {
+					set()
+				}
 			}
 			setIf("weight", func() { v := floatFlagVal(flags, "weight", 0); u.Weight = &v })
 			setIf("icu-weight", func() { v := floatFlagVal(flags, "icu-weight", 0); u.ICUWeight = &v })
@@ -35,7 +37,7 @@ func init() {
 	})
 
 	RegisterCommand("athlete", "profile", &Command{
-		Usage: "athlete profile",
+		Usage:       "athlete profile",
 		Description: "Get athlete profile info.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			var p AthleteProfile
@@ -47,7 +49,7 @@ func init() {
 	})
 
 	RegisterCommand("athlete", "summary", &Command{
-		Usage: "athlete summary [--start DATE] [--end DATE]",
+		Usage:       "athlete summary [--start DATE] [--end DATE]",
 		Description: "Summary info for followed athletes.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			q := queryFromFlags(flags, "start", "end")
@@ -60,7 +62,7 @@ func init() {
 	})
 
 	RegisterCommand("athlete", "plan", &Command{
-		Usage: "athlete plan [update --plan-id ID --start-date DATE]",
+		Usage:       "athlete plan [update --plan-id ID --start-date DATE]",
 		Description: "Get or update training plan.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			if _, ok := flags["plan-id"]; ok {
@@ -84,7 +86,7 @@ func init() {
 	})
 
 	RegisterCommand("athlete", "settings", &Command{
-		Usage: "athlete settings --device desktop|phone|tablet",
+		Usage:       "athlete settings --device desktop|phone|tablet",
 		Description: "Get athlete settings for device class.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			device := StringFlag(flags, "device", "desktop")

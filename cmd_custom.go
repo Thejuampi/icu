@@ -52,8 +52,12 @@ func init() {
 				return errMissing("item id")
 			}
 			item := CustomItem{}
-			if v := flags["name"]; v != "" { item.Name = v }
-			if v := flags["type"]; v != "" { item.Type = v }
+			if v := flags["name"]; v != "" {
+				item.Name = v
+			}
+			if v := flags["type"]; v != "" {
+				item.Type = v
+			}
 			var result CustomItem
 			if err := client.Put("custom-item", []string{args[0]}, nil, item, &result); err != nil {
 				return err

@@ -38,8 +38,12 @@ func init() {
 				return errMissing("gear id")
 			}
 			g := Gear{}
-			if v := flags["name"]; v != "" { g.Name = v }
-			if v := flags["distance"]; v != "" { g.Distance = floatFlagVal(flags, "distance", 0) }
+			if v := flags["name"]; v != "" {
+				g.Name = v
+			}
+			if v := flags["distance"]; v != "" {
+				g.Distance = floatFlagVal(flags, "distance", 0)
+			}
 			var result Gear
 			if err := client.Put("gear", []string{args[0]}, nil, g, &result); err != nil {
 				return err

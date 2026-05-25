@@ -26,7 +26,7 @@ func LookupCommand(resource, action string) (*Command, bool) {
 }
 
 func AllResources() []string {
-	var keys []string
+	keys := make([]string, 0, len(commands))
 	for k := range commands {
 		keys = append(keys, k)
 	}

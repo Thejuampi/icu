@@ -86,31 +86,44 @@ func parseFlags(args []string) map[string]string {
 	var positional []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if strings.HasPrefix(arg, "--") {
+		switch {
+		case strings.HasPrefix(arg, "--"):
 			name := strings.TrimPrefix(arg, "--")
-			if strings.Contains(name, "=") {
-				parts := strings.SplitN(name, "=", 2)
-				flags[parts[0]] = parts[1]
-			} else if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-				flags[name] = args[i+1]
-				i++
-			} else {
-				flags[name] = "true"
-			}
-		} else if strings.HasPrefix(arg, "-") && len(arg) == 2 {
+			i = parseLongFlag(flags, args, i, name)
+		case strings.HasPrefix(arg, "-") && len(arg) == 2:
 			name := arg[1:]
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				flags[string(name)] = args[i+1]
-				i++
-			} else {
-				flags[string(name)] = "true"
-			}
-		} else {
+			i = parseShortFlag(flags, args, i, name)
+		default:
 			positional = append(positional, arg)
 		}
 	}
 	flags["_posargs_"] = strings.Join(positional, " ")
 	return flags
+}
+
+func parseLongFlag(flags map[string]string, args []string, i int, name string) int {
+	switch {
+	case strings.Contains(name, "="):
+		parts := strings.SplitN(name, "=", 2)
+		flags[parts[0]] = parts[1]
+	case i+1 < len(args) && !strings.HasPrefix(args[i+1], "--"):
+		flags[name] = args[i+1]
+		return i + 1
+	default:
+		flags[name] = "true"
+	}
+	return i
+}
+
+func parseShortFlag(flags map[string]string, args []string, i int, name string) int {
+	switch {
+	case i+1 < len(args) && !strings.HasPrefix(args[i+1], "-"):
+		flags[name] = args[i+1]
+		return i + 1
+	default:
+		flags[name] = "true"
+	}
+	return i
 }
 
 func printHelp() {
@@ -125,7 +138,7 @@ func printHelp() {
 	fmt.Println()
 	fmt.Println("Resources:")
 
-	var resources []string
+	resources := make([]string, 0, len(commands))
 	for k := range commands {
 		resources = append(resources, k)
 	}

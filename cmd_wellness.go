@@ -30,23 +30,31 @@ func init() {
 	})
 
 	RegisterCommand("wellness", "update", &Command{
-		Usage: "wellness update <date> --weight 81 --resting-hr 50 --hrv 72.5 [--sleep-secs 28800] [--locked]",
+		Usage:       "wellness update <date> --weight 81 --resting-hr 50 --hrv 72.5 [--sleep-secs 28800] [--locked]",
 		Description: "Update wellness record for a date.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			if len(args) == 0 {
 				return errMissing("date (YYYY-MM-DD)")
 			}
 			w := Wellness{}
-			if _, ok := flags["weight"]; ok { w.Weight = floatFlagVal(flags, "weight", 0) }
+			if _, ok := flags["weight"]; ok {
+				w.Weight = floatFlagVal(flags, "weight", 0)
+			}
 			w.RestingHR = IntFlag(flags, "resting-hr", -999)
 			if w.RestingHR == -999 {
 				w.RestingHR = 0
 			}
-			if _, ok := flags["hrv"]; ok { w.HRV = floatFlagVal(flags, "hrv", 0) }
+			if _, ok := flags["hrv"]; ok {
+				w.HRV = floatFlagVal(flags, "hrv", 0)
+			}
 			w.SleepSecs = IntFlag(flags, "sleep-secs", -1)
-			if w.SleepSecs == -1 { w.SleepSecs = 0 }
+			if w.SleepSecs == -1 {
+				w.SleepSecs = 0
+			}
 			w.SleepScore = floatFlagVal(flags, "sleep-score", -1)
-			if w.SleepScore == -1 { w.SleepScore = 0 }
+			if w.SleepScore == -1 {
+				w.SleepScore = 0
+			}
 			w.Locked = BoolFlag(flags, "locked")
 			var result Wellness
 			if err := client.Put("wellness", []string{args[0]}, nil, w, &result); err != nil {

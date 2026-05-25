@@ -137,11 +137,11 @@ func init() {
 		Description: "Create a manual activity.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			a := Activity{
-				Type:         StringFlag(flags, "type", "Ride"),
-				Name:         StringFlag(flags, "name", ""),
-				MovingTime:   IntFlag(flags, "moving-time", 0),
-				Distance:     floatFlagVal(flags, "distance", 0),
-				TrainingLoad: IntFlag(flags, "training-load", 0),
+				Type:           StringFlag(flags, "type", "Ride"),
+				Name:           StringFlag(flags, "name", ""),
+				MovingTime:     IntFlag(flags, "moving-time", 0),
+				Distance:       floatFlagVal(flags, "distance", 0),
+				TrainingLoad:   IntFlag(flags, "training-load", 0),
 				StartDateLocal: StringFlag(flags, "start-date", ""),
 			}
 			var result Activity

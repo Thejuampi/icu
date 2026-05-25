@@ -42,14 +42,14 @@ func loadConfig() (*Config, error) {
 
 func saveConfig(cfg *Config) error {
 	dir := configDir()
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configPath(), data, 0600)
+	return os.WriteFile(configPath(), data, 0o600)
 }
 
 func ResolveAPIKey(flags map[string]string) string {

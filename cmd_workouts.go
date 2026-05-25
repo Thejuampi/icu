@@ -33,12 +33,12 @@ func init() {
 		Description: "Create a workout.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			w := WorkoutEx{
-				Name:          StringFlag(flags, "name", ""),
-				Type:          StringFlag(flags, "type", "Ride"),
-				FolderID:      IntFlag(flags, "folder-id", 0),
-				Description:   StringFlag(flags, "desc", ""),
-				TrainingLoad:  IntFlag(flags, "training-load", 0),
-				MovingTime:    IntFlag(flags, "moving-time", 0),
+				Name:         StringFlag(flags, "name", ""),
+				Type:         StringFlag(flags, "type", "Ride"),
+				FolderID:     IntFlag(flags, "folder-id", 0),
+				Description:  StringFlag(flags, "desc", ""),
+				TrainingLoad: IntFlag(flags, "training-load", 0),
+				MovingTime:   IntFlag(flags, "moving-time", 0),
 			}
 			var result Workout
 			if err := client.Post("workouts", nil, nil, w, &result); err != nil {
@@ -56,8 +56,12 @@ func init() {
 				return errMissing("workout id")
 			}
 			w := WorkoutEx{}
-			if v := flags["name"]; v != "" { w.Name = v }
-			if v := flags["desc"]; v != "" { w.Description = v }
+			if v := flags["name"]; v != "" {
+				w.Name = v
+			}
+			if v := flags["desc"]; v != "" {
+				w.Description = v
+			}
 			var result Workout
 			if err := client.Put("workouts", []string{args[0]}, nil, w, &result); err != nil {
 				return err

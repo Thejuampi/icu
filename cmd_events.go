@@ -6,7 +6,7 @@ import (
 )
 
 func osReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
-func jsonUnmarshal(data []byte, v any) error  { return json.Unmarshal(data, v) }
+func jsonUnmarshal(data []byte, v any) error { return json.Unmarshal(data, v) }
 
 func init() {
 	RegisterCommand("events", "list", &Command{
@@ -41,7 +41,7 @@ func init() {
 	})
 
 	RegisterCommand("events", "create", &Command{
-		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE [--moving-time SECS] [--training-load N] [--desc DESC]",
+		Usage:       "events create --category WORKOUT --type Ride --name NAME --start-date DATE [--moving-time SECS] [--training-load N] [--desc DESC]",
 		Description: "Create calendar event.",
 		Run: func(args []string, flags map[string]string, client *Client) error {
 			ev := EventEx{
