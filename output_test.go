@@ -1,10 +1,12 @@
-package main
+package icu_test
 
 import (
 	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
+
+	icu "github.com/Thejuampi/icu"
 )
 
 func TestWriteJSON(t *testing.T) {
@@ -17,7 +19,7 @@ func TestWriteJSON(t *testing.T) {
 		Age  int    `json:"age"`
 	}
 
-	err := WriteJSON(&buf, S{Name: "Juan", Age: 36})
+	err := icu.WriteJSON(&buf, S{Name: "Juan", Age: 36})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +43,7 @@ func TestWriteCompactJSON(t *testing.T) {
 		Name string `json:"name"`
 	}
 
-	err := WriteCompactJSON(&buf, S{Name: "Juan"})
+	err := icu.WriteCompactJSON(&buf, S{Name: "Juan"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +59,7 @@ func TestWriteCSV(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err := WriteCSV(&buf, []string{"name", "age"}, [][]string{{"Juan", "36"}, {"Ana", "28"}})
+	err := icu.WriteCSV(&buf, []string{"name", "age"}, [][]string{{"Juan", "36"}, {"Ana", "28"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +75,7 @@ func TestWriteTable(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err := WriteTable(&buf, []string{"Name", "Age"}, [][]string{{"Juan", "36"}})
+	err := icu.WriteTable(&buf, []string{"Name", "Age"}, [][]string{{"Juan", "36"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,7 @@ ifeq ($(OS),Windows_NT)
 endif
 
 build:
-	go build -o $(BIN) .
+	go build -o $(BIN) ./cmd/icu/
 
 test:
 	go test ./... -count=1
@@ -27,8 +27,8 @@ lint-fix:
 	golangci-lint run --fix ./...
 
 fmt:
-	gofumpt -w .
-	goimports -w .
+	gofumpt -w . ./cmd/icu/
+	goimports -w . ./cmd/icu/
 
 vet:
 	go vet ./...
@@ -40,7 +40,7 @@ mutation:
 ci: fmt lint vet test-cover test-race build
 
 install: build
-	go install .
+	go install ./cmd/icu/
 
 clean:
 	rm -rf bin/

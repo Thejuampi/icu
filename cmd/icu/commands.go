@@ -1,10 +1,12 @@
 package main
 
+import icu "github.com/Thejuampi/icu"
+
 type Command struct {
 	Name        string
 	Usage       string
 	Description string
-	Run         func(args []string, flags map[string]string, client *Client) error
+	Run         func(args []string, flags map[string]string, client *icu.Client) error
 }
 
 //nolint:gochecknoglobals // command registry is an intentional pattern

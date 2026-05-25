@@ -1,4 +1,4 @@
-package main
+package icu
 
 import (
 	"net/url"

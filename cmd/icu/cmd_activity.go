@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+
+	icu "github.com/Thejuampi/icu"
 )
 
 var errMissingRequired = errors.New("missing required argument")
@@ -17,7 +19,7 @@ func init() {
 		Name:        "",
 		Usage:       "activity <id> show [--intervals]",
 		Description: "Get a single activity.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			return activityCmd(args, client)
 		},
 	})
@@ -26,12 +28,12 @@ func init() {
 		Name:        "",
 		Usage:       "activity <id> update --name NAME [--desc DESC] [--type Ride]",
 		Description: "Update an activity.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
 
-			var a Activity
+			var a icu.Activity
 			if v := flags["name"]; v != "" {
 				a.Name = v
 			}
@@ -44,12 +46,12 @@ func init() {
 				a.Type = v
 			}
 
-			var result Activity
+			var result icu.Activity
 			if err := client.Put("activity", []string{args[0]}, nil, a, &result); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), result)
+			return icu.WriteJSON(osStdout(), result)
 		},
 	})
 
@@ -57,17 +59,17 @@ func init() {
 		Name:        "",
 		Usage:       "activity <id> delete",
 		Description: "Delete an activity.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
 
-			var resp DeleteResponse
+			var resp icu.DeleteResponse
 			if err := client.Delete("activity", []string{args[0]}, nil, &resp); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), resp)
+			return icu.WriteJSON(osStdout(), resp)
 		},
 	})
 
@@ -75,17 +77,17 @@ func init() {
 		Name:        "",
 		Usage:       "activity <id> intervals",
 		Description: "Get detected intervals.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
 
-			var dto IntervalsDTO
+			var dto icu.IntervalsDTO
 			if err := client.Get("activity", []string{args[0], "intervals"}, nil, &dto); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), dto)
+			return icu.WriteJSON(osStdout(), dto)
 		},
 	})
 
@@ -93,19 +95,19 @@ func init() {
 		Name:        "",
 		Usage:       "activity <id> streams [--types watts,heartrate,cadence]",
 		Description: "Get activity streams.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
 
 			q := queryFromFlags(flags, "types")
 
-			var streams []ActivityStream
+			var streams []icu.ActivityStream
 			if err := client.Get("activity", []string{args[0], "streams"}, q, &streams); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), streams)
+			return icu.WriteJSON(osStdout(), streams)
 		},
 	})
 
@@ -117,7 +119,7 @@ func init() {
 		Name:        "",
 		Usage:       "activity <id> power-vs-hr",
 		Description: "Get power vs HR data.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -127,7 +129,7 @@ func init() {
 				return err
 			}
 
-			return WriteJSON(osStdout(), v)
+			return icu.WriteJSON(osStdout(), v)
 		},
 	})
 
@@ -139,7 +141,7 @@ func init() {
 		Name:        "",
 		Usage:       "activity <id> weather",
 		Description: "Get weather summary (alias for weather-summary).",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -149,7 +151,7 @@ func init() {
 				return err
 			}
 
-			return WriteJSON(osStdout(), v)
+			return icu.WriteJSON(osStdout(), v)
 		},
 	})
 
@@ -157,7 +159,7 @@ func init() {
 		Name:        "",
 		Usage:       "activity <id> file",
 		Description: "Download original activity file.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -181,25 +183,25 @@ func init() {
 	registerActivityDetail("messages", "Get activity comments.")
 }
 
-func activityCmd(args []string, client *Client) error {
+func activityCmd(args []string, client *icu.Client) error {
 	if len(args) == 0 {
 		return errMissing("activity id")
 	}
 
-	var a Activity
+	var a icu.Activity
 	if err := client.Get("activity", []string{args[0]}, nil, &a); err != nil {
 		return err
 	}
 
-	return WriteJSON(osStdout(), a)
+	return icu.WriteJSON(osStdout(), a)
 }
 
 func registerActivityCurve(name, desc string) {
 	RegisterCommand("activity", name, &Command{
 		Name:        "",
-		Usage:       "activity <id> " + name,
+		Usage:       "icu.Activity <id> " + name,
 		Description: desc,
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -209,7 +211,7 @@ func registerActivityCurve(name, desc string) {
 				return err
 			}
 
-			return WriteJSON(osStdout(), v)
+			return icu.WriteJSON(osStdout(), v)
 		},
 	})
 }
@@ -217,9 +219,9 @@ func registerActivityCurve(name, desc string) {
 func registerActivityDetail(name, desc string, queryKeys ...string) {
 	RegisterCommand("activity", name, &Command{
 		Name:        "",
-		Usage:       "activity <id> " + name,
+		Usage:       "icu.Activity <id> " + name,
 		Description: desc,
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -231,7 +233,7 @@ func registerActivityDetail(name, desc string, queryKeys ...string) {
 				return err
 			}
 
-			return WriteJSON(osStdout(), v)
+			return icu.WriteJSON(osStdout(), v)
 		},
 	})
 }
@@ -239,9 +241,9 @@ func registerActivityDetail(name, desc string, queryKeys ...string) {
 func registerActivityDownload(name string) {
 	RegisterCommand("activity", name, &Command{
 		Name:        "",
-		Usage:       "activity <id> " + name,
+		Usage:       "icu.Activity <id> " + name,
 		Description: "Download " + name + ".",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}

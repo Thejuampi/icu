@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	icu "github.com/Thejuampi/icu"
 )
 
 func osReadFile(path string) ([]byte, error) {
@@ -29,18 +31,18 @@ func init() {
 		Name:        "",
 		Usage:       "events list --oldest DATE --newest DATE [--category WORKOUT] [--ext zwo|mrc|erg|fit] [--resolve]",
 		Description: "List calendar events.",
-		Run: func(_ []string, flags map[string]string, client *Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			q := queryFromFlags(flags, "oldest", "newest", "category", "ext", "limit", "calendar_id")
 			if BoolFlag(flags, "resolve") {
 				q["resolve"] = strTrue
 			}
 
-			var events []Event
+			var events []icu.Event
 			if err := client.Get("events", nil, q, &events); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), events)
+			return icu.WriteJSON(osStdout(), events)
 		},
 	})
 
@@ -48,17 +50,17 @@ func init() {
 		Name:        "",
 		Usage:       "events get <id>",
 		Description: "Get event by ID.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
 
-			var e Event
+			var e icu.Event
 			if err := client.Get("events", []string{args[0]}, nil, &e); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), e)
+			return icu.WriteJSON(osStdout(), e)
 		},
 	})
 
@@ -67,25 +69,25 @@ func init() {
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
 			" [--moving-time SECS] [--training-load N] [--desc DESC]",
 		Description: "Create calendar event.",
-		Run: func(_ []string, flags map[string]string, client *Client) error {
-			var ev EventEx
-			ev.Category = StringFlag(flags, "category", "WORKOUT")
-			ev.Type = StringFlag(flags, "type", "Ride")
-			ev.Name = StringFlag(flags, "name", "")
-			ev.StartDateLocal = StringFlag(flags, "start-date", "")
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			var ev icu.EventEx
+			ev.Category = icu.StringFlag(flags, "category", "WORKOUT")
+			ev.Type = icu.StringFlag(flags, "type", "Ride")
+			ev.Name = icu.StringFlag(flags, "name", "")
+			ev.StartDateLocal = icu.StringFlag(flags, "start-date", "")
 			ev.MovingTime = IntFlag(flags, "moving-time", 0)
 			ev.TrainingLoad = IntFlag(flags, "training-load", 0)
-			ev.Description = StringFlag(flags, "desc", "")
-			ev.Color = StringFlag(flags, "color", "")
+			ev.Description = icu.StringFlag(flags, "desc", "")
+			ev.Color = icu.StringFlag(flags, "color", "")
 			ev.Indoor = BoolFlag(flags, "indoor")
-			ev.ExternalID = StringFlag(flags, "external-id", "")
+			ev.ExternalID = icu.StringFlag(flags, "external-id", "")
 
-			var result Event
+			var result icu.Event
 			if err := client.Post("events", nil, nil, ev, &result); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), result)
+			return icu.WriteJSON(osStdout(), result)
 		},
 	})
 
@@ -93,12 +95,12 @@ func init() {
 		Name:        "",
 		Usage:       "events update <id> --name NAME [--desc DESC]",
 		Description: "Update calendar event.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
 
-			var ev EventEx
+			var ev icu.EventEx
 			if v := flags["name"]; v != "" {
 				ev.Name = v
 			}
@@ -111,12 +113,12 @@ func init() {
 				ev.TrainingLoad = IntFlag(flags, "training-load", 0)
 			}
 
-			var result Event
+			var result icu.Event
 			if err := client.Put("events", []string{args[0]}, nil, ev, &result); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), result)
+			return icu.WriteJSON(osStdout(), result)
 		},
 	})
 
@@ -124,7 +126,7 @@ func init() {
 		Name:        "",
 		Usage:       "events delete <id>",
 		Description: "Delete calendar event.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
@@ -137,12 +139,12 @@ func init() {
 		Name:        "",
 		Usage:       "events download <id> --ext zwo|mrc|erg|fit",
 		Description: "Download planned workout file.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
 
-			ext := StringFlag(flags, "ext", "zwo")
+			ext := icu.StringFlag(flags, "ext", "zwo")
 
 			data, err := client.Download("events", []string{args[0], "download." + ext}, nil)
 			if err != nil {
@@ -161,13 +163,13 @@ func init() {
 		Name:        "",
 		Usage:       "events tags",
 		Description: "List event tags.",
-		Run: func(_ []string, _ map[string]string, client *Client) error {
+		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var tags []string
 			if err := client.Get("event-tags", nil, nil, &tags); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), tags)
+			return icu.WriteJSON(osStdout(), tags)
 		},
 	})
 }

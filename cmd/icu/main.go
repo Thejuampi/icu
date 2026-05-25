@@ -5,6 +5,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	icu "github.com/Thejuampi/icu"
 )
 
 func main() {
@@ -69,7 +71,7 @@ func executeCommand(resource, action string, posArgs []string, flags map[string]
 		return
 	}
 
-	apiKey := ResolveAPIKey(flags)
+	apiKey := icu.ResolveAPIKey(flags)
 	if apiKey == "" {
 		fmt.Fprintln(os.Stderr, "Error: API key required. Set INTERVALS_ICU_API_KEY or use --api-key.")
 		os.Exit(1)
@@ -82,8 +84,8 @@ func executeCommand(resource, action string, posArgs []string, flags map[string]
 		os.Exit(1)
 	}
 
-	athleteID := ResolveAthleteID(flags)
-	client := NewClient(apiKey, athleteID)
+	athleteID := icu.ResolveAthleteID(flags)
+	client := icu.NewClient(apiKey, athleteID)
 
 	if err := cmd.Run(posArgs, flags, client); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

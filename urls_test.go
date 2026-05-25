@@ -1,6 +1,10 @@
-package main
+package icu_test
 
-import "testing"
+import (
+	"testing"
+
+	icu "github.com/Thejuampi/icu"
+)
 
 func TestBuildPath(t *testing.T) {
 	t.Parallel()
@@ -26,7 +30,7 @@ func TestBuildPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := BuildPath(tt.athleteID, tt.resource, tt.parts...)
+			got := icu.BuildPath(tt.athleteID, tt.resource, tt.parts...)
 			if got != tt.want {
 				t.Errorf("BuildPath(%q, %q, %v) = %q, want %q",
 					tt.athleteID, tt.resource, tt.parts, got, tt.want)
@@ -69,7 +73,7 @@ func TestBuildURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := BuildURL(tt.path, tt.query)
+			got := icu.BuildURL(tt.path, tt.query)
 			if got != tt.want {
 				t.Errorf("BuildURL(%q, %v) = %q, want %q", tt.path, tt.query, got, tt.want)
 			}

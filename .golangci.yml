@@ -74,9 +74,12 @@ linters-settings:
       main:
         allow:
           - $gostd
+          - github.com/Thejuampi/icu
   wrapcheck:
     ignore-sigs:
       - 'fmt.Errorf('
+    ignore-package-globs:
+      - github.com/Thejuampi/icu
   tagliatelle:
     case:
       rules:
@@ -104,7 +107,9 @@ issues:
         - thelper
     - path: cmd_.*\.go
       linters:
-        - gochecknoinits
+        - wrapcheck          # CLI cmd files pass library errors through intentionally
+        - gochecknoinits     # init() is the standard Go self-registration pattern
+
   exclude-dirs:
     - bin
     - vendor

@@ -41,14 +41,6 @@ func BoolFlag(args map[string]string, name string) bool {
 	return ok && (v == strTrue || v == "1" || v == "")
 }
 
-func StringFlag(args map[string]string, name, defaultVal string) string {
-	if v, ok := args[name]; ok && v != "" {
-		return v
-	}
-
-	return defaultVal
-}
-
 func IntFlag(args map[string]string, name string, defaultVal int) int {
 	if v, ok := args[name]; ok && v != "" {
 		var val int

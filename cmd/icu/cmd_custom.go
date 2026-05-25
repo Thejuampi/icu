@@ -1,17 +1,19 @@
 package main
 
+import icu "github.com/Thejuampi/icu"
+
 func init() {
 	RegisterCommand("custom", "list", &Command{
 		Name:        "",
 		Usage:       "custom list",
 		Description: "List custom items.",
-		Run: func(_ []string, _ map[string]string, client *Client) error {
-			var items []CustomItem
+		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
+			var items []icu.CustomItem
 			if err := client.Get("custom-item", nil, nil, &items); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), items)
+			return icu.WriteJSON(osStdout(), items)
 		},
 	})
 
@@ -19,17 +21,17 @@ func init() {
 		Name:        "",
 		Usage:       "custom get <id>",
 		Description: "Get a custom item.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("item id")
 			}
 
-			var item CustomItem
+			var item icu.CustomItem
 			if err := client.Get("custom-item", []string{args[0]}, nil, &item); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), item)
+			return icu.WriteJSON(osStdout(), item)
 		},
 	})
 
@@ -37,17 +39,17 @@ func init() {
 		Name:        "",
 		Usage:       "custom create --name NAME --type FITNESS_CHART|ACTIVITY_FIELD|...",
 		Description: "Create a custom item.",
-		Run: func(_ []string, flags map[string]string, client *Client) error {
-			var item CustomItem
-			item.Name = StringFlag(flags, "name", "")
-			item.Type = StringFlag(flags, "type", "")
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			var item icu.CustomItem
+			item.Name = icu.StringFlag(flags, "name", "")
+			item.Type = icu.StringFlag(flags, "type", "")
 
-			var result CustomItem
+			var result icu.CustomItem
 			if err := client.Post("custom-item", nil, nil, item, &result); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), result)
+			return icu.WriteJSON(osStdout(), result)
 		},
 	})
 
@@ -55,12 +57,12 @@ func init() {
 		Name:        "",
 		Usage:       "custom update <id> --name NAME",
 		Description: "Update a custom item.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("item id")
 			}
 
-			var item CustomItem
+			var item icu.CustomItem
 			if v := flags["name"]; v != "" {
 				item.Name = v
 			}
@@ -69,12 +71,12 @@ func init() {
 				item.Type = v
 			}
 
-			var result CustomItem
+			var result icu.CustomItem
 			if err := client.Put("custom-item", []string{args[0]}, nil, item, &result); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), result)
+			return icu.WriteJSON(osStdout(), result)
 		},
 	})
 
@@ -82,7 +84,7 @@ func init() {
 		Name:        "",
 		Usage:       "custom delete <id>",
 		Description: "Delete a custom item.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("item id")
 			}

@@ -1,4 +1,5 @@
-package main
+//nolint:testpackage // white-box tests need access to Client internals for httptest setup
+package icu
 
 import (
 	"io"

@@ -1,20 +1,22 @@
 package main
 
+import icu "github.com/Thejuampi/icu"
+
 //nolint:gocognit,funlen
 func init() {
 	RegisterCommand("wellness", "list", &Command{
 		Name:        "",
 		Usage:       "wellness list --oldest DATE --newest DATE [--fields f1,f2]",
 		Description: "List wellness records for a date range.",
-		Run: func(_ []string, flags map[string]string, client *Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			q := queryFromFlags(flags, "oldest", "newest", "fields")
 
-			var w []Wellness
+			var w []icu.Wellness
 			if err := client.Get("wellness", nil, q, &w); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), w)
+			return icu.WriteJSON(osStdout(), w)
 		},
 	})
 
@@ -22,17 +24,17 @@ func init() {
 		Name:        "",
 		Usage:       "wellness get <date>",
 		Description: "Get wellness record for a date.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("date (YYYY-MM-DD)")
 			}
 
-			var w Wellness
+			var w icu.Wellness
 			if err := client.Get("wellness", []string{args[0]}, nil, &w); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), w)
+			return icu.WriteJSON(osStdout(), w)
 		},
 	})
 
@@ -40,12 +42,12 @@ func init() {
 		Name:        "",
 		Usage:       "wellness update <date> --weight 81 --resting-hr 50 --hrv 72.5 [--sleep-secs 28800] [--locked]",
 		Description: "Update wellness record for a date.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("date (YYYY-MM-DD)")
 			}
 
-			var w Wellness
+			var w icu.Wellness
 			if _, ok := flags["weight"]; ok {
 				w.Weight = floatFlagVal(flags, "weight", 0)
 			}
@@ -71,12 +73,12 @@ func init() {
 
 			w.Locked = BoolFlag(flags, "locked")
 
-			var result Wellness
+			var result icu.Wellness
 			if err := client.Put("wellness", []string{args[0]}, nil, w, &result); err != nil {
 				return err
 			}
 
-			return WriteJSON(osStdout(), result)
+			return icu.WriteJSON(osStdout(), result)
 		},
 	})
 
@@ -84,8 +86,8 @@ func init() {
 		Name:        "",
 		Usage:       "wellness bulk --file FILE.json",
 		Description: "Bulk update wellness records from a JSON array file.",
-		Run: func(_ []string, flags map[string]string, client *Client) error {
-			fpath := StringFlag(flags, "file", "")
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			fpath := icu.StringFlag(flags, "file", "")
 			if fpath == "" {
 				return errMissing("--file")
 			}
@@ -95,7 +97,7 @@ func init() {
 				return err
 			}
 
-			var records []Wellness
+			var records []icu.Wellness
 			if err := jsonUnmarshal(data, &records); err != nil {
 				return err
 			}
@@ -108,7 +110,7 @@ func init() {
 		Name:        "",
 		Usage:       "wellness upload <file.csv>",
 		Description: "Upload wellness CSV file.",
-		Run: func(args []string, _ map[string]string, client *Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("csv file path")
 			}

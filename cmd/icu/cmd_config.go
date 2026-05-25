@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	icu "github.com/Thejuampi/icu"
 )
 
 //nolint:gocognit
@@ -11,13 +13,13 @@ func init() {
 		Name:        "",
 		Usage:       "config show",
 		Description: "Show current configuration.",
-		Run: func(_ []string, _ map[string]string, _ *Client) error {
-			cfg, err := loadConfig()
+		Run: func(_ []string, _ map[string]string, _ *icu.Client) error {
+			cfg, err := icu.LoadConfig()
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			fmt.Fprintf(os.Stdout, "Config file: %s\n\n", configPath())
+			fmt.Fprintf(os.Stdout, "config file: %s\n\n", icu.ConfigPath())
 			if cfg.APIKey != "" {
 				fmt.Fprintf(os.Stdout, "  api_key:    %s...%s\n", cfg.APIKey[:4], cfg.APIKey[len(cfg.APIKey)-4:])
 			} else {
@@ -44,10 +46,10 @@ func init() {
 		Name:        "",
 		Usage:       "config set --api-key KEY [--athlete-id ID] [--output json|csv|table]",
 		Description: "Set configuration values.",
-		Run: func(_ []string, flags map[string]string, _ *Client) error {
-			cfg, _ := loadConfig()
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			cfg, _ := icu.LoadConfig()
 			if cfg == nil {
-				var empty Config
+				var empty icu.Config
 				cfg = &empty
 			}
 
@@ -63,11 +65,11 @@ func init() {
 				cfg.Output = v
 			}
 
-			if err := saveConfig(cfg); err != nil {
+			if err := icu.SaveConfig(cfg); err != nil {
 				return fmt.Errorf("saving config: %w", err)
 			}
 
-			fmt.Fprintf(os.Stdout, "Config saved to %s\n", configPath())
+			fmt.Fprintf(os.Stdout, "config saved to %s\n", icu.ConfigPath())
 
 			return nil
 		},
@@ -77,8 +79,8 @@ func init() {
 		Name:        "",
 		Usage:       "config path",
 		Description: "Show config file path.",
-		Run: func(_ []string, _ map[string]string, _ *Client) error {
-			fmt.Fprintln(os.Stdout, configPath())
+		Run: func(_ []string, _ map[string]string, _ *icu.Client) error {
+			fmt.Fprintln(os.Stdout, icu.ConfigPath())
 
 			return nil
 		},

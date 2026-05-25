@@ -1,3 +1,3 @@
-module github.com/trainorrest/intervals-cli
+module github.com/Thejuampi/icu
 
-go 1.25.0
+go 1.26.0

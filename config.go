@@ -1,4 +1,4 @@
-package main
+package icu
 
 import (
 	"encoding/json"
@@ -22,12 +22,12 @@ func configDir() string {
 	return filepath.Join(home, ".icu")
 }
 
-func configPath() string {
+func ConfigPath() string {
 	return filepath.Join(configDir(), "config.json")
 }
 
-func loadConfig() (*Config, error) {
-	path := configPath()
+func LoadConfig() (*Config, error) {
+	path := ConfigPath()
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -48,7 +48,7 @@ func loadConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-func saveConfig(cfg *Config) error {
+func SaveConfig(cfg *Config) error {
 	dir := configDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("creating config dir: %w", err)
@@ -59,11 +59,19 @@ func saveConfig(cfg *Config) error {
 		return fmt.Errorf("encoding config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath(), data, 0o600); err != nil {
+	if err := os.WriteFile(ConfigPath(), data, 0o600); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 
 	return nil
+}
+
+func StringFlag(args map[string]string, name, defaultVal string) string {
+	if v, ok := args[name]; ok && v != "" {
+		return v
+	}
+
+	return defaultVal
 }
 
 func ResolveAPIKey(flags map[string]string) string {
@@ -75,7 +83,7 @@ func ResolveAPIKey(flags map[string]string) string {
 		return key
 	}
 
-	cfg, _ := loadConfig()
+	cfg, _ := LoadConfig()
 	if cfg != nil && cfg.APIKey != "" {
 		return cfg.APIKey
 	}
@@ -92,7 +100,7 @@ func ResolveAthleteID(flags map[string]string) string {
 		return id
 	}
 
-	cfg, _ := loadConfig()
+	cfg, _ := LoadConfig()
 	if cfg != nil && cfg.AthleteID != "" {
 		return cfg.AthleteID
 	}
@@ -103,7 +111,7 @@ func ResolveAthleteID(flags map[string]string) string {
 func ResolveOutputFormat(flags map[string]string) OutputFormat {
 	output := StringFlag(flags, "output", "")
 	if output == "" {
-		cfg, _ := loadConfig()
+		cfg, _ := LoadConfig()
 		if cfg != nil && cfg.Output != "" {
 			output = cfg.Output
 		}

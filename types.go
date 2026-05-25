@@ -1,4 +1,4 @@
-package main
+package icu
 
 type Athlete struct {
 	ID            string          `json:"id"`

@@ -1,14 +1,16 @@
-package main
+package icu_test
 
 import (
 	"encoding/json"
 	"testing"
+
+	icu "github.com/Thejuampi/icu"
 )
 
 func TestAthleteJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
-	var a Athlete
+	var a icu.Athlete
 	a.ID = "i123"
 	a.Name = "Juan"
 	a.Weight = 81
@@ -19,7 +21,7 @@ func TestAthleteJSONRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got Athlete
+	var got icu.Athlete
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +34,7 @@ func TestAthleteJSONRoundtrip(t *testing.T) {
 func TestActivityJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
-	var a Activity
+	var a icu.Activity
 	a.ID = "i151187748"
 	a.Name = "Morning Ride"
 	a.Type = "Ride"
@@ -45,7 +47,7 @@ func TestActivityJSONRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got Activity
+	var got icu.Activity
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +60,7 @@ func TestActivityJSONRoundtrip(t *testing.T) {
 func TestWellnessJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
-	var w Wellness
+	var w icu.Wellness
 	w.ID = "2026-05-24"
 	w.Weight = 81
 	w.RestingHR = 50
@@ -73,7 +75,7 @@ func TestWellnessJSONRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got Wellness
+	var got icu.Wellness
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +88,7 @@ func TestWellnessJSONRoundtrip(t *testing.T) {
 func TestEventJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
-	var e Event
+	var e icu.Event
 	e.Category = "WORKOUT"
 	e.Type = "Ride"
 	e.Name = "Intervals"
@@ -99,7 +101,7 @@ func TestEventJSONRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got Event
+	var got icu.Event
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +114,7 @@ func TestEventJSONRoundtrip(t *testing.T) {
 func TestSportSettingsJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
-	var s SportSettings
+	var s icu.SportSettings
 	s.Types = []string{"Ride", "VirtualRide"}
 	s.FTP = 290
 	s.LTHR = 178
@@ -123,7 +125,7 @@ func TestSportSettingsJSONRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got SportSettings
+	var got icu.SportSettings
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +138,7 @@ func TestSportSettingsJSONRoundtrip(t *testing.T) {
 func TestGearJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
-	var g Gear
+	var g icu.Gear
 	g.Name = "Carmelita"
 	g.Type = "Bike"
 	g.Distance = 22214500
@@ -147,7 +149,7 @@ func TestGearJSONRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got Gear
+	var got icu.Gear
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
