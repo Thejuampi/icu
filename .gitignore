@@ -1,0 +1,23 @@
+# Binary
+bin/
+*.exe
+
+# Coverage
+coverage.out
+coverage
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (just in case)
+*.pem
+*.key
+.env

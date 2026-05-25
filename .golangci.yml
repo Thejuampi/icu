@@ -1,0 +1,80 @@
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec
+    - bodyclose
+    - durationcheck
+    - gocritic
+    - gofumpt
+    - goimports
+    - misspell
+    - nilerr
+    - prealloc
+    - predeclared
+    - reassign
+    - revive
+    - stylecheck
+    - unconvert
+    - wastedassign
+    - copyloopvar
+
+linters-settings:
+  gofumpt:
+    extra-rules: true
+  gocritic:
+    enabled-checks:
+      - argOrder
+      - badCall
+      - dupArg
+      - dupBranchBody
+      - dupCase
+      - flagName
+      - nilValReturn
+      - offBy1
+      - weakCond
+      - assignOp
+      - boolExprSimplify
+      - builtinShadow
+      - commentedOutCode
+      - emptyFallthrough
+      - hexLiteral
+      - ifElseChain
+      - importShadow
+      - initClause
+      - methodExprCall
+      - nestingReduce
+      - paramTypeCombine
+      - ptrToRefParam
+      - regexpMust
+      - singleCaseSwitch
+      - sloppyLen
+      - switchTrue
+      - typeAssertChain
+      - typeSwitchVar
+      - underef
+      - unslice
+  revive:
+    rules:
+      - name: exported
+        disabled: true
+      - name: package-comments
+        disabled: true
+  gosec:
+    excludes:
+      - G104  # errcheck handles unchecked errors
+
+run:
+  timeout: 3m
+  go: "1.26"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-dirs:
+    - bin
+    - vendor
