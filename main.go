@@ -8,7 +8,9 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
+	const minArgs = 2
+
+	if len(os.Args) < minArgs {
 		printHelp()
 		os.Exit(1)
 	}
@@ -18,16 +20,20 @@ func main() {
 	args := os.Args[2:]
 
 	idFirst := isIDFirstResource(resource)
-	if idFirst && len(args) >= 2 && !strings.HasPrefix(args[0], "--") && !strings.HasPrefix(args[1], "--") {
+	if idFirst && len(args) >= minArgs && !strings.HasPrefix(args[0], "--") && !strings.HasPrefix(args[1], "--") {
 		flags := parseFlags(args[2:])
+
 		var posArgs []string
 		if pa, ok := flags["_posargs_"]; ok && pa != "" {
 			posArgs = strings.Fields(pa)
 		}
+
 		delete(flags, "_posargs_")
+
 		action = args[1]
 		posArgs = append([]string{args[0]}, posArgs...)
 		executeCommand(resource, action, posArgs, flags)
+
 		return
 	}
 
@@ -37,10 +43,12 @@ func main() {
 	}
 
 	flags := parseFlags(args)
+
 	var posArgs []string
 	if pa, ok := flags["_posargs_"]; ok && pa != "" {
 		posArgs = strings.Fields(pa)
 	}
+
 	delete(flags, "_posargs_")
 	executeCommand(resource, action, posArgs, flags)
 }
@@ -50,12 +58,14 @@ func isIDFirstResource(resource string) bool {
 	case "activity", "shared-event":
 		return true
 	}
+
 	return false
 }
 
 func executeCommand(resource, action string, posArgs []string, flags map[string]string) {
 	if _, ok := flags["help"]; ok || resource == "help" {
 		printHelp()
+
 		return
 	}
 
@@ -83,76 +93,89 @@ func executeCommand(resource, action string, posArgs []string, flags map[string]
 
 func parseFlags(args []string) map[string]string {
 	flags := map[string]string{}
+
 	var positional []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
+
+	for idx := 0; idx < len(args); idx++ {
+		arg := args[idx]
+
 		switch {
 		case strings.HasPrefix(arg, "--"):
 			name := strings.TrimPrefix(arg, "--")
-			i = parseLongFlag(flags, args, i, name)
+			idx = parseLongFlag(flags, args, idx, name)
 		case strings.HasPrefix(arg, "-") && len(arg) == 2:
 			name := arg[1:]
-			i = parseShortFlag(flags, args, i, name)
+			idx = parseShortFlag(flags, args, idx, name)
 		default:
 			positional = append(positional, arg)
 		}
 	}
+
 	flags["_posargs_"] = strings.Join(positional, " ")
+
 	return flags
 }
 
-func parseLongFlag(flags map[string]string, args []string, i int, name string) int {
+const splitCount = 2
+
+func parseLongFlag(flags map[string]string, args []string, idx int, name string) int {
 	switch {
 	case strings.Contains(name, "="):
-		parts := strings.SplitN(name, "=", 2)
+		parts := strings.SplitN(name, "=", splitCount)
 		flags[parts[0]] = parts[1]
-	case i+1 < len(args) && !strings.HasPrefix(args[i+1], "--"):
-		flags[name] = args[i+1]
-		return i + 1
+	case idx+1 < len(args) && !strings.HasPrefix(args[idx+1], "--"):
+		flags[name] = args[idx+1]
+
+		return idx + 1
 	default:
-		flags[name] = "true"
+		flags[name] = strTrue
 	}
-	return i
+
+	return idx
 }
 
-func parseShortFlag(flags map[string]string, args []string, i int, name string) int {
+func parseShortFlag(flags map[string]string, args []string, idx int, name string) int {
 	switch {
-	case i+1 < len(args) && !strings.HasPrefix(args[i+1], "-"):
-		flags[name] = args[i+1]
-		return i + 1
+	case idx+1 < len(args) && !strings.HasPrefix(args[idx+1], "-"):
+		flags[name] = args[idx+1]
+
+		return idx + 1
 	default:
-		flags[name] = "true"
+		flags[name] = strTrue
 	}
-	return i
+
+	return idx
 }
 
 func printHelp() {
-	fmt.Println("icu - Intervals.icu CLI")
-	fmt.Println()
-	fmt.Println("Usage: icu <resource> <action> [flags]")
-	fmt.Println()
-	fmt.Println("Global flags:")
-	fmt.Println("  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
-	fmt.Println("  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
-	fmt.Println("  --output FORMAT   Output format: json (default), csv, table")
-	fmt.Println()
-	fmt.Println("Resources:")
+	fmt.Fprintln(os.Stdout, "icu - Intervals.icu CLI")
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "Usage: icu <resource> <action> [flags]")
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "Global flags:")
+	fmt.Fprintln(os.Stdout, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
+	fmt.Fprintln(os.Stdout, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
+	fmt.Fprintln(os.Stdout, "  --output FORMAT   Output format: json (default), csv, table")
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "Resources:")
 
 	resources := make([]string, 0, len(commands))
 	for k := range commands {
 		resources = append(resources, k)
 	}
+
 	sort.Strings(resources)
 
 	for _, r := range resources {
 		acts := ActionsForResource(r)
 		sort.Strings(acts)
-		fmt.Printf("  %-15s  %s\n", r, strings.Join(acts, ", "))
+		fmt.Fprintf(os.Stdout, "  %-15s  %s\n", r, strings.Join(acts, ", "))
 	}
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  icu athlete show")
-	fmt.Println("  icu activities list --oldest 2026-05-20 --newest 2026-05-24")
-	fmt.Println("  icu wellness get 2026-05-24")
-	fmt.Println("  icu ftp show")
+
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "Examples:")
+	fmt.Fprintln(os.Stdout, "  icu athlete show")
+	fmt.Fprintln(os.Stdout, "  icu activities list --oldest 2026-05-20 --newest 2026-05-24")
+	fmt.Fprintln(os.Stdout, "  icu wellness get 2026-05-24")
+	fmt.Fprintln(os.Stdout, "  icu ftp show")
 }

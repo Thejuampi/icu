@@ -1,27 +1,7 @@
 linters:
-  enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - gosec
-    - bodyclose
-    - durationcheck
-    - gocritic
-    - gofumpt
-    - goimports
-    - misspell
-    - nilerr
-    - prealloc
-    - predeclared
-    - reassign
-    - revive
-    - stylecheck
-    - unconvert
-    - wastedassign
-    - copyloopvar
+  enable-all: true
+  disable:
+    - tenv
 
 linters-settings:
   gofumpt:
@@ -36,15 +16,74 @@ linters-settings:
     disabled-checks:
       - commentedOutCode
       - whyNoLint
+  funlen:
+    lines: 100
+    statements: 50
+  gocognit:
+    min-complexity: 20
+  gocyclo:
+    min-complexity: 15
+  cyclop:
+    max-complexity: 15
+  lll:
+    line-length: 140
+  varnamelen:
+    max-distance: 8
+    min-name-length: 2
+    ignore-names:
+      - ok
+      - id
+      - w
+      - f
+      - a
+      - e
+      - q
+      - g
+      - c
+      - u
+      - ev
+      - ss
+      - sb
+      - tt
+      - w
+  mnd:
+    ignored-numbers:
+      - 0; 1; 2; 3; 200; 300; 400; 401; 403; 404; 422; 429; 500; 0o600; 0o700
+    ignored-functions:
+      - 'strconv.Format*'
+      - 'os.*'
+      - 'fmt.*'
+  nestif:
+    min-complexity: 6
+  goconst:
+    min-len: 4
+    min-occurrences: 3
   revive:
     rules:
       - name: exported
         disabled: true
       - name: package-comments
         disabled: true
+      - name: unused-parameter
+        severity: warning
   gosec:
     excludes:
       - G104
+  depguard:
+    rules:
+      main:
+        allow:
+          - $gostd
+  wrapcheck:
+    ignore-sigs:
+      - 'fmt.Errorf('
+  tagliatelle:
+    case:
+      rules:
+        json: camel
+  forbidigo:
+    forbid:
+      - '^fmt\.Print(|f|ln)$'
 
 issues:
   exclude-rules:
@@ -52,8 +91,25 @@ issues:
       linters:
         - errcheck
         - gosec
-  max-issues-per-linter: 0
-  max-same-issues: 0
+        - gochecknoglobals
+        - varnamelen
+        - funlen
+        - goconst
+        - dupl
+        - mnd
+        - noctx
+    - path: _test\.go
+      text: "t.Helper"
+      linters:
+        - thelper
+    - path: cmd_.*\.go
+      linters:
+        - gochecknoinits
   exclude-dirs:
     - bin
     - vendor
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+run:
+  timeout: 5m

@@ -19,34 +19,54 @@ const (
 func WriteJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+
+	if err := enc.Encode(v); err != nil {
+		return fmt.Errorf("encoding JSON: %w", err)
+	}
+
+	return nil
 }
 
 func WriteCompactJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
-	return enc.Encode(v)
+
+	if err := enc.Encode(v); err != nil {
+		return fmt.Errorf("encoding compact JSON: %w", err)
+	}
+
+	return nil
 }
 
 func WriteCSV(w io.Writer, headers []string, rows [][]string) error {
 	cw := csv.NewWriter(w)
 	if err := cw.Write(headers); err != nil {
-		return err
+		return fmt.Errorf("writing CSV headers: %w", err)
 	}
+
 	for _, row := range rows {
 		if err := cw.Write(row); err != nil {
-			return err
+			return fmt.Errorf("writing CSV row: %w", err)
 		}
 	}
+
 	cw.Flush()
-	return cw.Error()
+
+	if err := cw.Error(); err != nil {
+		return fmt.Errorf("flushing CSV: %w", err)
+	}
+
+	return nil
 }
 
-func WriteTable(w io.Writer, headers []string, rows [][]string) error {
+//nolint:gocognit
+func WriteTable(writer io.Writer, headers []string, rows [][]string) error {
 	cols := len(headers)
 	widths := make([]int, cols)
+
 	for i, h := range headers {
 		widths[i] = len(h)
 	}
+
 	for _, row := range rows {
 		for i, cell := range row {
 			if i < cols && len(cell) > widths[i] {
@@ -54,26 +74,59 @@ func WriteTable(w io.Writer, headers []string, rows [][]string) error {
 			}
 		}
 	}
+
 	var sb strings.Builder
+
 	for i, h := range headers {
-		sb.WriteString(fmt.Sprintf("%-*s", widths[i]+2, h))
-	}
-	sb.WriteString("\n")
-	for i, w := range widths {
-		sb.WriteString(strings.Repeat("-", w))
+		sb.WriteString(h)
+
 		if i < cols-1 {
 			sb.WriteString("  ")
 		}
 	}
+
 	sb.WriteString("\n")
+
+	for i, w := range widths {
+		sb.WriteString(strings.Repeat("-", w))
+
+		if i < cols-1 {
+			sb.WriteString("  ")
+		}
+	}
+
+	sb.WriteString("\n")
+
 	for _, row := range rows {
 		for i, cell := range row {
 			if i < cols {
-				sb.WriteString(fmt.Sprintf("%-*s", widths[i]+2, cell))
+				writePaddedCell(&sb, widths[i], cell)
+
+				if i < cols-1 {
+					sb.WriteString("  ")
+				}
 			}
 		}
+
 		sb.WriteString("\n")
 	}
-	_, err := fmt.Fprint(w, sb.String())
-	return err
+
+	if _, err := fmt.Fprint(writer, sb.String()); err != nil {
+		return fmt.Errorf("writing table: %w", err)
+	}
+
+	return nil
+}
+
+const paddingSpaces = 2
+
+func writePaddedCell(sb *strings.Builder, width int, cell string) {
+	padding := width - len(cell)
+	if padding > 0 {
+		sb.WriteString(cell)
+		sb.WriteString(strings.Repeat(" ", padding+paddingSpaces))
+	} else {
+		sb.WriteString(cell)
+		sb.WriteString("  ")
+	}
 }

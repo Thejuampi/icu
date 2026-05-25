@@ -1,66 +1,85 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
+//nolint:gocognit
 func init() {
 	RegisterCommand("config", "show", &Command{
+		Name:        "",
 		Usage:       "config show",
 		Description: "Show current configuration.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(_ []string, _ map[string]string, _ *Client) error {
 			cfg, err := loadConfig()
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			fmt.Printf("Config file: %s\n\n", configPath())
+
+			fmt.Fprintf(os.Stdout, "Config file: %s\n\n", configPath())
 			if cfg.APIKey != "" {
-				fmt.Printf("  api_key:    %s...%s\n", cfg.APIKey[:4], cfg.APIKey[len(cfg.APIKey)-4:])
+				fmt.Fprintf(os.Stdout, "  api_key:    %s...%s\n", cfg.APIKey[:4], cfg.APIKey[len(cfg.APIKey)-4:])
 			} else {
-				fmt.Println("  api_key:    (not set)")
+				fmt.Fprintln(os.Stdout, "  api_key:    (not set)")
 			}
+
 			if cfg.AthleteID != "" {
-				fmt.Printf("  athlete_id: %s\n", cfg.AthleteID)
+				fmt.Fprintf(os.Stdout, "  athlete_id: %s\n", cfg.AthleteID)
 			} else {
-				fmt.Println("  athlete_id: 0 (default)")
+				fmt.Fprintln(os.Stdout, "  athlete_id: 0 (default)")
 			}
+
 			if cfg.Output != "" {
-				fmt.Printf("  output:     %s\n", cfg.Output)
+				fmt.Fprintf(os.Stdout, "  output:     %s\n", cfg.Output)
 			} else {
-				fmt.Println("  output:     json (default)")
+				fmt.Fprintln(os.Stdout, "  output:     json (default)")
 			}
+
 			return nil
 		},
 	})
 
 	RegisterCommand("config", "set", &Command{
+		Name:        "",
 		Usage:       "config set --api-key KEY [--athlete-id ID] [--output json|csv|table]",
 		Description: "Set configuration values.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
+		Run: func(_ []string, flags map[string]string, _ *Client) error {
 			cfg, _ := loadConfig()
 			if cfg == nil {
-				cfg = &Config{}
+				var empty Config
+				cfg = &empty
 			}
+
 			if v, ok := flags["api-key"]; ok {
 				cfg.APIKey = v
 			}
+
 			if v, ok := flags["athlete-id"]; ok {
 				cfg.AthleteID = v
 			}
+
 			if v, ok := flags["output"]; ok {
 				cfg.Output = v
 			}
+
 			if err := saveConfig(cfg); err != nil {
 				return fmt.Errorf("saving config: %w", err)
 			}
-			fmt.Printf("Config saved to %s\n", configPath())
+
+			fmt.Fprintf(os.Stdout, "Config saved to %s\n", configPath())
+
 			return nil
 		},
 	})
 
 	RegisterCommand("config", "path", &Command{
+		Name:        "",
 		Usage:       "config path",
 		Description: "Show config file path.",
-		Run: func(args []string, flags map[string]string, client *Client) error {
-			fmt.Println(configPath())
+		Run: func(_ []string, _ map[string]string, _ *Client) error {
+			fmt.Fprintln(os.Stdout, configPath())
+
 			return nil
 		},
 	})

@@ -7,12 +7,14 @@ type Command struct {
 	Run         func(args []string, flags map[string]string, client *Client) error
 }
 
+//nolint:gochecknoglobals // command registry is an intentional pattern
 var commands = map[string]map[string]*Command{}
 
 func RegisterCommand(resource, action string, cmd *Command) {
 	if commands[resource] == nil {
 		commands[resource] = map[string]*Command{}
 	}
+
 	commands[resource][action] = cmd
 }
 
@@ -22,6 +24,7 @@ func LookupCommand(resource, action string) (*Command, bool) {
 			return c, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -30,6 +33,7 @@ func AllResources() []string {
 	for k := range commands {
 		keys = append(keys, k)
 	}
+
 	return keys
 }
 
@@ -39,7 +43,9 @@ func ActionsForResource(resource string) []string {
 		for k := range r {
 			acts = append(acts, k)
 		}
+
 		return acts
 	}
+
 	return nil
 }
