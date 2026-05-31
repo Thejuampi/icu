@@ -2,22 +2,22 @@ package main
 
 import icu "github.com/Thejuampi/icu"
 
-func init() {
-	RegisterCommand("sports", "list", &Command{
+func registerSportsCommands(registry *CommandRegistry) {
+	registry.Register("sports", "list", &Command{
 		Name:        "",
 		Usage:       "sports list",
 		Description: "List all sport settings.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var ss []icu.SportSettings
 			if err := client.Get("sport-settings", nil, nil, &ss); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), ss)
+			return writeJSON(ss)
 		},
 	})
 
-	RegisterCommand("sports", "get", &Command{
+	registry.Register("sports", "get", &Command{
 		Name:        "",
 		Usage:       "sports get <type|id>",
 		Description: "Get sport settings by type or ID.",
@@ -28,14 +28,14 @@ func init() {
 
 			var ss icu.SportSettings
 			if err := client.Get("sport-settings", []string{args[0]}, nil, &ss); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), ss)
+			return writeJSON(ss)
 		},
 	})
 
-	RegisterCommand("sports", "update", &Command{
+	registry.Register("sports", "update", &Command{
 		Name:        "",
 		Usage:       "sports update <type|id> --ftp WATTS [--lthr BPM] [--max-hr BPM]",
 		Description: "Update sport settings.",
@@ -63,14 +63,14 @@ func init() {
 
 			var result icu.SportSettings
 			if err := client.Put("sport-settings", []string{args[0]}, map[string]string{"recalcHrZones": "false"}, ss, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
 	})
 
-	RegisterCommand("sports", "delete", &Command{
+	registry.Register("sports", "delete", &Command{
 		Name:        "",
 		Usage:       "sports delete <id>",
 		Description: "Delete sport settings.",
@@ -79,7 +79,7 @@ func init() {
 				return errMissing("sport settings id")
 			}
 
-			return client.Delete("sport-settings", []string{args[0]}, nil, nil)
+			return wrapCommandError(client.Delete("sport-settings", []string{args[0]}, nil, nil))
 		},
 	})
 }

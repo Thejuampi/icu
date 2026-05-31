@@ -2,8 +2,8 @@ package main
 
 import icu "github.com/Thejuampi/icu"
 
-func init() {
-	RegisterCommand("ftp", "show", &Command{
+func registerFTPCommands(registry *CommandRegistry) {
+	registry.Register("ftp", "show", &Command{
 		Name:        "",
 		Usage:       "ftp show [--sport Ride]",
 		Description: "Show FTP for a sport type.",
@@ -12,7 +12,7 @@ func init() {
 
 			var ss icu.SportSettings
 			if err := client.Get("sport-settings", []string{sport}, nil, &ss); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
 			type FTPInfo struct {
@@ -22,7 +22,7 @@ func init() {
 				LTHR      int    `json:"lthr,omitempty"`
 			}
 
-			return icu.WriteJSON(osStdout(), FTPInfo{
+			return writeJSON(FTPInfo{
 				Sport:     sport,
 				FTP:       ss.FTP,
 				IndoorFTP: ss.IndoorFTP,
@@ -31,7 +31,7 @@ func init() {
 		},
 	})
 
-	RegisterCommand("ftp", "update", &Command{
+	registry.Register("ftp", "update", &Command{
 		Name:        "",
 		Usage:       "ftp update --value WATTS [--sport Ride] [--indoor]",
 		Description: "Update FTP for a sport.",
@@ -51,10 +51,10 @@ func init() {
 
 			var result icu.SportSettings
 			if err := client.Put("sport-settings", []string{sport}, map[string]string{"recalcHrZones": "false"}, ss, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
 	})
 }

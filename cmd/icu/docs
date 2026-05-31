@@ -1,0 +1,2122 @@
+Below is an implementation-ready Montis command specification based on the command list from the prior turn. The user’s placeholder `[PASTE COMMAND LIST HERE]` was empty, so I scoped this to the listed Montis commands already surfaced: reports, calendar/workouts, activities, performance models, wellness/athlete data, communication, and the “what next” analytical command bank.
+
+## 0. Global command-routing rules
+
+Montis command dispatch must be deterministic. Do not infer or invent callable names. `run` is not a standalone command; it is only valid inside the four report function names: `runWeeklyReportV2`, `runSeasonReportV2`, `runWellnessReportV2`, and `runSummaryReportV2`. Any other use of `run` is invalid. 
+
+The integration boundary is the Montis tool/CLI call, not a raw Intervals.icu REST endpoint. The provided specification names functions such as `readCalendarV1`, `writeCalendarV1`, and `getOneDayFullActivityV1`; it does not specify underlying Intervals.icu endpoint URLs. QA should therefore validate the Montis function call, parameters, mutation behavior, and rendered response, not an undocumented endpoint contract. 
+
+When a command is ambiguous, route by intent family first: reports, calendar, activity, performance model, athlete/wellness, communication, or explanatory coaching. If required inputs are missing and the command would mutate data, ask before writing. If the command is read-only and a safe default exists, use the default and state it.
+
+---
+
+# 1. Report commands
+
+## 1.1 Weekly report
+
+**Canonical command phrase**
+`weekly report`
+
+**Accepted aliases / equivalents**
+`run weekly report`, `weekly report lite`, `run weekly report lite`, `weekly report overview`, `microcycle report`.
+
+**User intent**
+Generate a 7-day microcycle review: load, fatigue, intensity distribution, recovery interaction, performance signals, and coaching decisions.
+
+**Montis call**
+`runWeeklyReportV2`
+
+**Required inputs**
+None.
+
+**Optional inputs**
+`start` date, `lite`, `overview`, `athleteID`, `test`.
+
+**Default assumptions**
+If `start` is omitted, use the runtime’s default weekly window. Do not fabricate a custom date range in the assistant layer. If the user says `lite`, set `lite=true`. If the user says `overview`, set `overview=true`. Do not combine `lite=true` and `overview=true`.
+
+**Data sources used**
+Raw: Intervals.icu activities, training load, wellness/recovery data, and planned context where available.
+Montis interpretation layer: load × recovery × performance interaction, microcycle state, fatigue balance, adaptation signal.
+
+**Intervals.icu API / CLI involved**
+Montis tool call: `runWeeklyReportV2({ start?, lite?, overview?, athleteID? })`.
+
+**Time window logic**
+7-day weekly window. `start` defines the start date when supplied.
+
+**Key metrics / calculations**
+Expected Montis layers include CTL/ATL/TSB-style load state, acute/chronic load comparison, monotony/strain, intensity distribution, recovery state, durability/repeatability/neural-density signals where data supports them.
+
+**Expected output structure**
+Full version:
+
+1. Executive training-state summary
+2. Load and fatigue assessment
+3. Physiology/recovery response
+4. Performance intelligence
+5. Adaptation signal
+6. Coaching decision / next actions
+
+Lite version:
+
+1. Condensed state summary
+2. Key risks
+3. Key recommendations
+
+Overview version:
+Compact dashboard / bento-style summary. It should be visually compressed and lower-detail than full report.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Confirm only report functions use the word `run`. Ensure `lite` and `overview` are mutually exclusive. Validate date format as `YYYY-MM-DD` if provided. Validate coached-athlete selection if `athleteID` is needed.
+
+**Error cases**
+No connected athlete, insufficient activities, missing wellness data, invalid `start`, conflicting `lite` and `overview`, backend failure.
+
+**Clarifying questions**
+Ask which athlete when the user has coached athletes and did not specify one. Ask for a start date only if the user references a non-obvious week, such as “that build week.”
+
+**Example prompts**
+`run weekly report`
+`weekly report lite starting 2026-05-20`
+`weekly report overview`
+
+**Example response outline**
+“Weekly Report — [date range]. Current state: [state]. Main limiter: [limiter]. Load: [load signal]. Recovery: [recovery signal]. Decision: [train / recover / adjust]. Next actions: [1–3 items].”
+
+---
+
+## 1.2 Season report
+
+**Canonical command phrase**
+`season report`
+
+**Accepted aliases / equivalents**
+`run season report`, `season report lite`, `mesocycle report`, `training block progression`.
+
+**User intent**
+Generate a 90-day mesocycle / season-block progression report.
+
+**Montis call**
+`runSeasonReportV2`
+
+**Required inputs**
+None.
+
+**Optional inputs**
+`lite`, `athleteID`.
+
+**Default assumptions**
+Use the runtime’s current 90-day season/block window. `lite=true` when requested.
+
+**Data sources used**
+Raw: activity history, load history, performance curves where available, wellness trends.
+Montis interpretation: block progression, adaptation trajectory, phase-state inference.
+
+**Intervals.icu API / CLI involved**
+`runSeasonReportV2({ lite?, athleteID? })`.
+
+**Time window logic**
+90-day block.
+
+**Key metrics / calculations**
+Load progression, fatigue trends, intensity balance, aerobic/anaerobic development, durability/repeatability progression, adaptation stability.
+
+**Expected output structure**
+Full: block summary, phase progression, system development, risk flags, next block priorities.
+Lite: condensed progression summary and next priorities.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Do not accept `overview` unless runtime supports it; provided mapping only specifies `lite` for season.
+
+**Error cases**
+Insufficient 90-day data, no athlete connection, missing power/pace zones, backend failure.
+
+**Clarifying questions**
+Ask for athlete selection if needed. Do not ask for dates unless the user asks for a custom period; use summary report for arbitrary date ranges.
+
+**Example prompts**
+`run season report`
+`season report lite`
+`analyze my current training block`
+
+**Example response outline**
+“Season Report — 90-day block. Current phase: [phase]. Fitness/load trajectory: [trend]. Adaptation: [stable/fragile]. Limiter: [system]. Next block focus: [focus].”
+
+---
+
+## 1.3 Wellness report
+
+**Canonical command phrase**
+`wellness report`
+
+**Accepted aliases / equivalents**
+`run wellness report`, `recovery report`, `42-day wellness report`.
+
+**User intent**
+Assess recovery, fatigue, wellness trends, and readiness patterns.
+
+**Montis call**
+`runWellnessReportV2`
+
+**Required inputs**
+None.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+Use the runtime’s wellness-report window.
+
+**Data sources used**
+Raw: Intervals.icu wellness data such as HRV, resting HR, sleep, fatigue, soreness, motivation, subjective wellness where available.
+Montis interpretation: recovery adequacy, fatigue resolution, readiness risk.
+
+**Intervals.icu API / CLI involved**
+`runWellnessReportV2({ athleteID? })`.
+
+**Time window logic**
+Runtime wellness-report window; current tool description indicates a 42-day wellness report.
+
+**Key metrics / calculations**
+HRV trend, resting HR trend, sleep/recovery markers, fatigue and subjective wellness trend, readiness classification.
+
+**Expected output structure**
+Recovery state, trend signals, risk flags, load/recovery interaction, recommendations.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+If wellness data is absent or sparse, report data limitations clearly.
+
+**Error cases**
+No wellness data, incomplete sync, athlete not connected, backend failure.
+
+**Clarifying questions**
+Usually none unless multiple athletes are available.
+
+**Example prompts**
+`run wellness report`
+`evaluate recovery status`
+`check HRV trends`
+
+**Example response outline**
+“Wellness Report — [window]. Recovery state: [state]. HRV/RHR: [trend]. Sleep/fatigue: [trend]. Training implication: [decision].”
+
+---
+
+## 1.4 Summary report
+
+**Canonical command phrase**
+`summary report`
+
+**Accepted aliases / equivalents**
+`run summary report`, `macrocycle summary`, `long-term trends`.
+
+**User intent**
+Generate a high-level report over a specific date range or default macrocycle window.
+
+**Montis call**
+`runSummaryReportV2`
+
+**Required inputs**
+None, unless the user asks for a specific range.
+
+**Optional inputs**
+`start`, `end`, `athleteID`.
+
+**Default assumptions**
+If no dates are provided, use runtime default summary window. If only a vague range is given, resolve it to absolute dates before calling.
+
+**Data sources used**
+Raw: activities, training load, wellness, performance trends.
+Montis interpretation: macrocycle-level progression, fatigue/adaptation balance, limiting systems.
+
+**Intervals.icu API / CLI involved**
+`runSummaryReportV2({ start?, end?, athleteID? })`.
+
+**Time window logic**
+Custom `start`–`end` when supplied; runtime default otherwise.
+
+**Key metrics / calculations**
+Long-range load trajectory, performance trend, adaptation stability, system balance.
+
+**Expected output structure**
+Date range, macro trend, key changes, risks, recommended direction.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Validate `start <= end`. Dates must be absolute `YYYY-MM-DD`.
+
+**Error cases**
+Invalid range, no data in range, athlete unavailable.
+
+**Clarifying questions**
+Ask for dates if the user says “that period” and the context does not define it.
+
+**Example prompts**
+`summary report from 2026-03-01 to 2026-05-29`
+`run summary report`
+`analyze long-term trends`
+
+**Example response outline**
+“Summary Report — [date range]. Macro trend: [trend]. Fitness/load: [trend]. Recovery: [trend]. Performance: [trend]. Next strategic focus: [focus].”
+
+---
+
+## 1.5 Data quality report
+
+**Canonical command phrase**
+`data quality`
+
+**Accepted aliases / equivalents**
+`data quality report`, `check my intervals data`.
+
+**User intent**
+Audit Intervals.icu data completeness and reliability for coaching outputs.
+
+**Montis call**
+`runDataQualityReportV1`
+
+**Required inputs**
+None.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+Run for current athlete.
+
+**Data sources used**
+Raw: activity availability, wellness availability, zones/settings availability, missing or inconsistent fields.
+
+**Intervals.icu API / CLI involved**
+`runDataQualityReportV1({ athleteID? })`.
+
+**Time window logic**
+Runtime-defined audit window.
+
+**Key metrics / calculations**
+Missing data checks, sync gaps, wellness completeness, activity field completeness.
+
+**Expected output structure**
+Data readiness, missing inputs, impact on reports, corrective actions.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Do not “repair” data. Report only.
+
+**Error cases**
+No athlete connection, inaccessible Intervals.icu data.
+
+**Clarifying questions**
+Ask which athlete if multiple coached athletes are available.
+
+**Example prompts**
+`data quality`
+`check my intervals data`
+
+**Example response outline**
+“Data Quality Report. Status: [pass/warn/fail]. Missing: [items]. Coaching impact: [impact]. Fixes: [actions].”
+
+---
+
+# 2. Calendar and planned-event commands
+
+The command mapping defines `planned events`, `calendar`, and `schedule` as aliases for calendar reading; `write workout`, `add workout`, and `plan workout` as aliases for calendar writing; and `delete workout` / `remove event` as deletion commands. 
+
+## 2.1 Read calendar / planned events
+
+**Canonical command phrase**
+`planned events`
+
+**Accepted aliases / equivalents**
+`calendar`, `schedule`, `load planned events`, `show target events` when target events are calendar-backed.
+
+**User intent**
+Read planned workouts/events from the Intervals.icu calendar.
+
+**Montis call**
+`readCalendarV1`
+
+**Required inputs**
+`start`, `end`.
+
+**Optional inputs**
+`lite`, `athleteID`.
+
+**Default assumptions**
+If the user says “this week,” resolve to the current week in America/New_York. If no range is stated, ask for the date range unless a UI entry point supplies it.
+
+**Data sources used**
+Raw: Intervals.icu planned calendar events.
+Montis interpretation: optional categorization, upcoming load context, target-event identification.
+
+**Intervals.icu API / CLI involved**
+`readCalendarV1({ start, end, lite?, athleteID? })`.
+
+**Time window logic**
+Explicit start/end date range. Use absolute dates in the call.
+
+**Key metrics / calculations**
+Planned duration, planned load/TSS if present, event categories, sport/type distribution.
+
+**Expected output structure**
+Date range, event list by day, planned load summary, conflicts or gaps if relevant.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+`start` and `end` required. `start <= end`.
+
+**Error cases**
+Missing range, invalid date, no planned events, API failure.
+
+**Clarifying questions**
+“What date range should I read?”
+“Which athlete’s calendar should I use?”
+
+**Example prompts**
+`show planned events this week`
+`calendar from 2026-06-01 to 2026-06-07`
+`load planned events`
+
+**Example response outline**
+“Calendar — [date range]. Planned events: [list]. Planned load: [summary]. Notes: [gaps/conflicts].”
+
+---
+
+## 2.2 Write / add / plan workout
+
+**Canonical command phrase**
+`add workout`
+
+**Accepted aliases / equivalents**
+`write workout`, `plan workout`, `schedule workout`, `add a Ride workout on [date]`, `add a Run workout on [date]`, `add a Swim workout on [date]`.
+
+**User intent**
+Create or update one or more Intervals.icu calendar workouts directly.
+
+**Montis call**
+`writeCalendarV1`
+
+**Required inputs**
+Each planned workout must include date, title, sport type, category, description, intended duration, and optional TSS / carbohydrate recommendation when applicable. The write call body is `planned_workouts[]`. 
+
+**Optional inputs**
+`athleteID`, `tss`, `carbs_per_hour`, workout template preference, intensity model, cadence, distance instead of duration where valid.
+
+**Default assumptions**
+If the user specifies sport (`Run`, `Ride`, `Swim`), lock that sport before generating the workout, set `type` accordingly, and ensure the title reflects the sport. Do not switch sport based on workout structure or keywords. 
+
+If the user asks for a workout but not a calendar write, produce a read-only proposal. If the phrase includes `add`, `write`, `schedule`, or a date-specific `plan workout`, treat it as a calendar mutation.
+
+**Data sources used**
+Raw: Intervals.icu calendar for conflict/update checks when replacing; athlete zones/settings where needed.
+Montis interpretation: workout selection, phase alignment, fatigue/load context, fueling.
+
+**Intervals.icu API / CLI involved**
+`writeCalendarV1({ planned_workouts: [...] })`.
+
+**Time window logic**
+Single date or multi-date plan. For future planning, Montis must consider historical phases, semantic reports, load context, fatigue state, and target events before generating recommendations. 
+
+**Key metrics / calculations**
+Workout duration must equal the sum of interval durations. Fueling uses `load_per_hour = TSS / (duration_minutes / 60)`, duration and intensity bands, clamps carbohydrate recommendations to 30–110 g/h, and excludes note/holiday/sick/injured categories. 
+
+**Expected output structure**
+
+1. Confirmation of created/updated workout
+2. Date, title, type, category, duration
+3. Workout description in strict Intervals.icu syntax
+4. Fueling recommendation if applicable
+5. Any warnings or assumptions
+
+**Read-only or write**
+Writes/modifies calendar data.
+
+**Validation rules**
+Workout steps must use valid Intervals.icu syntax. Valid interval format is `- [optional cue text] [duration OR distance] [target] [optional cadence]`. Each interval must use exactly one intensity anchor. Cycling defaults to power targets; heart-rate anchors are distinct and must not be converted; pace targets are valid for run/swim. 
+
+Cadence may appear after the target. Ramps must include duration, stay on one line, and use one anchor. Repeats are allowed, but nested repeats are not supported. Each interval must contain one duration or distance, one intensity anchor, optional cadence, and optional cue text—nothing else. 
+
+For `Run`, prefer pace-based prescriptions, include `Pace`, do not use FTP unless explicitly requested, and use HR only when explicitly requested. If the user says heart-rate based without a model, use `Z2 HR` for endurance, `% HR` for steady, `% LTHR` for threshold, and do not default to HRmax. 
+
+**Error cases**
+Missing date, ambiguous sport, invalid interval syntax, mixed intensity anchors, duration mismatch, unsupported nested repeat, missing required metadata, failed calendar write, duplicate risk.
+
+**Clarifying questions**
+“What date should I add it to?”
+“Should this be Run, Ride, or Swim?”
+“Do you want this written to the calendar or just drafted?”
+“For HR-based work, should I use HR, LTHR, or HRmax?”
+
+**Example prompts**
+`add a Ride endurance workout on 2026-06-01`
+`schedule a Run threshold workout tomorrow`
+`write workout: 75 min VO2 ride next Tuesday`
+
+**Example response outline**
+“Created workout on [date]: [title]. Type: [type]. Category: WORKOUT. Duration: [duration]. Description: [strict interval text]. Fueling: [g/h].”
+
+---
+
+## 2.3 Schedule rest day
+
+**Canonical command phrase**
+`schedule rest day`
+
+**Accepted aliases / equivalents**
+`schedule off day`, `add rest day`, `add OFF day`.
+
+**User intent**
+Create a calendar note/rest day.
+
+**Montis call**
+`writeCalendarV1`
+
+**Required inputs**
+Date.
+
+**Optional inputs**
+Athlete ID, title.
+
+**Default assumptions**
+Description must be exactly `- OFF`. OFF/rest days are not workouts and should not receive fueling. The workout spec states OFF days must be written exactly as `- OFF`. 
+
+**Data sources used**
+Calendar only, unless checking context.
+
+**Intervals.icu API / CLI involved**
+`writeCalendarV1`.
+
+**Time window logic**
+Single date.
+
+**Key metrics / calculations**
+No duration/load calculation; duration is 0m.
+
+**Expected output structure**
+Confirmation, date, category/type, description.
+
+**Read-only or write**
+Writes calendar data.
+
+**Validation rules**
+Use `category=NOTE`, `type=Other` unless platform conventions override. Description exactly `- OFF`.
+
+**Error cases**
+Missing date, existing conflicting event if replacement intent is unclear.
+
+**Clarifying questions**
+“What date should I schedule the rest day?”
+
+**Example prompts**
+`schedule rest day on 2026-06-03`
+`add OFF day tomorrow`
+
+**Example response outline**
+“Scheduled rest day on [date]. Description: `- OFF`.”
+
+---
+
+## 2.4 Update / adjust planned workouts
+
+**Canonical command phrase**
+`adjust planned workouts`
+
+**Accepted aliases / equivalents**
+`optimize weekly plan`, `adjust next week training`, `replace workout`, `update workout`.
+
+**User intent**
+Modify existing calendar workouts.
+
+**Montis calls**
+Usually `readCalendarV1` first, then `deleteCalendarV1`, then `writeCalendarV1`.
+
+**Required inputs**
+Target workout identity: event ID, or date + sport/type + strongly similar title. New workout content.
+
+**Optional inputs**
+Athlete ID, replacement scope, date range.
+
+**Default assumptions**
+If the user says `add`, `create`, `schedule`, `another`, or `keep existing`, do not delete existing events. If the user implies replacement, perform strict atomic replacement: delete, verify, then create. If delete fails, abort and do not create a fallback duplicate. 
+
+**Data sources used**
+Raw: current calendar events, new generated workout.
+Montis interpretation: load/fatigue-aware adjustment.
+
+**Intervals.icu API / CLI involved**
+`readCalendarV1`, `deleteCalendarV1`, `writeCalendarV1`.
+
+**Time window logic**
+Date or date range supplied by user.
+
+**Key metrics / calculations**
+Planned load, duration, intensity distribution, phase suitability, carbohydrate recommendation if workout has load/duration.
+
+**Expected output structure**
+
+1. Existing event matched
+2. Deletion verification
+3. New event created
+4. Summary of changes
+5. Any unresolved conflicts
+
+**Read-only or write**
+Writes/modifies data.
+
+**Validation rules**
+Priority 1: if event ID exists, match by ID only and ignore fuzzy matching. Priority 2: if no ID, match same date, same sport/type, and title similarity ≥70% or keyword-equivalent. 
+
+**Error cases**
+No matching event, multiple possible matches, delete failure, write failure, invalid replacement workout, missing date/range.
+
+**Clarifying questions**
+“Which event should I replace?”
+“Should I keep the existing workout and add another, or replace it?”
+“Do you want changes written to the calendar?”
+
+**Example prompts**
+`adjust next week's training based on fatigue`
+`replace Tuesday's VO2 ride with endurance`
+`optimize weekly plan and update the calendar`
+
+**Example response outline**
+“Matched [event]. Deleted and verified. Created replacement: [new event]. Rationale: [fatigue/load reason].”
+
+---
+
+## 2.5 Delete / remove event
+
+**Canonical command phrase**
+`delete workout`
+
+**Accepted aliases / equivalents**
+`remove event`, `delete workout on [date]`, `clear day`, `delete all`, `remove everything`, `wipe`.
+
+**User intent**
+Remove planned workouts/events from Intervals.icu calendar.
+
+**Montis call**
+`deleteCalendarV1`
+
+**Required inputs**
+Either event ID, or date plus enough identifying information. Date-only deletion is permitted only when the user explicitly says `clear day`, `delete all`, `remove everything`, or `wipe`.
+
+**Optional inputs**
+`dates[]`, `athleteID`.
+
+**Default assumptions**
+If ambiguous, delete only matching events. Never delete an entire day unless explicitly requested. 
+
+**Data sources used**
+Calendar event data.
+
+**Intervals.icu API / CLI involved**
+`deleteCalendarV1({ id? | date? | dates?, athleteID? })`.
+
+**Time window logic**
+Single event, single date, or explicit dates list.
+
+**Key metrics / calculations**
+None.
+
+**Expected output structure**
+Deletion target, confirmation, unresolved matches if any.
+
+**Read-only or write**
+Writes/modifies data by deleting.
+
+**Validation rules**
+Specific event deletion deletes only matching events. Date-only deletion requires explicit “clear/delete all/wipe” language.
+
+**Error cases**
+Missing target, multiple matches, user only says “delete Tuesday” without specifying all or target, delete API failure.
+
+**Clarifying questions**
+“Do you want to delete all events on that date, or only a specific workout?”
+“Which of these matching events should I remove?”
+
+**Example prompts**
+`delete workout i12345`
+`remove the VO2 ride on 2026-06-02`
+`clear day 2026-06-05`
+
+**Example response outline**
+“Deleted [event/date scope]. No other events were modified.”
+
+---
+
+# 3. Activity commands
+
+The mapping defines `activity`, `analyse activity`, an activity `{id}`, or a `{date}` as routes to `getOneDayFullActivityV1`; `list activities` and `range activities` route to `listActivitiesLight`. 
+
+## 3.1 Analyze activity / activity by date or ID
+
+**Canonical command phrase**
+`analyze activity`
+
+**Accepted aliases / equivalents**
+`analyse activity`, `activity [date]`, `activity [id]`, `analyze last activity`.
+
+**User intent**
+Analyze one activity deeply, including execution, fatigue, durability, repeatability, and interval sequencing.
+
+**Montis call**
+`getOneDayFullActivityV1`
+
+**Required inputs**
+Date or activity ID. For `analyze last activity`, use latest activity discovery first.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+If the user gives an Intervals activity ID, use `activity_id`. If the user gives a date, use `date`. If the user says “last activity,” first list recent activities, select most recent completed activity, then fetch full activity.
+
+**Data sources used**
+Raw: full activity, interval-level data.
+Montis interpretation: execution quality, fatigue signal, durability/decoupling, anaerobic strain, neural density.
+
+**Intervals.icu API / CLI involved**
+`getOneDayFullActivityV1({ date? | activity_id?, athleteID? })`; optionally `listActivitiesLight` for “last activity.”
+
+**Time window logic**
+Single activity or all activities on one date.
+
+**Key metrics / calculations**
+The full activity returns `icu_intervals` fields such as duration, zone, TSS contribution, interval type, HR, decoupling, average watts, normalized watts, work, work above FTP, W′ start/end, cadence, and interval start/end bounds. Interpretation must use sequence and density, not simple averages. Rising decoupling indicates durability breakdown; `wp >> w` indicates stochastic effort; `j_af + wbal drop` indicates anaerobic strain; clustered work intervals indicate high neural load. 
+
+**Expected output structure**
+
+1. Activity summary
+2. Execution vs intent
+3. Interval sequence analysis
+4. Durability / decoupling
+5. Repeatability / W′ behavior
+6. Neural load density
+7. Coaching conclusion
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Activity ID must be valid. Date must be `YYYY-MM-DD`. Do not over-interpret missing sensors.
+
+**Error cases**
+No activity found, multiple activities on date and user did not specify which, missing power/HR data, no intervals, backend failure.
+
+**Clarifying questions**
+“Which activity on that date should I analyze?”
+“Do you mean activity ID or calendar date?”
+
+**Example prompts**
+`analyze last activity`
+`activity 2026-05-28`
+`analyze activity i146251446`
+
+**Example response outline**
+“Activity Analysis — [name/date]. Execution: [summary]. Key limiter: [durability/repeatability/neural load]. Evidence: [interval signals]. Recommendation: [next step].”
+
+---
+
+## 3.2 List activities / range activities
+
+**Canonical command phrase**
+`list activities`
+
+**Accepted aliases / equivalents**
+`range activities`, `show activities`, `activities from [start] to [end]`.
+
+**User intent**
+Fetch a lightweight list of activities for a range.
+
+**Montis call**
+`listActivitiesLight`
+
+**Required inputs**
+None strictly, but range is recommended.
+
+**Optional inputs**
+`oldest`, `newest`, `fields`, `athleteID`.
+
+**Default assumptions**
+If range is omitted, use runtime default lightweight range. The tool description indicates Tier-0 lightweight mode over a reduced recent fieldset.
+
+**Data sources used**
+Raw: activity metadata and selected fields.
+Montis interpretation: optional summary of training distribution or activity selection.
+
+**Intervals.icu API / CLI involved**
+`listActivitiesLight({ oldest?, newest?, fields?, athleteID? })`.
+
+**Time window logic**
+Use `oldest` and `newest` if supplied.
+
+**Key metrics / calculations**
+Activity count, duration, load, sport distribution, recent completion pattern.
+
+**Expected output structure**
+Range, list/table of activities, summary totals, notable items.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Validate dates and field names when specified.
+
+**Error cases**
+No activities, invalid range, unsupported field list.
+
+**Clarifying questions**
+“What date range should I list?” if no default should be applied by the UI.
+
+**Example prompts**
+`list activities this week`
+`range activities from 2026-05-01 to 2026-05-29`
+
+**Example response outline**
+“Activities — [range]. Total: [count]. Load: [sum]. Key sessions: [list].”
+
+---
+
+# 4. Performance model commands
+
+The mapping defines power curves, activity power curves, HR curves, power-HR curves, pace curves, activity HR curves, activity pace curves, activity segments, and MMP model commands. 
+
+## 4.1 Power curves
+
+**Canonical command phrase**
+`power curves`
+
+**Accepted aliases / equivalents**
+`show power curves`, `power curve modelling`.
+
+**User intent**
+Fetch athlete power-duration curves.
+
+**Montis call**
+`getPowerCurvesExtV1`
+
+**Required inputs**
+Sport type: `Ride`, `Run`, `VirtualRow`, `VirtualSki`, or `Swim`.
+
+**Optional inputs**
+`curves`, `pmType`, `athleteID`.
+
+**Default assumptions**
+If sport is omitted, ask unless the UI supplies sport context. Do not assume cycling for all athletes.
+
+**Data sources used**
+Raw: Intervals.icu power curve data.
+Montis interpretation: aerobic/anaerobic profile, curve changes, model comparison.
+
+**Intervals.icu API / CLI involved**
+`getPowerCurvesExtV1({ type, curves?, pmType?, athleteID? })`.
+
+**Time window logic**
+Specified by `curves`; default is runtime default if omitted.
+
+**Key metrics / calculations**
+MMP curve, CP/FTP-relevant durations, model type if specified.
+
+**Expected output structure**
+Curve set, key durations, changes, coaching interpretation.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Sport type must be supported. `pmType` must be one of supported model identifiers.
+
+**Error cases**
+Unsupported sport, no power data, insufficient maximal efforts.
+
+**Clarifying questions**
+“Which sport should I use for power curves?”
+
+**Example prompts**
+`power curves for Ride`
+`show Run power curves for the last year`
+
+**Example response outline**
+“Power Curves — [sport]. Key durations: [values]. Trend: [trend]. Implication: [focus].”
+
+---
+
+## 4.2 Activity power curve / fatigued power curve
+
+**Canonical command phrase**
+`activity power curve`
+
+**Accepted aliases / equivalents**
+`ride power curve`, `activity mmp`, `fatigued power curve`.
+
+**User intent**
+Analyze maximal mean power for a single activity, optionally fresh vs fatigued.
+
+**Montis call**
+`getActivityPowerCurveV1`
+
+**Required inputs**
+`activity_id`.
+
+**Optional inputs**
+`kj`, `athleteID`.
+
+**Default assumptions**
+If user says `fatigued power curve`, set `kj=kj1`. Otherwise use runtime default or `kj0` if explicitly fresh.
+
+**Data sources used**
+Raw: activity power curve.
+Montis interpretation: fatigue resistance, repeatability, late-ride decay.
+
+**Intervals.icu API / CLI involved**
+`getActivityPowerCurveV1({ activity_id, kj?, athleteID? })`.
+
+**Time window logic**
+Single activity.
+
+**Key metrics / calculations**
+MMP across durations; `kj0` fresh baseline and `kj1` fatigued curve are used for durability, fatigue resistance, repeatability, and late-ride decay. 
+
+**Expected output structure**
+Activity ID, curve mode, best durations, fatigue-resistance interpretation.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Valid activity ID required.
+
+**Error cases**
+Missing activity ID, no power data, invalid `kj`.
+
+**Clarifying questions**
+“Which activity ID should I use?”
+
+**Example prompts**
+`fatigued power curve for i146251446`
+`activity mmp i146251446`
+
+**Example response outline**
+“Activity Power Curve — [activity]. Mode: [fresh/fatigued]. Strong durations: [durations]. Weak durations: [durations]. Coaching implication: [focus].”
+
+---
+
+## 4.3 HR curves
+
+**Canonical command phrase**
+`hr curves`
+
+**Accepted aliases / equivalents**
+`heart rate curves`.
+
+**User intent**
+Fetch athlete heart-rate curve profile.
+
+**Montis call**
+`getHRCurvesV1`
+
+**Required inputs**
+None strictly.
+
+**Optional inputs**
+`curves`, `type`, `athleteID`.
+
+**Default assumptions**
+If sport type matters and is absent, ask or use UI context.
+
+**Data sources used**
+Raw: HR curve data.
+Montis interpretation: physiological response and HR durability.
+
+**Intervals.icu API / CLI involved**
+`getHRCurvesV1({ curves?, type?, athleteID? })`.
+
+**Time window logic**
+By `curves` argument or runtime default.
+
+**Key metrics / calculations**
+Peak/mean HR across durations, sport-specific HR response.
+
+**Expected output structure**
+Curve summary, notable durations, interpretation.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Supported sport type if provided.
+
+**Error cases**
+No HR data, invalid curve identifier.
+
+**Clarifying questions**
+“Which sport should I use for HR curves?”
+
+**Example prompts**
+`hr curves for Ride`
+`show HR curves`
+
+**Example response outline**
+“HR Curves — [sport/range]. Response profile: [summary]. Coaching implication: [interpretation].”
+
+---
+
+## 4.4 Power-HR curve
+
+**Canonical command phrase**
+`power hr curve`
+
+**Accepted aliases / equivalents**
+`power vs heart rate`, `power-HR relationship`.
+
+**User intent**
+Analyze power-heart-rate relationship over a date range.
+
+**Montis call**
+`getPowerHRCurveV1`
+
+**Required inputs**
+`start`, `end`.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+If date range is missing, ask.
+
+**Data sources used**
+Raw: power and HR activity data in range.
+Montis interpretation: efficiency, decoupling, aerobic stability.
+
+**Intervals.icu API / CLI involved**
+`getPowerHRCurveV1({ start, end, athleteID? })`.
+
+**Time window logic**
+Explicit date range.
+
+**Key metrics / calculations**
+Power/HR relationship, efficiency trend, drift/decoupling signal where derivable.
+
+**Expected output structure**
+Range, curve/relationship summary, trend interpretation.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Valid date range required.
+
+**Error cases**
+Missing range, no dual power+HR data.
+
+**Clarifying questions**
+“What date range should I use?”
+
+**Example prompts**
+`power hr curve from 2026-05-01 to 2026-05-29`
+
+**Example response outline**
+“Power-HR Curve — [range]. Efficiency trend: [trend]. Drift signal: [signal].”
+
+---
+
+## 4.5 Pace curves / activity pace curve
+
+**Canonical command phrase**
+`pace curves`
+
+**Accepted aliases / equivalents**
+`activity pace curve`, `GAP curve`, `raw pace curve`.
+
+**User intent**
+Fetch run/swim pace curves or single-activity pace profile.
+
+**Montis calls**
+`getPaceCurvesExtV1` for athlete curves.
+`getActivityPaceCurveV1` for one activity.
+
+**Required inputs**
+For athlete curves: `type` = `Run` or `Swim`.
+For activity curve: `activity_id`.
+
+**Optional inputs**
+`curves`, `gap`, `athleteID`.
+
+**Default assumptions**
+If `gap` omitted for activity pace, use runtime default or ask when terrain matters. `gap=true` means grade-adjusted pace; `gap=false` means raw pace. 
+
+**Data sources used**
+Raw: run/swim pace data.
+Montis interpretation: terrain-normalized durability, pace profile, speed development.
+
+**Intervals.icu API / CLI involved**
+`getPaceCurvesExtV1({ type, curves?, athleteID? })`
+`getActivityPaceCurveV1({ activity_id, gap?, athleteID? })`
+
+**Time window logic**
+Curve identifiers or single activity.
+
+**Key metrics / calculations**
+Best pace over durations, GAP vs raw pace comparison.
+
+**Expected output structure**
+Curve summary, key durations, pacing interpretation.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Pace curves only support Run/Swim. Activity ID required for activity curve.
+
+**Error cases**
+No pace data, unsupported sport, missing activity ID.
+
+**Clarifying questions**
+“Run or Swim?”
+“Use GAP or raw pace?”
+
+**Example prompts**
+`pace curves for Run`
+`activity pace curve i146251446 gap=true`
+
+**Example response outline**
+“Pace Curve — [sport/activity]. Strong durations: [values]. Interpretation: [pacing/durability].”
+
+---
+
+## 4.6 Activity HR curve
+
+**Canonical command phrase**
+`activity hr curve`
+
+**Accepted aliases / equivalents**
+`activity heart rate curve`.
+
+**User intent**
+Fetch HR curve for one activity.
+
+**Montis call**
+`getActivityHRCurveV1`
+
+**Required inputs**
+`activity_id`.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+None.
+
+**Data sources used**
+Raw HR activity data.
+Montis interpretation: HR response, fatigue, drift context.
+
+**Intervals.icu API / CLI involved**
+`getActivityHRCurveV1({ activity_id, athleteID? })`.
+
+**Time window logic**
+Single activity.
+
+**Key metrics / calculations**
+Max/mean HR by duration.
+
+**Expected output structure**
+Activity ID, HR curve summary, interpretation.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Activity ID required.
+
+**Error cases**
+No HR data, missing ID.
+
+**Clarifying questions**
+“Which activity ID?”
+
+**Example prompt**
+`activity hr curve i146251446`
+
+**Example response outline**
+“Activity HR Curve — [activity]. HR response: [summary].”
+
+---
+
+## 4.7 Activity segments
+
+**Canonical command phrase**
+`activity segments`
+
+**Accepted aliases / equivalents**
+`detected segments`, `climbs and intervals`.
+
+**User intent**
+Fetch detected climbs, intervals, or execution segments for one activity.
+
+**Montis call**
+`getActivitySegmentsV1`
+
+**Required inputs**
+`activity_id`.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+None.
+
+**Data sources used**
+Raw: detected activity segments.
+Montis interpretation: pacing, climb execution, interval execution.
+
+**Intervals.icu API / CLI involved**
+`getActivitySegmentsV1({ activity_id, athleteID? })`.
+
+**Time window logic**
+Single activity.
+
+**Key metrics / calculations**
+Segment duration, output, HR, pace/power, variability where available.
+
+**Expected output structure**
+Segments list, notable segments, execution interpretation.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Activity ID required.
+
+**Error cases**
+No segments detected, missing ID.
+
+**Clarifying questions**
+“Which activity ID?”
+
+**Example prompt**
+`activity segments i146251446`
+
+**Example response outline**
+“Detected Segments — [activity]. Key segments: [list]. Execution notes: [notes].”
+
+---
+
+## 4.8 MMP model
+
+**Canonical command phrase**
+`mmp model`
+
+**Accepted aliases / equivalents**
+`mean maximal power model`, `best sustainable power model`.
+
+**User intent**
+Fetch model of sustainable power across durations.
+
+**Montis call**
+`getMMPModelV1`
+
+**Required inputs**
+None strictly.
+
+**Optional inputs**
+`type`, `athleteID`.
+
+**Default assumptions**
+Ask for sport when omitted and not obvious.
+
+**Data sources used**
+Raw: MMP model data.
+Montis interpretation: power-duration strengths, threshold/VO2/anaerobic implications.
+
+**Intervals.icu API / CLI involved**
+`getMMPModelV1({ type?, athleteID? })`.
+
+**Time window logic**
+Runtime model window.
+
+**Key metrics / calculations**
+Modeled sustainable power across durations.
+
+**Expected output structure**
+Model summary, key durations, training implications.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Supported sport type if provided.
+
+**Error cases**
+Insufficient data, unsupported sport.
+
+**Clarifying questions**
+“Which sport should I model?”
+
+**Example prompt**
+`mmp model for Ride`
+
+**Example response outline**
+“MMP Model — [sport]. Sustainable profile: [summary]. Training implication: [focus].”
+
+---
+
+# 5. Athlete and wellness data commands
+
+## 5.1 Wellness data for one day
+
+**Canonical command phrase**
+`wellness data`
+
+**Accepted aliases / equivalents**
+`read wellness`, `wellness for [date]`.
+
+**User intent**
+Fetch single-day wellness data.
+
+**Montis call**
+`getOneDayWellnessV1`
+
+**Required inputs**
+`date`.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+If user says “today,” use current date in America/New_York.
+
+**Data sources used**
+Raw Intervals.icu wellness fields.
+Montis interpretation optional: readiness or recovery interpretation.
+
+**Intervals.icu API / CLI involved**
+`getOneDayWellnessV1({ date, athleteID? })`.
+
+**Time window logic**
+Single day.
+
+**Key metrics / calculations**
+HRV, fatigue, recovery, resting HR, sleep, subjective wellness where present. The tool mapping describes one-day wellness as HRV, fatigue, and recovery. 
+
+**Expected output structure**
+Date, raw wellness fields, interpretation if requested.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Date required.
+
+**Error cases**
+No wellness record, invalid date.
+
+**Clarifying questions**
+“What date should I check?”
+
+**Example prompts**
+`wellness data today`
+`get wellness data for 2026-05-28`
+
+**Example response outline**
+“Wellness — [date]. HRV: [value]. RHR: [value]. Fatigue: [value]. Readiness: [interpretation].”
+
+---
+
+## 5.2 Athlete profile
+
+**Canonical command phrase**
+`athlete profile`
+
+**Accepted aliases / equivalents**
+`show athlete profile`.
+
+**User intent**
+Fetch athlete profile data.
+
+**Montis call**
+`getAthleteProfileV1`
+
+**Required inputs**
+None.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+Use current athlete.
+
+**Data sources used**
+Athlete profile.
+
+**Intervals.icu API / CLI involved**
+`getAthleteProfileV1({ athleteID? })`.
+
+**Time window logic**
+Not applicable.
+
+**Key metrics / calculations**
+None unless profile fields are interpreted.
+
+**Expected output structure**
+Profile fields and relevant coaching context.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Athlete accessible.
+
+**Error cases**
+No athlete profile, access failure.
+
+**Clarifying questions**
+Ask which athlete if multiple are available.
+
+**Example prompt**
+`athlete profile`
+
+**Example response outline**
+“Athlete Profile — [athlete]. Key settings/context: [fields].”
+
+---
+
+## 5.3 Sport settings
+
+**Canonical command phrase**
+`sport settings`
+
+**Accepted aliases / equivalents**
+`show sport settings`, `zones/settings`.
+
+**User intent**
+Fetch athlete sport settings.
+
+**Montis call**
+`getSportSettingsV1`
+
+**Required inputs**
+None.
+
+**Optional inputs**
+`athleteID`.
+
+**Default assumptions**
+Use current athlete.
+
+**Data sources used**
+Sport settings and zones.
+
+**Intervals.icu API / CLI involved**
+`getSportSettingsV1({ athleteID? })`.
+
+**Time window logic**
+Not applicable.
+
+**Key metrics / calculations**
+Zones, thresholds, sport-specific configuration.
+
+**Expected output structure**
+Sport settings by sport, missing settings, implications.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Athlete accessible.
+
+**Error cases**
+No settings, access failure.
+
+**Clarifying questions**
+“Which athlete?” if needed.
+
+**Example prompt**
+`sport settings`
+
+**Example response outline**
+“Sport Settings — [athlete]. Ride: [settings]. Run: [settings]. Missing: [items].”
+
+---
+
+## 5.4 Coached athletes
+
+**Canonical command phrase**
+`coached athletes`
+
+**Accepted aliases / equivalents**
+`list coached athletes`.
+
+**User intent**
+List coached athletes available to the current user.
+
+**Montis call**
+`getCoachedAthletesV1`
+
+**Required inputs**
+None.
+
+**Optional inputs**
+None.
+
+**Default assumptions**
+None.
+
+**Data sources used**
+Coaching relationship/access list.
+
+**Intervals.icu API / CLI involved**
+`getCoachedAthletesV1()`.
+
+**Time window logic**
+Not applicable.
+
+**Key metrics / calculations**
+None.
+
+**Expected output structure**
+Athlete list with IDs/names as available.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+None.
+
+**Error cases**
+No coached athletes, access failure.
+
+**Clarifying questions**
+None.
+
+**Example prompt**
+`coached athletes`
+
+**Example response outline**
+“Coached athletes available: [list].”
+
+---
+
+# 6. Communication commands
+
+## 6.1 Send message / send to coach
+
+**Canonical command phrase**
+`send message`
+
+**Accepted aliases / equivalents**
+`send to coach`, `send report to chat`, `send to athlete`, `send to activity`.
+
+**User intent**
+Forward already-rendered content to an Intervals.icu chat, athlete, or activity thread.
+
+**Montis call**
+`sendChatMessageV1`
+
+**Required inputs**
+`content` plus exactly one routing field: `chat_id`, `to_athlete_id`, or `to_activity_id`.
+
+**Optional inputs**
+None beyond one route.
+
+**Default assumptions**
+The report content is already final and must not be modified. Do not add headers, metadata, summaries, or edits when forwarding.
+
+**Data sources used**
+Rendered report or user-provided message.
+
+**Intervals.icu API / CLI involved**
+`sendChatMessageV1({ content, chat_id? | to_athlete_id? | to_activity_id? })`.
+
+**Time window logic**
+Not applicable.
+
+**Key metrics / calculations**
+None.
+
+**Expected output structure**
+Confirmation of destination and send status.
+
+**Read-only or write**
+Writes/sends a message.
+
+**Validation rules**
+Exactly one routing field must be present. If zero or more than one route is supplied, do not call the tool.
+
+**Error cases**
+No content, zero destinations, multiple destinations, invalid destination, send failure.
+
+**Clarifying questions**
+“Where should I send it: chat ID, athlete ID, or activity ID?”
+“Which single destination should I use?”
+
+**Example prompts**
+`send this report to chat_id 01`
+`send to athlete i123`
+`send message to activity i146251446`
+
+**Example response outline**
+“Sent to [destination].”
+
+---
+
+# 7. Analytical “what next” command bank
+
+The “what next” command bank lists user-facing analysis prompts across Activity Analysis, Training Load, Physiology, Performance Intelligence, Adaptation, Nutrition, Planning, Events & Performance, Forecasting, Optimization, System Explanations, and Data Exploration. These are not all direct one-to-one tool calls; they are intent-level routes that should call the appropriate report, activity, calendar, wellness, or performance-model tools as needed. 
+
+## 7.1 Activity analysis family
+
+**Canonical commands**
+`analyze last activity`, `analyze training block`, `analyze performance trends`, `compare recent weeks`, `compare training phases`.
+
+**Accepted aliases**
+Natural variants: `review my last ride`, `compare this week to last week`, `analyze recent sessions`.
+
+**User intent**
+Understand execution and trend quality.
+
+**Required inputs**
+For single activity: activity ID or date, unless “last activity.”
+For comparisons: date range, week references, or phase references.
+
+**Optional inputs**
+Sport, athlete ID.
+
+**Default assumptions**
+“Last activity” means latest completed activity. “Recent weeks” means runtime-reasonable recent history if UI does not supply dates.
+
+**Data sources used**
+Raw: `listActivitiesLight`, `getOneDayFullActivityV1`, reports when appropriate.
+Montis interpretation: execution quality, fatigue, durability, repeatability, neural density.
+
+**Calls involved**
+`listActivitiesLight`, `getOneDayFullActivityV1`, optionally summary/weekly/season reports.
+
+**Time window logic**
+Single activity, one week vs another, or defined block.
+
+**Key metrics**
+Activity load, duration, zones, interval sequence, decoupling, W′, intensity density.
+
+**Output structure**
+Scope, raw findings, interpretation, coaching action.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Do not compare undefined periods without resolving dates.
+
+**Error cases**
+No matching activities, missing sensor data, ambiguous phase.
+
+**Clarifying questions**
+“Which weeks or phases should I compare?”
+“Which activity on that date?”
+
+**Example prompts**
+`analyze last activity`
+`compare recent weeks`
+`analyze performance trends`
+
+**Example response outline**
+“Scope: [range]. Trend: [summary]. Evidence: [metrics]. Interpretation: [Montis layer]. Recommendation: [action].”
+
+---
+
+## 7.2 Training load family
+
+**Canonical commands**
+`evaluate fatigue state`, `check training balance`, `review weekly structure`, `evaluate training monotony`, `assess training strain`, `check load variability`, `evaluate stress tolerance`, `evaluate load progression`.
+
+**User intent**
+Assess whether load is sustainable and productive.
+
+**Required inputs**
+None for current-state review; date range optional for specific periods.
+
+**Optional inputs**
+Sport, athlete ID, range.
+
+**Default assumptions**
+Use current/recent training context.
+
+**Data sources used**
+Raw: activity history, load metrics, planned events if interpreting future load.
+Montis interpretation: fatigue balance, progression stability, stress tolerance.
+
+**Calls involved**
+Weekly report for current microcycle; season/summary report for longer trends; calendar read for planned load.
+
+**Time window logic**
+Current week for microcycle questions; 90-day season for block progression; custom range if specified.
+
+**Key metrics**
+CTL/ATL/TSB-style load, acute/chronic ratio, monotony, strain, load variability, weekly TSS/load, planned vs completed load.
+
+**Output structure**
+Load state, fatigue state, risk, decision.
+
+**Read-only or write**
+Read-only unless paired with explicit `adjust/write/schedule`.
+
+**Validation rules**
+Separate completed load from planned load.
+
+**Error cases**
+Insufficient training history, no load data, missing planned events.
+
+**Clarifying questions**
+“Do you want completed load, planned load, or both?”
+
+**Example prompts**
+`evaluate fatigue state`
+`check load variability`
+`review weekly structure`
+
+**Example response outline**
+“Training Load — current state: [state]. Load trend: [trend]. Fatigue: [trend]. Risk: [risk]. Action: [recommendation].”
+
+---
+
+## 7.3 Physiology family
+
+**Canonical commands**
+`evaluate recovery status`, `evaluate readiness today`, `check HRV trends`, `analyze resting heart rate`, `assess sleep impact`, `review subjective wellness`, `evaluate motivation trends`, `check injury risk`, `monitor recovery balance`.
+
+**User intent**
+Assess recovery and readiness.
+
+**Required inputs**
+None for today/current; date required for one-day wellness data.
+
+**Optional inputs**
+Date range, athlete ID.
+
+**Default assumptions**
+“Today” means current date in America/New_York.
+
+**Data sources used**
+Raw: wellness data, HRV, RHR, sleep, subjective metrics.
+Montis interpretation: readiness, recovery/load interaction, injury-risk warning.
+
+**Calls involved**
+`getOneDayWellnessV1` for one-day data; `runWellnessReportV2` for trend report.
+
+**Time window logic**
+Today for readiness; wellness report window for trends; custom range if supplied.
+
+**Key metrics**
+HRV, RHR, sleep, fatigue, soreness, motivation, subjective wellness.
+
+**Output structure**
+Recovery state, trend evidence, training implication.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Do not diagnose injury. Flag risk based on data quality and trends only.
+
+**Error cases**
+No wellness data, sparse wellness sync, missing subjective inputs.
+
+**Clarifying questions**
+“Do you want today’s readiness or a trend report?”
+
+**Example prompts**
+`evaluate readiness today`
+`check HRV trends`
+`assess sleep impact`
+
+**Example response outline**
+“Readiness — [date/range]. Recovery: [state]. Evidence: [signals]. Training implication: [action].”
+
+---
+
+## 7.4 Performance intelligence family
+
+**Canonical commands**
+`review intensity distribution`, `explain polarisation score`, `explain fatigue trend`, `explain ACWR meaning`, `explain durability metrics`, `assess W prime usage`, `analyze anaerobic repeatability`, `evaluate heart rate drift`, `analyze decoupling trends`, `assess efficiency factor`, `check intensity density`, `review high intensity days`.
+
+**User intent**
+Understand performance model outputs and physiological execution signals.
+
+**Required inputs**
+None for concept explanation; date/activity/range for personalized analysis.
+
+**Optional inputs**
+Sport, athlete ID, activity ID, range.
+
+**Default assumptions**
+If phrased as “explain [concept] meaning,” mark as explanatory and do not query live data. If phrased as “my/current/recent,” use live data.
+
+**Data sources used**
+Raw: activities, intervals, curves, HR/power/pace data.
+Montis interpretation: Seiler/Treff distribution, durability, W′ behavior, intensity density.
+
+**Calls involved**
+Reports for current summaries; activity tools for session-level analysis; curve tools for performance models.
+
+**Time window logic**
+Concept-only: none. Personalized: current week, activity, or supplied range.
+
+**Key metrics**
+Intensity distribution, polarization score, ACWR, W′ depletion/recovery, HR drift/decoupling, efficiency factor, high-intensity clustering.
+
+**Output structure**
+Definition or raw finding, evidence, interpretation, action.
+
+**Read-only or write**
+Read-only.
+
+**Validation rules**
+Do not query live data for concept-only explanations unless the user asks for personalization.
+
+**Error cases**
+Missing activity/range for personalized analysis, no power/HR data.
+
+**Clarifying questions**
+“Do you want a general explanation or your current data analyzed?”
+
+**Example prompts**
+`explain ACWR meaning`
+`assess W prime usage in my last activity`
+`review high intensity days this week`
+
+**Example response outline**
+“Performance Intelligence — [scope]. Metric: [definition/value]. Evidence: [data]. Interpretation: [meaning]. Action: [recommendation].”
+
+---
+
+## 7.5 Adaptation family
+
+**Canonical commands**
+`assess aerobic development`, `assess VO2 progression`, `assess anaerobic capacity`, `evaluate metabolic efficiency`, `identify weak systems`, `identify strengths`, `suggest improvement focus`, `assess adaptation state`.
+
+**User intent**
+Determine whether training is producing desired physiological adaptation and which system is limiting.
+
+**Required inputs**
+None for current-state analysis; range optional.
+
+**Optional inputs**
+Sport, event target, athlete ID.
+
+**Default assumptions**
+Use recent block/season context for adaptation unless user specifies a narrower period.
+
+**Data sources used**
+Raw: activities, load history, performance curves, wellness.
+Montis interpretation: aerobic durability, repeatability, neural load, system balance, adaptation stability. The coaching question bank explicitly frames durability, repeatability, neural density, training load, fatigue balance, progression, system balance, and adaptation stability as analysis domains. 
+
+**Calls involved**
+Season report, summary report, power/pace curves, activity analysis.
+
+**Time window logic**
+Usually 90-day block or custom range.
+
+**Key metrics**
+Trend in load, curve changes, repeatability, decoupling, fatigue resistance, system balance.
+
+**Output structure**
+Adaptation state, strongest system, weakest system, confidence, next focus.
+
+**Read-only or write**
+Read-only unless paired with explicit planning/write command.
+
+**Validation rules**
+Separate evidence from inference. State data limitations.
+
+**Error cases**
+Insufficient historical data, missing curves, mixed sport context.
+
+**Clarifying questions**
+“Which sport or target event should I optimize around?”
+
+**Example prompts**
+`identify weak systems`
+`assess VO2 progression`
+`suggest improvement focus`
+
+**Example response outline**
+“Adaptation — [range]. Strongest system: [system]. Limiter: [system]. Evidence: [signals]. Focus: [training focus].”
+
+---
+
+## 7.6 Nutrition family
+
+**Canonical commands**
+`check fueling adequacy`, `analyze carbohydrate needs`, `review nutrition balance`, `optimize fueling strategy`.
+
+**User intent**
+Evaluate carbohydrate/fueling alignment with training demand.
+
+**Required inputs**
+Activity, planned workout, or date/range if user wants specific analysis.
+
+**Optional inputs**
+Duration, TSS/load, event type, athlete ID.
+
+**Default assumptions**
+For planned calendar workouts, use workout duration and TSS if present to calculate `carbs_per_hour`. For general advice, provide explanatory guidance without writing.
+
+**Data sources used**
+Raw: workout duration, TSS/load, activity demand.
+Montis interpretation: fueling adequacy relative to training load.
+
+**Calls involved**
+Calendar read for planned workouts, activity read for completed workouts, report context for training demand.
+
+**Time window logic**
+Single workout/activity or user-specified range.
+
+**Key metrics**
+`load_per_hour = TSS / (duration_minutes / 60)`, duration and intensity bands, carbohydrate lookup table, clamp 30–110 g/h, exclude non-training note/holiday/sick/injured categories. 
+
+**Output structure**
+Demand, recommended carbohydrate range, rationale, execution notes.
+
+**Read-only or write**
+Read-only unless updating calendar workout metadata.
+
+**Validation rules**
+Do not assign fueling to NOTE/HOLIDAY/SICK/INJURED events.
+
+**Error cases**
+Missing duration or TSS, unsupported event category.
+
+**Clarifying questions**
+“Which workout or date should I analyze?”
+
+**Example prompts**
+`analyze carbohydrate needs for Saturday's ride`
+`optimize fueling strategy for my long run`
+
+**Example response outline**
+“Fueling — [workout]. Demand: [load/hour]. Recommendation: [g/h]. Rationale: [duration/intensity].”
+
+---
+
+## 7.7 Planning and optimization family
+
+**Canonical commands**
+`optimize weekly plan`, `give me a strict 7 day plan`, `adjust next week training`, `plan next microcycle`, `suggest recovery strategy`, `suggest endurance session`, `suggest VO2 workout`, `suggest threshold workout`, `suggest easy ride session`, `give me a plan for my next target event`, `balance intensity zones`, `improve aerobic base`, `boost VO2 capacity`, `increase threshold power`, `improve durability`, `reduce fatigue accumulation`, `optimize long term progression`.
+
+**User intent**
+Generate or adjust training recommendations.
+
+**Required inputs**
+For read-only recommendation: enough context from reports/history.
+For calendar write: explicit date(s), sport(s), and write intent.
+
+**Optional inputs**
+Target event, available days, sport, duration limits, athlete ID.
+
+**Default assumptions**
+Planning recommendations are read-only unless the prompt clearly asks to add/write/schedule/update calendar items. Montis cannot create a native Intervals training-plan object; it can read training plans and create/update calendar workouts directly. 
+
+**Data sources used**
+Raw: reports, activities, wellness, planned events, target events.
+Montis interpretation: adaptive decision engine and phase-specific workout selection.
+
+**Calls involved**
+Read-only: reports, activity lists, calendar read.
+Write: `writeCalendarV1`, with `readCalendarV1`/`deleteCalendarV1` for replacements.
+
+**Time window logic**
+7-day plan = next 7 calendar days unless user specifies otherwise. Microcycle = weekly execution window. Target-event plan = from current date to target event date.
+
+**Key metrics**
+Load progression, fatigue state, recovery status, phase, target demands, intensity distribution, workout-library phase matching.
+
+**Expected output structure**
+Plan objective, assumptions, day-by-day plan, rationale, risk controls, write status.
+
+**Read-only or write**
+Read-only by default. Writes only when explicit calendar mutation language is present.
+
+**Validation rules**
+When writing, prefer canonical workout-library templates before custom sessions, lock sport before selecting workouts, use `Type` exactly as written unless explicitly changed, use only interval text from the workout description, do not pass estimated TSS, do not mix anchors, do not infer missing recovery, and ensure total duration equals interval sum. 
+
+Phase-based workout selection should prefer: Recovery → REC/END easy/NEURO light/OFF; Base → END/TOR/TEM; Build → TEM/SS/THR; Specialty → THR/UO/VO2/race-specific; Peak → OPEN/race-specific/short THR/VO2 maintenance; Transition → REC/END easy/OFF. 
+
+**Error cases**
+No calendar range, missing target event date, ambiguous write intent, impossible weekly constraints, insufficient recovery data.
+
+**Clarifying questions**
+“Should I write this to the calendar or just draft it?”
+“What is the target event date?”
+“What days are available?”
+
+**Example prompts**
+`give me a strict 7 day plan`
+`optimize weekly plan`
+`schedule a threshold workout next Tuesday`
+`reduce fatigue accumulation next week`
+
+**Example response outline**
+“Plan — [range]. Objective: [objective]. Constraints: [assumptions]. Day-by-day: [plan]. Rationale: [load/recovery]. Calendar write: [yes/no].”
+
+---
+
+## 7.8 Events and forecasting family
+
+**Canonical commands**
+`prepare for target event`, `show target events`, `evaluate race readiness`, `optimize taper strategy`, `forecast training progression`, `predict fatigue trajectory`, `review future forecast`, `interpret planned load`.
+
+**User intent**
+Assess target readiness and future training trajectory.
+
+**Required inputs**
+Target event date or calendar range for event-specific analysis.
+
+**Optional inputs**
+Event priority, sport, athlete ID.
+
+**Default assumptions**
+If target event is not supplied, read calendar over a reasonable future range or ask for the event.
+
+**Data sources used**
+Raw: planned events, activities, reports, wellness.
+Montis interpretation: readiness, taper state, fatigue projection.
+
+**Calls involved**
+`readCalendarV1`, reports, activity/list tools.
+
+**Time window logic**
+Current date to target event, or supplied forecast range.
+
+**Key metrics**
+Planned load, accumulated fatigue, recovery trajectory, event-specific system readiness.
+
+**Output structure**
+Target event, readiness state, risks, taper/forecast recommendation.
+
+**Read-only or write**
+Read-only unless paired with explicit calendar update/write.
+
+**Validation rules**
+Do not modify taper plan unless user asks to update calendar.
+
+**Error cases**
+No target event, missing planned events, insufficient history.
+
+**Clarifying questions**
+“Which target event should I use?”
+“Do you want a forecast only or calendar changes?”
+
+**Example prompts**
+`evaluate race readiness`
+`optimize taper strategy for my A race`
+`interpret planned load for next week`
+
+**Example response outline**
+“Event Readiness — [event/date]. Readiness: [state]. Fatigue trajectory: [trend]. Taper recommendation: [action].”
+
+---
+
+## 7.9 System explanations and data exploration
+
+**Canonical commands**
+`explain training state`, `explain load accepting state`, `explain productive fatigue`, `show training load details`, `show physiology response`, `show performance intelligence`, `show adaptation insights`, `show adaptive decisions`.
+
+**User intent**
+Explain Montis concepts or expose report-layer details.
+
+**Required inputs**
+None for concept-only explanation. Date/range if user wants personalized data.
+
+**Optional inputs**
+Athlete ID, report scope.
+
+**Default assumptions**
+Commands starting with `explain` are explanatory unless the user says “my/current/recent.” Commands starting with `show` usually imply data-backed output.
+
+**Data sources used**
+Concept-only: no live data.
+Personalized: reports, wellness, activities, performance models.
+
+**Calls involved**
+None for pure explanation; report/activity tools for personalized analysis.
+
+**Time window logic**
+None for explanation; report window for personalized.
+
+**Key metrics**
+Depends on concept: load, recovery, performance intelligence, adaptation, decision state.
+
+**Expected output structure**
+Definition, how Montis uses it, what changes the decision, example interpretation.
+
+**Read-only or write**
+Read-only / explanatory.
+
+**Validation rules**
+Mark concept-only outputs as explanatory. Do not claim live athlete state without querying live data.
+
+**Error cases**
+User asks for “my” state but data unavailable.
+
+**Clarifying questions**
+“Do you want a general explanation or your current data analyzed?”
+
+**Example prompts**
+`explain productive fatigue`
+`show adaptive decisions`
+`show physiology response`
+
+**Example response outline**
+“Concept: [definition]. Inputs: [data]. Interpretation: [meaning]. Actions: [how decisions change].”
+
+---
+
+# 8. Thin aliases
+
+These commands should be treated as thin aliases with identical execution flow:
+
+* `planned events`, `calendar`, `schedule` → `readCalendarV1`. 
+* `write workout`, `add workout`, `plan workout` → `writeCalendarV1` when the user intends a calendar write. 
+* `delete workout`, `remove event` → `deleteCalendarV1`. 
+* `activity`, `analyse activity`, date, or activity ID → `getOneDayFullActivityV1`. 
+* `list activities`, `range activities` → `listActivitiesLight`. 
+* `activity power curve`, `ride power curve`, `activity mmp`, `fatigued power curve` → `getActivityPowerCurveV1`, with `kj=kj1` when fatigued is requested. 
+* `send message`, `send to coach` → `sendChatMessageV1`. 
+
+One integration note: the mapping file includes `training plan → getAthleteTrainingPlanV1`, but that callable is not present in the currently exposed Montis tool runtime. QA should mark this as “specified in mapping but unavailable in current runtime” unless the function is added.
+
+---
+
+# 9. Calendar mutation QA checklist
+
+Use this checklist for any command that can write, update, or delete:
+
+1. Confirm mutation intent: `add/create/schedule/write/update/delete/clear/wipe`.
+2. Resolve athlete, date, sport, title, and scope.
+3. For sport-specific workouts, lock sport first.
+4. Use strict Intervals.icu syntax.
+5. Validate duration integrity.
+6. Validate exactly one intensity anchor per interval.
+7. Prefer workout-library templates before custom generation.
+8. Do not pass estimated TSS for library workouts unless the command explicitly supplies real TSS.
+9. For replacement, match by ID first; otherwise same date + same sport/type + strong title similarity.
+10. Delete → verify → create for replacements.
+11. Never date-delete unless user explicitly says `clear day`, `delete all`, `remove everything`, or `wipe`.
+12. Report exactly what was changed.

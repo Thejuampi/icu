@@ -12,8 +12,12 @@ import (
 func main() {
 	const minArgs = 2
 
+	registry := NewCommandRegistry()
+
+	registerAllCommands(registry)
+
 	if len(os.Args) < minArgs {
-		printHelp()
+		printHelp(registry)
 		os.Exit(1)
 	}
 
@@ -34,7 +38,7 @@ func main() {
 
 		action = args[1]
 		posArgs = append([]string{args[0]}, posArgs...)
-		executeCommand(resource, action, posArgs, flags)
+		executeCommand(registry, resource, action, posArgs, flags)
 
 		return
 	}
@@ -52,7 +56,7 @@ func main() {
 	}
 
 	delete(flags, "_posargs_")
-	executeCommand(resource, action, posArgs, flags)
+	executeCommand(registry, resource, action, posArgs, flags)
 }
 
 func isIDFirstResource(resource string) bool {
@@ -64,24 +68,31 @@ func isIDFirstResource(resource string) bool {
 	return false
 }
 
-func executeCommand(resource, action string, posArgs []string, flags map[string]string) {
+func commandRequiresAuth(resource, _ string) bool {
+	return resource != "config"
+}
+
+func executeCommand(registry *CommandRegistry, resource, action string, posArgs []string, flags map[string]string) {
 	if _, ok := flags["help"]; ok || resource == "help" {
-		printHelp()
+		printHelp(registry)
 
 		return
 	}
 
-	apiKey := icu.ResolveAPIKey(flags)
-	if apiKey == "" {
-		fmt.Fprintln(os.Stderr, "Error: API key required. Set INTERVALS_ICU_API_KEY or use --api-key.")
-		os.Exit(1)
-	}
-
-	cmd, ok := LookupCommand(resource, action)
+	cmd, ok := registry.Lookup(resource, action)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Unknown command: %s %s\n", resource, action)
 		fmt.Fprintf(os.Stderr, "Run 'icu help' for available commands.\n")
 		os.Exit(1)
+	}
+
+	var apiKey string
+	if commandRequiresAuth(resource, action) {
+		apiKey = icu.ResolveAPIKey(flags)
+		if apiKey == "" {
+			fmt.Fprintln(os.Stderr, "Error: API key required. Set INTERVALS_ICU_API_KEY or use --api-key.")
+			os.Exit(1)
+		}
 	}
 
 	athleteID := icu.ResolveAthleteID(flags)
@@ -149,35 +160,34 @@ func parseShortFlag(flags map[string]string, args []string, idx int, name string
 	return idx
 }
 
-func printHelp() {
-	fmt.Fprintln(os.Stdout, "icu - Intervals.icu CLI")
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintln(os.Stdout, "Usage: icu <resource> <action> [flags]")
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintln(os.Stdout, "Global flags:")
-	fmt.Fprintln(os.Stdout, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
-	fmt.Fprintln(os.Stdout, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
-	fmt.Fprintln(os.Stdout, "  --output FORMAT   Output format: json (default), csv, table")
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintln(os.Stdout, "Resources:")
+func printHelp(registry *CommandRegistry) {
+	out := osStdout()
 
-	resources := make([]string, 0, len(commands))
-	for k := range commands {
-		resources = append(resources, k)
-	}
+	fmt.Fprintln(out, "icu - Intervals.icu CLI")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Usage: icu <resource> <action> [flags]")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Global flags:")
+	fmt.Fprintln(out, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
+	fmt.Fprintln(out, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
+	fmt.Fprintln(out, "  --output FORMAT   Output format: json (default), csv, table")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Resources:")
+
+	resources := registry.Resources()
 
 	sort.Strings(resources)
 
 	for _, r := range resources {
-		acts := ActionsForResource(r)
+		acts := registry.Actions(r)
 		sort.Strings(acts)
-		fmt.Fprintf(os.Stdout, "  %-15s  %s\n", r, strings.Join(acts, ", "))
+		fmt.Fprintf(out, "  %-15s  %s\n", r, strings.Join(acts, ", "))
 	}
 
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintln(os.Stdout, "Examples:")
-	fmt.Fprintln(os.Stdout, "  icu athlete show")
-	fmt.Fprintln(os.Stdout, "  icu activities list --oldest 2026-05-20 --newest 2026-05-24")
-	fmt.Fprintln(os.Stdout, "  icu wellness get 2026-05-24")
-	fmt.Fprintln(os.Stdout, "  icu ftp show")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Examples:")
+	fmt.Fprintln(out, "  icu athlete show")
+	fmt.Fprintln(out, "  icu activities list --oldest 2026-05-20 --newest 2026-05-24")
+	fmt.Fprintln(out, "  icu wellness get 2026-05-24")
+	fmt.Fprintln(out, "  icu ftp show")
 }

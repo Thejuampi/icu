@@ -89,8 +89,8 @@ func TestEventJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
 	var e icu.Event
-	e.Category = "WORKOUT"
-	e.Type = "Ride"
+	e.Category = testWorkoutType
+	e.Type = testRideType
 	e.Name = "Intervals"
 	e.StartDateLocal = "2026-05-25T07:00:00"
 	e.TrainingLoad = 90
@@ -111,16 +111,36 @@ func TestEventJSONRoundtrip(t *testing.T) {
 	}
 }
 
+func TestEventExPartialUpdateOmitsCreateOnlyFields(t *testing.T) {
+	t.Parallel()
+
+	var event icu.EventEx
+	event.Name = "3x4 VO2Max - Re-Entry"
+	event.Description = "- Warmup 10m 55%"
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := string(data)
+	want := `{"name":"3x4 VO2Max - Re-Entry","description":"- Warmup 10m 55%"}`
+
+	if got != want {
+		t.Fatalf("EventEx partial JSON = %s, want %s", got, want)
+	}
+}
+
 func TestSportSettingsJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
-	var s icu.SportSettings
-	s.Types = []string{"Ride", "VirtualRide"}
-	s.FTP = 290
-	s.LTHR = 178
-	s.MaxHR = 198
+	var settings icu.SportSettings
+	settings.Types = []string{"Ride", "VirtualRide"}
+	settings.FTP = 290
+	settings.LTHR = 178
+	settings.MaxHR = 198
 
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(settings)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,8 +150,8 @@ func TestSportSettingsJSONRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.FTP != s.FTP || got.LTHR != s.LTHR {
-		t.Errorf("SportSettings roundtrip: got %+v, want %+v", got, s)
+	if got.FTP != settings.FTP || got.LTHR != settings.LTHR {
+		t.Errorf("SportSettings roundtrip: got %+v, want %+v", got, settings)
 	}
 }
 

@@ -2,23 +2,33 @@ package main
 
 import icu "github.com/Thejuampi/icu"
 
-//nolint:funlen
-func init() {
-	RegisterCommand("workouts", "list", &Command{
+func registerWorkoutsCommands(registry *CommandRegistry) {
+	registry.Register("workouts", "list", workoutsListCommand())
+	registry.Register("workouts", "get", workoutsGetCommand())
+	registry.Register("workouts", "create", workoutsCreateCommand())
+	registry.Register("workouts", "update", workoutsUpdateCommand())
+	registry.Register("workouts", "delete", workoutsDeleteCommand())
+	registry.Register("workouts", "tags", workoutsTagsCommand())
+}
+
+func workoutsListCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "workouts list",
 		Description: "List all workouts in library.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var w []icu.Workout
 			if err := client.Get("workouts", nil, nil, &w); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), w)
+			return writeJSON(w)
 		},
-	})
+	}
+}
 
-	RegisterCommand("workouts", "get", &Command{
+func workoutsGetCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "workouts get <id>",
 		Description: "Get a icu.Workout.",
@@ -29,36 +39,40 @@ func init() {
 
 			var w icu.Workout
 			if err := client.Get("workouts", []string{args[0]}, nil, &w); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), w)
+			return writeJSON(w)
 		},
-	})
+	}
+}
 
-	RegisterCommand("workouts", "create", &Command{
+func workoutsCreateCommand() *Command {
+	return &Command{
 		Name:        "",
-		Usage:       "workouts create --name NAME --type Ride [--icu.Folder-id ID] [--desc DESC] [--training-load N]",
+		Usage:       "workouts create --name NAME --type Ride [--folder-id ID] [--desc DESC] [--training-load N]",
 		Description: "Create a icu.Workout.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			var w icu.WorkoutEx
 			w.Name = icu.StringFlag(flags, "name", "")
 			w.Type = icu.StringFlag(flags, "type", "Ride")
-			w.FolderID = IntFlag(flags, "icu.Folder-id", 0)
+			w.FolderID = IntFlag(flags, "folder-id", 0)
 			w.Description = icu.StringFlag(flags, "desc", "")
 			w.TrainingLoad = IntFlag(flags, "training-load", 0)
 			w.MovingTime = IntFlag(flags, "moving-time", 0)
 
 			var result icu.Workout
 			if err := client.Post("workouts", nil, nil, w, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
-	})
+	}
+}
 
-	RegisterCommand("workouts", "update", &Command{
+func workoutsUpdateCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "workouts update <id> --name NAME",
 		Description: "Update a icu.Workout.",
@@ -78,14 +92,16 @@ func init() {
 
 			var result icu.Workout
 			if err := client.Put("workouts", []string{args[0]}, nil, w, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
-	})
+	}
+}
 
-	RegisterCommand("workouts", "delete", &Command{
+func workoutsDeleteCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "workouts delete <id>",
 		Description: "Delete a icu.Workout.",
@@ -94,21 +110,23 @@ func init() {
 				return errMissing("icu.Workout id")
 			}
 
-			return client.Delete("workouts", []string{args[0]}, nil, nil)
+			return wrapCommandError(client.Delete("workouts", []string{args[0]}, nil, nil))
 		},
-	})
+	}
+}
 
-	RegisterCommand("workouts", "tags", &Command{
+func workoutsTagsCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "workouts tags",
 		Description: "List icu.Workout tags.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var tags []string
 			if err := client.Get("workouts", []string{"tags"}, nil, &tags); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), tags)
+			return writeJSON(tags)
 		},
-	})
+	}
 }

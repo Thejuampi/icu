@@ -4,11 +4,33 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	icu "github.com/Thejuampi/icu"
 )
 
 const strTrue = "true"
 
 func osStdout() io.Writer { return os.Stdout }
+
+func wrapCommandError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	return fmt.Errorf("command failed: %w", err)
+}
+
+func writeJSON(v any) error {
+	return wrapCommandError(icu.WriteJSON(osStdout(), v))
+}
+
+func writeOutput(data []byte) error {
+	if _, err := osStdout().Write(data); err != nil {
+		return fmt.Errorf("writing output: %w", err)
+	}
+
+	return nil
+}
 
 func queryFromFlags(flags map[string]string, keys ...string) map[string]string {
 	q := map[string]string{}

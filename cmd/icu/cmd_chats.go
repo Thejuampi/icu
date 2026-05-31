@@ -2,22 +2,22 @@ package main
 
 import icu "github.com/Thejuampi/icu"
 
-func init() {
-	RegisterCommand("chats", "list", &Command{
+func registerChatsCommands(registry *CommandRegistry) {
+	registry.Register("chats", "list", &Command{
 		Name:        "",
 		Usage:       "chats list",
 		Description: "List chats for icu.Athlete.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var c []icu.Chat
 			if err := client.Get("chats", nil, nil, &c); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), c)
+			return writeJSON(c)
 		},
 	})
 
-	RegisterCommand("chats", "get", &Command{
+	registry.Register("chats", "get", &Command{
 		Name:        "",
 		Usage:       "chats get <id>",
 		Description: "Get icu.Chat by ID.",
@@ -28,14 +28,14 @@ func init() {
 
 			var c icu.Chat
 			if err := client.Get("chats", []string{args[0]}, nil, &c); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), c)
+			return writeJSON(c)
 		},
 	})
 
-	RegisterCommand("chats", "messages", &Command{
+	registry.Register("chats", "messages", &Command{
 		Name:        "",
 		Usage:       "chats messages <id> [--limit N]",
 		Description: "List messages in icu.Chat.",
@@ -48,14 +48,14 @@ func init() {
 
 			var msgs []icu.Message
 			if err := client.Get("chats", []string{args[0], "messages"}, q, &msgs); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), msgs)
+			return writeJSON(msgs)
 		},
 	})
 
-	RegisterCommand("chats", "send", &Command{
+	registry.Register("chats", "send", &Command{
 		Name:        "",
 		Usage:       "chats send --content MSG [--to ID]",
 		Description: "Send a icu.Message.",
@@ -65,11 +65,11 @@ func init() {
 			m.ToAthleteID = icu.StringFlag(flags, "to", "")
 
 			var resp icu.SendResponse
-			if err := client.Post("chats", []string{"send-icu.Message"}, nil, m, &resp); err != nil {
-				return err
+			if err := client.Post("chats", []string{"send-message"}, nil, m, &resp); err != nil {
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), resp)
+			return writeJSON(resp)
 		},
 	})
 }

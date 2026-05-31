@@ -1,5 +1,4 @@
-//nolint:testpackage // white-box tests need access to Client internals for httptest setup
-package icu
+package icu_test
 
 import (
 	"io"
@@ -7,41 +6,76 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	icu "github.com/Thejuampi/icu"
 )
+
+const (
+	testAthleteID    = "i123"
+	testWellnessDate = "2026-05-24"
+	testAthleteName  = "Juan"
+	testRideType     = "Ride"
+	testWorkoutType  = "WORKOUT"
+)
+
+func newTestClient(apiKey, athleteID, baseURL string, httpClient *http.Client) *icu.Client {
+	return icu.NewClient(
+		apiKey,
+		athleteID,
+		icu.WithHTTPClient(httpClient),
+		icu.WithBaseURL(baseURL),
+	)
+}
+
+func writeTestResponse(t *testing.T, responseWriter http.ResponseWriter, body string) {
+	t.Helper()
+
+	if _, err := io.WriteString(responseWriter, body); err != nil {
+		t.Fatalf("write response body: %v", err)
+	}
+}
+
+func writeTestBytes(t *testing.T, responseWriter http.ResponseWriter, body []byte) {
+	t.Helper()
+
+	if _, err := responseWriter.Write(body); err != nil {
+		t.Fatalf("write response bytes: %v", err)
+	}
+}
 
 func TestClientGetAthlete(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("expected GET, got %s", r.Method)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", req.Method)
 		}
 
-		if r.URL.Path != "/api/v1/athlete/0" {
-			t.Errorf("expected /api/v1/athlete/0, got %s", r.URL.Path)
+		if req.URL.Path != "/api/v1/athlete/0" {
+			t.Errorf("expected /api/v1/athlete/0, got %s", req.URL.Path)
 		}
 
-		auth := r.Header.Get("Authorization")
+		auth := req.Header.Get("Authorization")
 		if !strings.HasPrefix(auth, "Basic ") {
 			t.Errorf("missing Basic auth header: %s", auth)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"id":"i123","name":"Juan","weight":81}`)
+		writeTestResponse(t, w, `{"id":"`+testAthleteID+`","name":"`+testAthleteName+`","weight":81}`)
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
-	var a Athlete
+	var a icu.Athlete
 
 	err := client.Get("athlete", nil, nil, &a)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if a.ID != "i123" || a.Name != "Juan" {
+	if a.ID != testAthleteID || a.Name != testAthleteName {
 		t.Errorf("unexpected athlete: %+v", a)
 	}
 }
@@ -49,36 +83,36 @@ func TestClientGetAthlete(t *testing.T) {
 func TestClientPostEvent(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST, got %s", r.Method)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", req.Method)
 		}
 
-		if r.URL.Path != "/api/v1/athlete/0/events" {
-			t.Errorf("expected /api/v1/athlete/0/events, got %s", r.URL.Path)
+		if req.URL.Path != "/api/v1/athlete/0/events" {
+			t.Errorf("expected /api/v1/athlete/0/events, got %s", req.URL.Path)
 		}
 
-		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+		if ct := req.Header.Get("Content-Type"); ct != "application/json" {
 			t.Errorf("expected application/json, got %s", ct)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, `{"id":42,"name":"Test Workout","category":"WORKOUT"}`)
+		writeTestResponse(t, w, `{"id":42,"name":"Test Workout","category":"`+testWorkoutType+`"}`)
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
-	var ev EventEx
+	var ev icu.EventEx
 	ev.StartDateLocal = "2026-05-25T07:00:00"
-	ev.Category = "WORKOUT"
+	ev.Category = testWorkoutType
 	ev.Name = "Test Workout"
-	ev.Type = "Ride"
+	ev.Type = testRideType
 	ev.MovingTime = 3600
 
-	var result Event
+	var result icu.Event
 
 	err := client.Post("events", nil, nil, ev, &result)
 	if err != nil {
@@ -107,17 +141,17 @@ func TestClientPutWellnessBulk(t *testing.T) {
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
-	var w1 Wellness
-	w1.ID = "2026-05-24"
+	var w1 icu.Wellness
+	w1.ID = testWellnessDate
 	w1.Weight = 81
 
-	var w2 Wellness
+	var w2 icu.Wellness
 	w2.ID = "2026-05-23"
 	w2.Weight = 81.2
 
-	body := []Wellness{w1, w2}
+	body := []icu.Wellness{w1, w2}
 
 	err := client.Put("wellness-bulk", nil, nil, body, nil)
 	if err != nil {
@@ -134,14 +168,14 @@ func TestClientDeleteActivity(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, `{"id":"i123","icuAthleteId":"i445643"}`)
+		writeTestResponse(t, w, `{"id":"i123","icuAthleteId":"i445643"}`)
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
-	var resp DeleteResponse
+	var resp icu.DeleteResponse
 
 	err := client.Delete("activity", []string{"i123"}, nil, &resp)
 	if err != nil {
@@ -158,12 +192,12 @@ func TestClientErrorHandling(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		io.WriteString(w, `{"error":"invalid api key"}`)
+		writeTestResponse(t, w, `{"error":"invalid api key"}`)
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "bad-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("bad-key", "0", srv.URL, srv.Client())
 
 	err := client.Get("athlete", nil, nil, nil)
 	if err == nil {
@@ -187,14 +221,14 @@ func TestClientQueryParams(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `[]`)
+		writeTestResponse(t, w, `[]`)
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
-	var activities []Activity
+	var activities []icu.Activity
 
 	err := client.Get("activities", nil, map[string]string{"oldest": "2026-05-20", "newest": "2026-05-24"}, &activities)
 	if err != nil {
@@ -216,14 +250,14 @@ func TestClientUploadFile(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, `{"activities":[]}`)
+		writeTestResponse(t, w, `{"activities":[]}`)
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
-	var resp UploadResponse
+	var resp icu.UploadResponse
 
 	err := client.UploadFile("activities", "", "testdata/activity.fit", map[string]string{"name": "Test"}, &resp)
 	if err == nil {
@@ -236,12 +270,12 @@ func TestClientDownload(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Write([]byte("fake fit data"))
+		writeTestBytes(t, w, []byte("fake fit data"))
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
 	data, err := client.Download("activity", []string{"i123", "file"}, nil)
 	if err != nil {
@@ -257,26 +291,26 @@ func TestClientAthleteIDInPath(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/athlete/i445643/wellness/2026-05-24" {
+		if r.URL.Path != "/api/v1/athlete/i445643/wellness/"+testWellnessDate {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"id":"2026-05-24","weight":81}`)
+		writeTestResponse(t, w, `{"id":"`+testWellnessDate+`","weight":81}`)
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "i445643", baseURL: srv.URL}
+	client := newTestClient("test-key", "i445643", srv.URL, srv.Client())
 
-	var w Wellness
+	var w icu.Wellness
 
-	err := client.Get("wellness", []string{"2026-05-24"}, nil, &w)
+	err := client.Get("wellness", []string{testWellnessDate}, nil, &w)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if w.ID != "2026-05-24" {
+	if w.ID != testWellnessDate {
 		t.Errorf("unexpected wellness id: %s", w.ID)
 	}
 }
@@ -286,14 +320,14 @@ func TestClientJSONError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `not json`)
+		writeTestResponse(t, w, `not json`)
 	}))
 
 	defer srv.Close()
 
-	client := &Client{httpClient: srv.Client(), apiKey: "test-key", athleteID: "0", baseURL: srv.URL}
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
-	var a Athlete
+	var a icu.Athlete
 
 	err := client.Get("athlete", nil, nil, &a)
 	if err == nil {

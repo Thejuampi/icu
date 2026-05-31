@@ -25,9 +25,18 @@ func jsonUnmarshal(data []byte, v any) error {
 	return nil
 }
 
-//nolint:gocognit,gocyclo,cyclop,funlen
-func init() {
-	RegisterCommand("events", "list", &Command{
+func registerEventsCommands(registry *CommandRegistry) {
+	registry.Register("events", "list", eventsListCommand())
+	registry.Register("events", "get", eventsGetCommand())
+	registry.Register("events", "create", eventsCreateCommand())
+	registry.Register("events", "update", eventsUpdateCommand())
+	registry.Register("events", "delete", eventsDeleteCommand())
+	registry.Register("events", "download", eventsDownloadCommand())
+	registry.Register("events", "tags", eventsTagsCommand())
+}
+
+func eventsListCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "events list --oldest DATE --newest DATE [--category WORKOUT] [--ext zwo|mrc|erg|fit] [--resolve]",
 		Description: "List calendar events.",
@@ -39,14 +48,16 @@ func init() {
 
 			var events []icu.Event
 			if err := client.Get("events", nil, q, &events); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), events)
+			return writeJSON(events)
 		},
-	})
+	}
+}
 
-	RegisterCommand("events", "get", &Command{
+func eventsGetCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "events get <id>",
 		Description: "Get event by ID.",
@@ -57,14 +68,16 @@ func init() {
 
 			var e icu.Event
 			if err := client.Get("events", []string{args[0]}, nil, &e); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), e)
+			return writeJSON(e)
 		},
-	})
+	}
+}
 
-	RegisterCommand("events", "create", &Command{
+func eventsCreateCommand() *Command {
+	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
 			" [--moving-time SECS] [--training-load N] [--desc DESC]",
@@ -84,14 +97,16 @@ func init() {
 
 			var result icu.Event
 			if err := client.Post("events", nil, nil, ev, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
-	})
+	}
+}
 
-	RegisterCommand("events", "update", &Command{
+func eventsUpdateCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "events update <id> --name NAME [--desc DESC]",
 		Description: "Update calendar event.",
@@ -115,14 +130,16 @@ func init() {
 
 			var result icu.Event
 			if err := client.Put("events", []string{args[0]}, nil, ev, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
-	})
+	}
+}
 
-	RegisterCommand("events", "delete", &Command{
+func eventsDeleteCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "events delete <id>",
 		Description: "Delete calendar event.",
@@ -131,11 +148,13 @@ func init() {
 				return errMissing("event id")
 			}
 
-			return client.Delete("events", []string{args[0]}, nil, nil)
+			return wrapCommandError(client.Delete("events", []string{args[0]}, nil, nil))
 		},
-	})
+	}
+}
 
-	RegisterCommand("events", "download", &Command{
+func eventsDownloadCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "events download <id> --ext zwo|mrc|erg|fit",
 		Description: "Download planned workout file.",
@@ -148,28 +167,26 @@ func init() {
 
 			data, err := client.Download("events", []string{args[0], "download." + ext}, nil)
 			if err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			if _, err := osStdout().Write(data); err != nil {
-				return fmt.Errorf("writing output: %w", err)
-			}
-
-			return nil
+			return writeOutput(data)
 		},
-	})
+	}
+}
 
-	RegisterCommand("events", "tags", &Command{
+func eventsTagsCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "events tags",
 		Description: "List event tags.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var tags []string
 			if err := client.Get("event-tags", nil, nil, &tags); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), tags)
+			return writeJSON(tags)
 		},
-	})
+	}
 }

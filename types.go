@@ -245,9 +245,9 @@ type Event struct {
 }
 
 type EventEx struct {
-	StartDateLocal  string   `json:"startDateLocal"`
+	StartDateLocal  string   `json:"startDateLocal,omitempty"`
 	EndDateLocal    string   `json:"endDateLocal,omitempty"`
-	Category        string   `json:"category"`
+	Category        string   `json:"category,omitempty"`
 	Type            string   `json:"type,omitempty"`
 	Name            string   `json:"name,omitempty"`
 	Description     string   `json:"description,omitempty"`

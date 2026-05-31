@@ -13,18 +13,33 @@ func errMissing(what string) error {
 	return fmt.Errorf("%w: %s", errMissingRequired, what)
 }
 
-//nolint:gocognit,gocyclo,cyclop,funlen
-func init() {
-	RegisterCommand("activity", "show", &Command{
+func registerActivityCommands(registry *CommandRegistry) {
+	registry.Register("activity", "show", activityShowCommand())
+	registry.Register("activity", "update", activityUpdateCommand())
+	registry.Register("activity", "delete", activityDeleteCommand())
+	registry.Register("activity", "intervals", activityIntervalsCommand())
+	registry.Register("activity", "streams", activityStreamsCommand())
+	registry.Register("activity", "power-vs-hr", activityPowerVsHRCommand())
+	registry.Register("activity", "weather", activityWeatherCommand())
+	registry.Register("activity", "file", activityFileCommand())
+	registerActivityCurveCommands(registry)
+	registerActivityDetailCommands(registry)
+	registerActivityDownloadCommands(registry)
+}
+
+func activityShowCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "activity <id> show [--intervals]",
 		Description: "Get a single activity.",
 		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			return activityCmd(args, client)
 		},
-	})
+	}
+}
 
-	RegisterCommand("activity", "update", &Command{
+func activityUpdateCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "activity <id> update --name NAME [--desc DESC] [--type Ride]",
 		Description: "Update an activity.",
@@ -48,14 +63,16 @@ func init() {
 
 			var result icu.Activity
 			if err := client.Put("activity", []string{args[0]}, nil, a, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
-	})
+	}
+}
 
-	RegisterCommand("activity", "delete", &Command{
+func activityDeleteCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "activity <id> delete",
 		Description: "Delete an activity.",
@@ -66,14 +83,16 @@ func init() {
 
 			var resp icu.DeleteResponse
 			if err := client.Delete("activity", []string{args[0]}, nil, &resp); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), resp)
+			return writeJSON(resp)
 		},
-	})
+	}
+}
 
-	RegisterCommand("activity", "intervals", &Command{
+func activityIntervalsCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "activity <id> intervals",
 		Description: "Get detected intervals.",
@@ -84,14 +103,16 @@ func init() {
 
 			var dto icu.IntervalsDTO
 			if err := client.Get("activity", []string{args[0], "intervals"}, nil, &dto); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), dto)
+			return writeJSON(dto)
 		},
-	})
+	}
+}
 
-	RegisterCommand("activity", "streams", &Command{
+func activityStreamsCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "activity <id> streams [--types watts,heartrate,cadence]",
 		Description: "Get activity streams.",
@@ -104,18 +125,22 @@ func init() {
 
 			var streams []icu.ActivityStream
 			if err := client.Get("activity", []string{args[0], "streams"}, q, &streams); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), streams)
+			return writeJSON(streams)
 		},
-	})
+	}
+}
 
-	registerActivityCurve("power-curve", "Get activity power curve.")
-	registerActivityCurve("hr-curve", "Get activity HR curve.")
-	registerActivityCurve("pace-curve", "Get activity pace curve.")
+func registerActivityCurveCommands(registry *CommandRegistry) {
+	registerActivityCurve(registry, "power-curve", "Get activity power curve.")
+	registerActivityCurve(registry, "hr-curve", "Get activity HR curve.")
+	registerActivityCurve(registry, "pace-curve", "Get activity pace curve.")
+}
 
-	RegisterCommand("activity", "power-vs-hr", &Command{
+func activityPowerVsHRCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "activity <id> power-vs-hr",
 		Description: "Get power vs HR data.",
@@ -126,18 +151,24 @@ func init() {
 
 			var v any
 			if err := client.Get("activity", []string{args[0], "power-vs-hr"}, nil, &v); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), v)
+			return writeJSON(v)
 		},
-	})
+	}
+}
 
-	registerActivityDetail("best-efforts", "Find best efforts.", "stream", "duration", "distance", "count")
-	registerActivityDetail("map", "Get map data.", "bounds", "weather")
-	registerActivityDetail("weather-summary", "Get weather summary.", "descr_config")
+func registerActivityDetailCommands(registry *CommandRegistry) {
+	registerActivityDetail(registry, "best-efforts", "Find best efforts.", "stream", "duration", "distance", "count")
+	registerActivityDetail(registry, "map", "Get map data.", "bounds", "weather")
+	registerActivityDetail(registry, "weather-summary", "Get weather summary.", "descr_config")
+	registerActivityDetail(registry, "segments", "Get activity segments.")
+	registerActivityDetail(registry, "messages", "Get activity comments.")
+}
 
-	RegisterCommand("activity", "weather", &Command{
+func activityWeatherCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "activity <id> weather",
 		Description: "Get weather summary (alias for weather-summary).",
@@ -148,14 +179,16 @@ func init() {
 
 			var v any
 			if err := client.Get("activity", []string{args[0], "weather-summary"}, nil, &v); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), v)
+			return writeJSON(v)
 		},
-	})
+	}
+}
 
-	RegisterCommand("activity", "file", &Command{
+func activityFileCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "activity <id> file",
 		Description: "Download original activity file.",
@@ -166,21 +199,17 @@ func init() {
 
 			data, err := client.Download("activity", []string{args[0], "file"}, nil)
 			if err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			if _, err := osStdout().Write(data); err != nil {
-				return fmt.Errorf("writing output: %w", err)
-			}
-
-			return nil
+			return writeOutput(data)
 		},
-	})
+	}
+}
 
-	registerActivityDownload("fit-file")
-	registerActivityDownload("gpx-file")
-	registerActivityDetail("segments", "Get activity segments.")
-	registerActivityDetail("messages", "Get activity comments.")
+func registerActivityDownloadCommands(registry *CommandRegistry) {
+	registerActivityDownload(registry, "fit-file")
+	registerActivityDownload(registry, "gpx-file")
 }
 
 func activityCmd(args []string, client *icu.Client) error {
@@ -190,14 +219,14 @@ func activityCmd(args []string, client *icu.Client) error {
 
 	var a icu.Activity
 	if err := client.Get("activity", []string{args[0]}, nil, &a); err != nil {
-		return err
+		return wrapCommandError(err)
 	}
 
-	return icu.WriteJSON(osStdout(), a)
+	return writeJSON(a)
 }
 
-func registerActivityCurve(name, desc string) {
-	RegisterCommand("activity", name, &Command{
+func registerActivityCurve(registry *CommandRegistry, name, desc string) {
+	registry.Register("activity", name, &Command{
 		Name:        "",
 		Usage:       "icu.Activity <id> " + name,
 		Description: desc,
@@ -208,16 +237,16 @@ func registerActivityCurve(name, desc string) {
 
 			var v any
 			if err := client.Get("activity", []string{args[0], name}, nil, &v); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), v)
+			return writeJSON(v)
 		},
 	})
 }
 
-func registerActivityDetail(name, desc string, queryKeys ...string) {
-	RegisterCommand("activity", name, &Command{
+func registerActivityDetail(registry *CommandRegistry, name, desc string, queryKeys ...string) {
+	registry.Register("activity", name, &Command{
 		Name:        "",
 		Usage:       "icu.Activity <id> " + name,
 		Description: desc,
@@ -230,16 +259,16 @@ func registerActivityDetail(name, desc string, queryKeys ...string) {
 
 			var v any
 			if err := client.Get("activity", []string{args[0], name}, q, &v); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), v)
+			return writeJSON(v)
 		},
 	})
 }
 
-func registerActivityDownload(name string) {
-	RegisterCommand("activity", name, &Command{
+func registerActivityDownload(registry *CommandRegistry, name string) {
+	registry.Register("activity", name, &Command{
 		Name:        "",
 		Usage:       "icu.Activity <id> " + name,
 		Description: "Download " + name + ".",
@@ -250,14 +279,10 @@ func registerActivityDownload(name string) {
 
 			data, err := client.Download("activity", []string{args[0], name}, nil)
 			if err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			if _, err := osStdout().Write(data); err != nil {
-				return fmt.Errorf("writing output: %w", err)
-			}
-
-			return nil
+			return writeOutput(data)
 		},
 	})
 }

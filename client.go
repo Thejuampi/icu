@@ -22,8 +22,26 @@ type Client struct {
 	baseURL    string
 }
 
-func NewClient(apiKey, athleteID string) *Client {
-	return &Client{
+type ClientOption func(*Client)
+
+func WithHTTPClient(httpClient *http.Client) ClientOption {
+	return func(client *Client) {
+		if httpClient != nil {
+			client.httpClient = httpClient
+		}
+	}
+}
+
+func WithBaseURL(baseURL string) ClientOption {
+	return func(client *Client) {
+		if baseURL != "" {
+			client.baseURL = baseURL
+		}
+	}
+}
+
+func NewClient(apiKey, athleteID string, options ...ClientOption) *Client {
+	client := &Client{
 		httpClient: &http.Client{
 			Transport:     nil,
 			CheckRedirect: nil,
@@ -34,6 +52,12 @@ func NewClient(apiKey, athleteID string) *Client {
 		athleteID: athleteID,
 		baseURL:   BaseURL,
 	}
+
+	for _, option := range options {
+		option(client)
+	}
+
+	return client
 }
 
 func (c *Client) Get(resource string, parts []string, query map[string]string, result any) error {
