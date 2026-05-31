@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net/http"
@@ -68,7 +69,18 @@ func TestCLIParsingAndHelpFunctional(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 
-	printHelp(registry)
+	var buf bytes.Buffer
+
+	printHelp(registry, &buf, "")
+
+	output := buf.String()
+	if !strings.Contains(output, "icu - Intervals.icu CLI") {
+		t.Fatalf("printHelp output missing header: %s", output)
+	}
+
+	if !strings.Contains(output, "Resources:") {
+		t.Fatalf("printHelp output missing Resources: %s", output)
+	}
 
 	flags := parseFlags([]string{"--oldest", "2026-06-01", "--limit=10", "positional", "-h"})
 
@@ -594,7 +606,7 @@ func athleteResponse(method, path string) (string, bool) {
 	case strings.HasSuffix(path, "/athlete-summary"):
 		return `[{"date":"2026-06-01","athleteId":"0","athleteName":"Tester","fitness":50}]`, true
 	case strings.HasSuffix(path, "/training-plan"):
-		return `{"athleteId":"0","trainingPlanId":12,"trainingPlanStartDate":"2026-06-01"}`, true
+		return `{"athlete_id":"0","training_plan_id":12,"training_plan_start_date":"2026-06-01"}`, true
 	case strings.Contains(path, "/settings/"):
 		return okJSON, true
 	case strings.HasSuffix(path, "/athlete/0") && (method == http.MethodGet || method == http.MethodPut):

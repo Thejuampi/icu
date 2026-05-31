@@ -1,6 +1,11 @@
 ---
 name: intervals-icu
 description: Use when working with Intervals.icu API data — activities, wellness, workouts, events, FTP, athlete profiles, sport settings, routes, gear, chats. Covers all endpoints via the `icu` CLI (github.com/Thejuampi/icu). Trigger keywords: intervals.icu, intervals icu, API key, workout, wellness, FTP, training load, cycling, icu CLI.
+compatibility: opencode
+metadata:
+  cli: icu
+  domain: intervals-icu-api
+  source: project-agent-skill
 ---
 
 # Intervals.icu API Skill
@@ -27,6 +32,17 @@ The `icu` CLI wraps every intervals.icu endpoint (~70 commands). Install:
 
 ```bash
 go install github.com/Thejuampi/icu@latest
+```
+
+### Getting Help
+
+```bash
+icu help              # Global help listing all resources
+icu --help            # Same as above
+icu ftp --help        # Resource-specific help showing all actions with usage and descriptions
+icu activities        # Resources without a "show" action default to help
+icu config diagnose   # Safe diagnostic output (no secrets)
+icu config diagnose --verbose  # Full diagnostic including key fingerprints
 ```
 
 Repo: https://github.com/Thejuampi/icu
@@ -403,7 +419,7 @@ Common fields to request via `?fields=` parameter: `id`, `name`, `start_date_loc
 
 ## CLI Command Reference
 
-See `icu help` for the full list. Key commands:
+See `icu help` for the full list. Use `icu <resource> --help` for resource-specific usage. Key commands:
 
 | Category | Example |
 |----------|---------|
@@ -416,7 +432,7 @@ See `icu help` for the full list. Key commands:
 | FTP | `icu ftp show`, `icu ftp update --value 290` |
 | Sports | `icu sports list`, `icu sports get Ride` |
 | Curves | `icu curves power --type Ride --curves 42d`, `icu curves mmp` |
-| Config | `icu config show`, `icu config set --api-key KEY` |
+| Config | `icu config show`, `icu config set --api-key KEY`, `icu config diagnose [--verbose]` |
 
 ## Error Handling
 

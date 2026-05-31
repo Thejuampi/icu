@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -9,46 +10,72 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
+const defaultAction = "show"
+
 func main() {
+	os.Exit(run(os.Args, os.Stdout, os.Stderr))
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
 	const minArgs = 2
 
 	registry := NewCommandRegistry()
-
 	registerAllCommands(registry)
 
-	if len(os.Args) < minArgs {
-		printHelp(registry)
-		os.Exit(1)
+	if len(args) >= minArgs && isHelpArg(args[1]) {
+		printHelp(registry, stdout, "")
+
+		return 0
 	}
 
-	resource := os.Args[1]
-	action := "show"
-	args := os.Args[2:]
+	if len(args) < minArgs {
+		printHelp(registry, stdout, "")
 
-	idFirst := isIDFirstResource(resource)
-	if idFirst && len(args) >= minArgs && !strings.HasPrefix(args[0], "--") && !strings.HasPrefix(args[1], "--") {
-		flags := parseFlags(args[2:])
+		return 0
+	}
 
-		var posArgs []string
-		if pa, ok := flags["_posargs_"]; ok && pa != "" {
-			posArgs = strings.Fields(pa)
+	resource := args[1]
+	rest := args[2:]
+
+	action, posArgs, flags, dispatch := runDispatch(registry, resource, rest, stdout)
+	if dispatch {
+		return executeCommand(registry, resource, action, posArgs, flags, stdout, stderr)
+	}
+
+	return 0
+}
+
+//nolint:gocritic // unnamed results are clearer in dispatch functions
+func runDispatch(
+	registry *CommandRegistry,
+	resource string,
+	rest []string,
+	stdout io.Writer,
+) (string, []string, map[string]string, bool) {
+	if action, pos, fl, ok := tryIDFirst(registry, resource, rest, stdout); ok {
+		return action, pos, fl, true
+	}
+
+	if indexOfHelp(rest) >= 0 {
+		printHelp(registry, stdout, resource)
+
+		return "", nil, nil, false
+	}
+
+	action := ""
+	if len(rest) > 0 && !strings.HasPrefix(rest[0], "--") {
+		action = rest[0]
+		rest = rest[1:]
+	}
+
+	if action == "" {
+		action = resolveDefault(registry, resource, stdout)
+		if action == "" {
+			return "", nil, nil, false
 		}
-
-		delete(flags, "_posargs_")
-
-		action = args[1]
-		posArgs = append([]string{args[0]}, posArgs...)
-		executeCommand(registry, resource, action, posArgs, flags)
-
-		return
 	}
 
-	if len(args) > 0 && !strings.HasPrefix(args[0], "--") {
-		action = args[0]
-		args = args[1:]
-	}
-
-	flags := parseFlags(args)
+	flags := parseFlags(rest)
 
 	var posArgs []string
 	if pa, ok := flags["_posargs_"]; ok && pa != "" {
@@ -56,7 +83,81 @@ func main() {
 	}
 
 	delete(flags, "_posargs_")
-	executeCommand(registry, resource, action, posArgs, flags)
+
+	return action, posArgs, flags, true
+}
+
+//nolint:gocritic
+func tryIDFirst(
+	registry *CommandRegistry,
+	resource string,
+	rest []string,
+	stdout io.Writer,
+) (string, []string, map[string]string, bool) {
+	const minArgs = 2
+
+	if !isIDFirstResource(resource) || len(rest) < minArgs || strings.HasPrefix(rest[0], "--") || strings.HasPrefix(rest[1], "--") {
+		return "", nil, nil, false
+	}
+
+	if indexOfHelp(rest[2:]) >= 0 {
+		printHelp(registry, stdout, resource)
+
+		return "", nil, nil, true
+	}
+
+	flags := parseFlags(rest[2:])
+
+	var posArgs []string
+	if pa, ok := flags["_posargs_"]; ok && pa != "" {
+		posArgs = strings.Fields(pa)
+	}
+
+	delete(flags, "_posargs_")
+
+	action := rest[1]
+	posArgs = append([]string{rest[0]}, posArgs...)
+
+	return action, posArgs, flags, true
+}
+
+func resolveDefault(registry *CommandRegistry, resource string, stdout io.Writer) string {
+	acts := registry.Actions(resource)
+	if acts == nil {
+		return defaultAction
+	}
+
+	if !hasAction(acts, defaultAction) {
+		printHelp(registry, stdout, resource)
+
+		return ""
+	}
+
+	return defaultAction
+}
+
+func hasAction(acts []string, target string) bool {
+	for _, a := range acts {
+		if a == target {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isHelpArg(arg string) bool {
+	return arg == "help" || arg == "--help" || arg == "-h"
+}
+
+func indexOfHelp(args []string) int {
+	for i, a := range args {
+		if isHelpArg(a) {
+			return i
+		}
+	}
+
+	return -1
 }
 
 func isIDFirstResource(resource string) bool {
@@ -72,26 +173,28 @@ func commandRequiresAuth(resource, _ string) bool {
 	return resource != "config"
 }
 
-func executeCommand(registry *CommandRegistry, resource, action string, posArgs []string, flags map[string]string) {
-	if _, ok := flags["help"]; ok || resource == "help" {
-		printHelp(registry)
-
-		return
-	}
-
+func executeCommand(
+	registry *CommandRegistry,
+	resource, action string,
+	posArgs []string,
+	flags map[string]string,
+	_, stderr io.Writer,
+) int {
 	cmd, ok := registry.Lookup(resource, action)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "Unknown command: %s %s\n", resource, action)
-		fmt.Fprintf(os.Stderr, "Run 'icu help' for available commands.\n")
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Unknown command: %s %s\n", resource, action)
+		fmt.Fprintf(stderr, "Run 'icu help' for available commands.\n")
+
+		return 1
 	}
 
 	var apiKey string
 	if commandRequiresAuth(resource, action) {
 		apiKey = icu.ResolveAPIKey(flags)
 		if apiKey == "" {
-			fmt.Fprintln(os.Stderr, "Error: API key required. Set INTERVALS_ICU_API_KEY or use --api-key.")
-			os.Exit(1)
+			fmt.Fprintln(stderr, "Error: API key required. Set INTERVALS_ICU_API_KEY or use --api-key.")
+
+			return 1
 		}
 	}
 
@@ -99,9 +202,12 @@ func executeCommand(registry *CommandRegistry, resource, action string, posArgs 
 	client := icu.NewClient(apiKey, athleteID)
 
 	if err := cmd.Run(posArgs, flags, client); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+
+		return 1
 	}
+
+	return 0
 }
 
 func parseFlags(args []string) map[string]string {
@@ -160,19 +266,34 @@ func parseShortFlag(flags map[string]string, args []string, idx int, name string
 	return idx
 }
 
-func printHelp(registry *CommandRegistry) {
-	out := osStdout()
+func printHelp(registry *CommandRegistry, w io.Writer, resource string) {
+	if resource != "" {
+		acts := registry.Actions(resource)
+		if acts == nil {
+			resource = ""
+		}
+	}
 
-	fmt.Fprintln(out, "icu - Intervals.icu CLI")
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Usage: icu <resource> <action> [flags]")
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Global flags:")
-	fmt.Fprintln(out, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
-	fmt.Fprintln(out, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
-	fmt.Fprintln(out, "  --output FORMAT   Output format: json (default), csv, table")
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Resources:")
+	if resource == "" {
+		printGlobalHelp(registry, w)
+
+		return
+	}
+
+	printResourceHelp(registry, w, resource)
+}
+
+func printGlobalHelp(registry *CommandRegistry, w io.Writer) {
+	fmt.Fprintln(w, "icu - Intervals.icu CLI")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Usage: icu <resource> <action> [flags]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Global flags:")
+	fmt.Fprintln(w, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
+	fmt.Fprintln(w, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
+	fmt.Fprintln(w, "  --output FORMAT   Output format: json (default), csv, table")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Resources:")
 
 	resources := registry.Resources()
 
@@ -181,13 +302,39 @@ func printHelp(registry *CommandRegistry) {
 	for _, r := range resources {
 		acts := registry.Actions(r)
 		sort.Strings(acts)
-		fmt.Fprintf(out, "  %-15s  %s\n", r, strings.Join(acts, ", "))
+		fmt.Fprintf(w, "  %-15s  %s\n", r, strings.Join(acts, ", "))
 	}
 
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Examples:")
-	fmt.Fprintln(out, "  icu athlete show")
-	fmt.Fprintln(out, "  icu activities list --oldest 2026-05-20 --newest 2026-05-24")
-	fmt.Fprintln(out, "  icu wellness get 2026-05-24")
-	fmt.Fprintln(out, "  icu ftp show")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintln(w, "  icu athlete show")
+	fmt.Fprintln(w, "  icu activities list --oldest 2026-05-20 --newest 2026-05-24")
+	fmt.Fprintln(w, "  icu wellness get 2026-05-24")
+	fmt.Fprintln(w, "  icu ftp show")
+}
+
+func printResourceHelp(registry *CommandRegistry, w io.Writer, resource string) {
+	acts := registry.Actions(resource)
+	sort.Strings(acts)
+
+	fmt.Fprintf(w, "Commands for %s:\n\n", resource)
+
+	for _, action := range acts {
+		cmd, ok := registry.Lookup(resource, action)
+		if !ok {
+			continue
+		}
+
+		if cmd.Usage != "" {
+			fmt.Fprintf(w, "  icu %s\n", cmd.Usage)
+		} else {
+			fmt.Fprintf(w, "  icu %s %s\n", resource, action)
+		}
+
+		if cmd.Description != "" {
+			fmt.Fprintf(w, "      %s\n", cmd.Description)
+		}
+
+		fmt.Fprintln(w)
+	}
 }

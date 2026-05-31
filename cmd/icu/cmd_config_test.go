@@ -58,6 +58,26 @@ func TestConfigCommandsFunctionalRoundTrip(t *testing.T) {
 	}
 }
 
+func TestConfigDiagnoseVerboseFlag(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerConfigCommands(registry)
+
+	cmd, ok := registry.Lookup("config", "diagnose")
+	if !ok {
+		t.Fatal("missing config diagnose command")
+	}
+
+	if err := cmd.Run(nil, nil, nil); err != nil {
+		t.Fatalf("config diagnose without verbose: %v", err)
+	}
+
+	if err := cmd.Run(nil, map[string]string{"verbose": "true"}, nil); err != nil {
+		t.Fatalf("config diagnose with verbose: %v", err)
+	}
+}
+
 func runConfigCommand(t *testing.T, registry *CommandRegistry, action string, flags map[string]string) error {
 	t.Helper()
 

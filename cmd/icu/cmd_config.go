@@ -101,10 +101,35 @@ func configPathCommand() *Command {
 func configDiagnoseCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "config diagnose",
+		Usage:       "config diagnose [--verbose]",
 		Description: "Show non-secret diagnostics for auth and config resolution.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			return writeJSON(icu.DiagnoseConfig(flags))
+			diag := icu.DiagnoseConfig(flags)
+
+			if !BoolFlag(flags, "verbose") {
+				return writeJSON(configDiagnoseSafe(&diag))
+			}
+
+			return writeJSON(diag)
+		},
+	}
+}
+
+func configDiagnoseSafe(diag *icu.ConfigDiagnostic) map[string]any {
+	return map[string]any{
+		"configPath":   diag.ConfigPath,
+		"configError":  diag.ConfigError,
+		"apiKeySource": diag.APIKey.ResolvedSource,
+		"athleteId": map[string]any{
+			"config":         diag.AthleteID.Config,
+			"default":        diag.AthleteID.Default,
+			"resolved":       diag.AthleteID.Resolved,
+			"resolvedSource": diag.AthleteID.ResolvedSource,
+		},
+		"output": map[string]any{
+			"default":        diag.Output.Default,
+			"resolved":       diag.Output.Resolved,
+			"resolvedSource": diag.Output.ResolvedSource,
 		},
 	}
 }
