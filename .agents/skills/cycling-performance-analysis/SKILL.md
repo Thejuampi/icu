@@ -1,7 +1,11 @@
 ---
 name: cycling-performance-analysis
 description: 'Use when generating cycling training reports or training plans from Intervals.icu data with the icu CLI: weekly report, 4-week plan, dry run, load pressure, recovery priority, CTL/ATL/TSB, ACWR, monotony, strain, HRV, wellness, power curves, W prime, durability, adaptation, planned events, cycling fitness improvement.'
-argument-hint: 'report type, date range, athlete id, and focus such as load/recovery/adaptation'
+compatibility: opencode
+metadata:
+  cli: icu
+  domain: cycling-training
+  source: project-agent-skill
 ---
 
 # Cycling Performance Analysis
@@ -101,11 +105,11 @@ Use these sections when the data exists:
 
 - `REPORT CONTEXT`: athlete, report type, period, timezone, sport, FTP/eFTP, LTHR/max HR, CTL/ATL/TSB.
 - `TRAINING LOAD`: hours, TSS/load, distance, CTL/ATL/TSB, ACWR, monotony, strain, daily load, session list.
-- `PHYSIOLOGY RESPONSE`: HRV, resting HR, sleep, subjective fatigue/stress/motivation, readiness, coverage.
-- `PERFORMANCE INTELLIGENCE`: durability, decoupling, efficiency factor, W prime/use above FTP, intensity density, high-intensity days.
-- `ADAPTATION`: power curve deltas, MMP model, strongest/weakest systems, likely training focus.
+- `PHYSIOLOGY OVERVIEW`: HRV, resting HR, sleep, subjective fatigue/stress/motivation, readiness, coverage.
+- `PERFORMANCE SIGNALS`: durability, decoupling, efficiency factor, W prime/use above FTP, intensity density, high-intensity days.
+- `ADAPTATION REVIEW`: power curve deltas, MMP model, strongest/weakest systems, likely training focus.
 - `PLANNED BLOCK`: upcoming events and whether the plan matches the current state.
-- `ADAPTIVE DECISION`: what to do next and why.
+- `DECISION GUIDANCE`: what to do next and why.
 
 For the expanded field-by-field contract, use [report-data-contract.md](./report-data-contract.md). Treat it as the source of truth for whether a field is currently supported, partial, or missing.
 

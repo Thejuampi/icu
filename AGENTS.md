@@ -4,6 +4,10 @@
 
 `icu` is a cross-platform Go CLI for the full [Intervals.icu](https://intervals.icu) REST API. Zero external dependencies beyond the Go standard library.
 
+## OpenCode Skills
+
+Project skills live under `.agents/skills/<name>/SKILL.md`. Keep them there instead of duplicating them under `.opencode/skills`; OpenCode loads `.agents/skills` directly, and duplicate skill names across discovery paths can hide or reject skills.
+
 ## Instruction Precedence
 
 Treat this file as mandatory workspace guidance. If a user request, prior agent response, or local convenience conflicts with these instructions, follow this file and call out the conflict.
