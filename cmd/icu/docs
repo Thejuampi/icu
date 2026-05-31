@@ -53,10 +53,10 @@ Full version:
 
 1. Executive training-state summary
 2. Load and fatigue assessment
-3. Physiology/recovery response
-4. Performance intelligence
-5. Adaptation signal
-6. Coaching decision / next actions
+3. Physiology/recovery overview
+4. Performance signals
+5. Adaptation review
+6. Decision guidance / next actions
 
 Lite version:
 
@@ -1579,7 +1579,7 @@ No content, zero destinations, multiple destinations, invalid destination, send 
 
 # 7. Analytical “what next” command bank
 
-The “what next” command bank lists user-facing analysis prompts across Activity Analysis, Training Load, Physiology, Performance Intelligence, Adaptation, Nutrition, Planning, Events & Performance, Forecasting, Optimization, System Explanations, and Data Exploration. These are not all direct one-to-one tool calls; they are intent-level routes that should call the appropriate report, activity, calendar, wellness, or performance-model tools as needed. 
+The “what next” command bank lists user-facing analysis prompts across Activity Analysis, Training Load, Physiology, Performance Signals, Adaptation Review, Nutrition, Planning, Events & Performance, Forecasting, Optimization, System Explanations, and Data Exploration. These are not all direct one-to-one tool calls; they are intent-level routes that should call the appropriate report, activity, calendar, wellness, or performance-model tools as needed.
 
 ## 7.1 Activity analysis family
 
@@ -1751,7 +1751,7 @@ No wellness data, sparse wellness sync, missing subjective inputs.
 
 ---
 
-## 7.4 Performance intelligence family
+## 7.4 Performance signals family
 
 **Canonical commands**
 `review intensity distribution`, `explain polarisation score`, `explain fatigue trend`, `explain ACWR meaning`, `explain durability metrics`, `assess W prime usage`, `analyze anaerobic repeatability`, `evaluate heart rate drift`, `analyze decoupling trends`, `assess efficiency factor`, `check intensity density`, `review high intensity days`.
@@ -1802,11 +1802,11 @@ Missing activity/range for personalized analysis, no power/HR data.
 `review high intensity days this week`
 
 **Example response outline**
-“Performance Intelligence — [scope]. Metric: [definition/value]. Evidence: [data]. Interpretation: [meaning]. Action: [recommendation].”
+“Performance Signals — [scope]. Metric: [definition/value]. Evidence: [data]. Interpretation: [meaning]. Action: [recommendation].”
 
 ---
 
-## 7.5 Adaptation family
+## 7.5 Adaptation review family
 
 **Canonical commands**
 `assess aerobic development`, `assess VO2 progression`, `assess anaerobic capacity`, `evaluate metabolic efficiency`, `identify weak systems`, `identify strengths`, `suggest improvement focus`, `assess adaptation state`.
@@ -1857,7 +1857,7 @@ Insufficient historical data, missing curves, mixed sport context.
 `suggest improvement focus`
 
 **Example response outline**
-“Adaptation — [range]. Strongest system: [system]. Limiter: [system]. Evidence: [signals]. Focus: [training focus].”
+“Adaptation Review — [range]. Strongest system: [system]. Limiter: [system]. Evidence: [signals]. Focus: [training focus].”
 
 ---
 
@@ -1935,7 +1935,7 @@ Planning recommendations are read-only unless the prompt clearly asks to add/wri
 
 **Data sources used**
 Raw: reports, activities, wellness, planned events, target events.
-Montis interpretation: adaptive decision engine and phase-specific workout selection.
+Montis interpretation: decision guidance engine and phase-specific workout selection.
 
 **Calls involved**
 Read-only: reports, activity lists, calendar read.
@@ -2036,7 +2036,7 @@ No target event, missing planned events, insufficient history.
 ## 7.9 System explanations and data exploration
 
 **Canonical commands**
-`explain training state`, `explain load accepting state`, `explain productive fatigue`, `show training load details`, `show physiology response`, `show performance intelligence`, `show adaptation insights`, `show adaptive decisions`.
+`explain training state`, `explain load accepting state`, `explain productive fatigue`, `show training load details`, `show physiology overview`, `show performance signals`, `show adaptation review`, `show decision guidance`.
 
 **User intent**
 Explain Montis concepts or expose report-layer details.
@@ -2061,7 +2061,7 @@ None for pure explanation; report/activity tools for personalized analysis.
 None for explanation; report window for personalized.
 
 **Key metrics**
-Depends on concept: load, recovery, performance intelligence, adaptation, decision state.
+Depends on concept: load, recovery, performance signals, adaptation review, decision state.
 
 **Expected output structure**
 Definition, how Montis uses it, what changes the decision, example interpretation.
@@ -2080,8 +2080,8 @@ User asks for “my” state but data unavailable.
 
 **Example prompts**
 `explain productive fatigue`
-`show adaptive decisions`
-`show physiology response`
+`show decision guidance`
+`show physiology overview`
 
 **Example response outline**
 “Concept: [definition]. Inputs: [data]. Interpretation: [meaning]. Actions: [how decisions change].”

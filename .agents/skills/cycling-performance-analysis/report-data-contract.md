@@ -2,10 +2,10 @@
 
 This contract tracks the data needed to render expanded cycling reports like:
 
-- `full physiology_response`
-- `full performance_intelligence`
-- `full adaptation`
-- `full adaptive_decisions`
+- `full physiology overview`
+- `full performance signals`
+- `full adaptation review`
+- `full decision guidance`
 - `4-week training plan dry run`
 
 Support status meanings:
@@ -14,7 +14,7 @@ Support status meanings:
 - `partial`: some source fields exist, but the grouped report field needs more work.
 - `missing`: not currently produced by `icu`.
 
-## Physiology Response
+## Physiology Overview
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ Support status meanings:
 | Physiology state | HRV/resting HR/sleep/load-pressure rule | `icu analysis wellness` local deterministic analysis | supported |
 | External heat/load context | weather/temp/terrain/VAM fields | activities/weather endpoints | missing |
 
-## Performance Intelligence
+## Performance Signals
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
@@ -37,7 +37,7 @@ Support status meanings:
 | Neural density / NDLI | high-intensity days, work above FTP, IF, EF, VI | `icu analysis cycling` | supported |
 | Efficiency semantic state | EF and sport context | local deterministic thresholds | missing |
 
-## Adaptation
+## Adaptation Review
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ Support status meanings:
 | Lactate calibration | lactate custom/wellness fields | custom/wellness data | missing |
 | Phase summary | historical load segmentation | activities/events analysis | missing |
 
-## Adaptive Decisions
+## Decision Guidance
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
@@ -90,8 +90,8 @@ Planning output should compare the existing calendar against the athlete's recen
 
 ## Implementation Priority
 
-1. Expand `icu analysis cycling` with stable load-state and performance-intelligence JSON.
+1. Expand `icu analysis cycling` with stable load-state and performance-signals JSON.
 2. Add wellness analysis from `icu wellness list` for HRV/resting HR/sleep coverage and physiology state.
 3. Add planned-event analysis for ISO-week planned load and forecast inputs.
 4. Add power-curve comparison support for adaptation.
-5. Add a deterministic adaptive-decision layer only after the numeric sections are stable.
+5. Add a deterministic decision-guidance layer only after the numeric sections are stable.
