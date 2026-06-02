@@ -34,6 +34,22 @@ If the investigation exposes a CLI bug, parser mismatch, auth ambiguity, or data
 - Intervals.icu endpoints can return snake_case fields when `fields` is used, even when local DTOs use camelCase JSON tags. If a report shows suspicious zeros for dates, duration, TSS, IF, CTL, ATL, or planned-event load, verify parsing before interpreting the result.
 - Spot-check one raw activity or event after adding new fields. A plausible report with zero-valued inputs is worse than an unavailable section.
 - Treat existing planned workouts as the baseline plan. For planning requests, first evaluate whether the existing calendar is coherent before proposing replacement workouts.
+- Review existing NOTE events on the calendar before rendering analysis. Notes carry coaching context, block structure, decision rules, and athlete-facing communication. Skimming only WORKOUT events misses the full picture. Collect them explicitly alongside planned sessions.
+- After producing a plan review, write key findings back as NOTE events on the calendar so future analyses and the athlete can reference them. If the plan is approved, create: (a) one block-overview note with week roles, load targets, decision thresholds, and FTP; (b) weekly focus notes with session classification and conditional rules.
+- The `--desc` text parser in Intervals.icu requires a specific format. **Never use inline `- NxMm XX%` syntax** — the API will not expand it into a repeat block. Instead use the **multi-line repeat block format**:
+
+```
+# CORRECT — repeats parsed as nested steps:
+3x
+  - 15m 88-92%
+  - 5m 55-60%
+
+# WRONG — inline repeats are treated as a single step:
+- 3x15m 88-92% with 5m rest
+```
+
+Each `-` step line is `duration zone%` (e.g., `15m 55-72%`). A bare `Nx` on its own line starts a repeating block; the indented `-` lines beneath it define the steps to repeat. Do not include rest duration text like `with 5m rest` in the step line — rest is its own indented step.
+- The `workout_doc` and `workout` fields in the EventEx schema are **read-only** in practice. The API ignores them in POST/PUT requests and only generates `workoutDoc` from the `--desc` text description. Workout structure (including step-level `text` cues) can only be set via the description text parser. The text parser strips arbitrary text annotations — only power/HR zones and keywords (warmup, cooldown, etc.) are preserved as step text. Step-level coaching cues must be added manually in the Intervals.icu UI after creation.
 
 ## Primary Workflow
 
@@ -59,6 +75,16 @@ icu events list --oldest NEXT_START --newest NEXT_END --athlete-id ATHLETE_ID
 icu curves power --type Ride --curves 42d --athlete-id ATHLETE_ID
 icu curves mmp --type Ride --athlete-id ATHLETE_ID
 ```
+
+4. Review existing calendar notes (NOTE events) for coaching context.
+
+```bash
+icu events list --oldest PLAN_START --newest PLAN_END --athlete-id ATHLETE_ID
+```
+
+Filter the response for `category: "NOTE"` events. Read their `name` and `description` fields. These contain block intentions, decision rules, physiological thresholds, and athlete communication. Missing them means the analysis is working with incomplete context.
+
+If notes exist, incorporate their content into the review. If notes are absent or outdated, flag it and offer to write them after the analysis.
 
 For planning questions, use a 12-week lookback and the next 4 weeks of events unless the user requests a different horizon.
 
@@ -86,14 +112,14 @@ Use wider ranges for trend questions:
 icu activities list --oldest HISTORY_START --newest END --athlete-id ATHLETE_ID --fields id,name,start_date_local,type,moving_time,distance,icu_training_load,icu_intensity,decoupling,icu_efficiency_factor,icu_variability_index,icu_joules_above_ftp,icu_max_wbal_depletion,icu_ctl,icu_atl
 ```
 
-4. Check the data contract before writing prose.
+5. Check the data contract before writing prose.
    - Required for load/recovery report: athlete, sport settings, 7-day cycling analysis, 42-day wellness if available, next planned events if planning is discussed.
    - Required for adaptation: current power curves or MMP model plus historical activity context.
    - Required for W prime/repeatability: work above FTP and W balance fields in activities or activity intervals.
    - Required for heat/environment: weather or activity environmental fields. Do not infer heat stress from prose alone.
    - Required for 4-week planning: 12-week cycling analysis, 42-day wellness analysis, sport settings, and next 4 weeks of events.
 
-5. Render the report from facts to interpretation.
+6. Render the report from facts to interpretation.
    - Start with the headline state: e.g. `Load Pressure / recovery_priority`.
    - Separate raw metrics from interpretation.
    - Make confidence clear when data is sparse.

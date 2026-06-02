@@ -1,0 +1,14 @@
+Downloaded Intervals.icu OpenAPI spec
+
+Source URL: https://intervals.icu/api/v1/docs/
+Downloaded at: 2026-05-31T15:44:19.3038426-04:00
+Format: OpenAPI 3.0.1
+Title: Intervals.icu API
+Version: v1.0.0
+Paths: 115
+Schemas: 108
+SHA256: 92BDAA0B7DBC6FF9E6AA6D10FFD36EB9B34A339417D208AF9FC0CDB772AB3443
+
+Notes:
+- https://intervals.icu/openapi-spec.json currently returns the Intervals.icu app HTML, not the OpenAPI JSON.
+- Swagger UI is available at https://intervals.icu/api/v1/docs/swagger-ui/index.html and consumes the JSON above.

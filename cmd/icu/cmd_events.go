@@ -80,7 +80,7 @@ func eventsCreateCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--desc DESC]",
+			" [--moving-time SECS] [--training-load N] [--desc DESC] [--upsert]",
 		Description: "Create calendar event.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			var ev icu.EventEx
@@ -95,8 +95,15 @@ func eventsCreateCommand() *Command {
 			ev.Indoor = BoolFlag(flags, "indoor")
 			ev.ExternalID = icu.StringFlag(flags, "external-id", "")
 
+			query := map[string]string{
+				"upsertOnUid": "false",
+			}
+			if BoolFlag(flags, "upsert") {
+				query["upsertOnUid"] = "true"
+			}
+
 			var result icu.Event
-			if err := client.Post("events", nil, nil, ev, &result); err != nil {
+			if err := client.Post("events", nil, query, ev, &result); err != nil {
 				return wrapCommandError(err)
 			}
 
