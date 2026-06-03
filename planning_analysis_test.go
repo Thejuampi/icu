@@ -117,12 +117,129 @@ func TestAnalyzeTrainingPlanComparesAgainstCompletedHistory(t *testing.T) {
 		AverageWeeklyHours:   10.32,
 		CurrentStateLabel:    "",
 		CurrentLoadPressure:  0,
+		CurrentCTL:           0,
+		CurrentATL:           0,
+		CurrentTSB:           0,
+		CurrentDecoupling:    0,
+		CurrentHotSessions:   0,
 		CurrentStateSource:   "",
 		PlannedLoadAlignment: "below_recent_tolerance",
+		Weeks: []icu.TrainingPlanCompletedWeek{
+			{
+				ISOWeek:               "2026-W19",
+				StartDate:             "2026-05-04",
+				EndDate:               "2026-05-10",
+				Load:                  440,
+				MovingTimeSecs:        36000,
+				MovingTimeHours:       10,
+				Sessions:              1,
+				HighIntensityDays:     0,
+				LongEnduranceSessions: 1,
+				MeanIntensity:         0,
+				MeanDecoupling:        0,
+				Tolerance:             "within_recent_tolerance",
+			},
+			{
+				ISOWeek:               "2026-W20",
+				StartDate:             "2026-05-11",
+				EndDate:               "2026-05-17",
+				Load:                  450,
+				MovingTimeSecs:        37000,
+				MovingTimeHours:       10.28,
+				Sessions:              1,
+				HighIntensityDays:     0,
+				LongEnduranceSessions: 1,
+				MeanIntensity:         0,
+				MeanDecoupling:        0,
+				Tolerance:             "within_recent_tolerance",
+			},
+			{
+				ISOWeek:               "2026-W21",
+				StartDate:             "2026-05-18",
+				EndDate:               "2026-05-24",
+				Load:                  490,
+				MovingTimeSecs:        38500,
+				MovingTimeHours:       10.69,
+				Sessions:              1,
+				HighIntensityDays:     0,
+				LongEnduranceSessions: 1,
+				MeanIntensity:         0,
+				MeanDecoupling:        0,
+				Tolerance:             "within_recent_tolerance",
+			},
+		},
 	}
 
 	if !reflect.DeepEqual(got.History, want) {
 		t.Fatalf("History = %+v, want %+v", got.History, want)
+	}
+}
+
+func TestAnalyzeTrainingPlanIncludesCompletedWeekSeries(t *testing.T) {
+	t.Parallel()
+
+	var hardRide icu.Activity
+	hardRide.Type = testRideType
+	hardRide.StartDateLocal = "2026-05-05T08:00:00"
+	hardRide.TrainingLoad = 100
+	hardRide.MovingTime = 3600
+	hardRide.Intensity = 0.9
+	hardRide.Decoupling = 3
+
+	var longRide icu.Activity
+	longRide.Type = testRideType
+	longRide.StartDateLocal = "2026-05-07T08:00:00"
+	longRide.TrainingLoad = 80
+	longRide.MovingTime = 9000
+	longRide.Intensity = 0.68
+	longRide.Decoupling = 4
+
+	var recoveryRide icu.Activity
+	recoveryRide.Type = testRideType
+	recoveryRide.StartDateLocal = "2026-05-12T08:00:00"
+	recoveryRide.TrainingLoad = 60
+	recoveryRide.MovingTime = 3600
+	recoveryRide.Intensity = 0.6
+
+	got := icu.AnalyzeTrainingPlan([]icu.Activity{hardRide, longRide, recoveryRide}, nil, icu.TrainingPlanOptions{
+		HistoryStartDate: "2026-05-04",
+		HistoryEndDate:   "2026-05-17",
+		PlanStartDate:    "",
+		PlanEndDate:      "",
+	})
+	want := []icu.TrainingPlanCompletedWeek{
+		{
+			ISOWeek:               "2026-W19",
+			StartDate:             "2026-05-04",
+			EndDate:               "2026-05-10",
+			Load:                  180,
+			MovingTimeSecs:        12600,
+			MovingTimeHours:       3.5,
+			Sessions:              2,
+			HighIntensityDays:     1,
+			LongEnduranceSessions: 1,
+			MeanIntensity:         0.79,
+			MeanDecoupling:        3.5,
+			Tolerance:             "above_recent_average",
+		},
+		{
+			ISOWeek:               "2026-W20",
+			StartDate:             "2026-05-11",
+			EndDate:               "2026-05-17",
+			Load:                  60,
+			MovingTimeSecs:        3600,
+			MovingTimeHours:       1,
+			Sessions:              1,
+			HighIntensityDays:     0,
+			LongEnduranceSessions: 0,
+			MeanIntensity:         0.6,
+			MeanDecoupling:        0,
+			Tolerance:             "below_recent_tolerance",
+		},
+	}
+
+	if !reflect.DeepEqual(got.History.Weeks, want) {
+		t.Fatalf("History.Weeks = %+v, want %+v", got.History.Weeks, want)
 	}
 }
 
@@ -142,6 +259,262 @@ func TestAnalyzeTrainingPlanAddsExecutionGuidanceForKeyWorkout(t *testing.T) {
 
 	if got.PlannedSessions[0].Execution.RecommendedTitle != want {
 		t.Fatalf("RecommendedTitle = %q, want %q", got.PlannedSessions[0].Execution.RecommendedTitle, want)
+	}
+}
+
+func TestAnalyzeTrainingPlanUsesSportAnchorsFromContext(t *testing.T) {
+	t.Parallel()
+
+	var settings icu.SportSettings
+	settings.FTP = 295
+	settings.IndoorFTP = 288
+	settings.LTHR = 176
+	settings.MaxHR = 194
+	settings.WPrime = 23000
+	settings.PMax = 1090
+
+	got := icu.AnalyzeTrainingPlanWithContext(nil, nil, icu.TrainingPlanOptions{
+		HistoryStartDate: "",
+		HistoryEndDate:   "",
+		PlanStartDate:    "",
+		PlanEndDate:      "",
+	}, icu.TrainingPlanContext{
+		SportSettings: &settings,
+		Wellness:      nil,
+		Adaptation:    nil,
+	})
+	want := icu.TrainingPlanSportAnchors{
+		FTP:       295,
+		IndoorFTP: 288,
+		LTHR:      176,
+		MaxHR:     194,
+		WPrime:    23000,
+		PMax:      1090,
+		Source:    "sport_settings",
+	}
+
+	if got.Anchors != want {
+		t.Fatalf("Anchors = %+v, want %+v", got.Anchors, want)
+	}
+}
+
+func TestAnalyzeTrainingPlanBuildsTargetEventStatus(t *testing.T) {
+	t.Parallel()
+
+	var events []icu.Event
+	events = append(
+		events,
+		plannedWorkout("2026-06-03T08:00:00", "Tempo", 80, 5400, 0.74),
+		plannedTarget("2026-06-20T08:00:00", "A Race", "RACE_A"),
+		plannedTarget("2026-06-28T08:00:00", "A Event", "TARGET"),
+	)
+
+	var rides []icu.Activity
+	rides = append(rides, completedRide("2026-05-28T08:00:00", 110, 7200))
+
+	got := icu.AnalyzeTrainingPlan(rides, events, icu.TrainingPlanOptions{
+		HistoryStartDate: "2026-05-01",
+		HistoryEndDate:   "2026-05-31",
+		PlanStartDate:    "2026-06-01",
+		PlanEndDate:      "2026-06-30",
+	})
+	want := icu.TrainingPlanEventTargetStatus{
+		TargetEvents:   2,
+		RaceEvents:     1,
+		UpcomingEvents: 2,
+		NextEventDate:  "2026-06-20",
+		Readiness:      "on_track",
+		Source:         "calendar_event_targets",
+		Events:         nil,
+	}
+
+	if got.TargetStatus.TargetEvents != want.TargetEvents ||
+		got.TargetStatus.RaceEvents != want.RaceEvents ||
+		got.TargetStatus.UpcomingEvents != want.UpcomingEvents ||
+		got.TargetStatus.NextEventDate != want.NextEventDate ||
+		got.TargetStatus.Readiness != want.Readiness ||
+		got.TargetStatus.Source != want.Source {
+		t.Fatalf("TargetStatus = %+v, want core %+v", got.TargetStatus, want)
+	}
+}
+
+func TestAnalyzeTrainingPlanBuildsLoadForecast(t *testing.T) {
+	t.Parallel()
+
+	var current icu.Activity
+	current.Type = testRideType
+	current.StartDateLocal = "2026-05-31T08:00:00"
+	current.CTL = 70
+	current.ATL = 80
+
+	var events []icu.Event
+	events = append(
+		events,
+		plannedWorkout("2026-06-01T08:00:00", "VO2", 100, 3600, 0.9),
+		plannedWorkout("2026-06-02T08:00:00", "Easy", 50, 3600, 0.6),
+	)
+
+	got := icu.AnalyzeTrainingPlan([]icu.Activity{current}, events, icu.TrainingPlanOptions{
+		HistoryStartDate: "2026-05-01",
+		HistoryEndDate:   "2026-05-31",
+		PlanStartDate:    "2026-06-01",
+		PlanEndDate:      "2026-06-02",
+	})
+	want := icu.TrainingPlanForecast{
+		StartCTL:   70,
+		StartATL:   80,
+		StartTSB:   -10,
+		EndCTL:     70.22,
+		EndATL:     78.16,
+		EndTSB:     -7.94,
+		LowestTSB:  -12.14,
+		HighestTSB: -7.94,
+		Status:     "watch",
+		Source:     "planned_load_impulse_model",
+		Points:     nil,
+	}
+
+	if got.Forecast.StartCTL != want.StartCTL ||
+		got.Forecast.StartATL != want.StartATL ||
+		got.Forecast.StartTSB != want.StartTSB ||
+		got.Forecast.EndCTL != want.EndCTL ||
+		got.Forecast.EndATL != want.EndATL ||
+		got.Forecast.EndTSB != want.EndTSB ||
+		got.Forecast.LowestTSB != want.LowestTSB ||
+		got.Forecast.HighestTSB != want.HighestTSB ||
+		got.Forecast.Status != want.Status ||
+		got.Forecast.Source != want.Source {
+		t.Fatalf("Forecast = %+v, want core %+v", got.Forecast, want)
+	}
+}
+
+func TestAnalyzeTrainingPlanBuildsDayRulesAndDecisionGuidance(t *testing.T) {
+	t.Parallel()
+
+	var current icu.Activity
+	current.Type = testRideType
+	current.StartDateLocal = "2026-05-31T08:00:00"
+	current.CTL = 60
+	current.ATL = 78
+	current.Decoupling = 6.2
+	current.AverageTemp = 32
+
+	var events []icu.Event
+	events = append(events, plannedWorkout("2026-06-01T08:00:00", "VO2 Key", 110, 3600, 0.9))
+
+	var firstWellness icu.Wellness
+	firstWellness.ID = "2026-05-29"
+	firstWellness.HRV = 50
+	firstWellness.RestingHR = 45
+	firstWellness.SleepScore = 85
+
+	var secondWellness icu.Wellness
+	secondWellness.ID = "2026-05-30"
+	secondWellness.HRV = 43
+	secondWellness.RestingHR = 55
+	secondWellness.SleepScore = 70
+
+	wellness := icu.AnalyzeWellness([]icu.Wellness{firstWellness, secondWellness}, icu.AnalysisOptions{
+		StartDate: "2026-05-29",
+		EndDate:   "2026-05-31",
+	})
+
+	got := icu.AnalyzeTrainingPlanWithContext([]icu.Activity{current}, events, icu.TrainingPlanOptions{
+		HistoryStartDate: "2026-05-01",
+		HistoryEndDate:   "2026-05-31",
+		PlanStartDate:    "2026-06-01",
+		PlanEndDate:      "2026-06-01",
+	}, icu.TrainingPlanContext{SportSettings: nil, Wellness: &wellness, Adaptation: nil})
+
+	if len(got.DayAdjustments) == 0 || got.Decision.PrimaryDirective != "recovery_priority" ||
+		got.Decision.ADEScore >= 100 {
+		t.Fatalf("DayAdjustments/Decision = %+v / %+v, want non-empty rules and reduced ADE", got.DayAdjustments, got.Decision)
+	}
+}
+
+func TestAnalyzeTrainingPlanAddsExplicitSleepAndRestingHRRules(t *testing.T) {
+	t.Parallel()
+
+	event := plannedWorkout("2026-06-01T08:00:00", "VO2 Key", 110, 3600, 0.9)
+
+	var baseline icu.Wellness
+	baseline.ID = "2026-05-30"
+	baseline.RestingHR = 45
+	baseline.SleepScore = 85
+
+	var latest icu.Wellness
+	latest.ID = "2026-05-31"
+	latest.RestingHR = 55
+	latest.SleepScore = 70
+
+	wellness := icu.AnalyzeWellness([]icu.Wellness{baseline, latest}, icu.AnalysisOptions{
+		StartDate: "2026-05-30",
+		EndDate:   "2026-05-31",
+	})
+
+	got := icu.AnalyzeTrainingPlanWithContext(nil, []icu.Event{event}, icu.TrainingPlanOptions{
+		HistoryStartDate: "2026-05-01",
+		HistoryEndDate:   "2026-05-31",
+		PlanStartDate:    "2026-06-01",
+		PlanEndDate:      "2026-06-01",
+	}, icu.TrainingPlanContext{SportSettings: nil, Wellness: &wellness, Adaptation: nil})
+
+	if !containsAdjustmentCondition(got.DayAdjustments, "sleep_score_watch") ||
+		!containsAdjustmentCondition(got.DayAdjustments, "resting_hr_delta_watch") {
+		t.Fatalf("DayAdjustments = %+v, want sleep and resting-HR gates", got.DayAdjustments)
+	}
+}
+
+func TestAnalyzeTrainingPlanUsesAdaptationInDecisionGuidance(t *testing.T) {
+	t.Parallel()
+
+	adaptation := icu.CyclingAdaptationAnalysis{
+		Scope: icu.AdaptationScope{StartDate: "", EndDate: "", Curves: 2, Activities: 0},
+		PowerAnchors: icu.AdaptationPowerAnchors{
+			FTP:           285,
+			CriticalPower: 292,
+			WPrime:        22000,
+			PMax:          1050,
+			Source:        "mmp_model",
+		},
+		PowerCurveDeltas: nil,
+		SystemStatus: icu.AdaptationSystemStatus{
+			Status:        "declining",
+			Improved:      0,
+			Stable:        1,
+			Declined:      2,
+			PrimarySignal: "5m_declined",
+			Source:        "power_curve_comparison",
+		},
+		Lactate: icu.WellnessLactateCalibration{
+			Mean:            0,
+			Latest:          0,
+			Trend7Day:       0,
+			Samples:         0,
+			CoveragePercent: 0,
+			State:           "",
+			Source:          "",
+		},
+		PhaseSummary: icu.AdaptationPhaseSummary{
+			Weeks:        0,
+			RecentLoad:   0,
+			PreviousLoad: 0,
+			Trend:        "",
+			Phase:        "",
+			Source:       "",
+		},
+		Warnings: nil,
+	}
+
+	got := icu.AnalyzeTrainingPlanWithContext(nil, nil, icu.TrainingPlanOptions{
+		HistoryStartDate: "",
+		HistoryEndDate:   "",
+		PlanStartDate:    "",
+		PlanEndDate:      "",
+	}, icu.TrainingPlanContext{SportSettings: nil, Wellness: nil, Adaptation: &adaptation})
+
+	if got.Decision.PrimaryDirective != "protect_target_event" || got.Decision.ADEScore >= 100 {
+		t.Fatalf("Decision = %+v, want adaptation-driven target protection and ADE penalty", got.Decision)
 	}
 }
 
@@ -250,6 +623,26 @@ func plannedNote(date, name string) icu.Event {
 	event.Name = name
 
 	return event
+}
+
+func plannedTarget(date, name, category string) icu.Event {
+	var event icu.Event
+	event.StartDateLocal = date
+	event.Category = category
+	event.Type = testRideType
+	event.Name = name
+
+	return event
+}
+
+func containsAdjustmentCondition(adjustments []icu.TrainingPlanDayAdjustment, condition string) bool {
+	for index := range adjustments {
+		if adjustments[index].Condition == condition {
+			return true
+		}
+	}
+
+	return false
 }
 
 func completedRide(date string, load, movingTime int) icu.Activity {

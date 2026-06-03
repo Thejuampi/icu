@@ -6,7 +6,10 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
-const testWellnessStartDate = "2026-05-01"
+const (
+	testWellnessStartDate  = "2026-05-01"
+	testWellnessSecondDate = "2026-05-02"
+)
 
 func TestAnalyzeWellnessComputesHRV(t *testing.T) {
 	t.Parallel()
@@ -16,12 +19,12 @@ func TestAnalyzeWellnessComputesHRV(t *testing.T) {
 	first.HRV = 50
 
 	var second icu.Wellness
-	second.ID = "2026-05-02"
+	second.ID = testWellnessSecondDate
 	second.HRV = 40
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first, second}, icu.AnalysisOptions{
 		StartDate: testWellnessStartDate,
-		EndDate:   "2026-05-02",
+		EndDate:   testWellnessSecondDate,
 	})
 
 	if got.HRV.Mean != 45 || got.HRV.Latest != 40 || got.HRV.Ratio != 0.89 || got.HRV.CoveragePercent != 100 {
@@ -62,7 +65,7 @@ func TestAnalyzeWellnessComputesPhysiologyState(t *testing.T) {
 	first.SleepScore = 85
 
 	var second icu.Wellness
-	second.ID = "2026-05-02"
+	second.ID = testWellnessSecondDate
 	second.HRV = 43
 	second.RestingHR = 55
 	second.SleepScore = 70
@@ -71,10 +74,40 @@ func TestAnalyzeWellnessComputesPhysiologyState(t *testing.T) {
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first, second}, icu.AnalysisOptions{
 		StartDate: testWellnessStartDate,
-		EndDate:   "2026-05-02",
+		EndDate:   testWellnessSecondDate,
 	})
 
 	if got.State.State != "WATCH" || got.State.Confidence != "high" || got.Load.TSB != -14 {
 		t.Fatalf("State = %+v Load = %+v, want WATCH high TSB -14", got.State, got.Load)
+	}
+}
+
+func TestAnalyzeWellnessComputesLactateCalibration(t *testing.T) {
+	t.Parallel()
+
+	var first icu.Wellness
+	first.ID = testWellnessStartDate
+	first.Lactate = 1.2
+
+	var second icu.Wellness
+	second.ID = testWellnessSecondDate
+	second.Lactate = 3.1
+
+	got := icu.AnalyzeWellness([]icu.Wellness{first, second}, icu.AnalysisOptions{
+		StartDate: testWellnessStartDate,
+		EndDate:   "2026-05-04",
+	})
+	want := icu.WellnessLactateCalibration{
+		Mean:            2.15,
+		Latest:          3.1,
+		Trend7Day:       0,
+		Samples:         2,
+		CoveragePercent: 50,
+		State:           "watch",
+		Source:          "wellness_lactate",
+	}
+
+	if got.Lactate != want {
+		t.Fatalf("Lactate = %+v, want %+v", got.Lactate, want)
 	}
 }

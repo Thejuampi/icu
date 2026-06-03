@@ -54,10 +54,43 @@ func (activity *Activity) applySnakeFields(raw map[string]json.RawMessage) {
 	copyRawFloatIfSet(&activity.PowerHRZ2, raw, "icu_power_hr_z2")
 	copyRawIntIfSet(&activity.PowerHRZ2Mins, raw, "icu_power_hr_z2_mins")
 	copyRawIntIfSet(&activity.CadenceZ2, raw, "icu_cadence_z2")
+	activity.applyEnvironmentSnakeFields(raw)
 	copyRawFloatIfSet(&activity.ATL, raw, "icu_atl")
 	copyRawFloatIfSet(&activity.CTL, raw, "icu_ctl")
 	copyRawValueIfSet(&activity.ZoneTimes, raw, "icu_zone_times")
 	copyRawValueIfSet(&activity.HRZoneTimes, raw, "icu_hr_zone_times")
+}
+
+func (activity *Activity) applyEnvironmentSnakeFields(raw map[string]json.RawMessage) {
+	copyRawFloatIfSet(&activity.AverageTemp, raw, "average_temp")
+	copyRawFloatIfSet(&activity.MinTemp, raw, "min_temp")
+	copyRawFloatIfSet(&activity.MaxTemp, raw, "max_temp")
+	copyRawFloatIfSet(&activity.AverageWeatherTemp, raw, "average_weather_temp")
+	copyRawFloatIfSet(&activity.MinWeatherTemp, raw, "min_weather_temp")
+	copyRawFloatIfSet(&activity.MaxWeatherTemp, raw, "max_weather_temp")
+	copyRawFloatIfSet(&activity.AverageFeelsLike, raw, "average_feels_like")
+	copyRawFloatIfSet(&activity.AverageWindSpeed, raw, "average_wind_speed")
+	copyRawFloatIfSet(&activity.AverageWindGust, raw, "average_wind_gust")
+	copyRawIntIfSet(&activity.PrevailingWindDeg, raw, "prevailing_wind_deg")
+	copyRawFloatIfSet(&activity.HeadwindPercent, raw, "headwind_percent")
+	copyRawFloatIfSet(&activity.TailwindPercent, raw, "tailwind_percent")
+	copyRawFloatIfSet(&activity.AverageAltitude, raw, "average_altitude")
+	copyRawFloatIfSet(&activity.MinAltitude, raw, "min_altitude")
+	copyRawFloatIfSet(&activity.MaxAltitude, raw, "max_altitude")
+	copyRawFloatIfSet(&activity.AverageGradient, raw, "average_gradient")
+	copyRawFloatIfSet(&activity.AverageLactate, raw, "average_lactate")
+	copyRawFloatIfSet(&activity.MinLactate, raw, "min_lactate")
+	copyRawFloatIfSet(&activity.MaxLactate, raw, "max_lactate")
+	copyRawFloatIfSet(&activity.AverageYaw, raw, "average_yaw")
+	copyRawInt64IfSet(&activity.RouteID, raw, "route_id")
+	copyRawFloatIfSet(&activity.StrainScore, raw, "strain_score")
+}
+
+func copyRawInt64IfSet(target *int64, raw map[string]json.RawMessage, key string) {
+	var value int64
+	if decodeRawIfPresent(raw, key, &value) && value != 0 {
+		*target = value
+	}
 }
 
 func normalizeActivityIntensity(value float64) float64 {

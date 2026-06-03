@@ -116,8 +116,26 @@ type Activity struct {
 	SessionRPE         int        `json:"sessionRpe,omitempty"`
 	Compliance         float64    `json:"compliance,omitempty"`
 	AverageTemp        float64    `json:"averageTemp,omitempty"`
+	MinTemp            float64    `json:"minTemp,omitempty"`
+	MaxTemp            float64    `json:"maxTemp,omitempty"`
 	AverageWeatherTemp float64    `json:"averageWeatherTemp,omitempty"`
+	MinWeatherTemp     float64    `json:"minWeatherTemp,omitempty"`
+	MaxWeatherTemp     float64    `json:"maxWeatherTemp,omitempty"`
 	AverageFeelsLike   float64    `json:"averageFeelsLike,omitempty"`
+	AverageWindSpeed   float64    `json:"averageWindSpeed,omitempty"`
+	AverageWindGust    float64    `json:"averageWindGust,omitempty"`
+	PrevailingWindDeg  int        `json:"prevailingWindDeg,omitempty"`
+	HeadwindPercent    float64    `json:"headwindPercent,omitempty"`
+	TailwindPercent    float64    `json:"tailwindPercent,omitempty"`
+	AverageAltitude    float64    `json:"averageAltitude,omitempty"`
+	MinAltitude        float64    `json:"minAltitude,omitempty"`
+	MaxAltitude        float64    `json:"maxAltitude,omitempty"`
+	AverageGradient    float64    `json:"averageGradient,omitempty"`
+	AverageLactate     float64    `json:"averageLactate,omitempty"`
+	MinLactate         float64    `json:"minLactate,omitempty"`
+	MaxLactate         float64    `json:"maxLactate,omitempty"`
+	AverageYaw         float64    `json:"averageYaw,omitempty"`
+	RouteID            int64      `json:"routeId,omitempty"`
 	StrainScore        float64    `json:"strainScore,omitempty"`
 	Source             string     `json:"source,omitempty"`
 	StravaID           string     `json:"stravaId,omitempty"`
@@ -215,33 +233,42 @@ type SportInfo struct {
 }
 
 type Event struct {
-	ID                int      `json:"id,omitempty"`
-	StartDateLocal    string   `json:"startDateLocal,omitempty"`
-	EndDateLocal      string   `json:"endDateLocal,omitempty"`
-	Category          string   `json:"category,omitempty"`
-	Type              string   `json:"type,omitempty"`
-	Name              string   `json:"name,omitempty"`
-	Description       string   `json:"description,omitempty"`
-	TrainingLoad      int      `json:"icuTrainingLoad,omitempty"`
-	MovingTime        int      `json:"movingTime,omitempty"`
-	Distance          float64  `json:"distance,omitempty"`
-	Color             string   `json:"color,omitempty"`
-	Indoor            bool     `json:"indoor,omitempty"`
-	FTP               int      `json:"icuFtp,omitempty"`
-	ATL               float64  `json:"icuAtl,omitempty"`
-	CTL               float64  `json:"icuCtl,omitempty"`
-	Target            string   `json:"target,omitempty"`
-	UID               string   `json:"uid,omitempty"`
-	CalendarID        int      `json:"calendarId,omitempty"`
-	Tags              []string `json:"tags,omitempty"`
-	ExternalID        string   `json:"externalId,omitempty"`
-	HideFromAthlete   bool     `json:"hideFromAthlete,omitempty"`
-	AthleteCannotEdit bool     `json:"athleteCannotEdit,omitempty"`
-	Intensity         float64  `json:"icuIntensity,omitempty"`
-	StrainScore       float64  `json:"strainScore,omitempty"`
-	WorkoutDoc        any      `json:"workoutDoc,omitempty"`
-	WorkoutFileBase64 string   `json:"workoutFileBase64,omitempty"`
-	WorkoutFilename   string   `json:"workoutFilename,omitempty"`
+	ID                   int      `json:"id,omitempty"`
+	StartDateLocal       string   `json:"startDateLocal,omitempty"`
+	EndDateLocal         string   `json:"endDateLocal,omitempty"`
+	Category             string   `json:"category,omitempty"`
+	Type                 string   `json:"type,omitempty"`
+	Name                 string   `json:"name,omitempty"`
+	Description          string   `json:"description,omitempty"`
+	TrainingLoad         int      `json:"icuTrainingLoad,omitempty"`
+	MovingTime           int      `json:"movingTime,omitempty"`
+	Distance             float64  `json:"distance,omitempty"`
+	Color                string   `json:"color,omitempty"`
+	Indoor               bool     `json:"indoor,omitempty"`
+	FTP                  int      `json:"icuFtp,omitempty"`
+	ATL                  float64  `json:"icuAtl,omitempty"`
+	CTL                  float64  `json:"icuCtl,omitempty"`
+	Target               string   `json:"target,omitempty"`
+	UID                  string   `json:"uid,omitempty"`
+	CalendarID           int      `json:"calendarId,omitempty"`
+	Tags                 []string `json:"tags,omitempty"`
+	ExternalID           string   `json:"externalId,omitempty"`
+	HideFromAthlete      bool     `json:"hideFromAthlete,omitempty"`
+	AthleteCannotEdit    bool     `json:"athleteCannotEdit,omitempty"`
+	Intensity            float64  `json:"icuIntensity,omitempty"`
+	StrainScore          float64  `json:"strainScore,omitempty"`
+	PlanApplied          bool     `json:"planApplied,omitempty"`
+	CreatedByID          string   `json:"createdById,omitempty"`
+	SharedEventID        int      `json:"sharedEventId,omitempty"`
+	LoadTarget           int      `json:"loadTarget,omitempty"`
+	TimeTarget           int      `json:"timeTarget,omitempty"`
+	DistanceTarget       float64  `json:"distanceTarget,omitempty"`
+	TrainingAvailability string   `json:"trainingAvailability,omitempty"`
+	MaxTrainingTime      int      `json:"maxTrainingTime,omitempty"`
+	CanTrainSports       []string `json:"canTrainSports,omitempty"`
+	WorkoutDoc           any      `json:"workoutDoc,omitempty"`
+	WorkoutFileBase64    string   `json:"workoutFileBase64,omitempty"`
+	WorkoutFilename      string   `json:"workoutFilename,omitempty"`
 }
 
 // EventEx represents the request body for creating or updating calendar events.
@@ -394,10 +421,11 @@ type MapData struct {
 
 type WeatherSummary struct {
 	AvgTemp      float64 `json:"averageTemp,omitempty"`
-	MinTemp      float64 `json:"minWeatherTemp,omitempty"`
-	MaxTemp      float64 `json:"maxWeatherTemp,omitempty"`
+	MinTemp      float64 `json:"minTemp,omitempty"`
+	MaxTemp      float64 `json:"maxTemp,omitempty"`
 	AvgFeelsLike float64 `json:"averageFeelsLike,omitempty"`
 	AvgWindSpeed float64 `json:"averageWindSpeed,omitempty"`
+	AvgWindGust  float64 `json:"averageWindGust,omitempty"`
 	HeadwindPct  float64 `json:"headwindPercent,omitempty"`
 	TailwindPct  float64 `json:"tailwindPercent,omitempty"`
 	Description  string  `json:"description,omitempty"`
@@ -416,17 +444,18 @@ type Effort struct {
 }
 
 type DataCurve struct {
-	ID           string    `json:"id,omitempty"`
-	Label        string    `json:"label,omitempty"`
-	StartDate    string    `json:"startDateLocal,omitempty"`
-	EndDate      string    `json:"endDateLocal,omitempty"`
-	Days         int       `json:"days,omitempty"`
-	MovingTime   int       `json:"movingTime,omitempty"`
-	TrainingLoad int       `json:"trainingLoad,omitempty"`
-	Weight       float64   `json:"weight,omitempty"`
-	Secs         []int     `json:"secs,omitempty"`
-	Values       []int     `json:"values,omitempty"`
-	Distance     []float64 `json:"distance,omitempty"`
+	ID                string    `json:"id,omitempty"`
+	Label             string    `json:"label,omitempty"`
+	StartDate         string    `json:"startDateLocal,omitempty"`
+	EndDate           string    `json:"endDateLocal,omitempty"`
+	Days              int       `json:"days,omitempty"`
+	MovingTime        int       `json:"movingTime,omitempty"`
+	TrainingLoad      int       `json:"trainingLoad,omitempty"`
+	Weight            float64   `json:"weight,omitempty"`
+	InputPointIndexes []int     `json:"inputPointIndexes,omitempty"`
+	Secs              []int     `json:"secs,omitempty"`
+	Values            []int     `json:"values,omitempty"`
+	Distance          []float64 `json:"distance,omitempty"`
 }
 
 type (
@@ -549,6 +578,7 @@ type Forecast struct {
 	ID       int     `json:"id,omitempty"`
 	Provider string  `json:"provider,omitempty"`
 	Label    string  `json:"label,omitempty"`
+	Location string  `json:"location,omitempty"`
 	Lat      float64 `json:"lat,omitempty"`
 	Lon      float64 `json:"lon,omitempty"`
 	Enabled  bool    `json:"enabled,omitempty"`

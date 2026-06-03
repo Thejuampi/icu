@@ -9,8 +9,14 @@ import (
 
 const defaultAnalysisFields = "id,name,start_date_local,type,moving_time,distance,total_elevation_gain," +
 	"average_heartrate,max_heartrate,icu_weighted_avg_watts,icu_training_load,icu_intensity," +
-	"icu_ftp,icu_joules_above_ftp,icu_max_wbal_depletion,decoupling," +
-	"icu_efficiency_factor,icu_variability_index,icu_zone_times,icu_hr_zone_times,icu_ctl,icu_atl"
+	"icu_ftp,icu_pm_cp,icu_pm_w_prime,icu_pm_p_max,icu_pm_ftp,icu_rolling_ftp," +
+	"icu_joules_above_ftp,icu_max_wbal_depletion,decoupling," +
+	"icu_efficiency_factor,icu_variability_index,icu_zone_times,icu_hr_zone_times," +
+	"average_temp,min_temp,max_temp,average_weather_temp,min_weather_temp,max_weather_temp," +
+	"average_feels_like,average_wind_speed,average_wind_gust,prevailing_wind_deg," +
+	"headwind_percent,tailwind_percent,average_altitude,min_altitude,max_altitude," +
+	"average_gradient,average_lactate,min_lactate,max_lactate,average_yaw,route_id,strain_score," +
+	"icu_ctl,icu_atl"
 
 const (
 	defaultAnalysisDays    = 28
@@ -34,6 +40,7 @@ func registerAnalysisCommands(registry *CommandRegistry) {
 	registry.Register("analysis", "cycling", analysisCyclingCommand())
 	registry.Register("analysis", "wellness", analysisWellnessCommand())
 	registry.Register("analysis", "plan", analysisPlanCommand())
+	registry.Register("analysis", "adaptation", analysisAdaptationCommand())
 }
 
 func analysisCyclingCommand() *Command {
@@ -89,6 +96,27 @@ func analysisPlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
+			sportType := icu.StringFlag(flags, "sport-type", "Ride")
+			var sportSettings icu.SportSettings
+			if err := client.Get("sport-settings", []string{sportType}, nil, &sportSettings); err != nil {
+				return wrapCommandError(err)
+			}
+
+			wellnessQuery := map[string]string{
+				"oldest": dateRanges.History.Oldest,
+				"newest": dateRanges.History.Newest,
+			}
+
+			var wellnessRecords []icu.Wellness
+			if err := client.Get("wellness", nil, wellnessQuery, &wellnessRecords); err != nil {
+				return wrapCommandError(err)
+			}
+
+			wellnessAnalysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+				StartDate: dateRanges.History.Oldest,
+				EndDate:   dateRanges.History.Newest,
+			})
+
 			eventQuery := queryFromFlags(flags, "calendar_id")
 			eventQuery["oldest"] = dateRanges.Plan.Oldest
 			eventQuery["newest"] = dateRanges.Plan.Newest
@@ -101,11 +129,15 @@ func analysisPlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			analysis := icu.AnalyzeTrainingPlan(activities, events, icu.TrainingPlanOptions{
+			analysis := icu.AnalyzeTrainingPlanWithContext(activities, events, icu.TrainingPlanOptions{
 				HistoryStartDate: dateRanges.History.Oldest,
 				HistoryEndDate:   dateRanges.History.Newest,
 				PlanStartDate:    dateRanges.Plan.Oldest,
 				PlanEndDate:      dateRanges.Plan.Newest,
+			}, icu.TrainingPlanContext{
+				SportSettings: &sportSettings,
+				Wellness:      &wellnessAnalysis,
+				Adaptation:    nil,
 			})
 
 			return writeJSON(analysis)
@@ -137,6 +169,78 @@ func analysisWellnessCommand() *Command {
 				StartDate: dateRange.Oldest,
 				EndDate:   dateRange.Newest,
 			})
+
+			return writeJSON(analysis)
+		},
+	}
+}
+
+func analysisAdaptationCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride]",
+		Description: "Analyze cycling adaptation from power curves, MMP model, sport anchors, activities, and wellness.",
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			dateRange, err := analysisDateRange(flags, time.Now())
+			if err != nil {
+				return err
+			}
+
+			sportType := icu.StringFlag(flags, "type", "Ride")
+
+			activityQuery := queryFromFlags(flags, "limit")
+			activityQuery["oldest"] = dateRange.Oldest
+			activityQuery["newest"] = dateRange.Newest
+			activityQuery["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+
+			var activities []icu.Activity
+			if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
+				return wrapCommandError(err)
+			}
+
+			curveQuery := queryFromFlags(flags, "newest", "filters")
+			curveQuery["type"] = sportType
+			curveQuery["curves"] = icu.StringFlag(flags, "curves", "42d,365d")
+
+			var curves []icu.DataCurve
+			if err := client.Get("power-curves", nil, curveQuery, &curves); err != nil {
+				return wrapCommandError(err)
+			}
+
+			modelQuery := map[string]string{"type": sportType}
+			var model icu.PowerModel
+			if err := client.Get("mmp-model", nil, modelQuery, &model); err != nil {
+				return wrapCommandError(err)
+			}
+
+			var sportSettings icu.SportSettings
+			if err := client.Get("sport-settings", []string{sportType}, nil, &sportSettings); err != nil {
+				return wrapCommandError(err)
+			}
+
+			wellnessQuery := map[string]string{
+				"oldest": dateRange.Oldest,
+				"newest": dateRange.Newest,
+			}
+
+			var wellnessRecords []icu.Wellness
+			if err := client.Get("wellness", nil, wellnessQuery, &wellnessRecords); err != nil {
+				return wrapCommandError(err)
+			}
+
+			wellnessAnalysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+				StartDate: dateRange.Oldest,
+				EndDate:   dateRange.Newest,
+			})
+
+			analysis := icu.AnalyzeCyclingAdaptation(
+				curves,
+				model,
+				&sportSettings,
+				activities,
+				&wellnessAnalysis,
+				icu.AnalysisOptions{StartDate: dateRange.Oldest, EndDate: dateRange.Newest},
+			)
 
 			return writeJSON(analysis)
 		},

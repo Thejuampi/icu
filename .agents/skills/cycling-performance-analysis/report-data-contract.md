@@ -24,49 +24,49 @@ Support status meanings:
 | Subjective wellness coverage | fatigue, stress, soreness, mood, motivation | `icu analysis wellness` | supported |
 | CTL, ATL, TSB | activity or wellness load fields | `icu analysis cycling` | supported |
 | Physiology state | HRV/resting HR/sleep/load-pressure rule | `icu analysis wellness` local deterministic analysis | supported |
-| External heat/load context | weather/temp/terrain/VAM fields | activities/weather endpoints | missing |
+| External heat/load context | weather/temp/terrain/VAM fields | `icu analysis cycling` environment context from activity fields | supported |
 
 ## Performance Signals
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
 | Load Pressure / recovery priority | latest CTL, ATL, TSB | `icu analysis cycling` | supported |
-| WDRM counters | work above FTP, W balance depletion, W prime capacity | activities + sport settings | partial |
-| W prime pattern | per-session W balance and anaerobic contribution | `icu analysis cycling` sessions | partial |
-| Durability / ISDM | decoupling per session, long endurance count | `icu analysis cycling` | partial |
+| WDRM counters | work above FTP, W balance depletion, W prime capacity | `icu analysis cycling` anaerobic and repeatability sections | supported |
+| W prime pattern | per-session W balance and anaerobic contribution | `icu analysis cycling` sessions and repeatability section | supported |
+| Durability / ISDM | decoupling per session, long endurance count | `icu analysis cycling` durability signal | supported |
 | Neural density / NDLI | high-intensity days, work above FTP, IF, EF, VI | `icu analysis cycling` | supported |
-| Efficiency semantic state | EF and sport context | local deterministic thresholds | missing |
+| Efficiency semantic state | EF and VI context | `icu analysis cycling` local deterministic thresholds | supported |
 
 ## Adaptation Review
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
-| Power anchors | power curves with activity sources | `icu curves power` | partial |
-| Power curve deltas | comparable curve windows | `icu curves power` plus local analysis | missing |
-| CP/W prime/Pmax/FTP | MMP model or sport settings | `icu curves mmp`, `icu sports get Ride` | partial |
-| System status | curve deltas and training response | local deterministic analysis | missing |
-| Lactate calibration | lactate custom/wellness fields | custom/wellness data | missing |
-| Phase summary | historical load segmentation | activities/events analysis | missing |
+| Power anchors | power curves with activity sources | `icu analysis adaptation` | supported |
+| Power curve deltas | comparable curve windows | `icu analysis adaptation` power curve deltas | supported |
+| CP/W prime/Pmax/FTP | MMP model or sport settings | `icu analysis adaptation` power anchors | supported |
+| System status | curve deltas and training response | `icu analysis adaptation` system status | supported |
+| Lactate calibration | lactate wellness fields | `icu analysis wellness` lactate calibration | supported |
+| Phase summary | historical load segmentation | `icu analysis adaptation` phase summary | supported |
 
 ## Decision Guidance
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
-| Primary directive | load pressure + physiology + adaptation + forecast | local decision engine | missing |
-| ADE score and penalties | deterministic scoring rules | local decision engine | missing |
-| Event target status | target/race events | `icu events list` | partial |
+| Primary directive | load pressure + physiology + forecast (adaptation pending) | `icu analysis plan` decision guidance | partial |
+| ADE score and penalties | deterministic scoring rules | `icu analysis plan` decision guidance | supported |
+| Event target status | target/race events | `icu analysis plan` target status | supported |
 | Planned summary by ISO week | future events grouped by ISO week | `icu analysis plan` | supported |
-| Future forecast | planned load + CTL/ATL projection | local forecast engine | missing |
-| Training guidance | directive rendered from all sections | AI after numeric contract | missing |
+| Future forecast | planned load + CTL/ATL projection | `icu analysis plan` forecast | supported |
+| Training guidance | directive rendered from all sections | `icu analysis plan` decision guidance (adaptation pending) | partial |
 
 ## Training Plan Dry Run
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
-| 12-week completed load history | weekly TSS and hours tolerance | `icu analysis plan` plus `icu analysis cycling` for richer completed-session detail | partial |
+| 12-week completed load history | weekly TSS, hours, sessions, intensity, decoupling, and tolerance | `icu analysis plan` completed week series | supported |
 | Current load/recovery state | latest CTL, ATL, TSB, ACWR, monotony, strain | `icu analysis cycling` | supported |
 | Current physiology state | HRV, resting HR, sleep, coverage, confidence | `icu analysis wellness` | supported |
-| Sport anchors | FTP, LTHR, W prime if available | `icu sports get Ride` | partial |
+| Sport anchors | FTP, LTHR, W prime if available | `icu analysis plan` sport anchors from sport settings | supported |
 | Existing 4-week calendar | future workouts and notes with duration/load/intensity | `icu analysis plan` | supported |
 | Weekly planned-load grouping | ISO-week summary of future events | `icu analysis plan` | supported |
 | Planned session structure | high-intensity, tempo/threshold, long endurance, recovery, aerobic, opener, rest | `icu analysis plan` | supported |
@@ -74,8 +74,8 @@ Support status meanings:
 | Representative workout titles | device-friendly titles from interval pattern, duration, and session class | `icu analysis plan` | supported |
 | Device cue messages | preview, work, encouragement, restraint, finish messages by session class | `icu analysis plan` | supported |
 | Indoor Z2 variation profile | 4m Z2 waves, 40s HR-control valleys, low/mid/high Z2 rotation, max-Z2 caps | `icu analysis plan` | supported |
-| CTL/ATL/TSB forecast | future planned load impulse model | local forecast engine | missing |
-| Day-level adjustment rules | HRV/sleep/RHR/TSB/decoupling/heat gates | AI guidance after numeric contract | partial |
+| CTL/ATL/TSB forecast | future planned load impulse model | `icu analysis plan` forecast | supported |
+| Day-level adjustment rules | HRV/sleep/RHR/TSB/decoupling/heat gates | `icu analysis plan` deterministic day adjustments | supported |
 
 Planning output should compare the existing calendar against the athlete's recent tolerance before creating replacement workouts. When the calendar is structurally sound, prefer conditional execution rules and small load/intensity edits.
 
@@ -85,13 +85,11 @@ Planning output should compare the existing calendar against the athlete's recen
 | --- | --- | --- |
 | Env API key shadows config API key | `icu config diagnose --athlete-id ATHLETE_ID` with source/fingerprint only | supported |
 | Secret leakage during auth debugging | never print raw API keys; use status, length, trim, fingerprint | supported |
-| Intervals snake_case payload not mapped to DTO | add unmarshal tests for raw activity/event fields before trusting reports | supported for activities/events |
+| Intervals snake_case payload not mapped to DTO | add unmarshal tests for raw activity/event/supporting fields before trusting reports | supported for activities/events/weather/curves/sports/custom items |
 | Suspicious zero-valued activity/event fields | spot-check raw API or CLI JSON before writing coaching prose | manual |
 
 ## Implementation Priority
 
-1. Expand `icu analysis cycling` with stable load-state and performance-signals JSON.
-2. Add wellness analysis from `icu wellness list` for HRV/resting HR/sleep coverage and physiology state.
-3. Add planned-event analysis for ISO-week planned load and forecast inputs.
-4. Add power-curve comparison support for adaptation.
-5. Add a deterministic decision-guidance layer only after the numeric sections are stable.
+1. Add aggregate `analysis report` output that fuses cycling, wellness, plan, adaptation, and decision sections.
+2. Wire `analysis report` so `primary directive` and `training guidance` receive adaptation context directly from CLI output.
+3. Expand adaptation source detail with activity IDs behind best power curve points when Intervals.icu exposes them in curve payloads.

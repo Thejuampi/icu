@@ -7,6 +7,8 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
+const testAnalysisSecondRideDateTime = "2026-05-30T08:00:00"
+
 func TestAnalyzeCyclingActivitiesFiltersCycling(t *testing.T) {
 	t.Parallel()
 
@@ -116,7 +118,7 @@ func TestAnalyzeCyclingActivitiesSessionSummary(t *testing.T) {
 	ride.ID = "i152759915"
 	ride.Name = "Indoor-Friendly Adventure"
 	ride.Type = testRideType
-	ride.StartDateLocal = "2026-05-30T08:00:00"
+	ride.StartDateLocal = testAnalysisSecondRideDateTime
 	ride.MovingTime = 8370
 	ride.Distance = 59500
 	ride.TrainingLoad = 124
@@ -149,11 +151,138 @@ func TestAnalyzeCyclingActivitiesSessionSummary(t *testing.T) {
 			VariabilityIndex:   1.29,
 			JoulesAboveFTP:     12000,
 			MaxWBalDepletion:   6500,
+			WPrime:             0,
+			WBalDepletionPct:   0,
+			CriticalPower:      0,
+			PMax:               0,
+			FTP:                0,
+			RollingFTP:         0,
+			AverageTemp:        0,
+			AverageFeelsLike:   0,
+			HeadwindPercent:    0,
+			StrainScore:        0,
 		},
 	}
 
 	if !reflect.DeepEqual(got.Sessions, want) {
 		t.Fatalf("Sessions = %+v, want %+v", got.Sessions, want)
+	}
+}
+
+func TestAnalyzeCyclingActivitiesEnvironmentalContext(t *testing.T) {
+	t.Parallel()
+
+	var hotRide icu.Activity
+	hotRide.Type = testRideType
+	hotRide.StartDateLocal = "2026-05-29T08:00:00"
+	hotRide.MovingTime = 5400
+	hotRide.AverageTemp = 31
+	hotRide.MaxTemp = 36
+	hotRide.AverageWeatherTemp = 30
+	hotRide.AverageFeelsLike = 34
+	hotRide.AverageWindSpeed = 18
+	hotRide.AverageWindGust = 34
+	hotRide.HeadwindPercent = 44
+	hotRide.TailwindPercent = 20
+	hotRide.AverageAltitude = 520
+	hotRide.MaxAltitude = 780
+	hotRide.AverageGradient = 3.8
+	hotRide.AverageYaw = 8
+	hotRide.StrainScore = 72
+
+	var mildRide icu.Activity
+	mildRide.Type = testRideType
+	mildRide.StartDateLocal = testAnalysisSecondRideDateTime
+	mildRide.MovingTime = 3600
+	mildRide.AverageTemp = 24
+	mildRide.AverageWeatherTemp = 23
+	mildRide.AverageFeelsLike = 25
+	mildRide.AverageWindSpeed = 8
+	mildRide.HeadwindPercent = 12
+	mildRide.AverageAltitude = 300
+	mildRide.AverageGradient = 1.5
+	mildRide.StrainScore = 40
+
+	got := icu.AnalyzeCyclingActivities([]icu.Activity{hotRide, mildRide}, icu.AnalysisOptions{
+		StartDate: "",
+		EndDate:   "",
+	})
+	want := icu.CyclingEnvironmentContext{
+		Samples:              2,
+		AverageTemp:          27.5,
+		MaxTemp:              36,
+		AverageWeatherTemp:   26.5,
+		AverageFeelsLike:     29.5,
+		AverageWindSpeed:     13,
+		MaxWindGust:          34,
+		HeadwindPercent:      28,
+		TailwindPercent:      20,
+		AverageAltitude:      410,
+		MaxAltitude:          780,
+		AverageGradient:      2.65,
+		AverageYaw:           8,
+		AverageStrainScore:   56,
+		HotSessions:          1,
+		WindAffectedSessions: 1,
+		ClimbingSessions:     1,
+		Source:               "activity_environment_fields",
+	}
+
+	if !reflect.DeepEqual(got.Environment, want) {
+		t.Fatalf("Environment = %+v, want %+v", got.Environment, want)
+	}
+}
+
+func TestAnalyzeCyclingActivitiesWPrimeAndEfficiencySignals(t *testing.T) {
+	t.Parallel()
+
+	var firstRide icu.Activity
+	firstRide.Type = testRideType
+	firstRide.MovingTime = 3600
+	firstRide.FTP = 285
+	firstRide.CriticalPower = 292
+	firstRide.WPrime = 22000
+	firstRide.PMax = 1100
+	firstRide.RollingFTP = 288
+	firstRide.JoulesAboveFTP = 11000
+	firstRide.MaxWbalDepletion = 8800
+	firstRide.EfficiencyFactor = 1.46
+	firstRide.VariabilityIndex = 1.1
+
+	var secondRide icu.Activity
+	secondRide.Type = testRideType
+	secondRide.MovingTime = 5400
+	secondRide.FTP = 290
+	secondRide.CriticalPower = 296
+	secondRide.WPrime = 24000
+	secondRide.PMax = 1120
+	secondRide.RollingFTP = 291
+	secondRide.JoulesAboveFTP = 9000
+	secondRide.MaxWbalDepletion = 12000
+	secondRide.EfficiencyFactor = 1.5
+	secondRide.VariabilityIndex = 1.16
+
+	got := icu.AnalyzeCyclingActivities([]icu.Activity{firstRide, secondRide}, icu.AnalysisOptions{
+		StartDate: "",
+		EndDate:   "",
+	})
+	want := icu.CyclingPowerAnchors{
+		FTP:           290,
+		CriticalPower: 296,
+		WPrime:        24000,
+		PMax:          1120,
+		RollingFTP:    291,
+		Source:        "latest_activity_model_fields",
+	}
+
+	if got.PowerAnchors != want {
+		t.Fatalf("PowerAnchors = %+v, want %+v", got.PowerAnchors, want)
+	}
+
+	if got.Performance.Repeatability.Pattern != "repeatable_w_prime_depletion" ||
+		got.Performance.Repeatability.MaxWBalDepletionPercent != 50 ||
+		got.Performance.Efficiency.State != "efficient_stable" {
+		t.Fatalf("Performance = %+v, want W prime pattern and efficient_stable", got.Performance)
 	}
 }
 
@@ -176,7 +305,7 @@ func TestAnalyzeCyclingActivitiesStateAndPerformance(t *testing.T) {
 
 	var secondRide icu.Activity
 	secondRide.Type = testRideType
-	secondRide.StartDateLocal = "2026-05-30T08:00:00"
+	secondRide.StartDateLocal = testAnalysisSecondRideDateTime
 	secondRide.MovingTime = 3600
 	secondRide.TrainingLoad = 80
 	secondRide.Intensity = 0.9
@@ -194,12 +323,17 @@ func TestAnalyzeCyclingActivitiesStateAndPerformance(t *testing.T) {
 	)
 	want := icu.CyclingPerformanceIntelligence{
 		Repeatability: icu.CyclingRepeatability{
-			TotalWorkAboveFTP:     30000,
-			MaxWBalDepletion:      7000,
-			MeanMaxWBalDepletion:  6000,
-			SessionsWithWBalData:  2,
-			Classification:        "informational",
-			ClassificationContext: "local_activity_fields",
+			TotalWorkAboveFTP:        30000,
+			MaxWBalDepletion:         7000,
+			MeanMaxWBalDepletion:     6000,
+			MaxWBalDepletionPercent:  0,
+			MeanWBalDepletionPercent: 0,
+			WPrimeCapacity:           0,
+			WorkAboveFTPPerHour:      9000,
+			SessionsWithWBalData:     2,
+			Pattern:                  "",
+			Classification:           "informational",
+			ClassificationContext:    "local_activity_fields",
 		},
 		Durability: icu.CyclingDurabilitySignal{
 			State:                 "watch",
@@ -207,6 +341,8 @@ func TestAnalyzeCyclingActivitiesStateAndPerformance(t *testing.T) {
 			MaxDecoupling:         8,
 			HighDriftSessions:     1,
 			LongEnduranceSessions: 1,
+			ISDMState:             "durability_limiter",
+			ISDMScore:             50,
 			Classification:        "local_heuristic",
 		},
 		NeuralDensity: icu.CyclingNeuralDensity{
@@ -216,6 +352,13 @@ func TestAnalyzeCyclingActivitiesStateAndPerformance(t *testing.T) {
 			MeanEfficiencyFactor: 1.45,
 			MeanVariabilityIndex: 1.3,
 			Classification:       "local_heuristic",
+		},
+		Efficiency: icu.CyclingEfficiencySignal{
+			State:                  "efficient_variable",
+			MeanEfficiencyFactor:   1.45,
+			MeanVariabilityIndex:   1.3,
+			SessionsWithEfficiency: 2,
+			Classification:         "local_efficiency_heuristic",
 		},
 	}
 

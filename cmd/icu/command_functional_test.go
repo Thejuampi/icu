@@ -213,6 +213,9 @@ func athleteAndAnalysisCommandCases() []commandCase {
 				"plan-newest", "2026-06-07",
 			),
 			http.MethodGet, "/api/v1/athlete/0/events", "plannedSessions"),
+		commandFlow("analysis adaptation", "analysis", "adaptation", nil,
+			flags("oldest", "2026-05-01", "newest", "2026-06-01"),
+			http.MethodGet, "/api/v1/athlete/0/wellness", "powerCurveDeltas"),
 	}
 }
 
@@ -729,6 +732,9 @@ func customMiscResponse(method, path string) (string, bool) {
 		return okJSON, true
 	case strings.Contains(path, "/mmp-model"):
 		return `{"criticalPower":285,"wPrime":21000,"ftp":285}`, true
+	case strings.Contains(path, "/power-curves"):
+		return `[{"id":"ok","label":"42d","days":42,"secs":[60,300],"values":[520,410]},` +
+			`{"id":"baseline","label":"1y","days":365,"secs":[60,300],"values":[500,420]}]`, true
 	case strings.Contains(path, "curves"), strings.Contains(path, "power-hr-curve"):
 		return okJSON, true
 	default:

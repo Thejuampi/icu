@@ -8,17 +8,34 @@ import (
 )
 
 const (
-	analysisDateLayout     = "2006-01-02"
-	acuteLoadDays          = 7
-	chronicLoadDays        = 28
-	longEnduranceSeconds   = 7200
-	secondsPerMinute       = 60
-	secondsPerHour         = 3600
-	metersPerKilometer     = 1000
-	percentScale           = 100
-	thousandScale          = 1000
-	highIntensityThreshold = 0.85
-	highDecouplingPct      = 5
+	analysisDateLayout       = "2006-01-02"
+	acuteLoadDays            = 7
+	chronicLoadDays          = 28
+	longEnduranceSeconds     = 7200
+	secondsPerMinute         = 60
+	secondsPerHour           = 3600
+	metersPerKilometer       = 1000
+	percentScale             = 100
+	thousandScale            = 1000
+	unknownState             = "unknown"
+	stateLabelLoadPressure   = "Load Pressure"
+	stateOperationalRecovery = "recovery_priority"
+	stateLoadPressure        = "load_pressure"
+	stateDurabilityWatch     = "watch"
+	highIntensityThreshold   = 0.85
+	highDecouplingPct        = 5
+	hotTempThreshold         = 30
+	hotFeelsLikeThreshold    = 32
+	windSpeedThreshold       = 15
+	headwindThreshold        = 40
+	climbingGradientPct      = 3
+	wPrimeRepeatablePct      = 50
+	wPrimeModeratePct        = 30
+	isdmBaseScore            = 100
+	isdmDecouplingPenalty    = 5
+	isdmHighDriftPenalty     = 10
+	lowEfficiencyThreshold   = 1.2
+	highEfficiencyThreshold  = 1.4
 )
 
 type AnalysisOptions struct {
@@ -27,16 +44,48 @@ type AnalysisOptions struct {
 }
 
 type CyclingAnalysis struct {
-	Scope       CyclingScope                   `json:"scope"`
-	State       CyclingState                   `json:"state"`
-	Volume      CyclingVolume                  `json:"volume"`
-	Load        CyclingLoad                    `json:"load"`
-	Intensity   CyclingIntensity               `json:"intensity"`
-	Durability  CyclingDurability              `json:"durability"`
-	Anaerobic   CyclingAnaerobic               `json:"anaerobic"`
-	Performance CyclingPerformanceIntelligence `json:"performance"`
-	Sessions    []CyclingSession               `json:"sessions,omitempty"`
-	Warnings    []string                       `json:"warnings,omitempty"`
+	Scope        CyclingScope                   `json:"scope"`
+	State        CyclingState                   `json:"state"`
+	Volume       CyclingVolume                  `json:"volume"`
+	PowerAnchors CyclingPowerAnchors            `json:"powerAnchors"`
+	Environment  CyclingEnvironmentContext      `json:"environment"`
+	Load         CyclingLoad                    `json:"load"`
+	Intensity    CyclingIntensity               `json:"intensity"`
+	Durability   CyclingDurability              `json:"durability"`
+	Anaerobic    CyclingAnaerobic               `json:"anaerobic"`
+	Performance  CyclingPerformanceIntelligence `json:"performance"`
+	Sessions     []CyclingSession               `json:"sessions,omitempty"`
+	Warnings     []string                       `json:"warnings,omitempty"`
+}
+
+type CyclingPowerAnchors struct {
+	FTP           int    `json:"ftp,omitempty"`
+	CriticalPower int    `json:"criticalPower,omitempty"`
+	WPrime        int    `json:"wPrime,omitempty"`
+	PMax          int    `json:"pMax,omitempty"`
+	RollingFTP    int    `json:"rollingFtp,omitempty"`
+	Source        string `json:"source,omitempty"`
+}
+
+type CyclingEnvironmentContext struct {
+	Samples              int     `json:"samples"`
+	AverageTemp          float64 `json:"averageTemp,omitempty"`
+	MaxTemp              float64 `json:"maxTemp,omitempty"`
+	AverageWeatherTemp   float64 `json:"averageWeatherTemp,omitempty"`
+	AverageFeelsLike     float64 `json:"averageFeelsLike,omitempty"`
+	AverageWindSpeed     float64 `json:"averageWindSpeed,omitempty"`
+	MaxWindGust          float64 `json:"maxWindGust,omitempty"`
+	HeadwindPercent      float64 `json:"headwindPercent,omitempty"`
+	TailwindPercent      float64 `json:"tailwindPercent,omitempty"`
+	AverageAltitude      float64 `json:"averageAltitude,omitempty"`
+	MaxAltitude          float64 `json:"maxAltitude,omitempty"`
+	AverageGradient      float64 `json:"averageGradient,omitempty"`
+	AverageYaw           float64 `json:"averageYaw,omitempty"`
+	AverageStrainScore   float64 `json:"averageStrainScore,omitempty"`
+	HotSessions          int     `json:"hotSessions,omitempty"`
+	WindAffectedSessions int     `json:"windAffectedSessions,omitempty"`
+	ClimbingSessions     int     `json:"climbingSessions,omitempty"`
+	Source               string  `json:"source,omitempty"`
 }
 
 type CyclingState struct {
@@ -99,9 +148,12 @@ type CyclingDurability struct {
 }
 
 type CyclingAnaerobic struct {
-	TotalJoulesAboveFTP int `json:"totalJoulesAboveFtp"`
-	MaxWBalDepletion    int `json:"maxWbalDepletion"`
-	WBalActivities      int `json:"wbalActivities"`
+	TotalJoulesAboveFTP      int     `json:"totalJoulesAboveFtp"`
+	MaxWBalDepletion         int     `json:"maxWbalDepletion"`
+	WBalActivities           int     `json:"wbalActivities"`
+	WPrimeCapacity           int     `json:"wPrimeCapacity,omitempty"`
+	MaxWBalDepletionPercent  float64 `json:"maxWbalDepletionPercent,omitempty"`
+	MeanWBalDepletionPercent float64 `json:"meanWbalDepletionPercent,omitempty"`
 }
 
 type CyclingSession struct {
@@ -122,21 +174,37 @@ type CyclingSession struct {
 	VariabilityIndex   float64 `json:"variabilityIndex,omitempty"`
 	JoulesAboveFTP     int     `json:"joulesAboveFtp,omitempty"`
 	MaxWBalDepletion   int     `json:"maxWbalDepletion,omitempty"`
+	WPrime             int     `json:"wPrime,omitempty"`
+	WBalDepletionPct   float64 `json:"wbalDepletionPct,omitempty"`
+	CriticalPower      int     `json:"criticalPower,omitempty"`
+	PMax               int     `json:"pMax,omitempty"`
+	FTP                int     `json:"ftp,omitempty"`
+	RollingFTP         int     `json:"rollingFtp,omitempty"`
+	AverageTemp        float64 `json:"averageTemp,omitempty"`
+	AverageFeelsLike   float64 `json:"averageFeelsLike,omitempty"`
+	HeadwindPercent    float64 `json:"headwindPercent,omitempty"`
+	StrainScore        float64 `json:"strainScore,omitempty"`
 }
 
 type CyclingPerformanceIntelligence struct {
 	Repeatability CyclingRepeatability    `json:"repeatability"`
 	Durability    CyclingDurabilitySignal `json:"durability"`
 	NeuralDensity CyclingNeuralDensity    `json:"neuralDensity"`
+	Efficiency    CyclingEfficiencySignal `json:"efficiency"`
 }
 
 type CyclingRepeatability struct {
-	TotalWorkAboveFTP     int     `json:"totalWorkAboveFtp"`
-	MaxWBalDepletion      int     `json:"maxWbalDepletion,omitempty"`
-	MeanMaxWBalDepletion  float64 `json:"meanMaxWbalDepletion,omitempty"`
-	SessionsWithWBalData  int     `json:"sessionsWithWbalData"`
-	Classification        string  `json:"classification,omitempty"`
-	ClassificationContext string  `json:"classificationContext,omitempty"`
+	TotalWorkAboveFTP        int     `json:"totalWorkAboveFtp"`
+	MaxWBalDepletion         int     `json:"maxWbalDepletion,omitempty"`
+	MeanMaxWBalDepletion     float64 `json:"meanMaxWbalDepletion,omitempty"`
+	MaxWBalDepletionPercent  float64 `json:"maxWbalDepletionPercent,omitempty"`
+	MeanWBalDepletionPercent float64 `json:"meanWbalDepletionPercent,omitempty"`
+	WPrimeCapacity           int     `json:"wPrimeCapacity,omitempty"`
+	WorkAboveFTPPerHour      float64 `json:"workAboveFtpPerHour,omitempty"`
+	SessionsWithWBalData     int     `json:"sessionsWithWbalData"`
+	Pattern                  string  `json:"pattern,omitempty"`
+	Classification           string  `json:"classification,omitempty"`
+	ClassificationContext    string  `json:"classificationContext,omitempty"`
 }
 
 type CyclingDurabilitySignal struct {
@@ -145,6 +213,8 @@ type CyclingDurabilitySignal struct {
 	MaxDecoupling         float64 `json:"maxDecoupling"`
 	HighDriftSessions     int     `json:"highDriftSessions"`
 	LongEnduranceSessions int     `json:"longEnduranceSessions"`
+	ISDMState             string  `json:"isdmState,omitempty"`
+	ISDMScore             float64 `json:"isdmScore,omitempty"`
 	Classification        string  `json:"classification,omitempty"`
 }
 
@@ -157,18 +227,46 @@ type CyclingNeuralDensity struct {
 	Classification       string  `json:"classification,omitempty"`
 }
 
+type CyclingEfficiencySignal struct {
+	State                  string  `json:"state,omitempty"`
+	MeanEfficiencyFactor   float64 `json:"meanEfficiencyFactor,omitempty"`
+	MeanVariabilityIndex   float64 `json:"meanVariabilityIndex,omitempty"`
+	SessionsWithEfficiency int     `json:"sessionsWithEfficiency"`
+	Classification         string  `json:"classification,omitempty"`
+}
+
 type cyclingAnalysisAccumulator struct {
-	analysis             CyclingAnalysis
-	dailyLoads           map[string]int
-	intensityWeightedSum float64
-	intensity            numericAccumulator
-	decoupling           numericAccumulator
-	efficiency           numericAccumulator
-	variability          numericAccumulator
-	wbalDepletion        numericAccumulator
-	maxDecoupling        float64
-	longEndurance        int
-	latestLoadDate       string
+	analysis                CyclingAnalysis
+	dailyLoads              map[string]int
+	intensityWeightedSum    float64
+	intensity               numericAccumulator
+	decoupling              numericAccumulator
+	efficiency              numericAccumulator
+	variability             numericAccumulator
+	wbalDepletion           numericAccumulator
+	wbalDepletionPercent    numericAccumulator
+	maxWbalDepletionPercent float64
+	temp                    numericAccumulator
+	weatherTemp             numericAccumulator
+	feelsLike               numericAccumulator
+	windSpeed               numericAccumulator
+	headwind                numericAccumulator
+	tailwind                numericAccumulator
+	altitude                numericAccumulator
+	gradient                numericAccumulator
+	yaw                     numericAccumulator
+	strain                  numericAccumulator
+	environmentSamples      int
+	maxTemp                 float64
+	maxWindGust             float64
+	maxAltitude             float64
+	hotSessions             int
+	windAffectedSessions    int
+	climbingSessions        int
+	maxDecoupling           float64
+	longEndurance           int
+	latestLoadDate          string
+	latestAnchorDate        string
 }
 
 type numericAccumulator struct {
@@ -208,7 +306,9 @@ func (accumulator *cyclingAnalysisAccumulator) add(activity *Activity) {
 	accumulator.addLoad(activity)
 	accumulator.addIntensity(activity)
 	accumulator.addDurability(activity)
+	accumulator.addPowerAnchors(activity)
 	accumulator.addAnaerobic(activity)
+	accumulator.addEnvironment(activity)
 	accumulator.addDate(activity)
 	accumulator.addSession(activity)
 }
@@ -286,6 +386,78 @@ func (accumulator *cyclingAnalysisAccumulator) addAnaerobic(activity *Activity) 
 	if activity.MaxWbalDepletion > accumulator.analysis.Anaerobic.MaxWBalDepletion {
 		accumulator.analysis.Anaerobic.MaxWBalDepletion = activity.MaxWbalDepletion
 	}
+
+	if activity.WPrime > 0 && activity.MaxWbalDepletion > 0 {
+		depletionPercent := round2(float64(activity.MaxWbalDepletion) * percentScale / float64(activity.WPrime))
+		accumulator.wbalDepletionPercent.add(depletionPercent)
+
+		if depletionPercent > accumulator.maxWbalDepletionPercent {
+			accumulator.maxWbalDepletionPercent = depletionPercent
+		}
+	}
+}
+
+func (accumulator *cyclingAnalysisAccumulator) addPowerAnchors(activity *Activity) {
+	if !activityHasPowerAnchors(activity) {
+		return
+	}
+
+	date := activityDate(activity)
+	if date != "" && date < accumulator.latestAnchorDate {
+		return
+	}
+
+	accumulator.latestAnchorDate = date
+	accumulator.analysis.PowerAnchors.FTP = activity.FTP
+	accumulator.analysis.PowerAnchors.CriticalPower = activity.CriticalPower
+	accumulator.analysis.PowerAnchors.WPrime = activity.WPrime
+	accumulator.analysis.PowerAnchors.PMax = activity.PMax
+	accumulator.analysis.PowerAnchors.RollingFTP = activity.RollingFTP
+	accumulator.analysis.PowerAnchors.Source = "latest_activity_model_fields"
+}
+
+func activityHasPowerAnchors(activity *Activity) bool {
+	return activity.FTP != 0 || activity.CriticalPower != 0 || activity.WPrime != 0 ||
+		activity.PMax != 0 || activity.RollingFTP != 0
+}
+
+func (accumulator *cyclingAnalysisAccumulator) addEnvironment(activity *Activity) {
+	if !activityHasEnvironment(activity) {
+		return
+	}
+
+	accumulator.environmentSamples++
+	accumulator.temp.addIfNonZero(activity.AverageTemp)
+	accumulator.weatherTemp.addIfNonZero(activity.AverageWeatherTemp)
+	accumulator.feelsLike.addIfNonZero(activity.AverageFeelsLike)
+	accumulator.windSpeed.addIfNonZero(activity.AverageWindSpeed)
+	accumulator.headwind.addIfNonZero(activity.HeadwindPercent)
+	accumulator.tailwind.addIfNonZero(activity.TailwindPercent)
+	accumulator.altitude.addIfNonZero(activity.AverageAltitude)
+	accumulator.gradient.addIfNonZero(activity.AverageGradient)
+	accumulator.yaw.addIfNonZero(activity.AverageYaw)
+	accumulator.strain.addIfNonZero(activity.StrainScore)
+	accumulator.maxTemp = maxFloat(accumulator.maxTemp, activity.MaxTemp)
+	accumulator.maxWindGust = maxFloat(accumulator.maxWindGust, activity.AverageWindGust)
+	accumulator.maxAltitude = maxFloat(accumulator.maxAltitude, activity.MaxAltitude)
+
+	if activity.AverageTemp >= hotTempThreshold || activity.AverageFeelsLike >= hotFeelsLikeThreshold {
+		accumulator.hotSessions++
+	}
+
+	if activity.AverageWindSpeed >= windSpeedThreshold || activity.HeadwindPercent >= headwindThreshold {
+		accumulator.windAffectedSessions++
+	}
+
+	if activity.AverageGradient >= climbingGradientPct {
+		accumulator.climbingSessions++
+	}
+}
+
+func activityHasEnvironment(activity *Activity) bool {
+	return activity.AverageTemp != 0 || activity.AverageWeatherTemp != 0 || activity.AverageFeelsLike != 0 ||
+		activity.AverageWindSpeed != 0 || activity.HeadwindPercent != 0 || activity.AverageAltitude != 0 ||
+		activity.AverageGradient != 0 || activity.StrainScore != 0
 }
 
 func (accumulator *cyclingAnalysisAccumulator) addDate(activity *Activity) {
@@ -327,10 +499,45 @@ func (accumulator *cyclingAnalysisAccumulator) finish(options AnalysisOptions) C
 	accumulator.finishLoad(options)
 	accumulator.finishIntensity()
 	accumulator.finishDurability()
+	accumulator.finishAnaerobic()
+	accumulator.finishEnvironment()
 	accumulator.finishState()
 	accumulator.finishPerformance()
 
 	return accumulator.analysis
+}
+
+func (accumulator *cyclingAnalysisAccumulator) finishAnaerobic() {
+	accumulator.analysis.Anaerobic.WPrimeCapacity = accumulator.analysis.PowerAnchors.WPrime
+	accumulator.analysis.Anaerobic.MaxWBalDepletionPercent = round2(accumulator.maxWbalDepletionPercent)
+	accumulator.analysis.Anaerobic.MeanWBalDepletionPercent = round2(accumulator.wbalDepletionPercent.average())
+}
+
+func (accumulator *cyclingAnalysisAccumulator) finishEnvironment() {
+	if accumulator.environmentSamples == 0 {
+		return
+	}
+
+	accumulator.analysis.Environment = CyclingEnvironmentContext{
+		Samples:              accumulator.environmentSamples,
+		AverageTemp:          round2(accumulator.temp.average()),
+		MaxTemp:              round2(accumulator.maxTemp),
+		AverageWeatherTemp:   round2(accumulator.weatherTemp.average()),
+		AverageFeelsLike:     round2(accumulator.feelsLike.average()),
+		AverageWindSpeed:     round2(accumulator.windSpeed.average()),
+		MaxWindGust:          round2(accumulator.maxWindGust),
+		HeadwindPercent:      round2(accumulator.headwind.average()),
+		TailwindPercent:      round2(accumulator.tailwind.average()),
+		AverageAltitude:      round2(accumulator.altitude.average()),
+		MaxAltitude:          round2(accumulator.maxAltitude),
+		AverageGradient:      round2(accumulator.gradient.average()),
+		AverageYaw:           round2(accumulator.yaw.average()),
+		AverageStrainScore:   round2(accumulator.strain.average()),
+		HotSessions:          accumulator.hotSessions,
+		WindAffectedSessions: accumulator.windAffectedSessions,
+		ClimbingSessions:     accumulator.climbingSessions,
+		Source:               "activity_environment_fields",
+	}
 }
 
 func (accumulator *cyclingAnalysisAccumulator) finishVolume() {
@@ -384,9 +591,9 @@ func (accumulator *cyclingAnalysisAccumulator) finishState() {
 	accumulator.analysis.State.Source = "local_ctl_atl_heuristic"
 
 	if loadPressure > 0 {
-		accumulator.analysis.State.StateLabel = "Load Pressure"
-		accumulator.analysis.State.OperationalState = "recovery_priority"
-		accumulator.analysis.State.LoadRecoveryState = "load_pressure"
+		accumulator.analysis.State.StateLabel = stateLabelLoadPressure
+		accumulator.analysis.State.OperationalState = stateOperationalRecovery
+		accumulator.analysis.State.LoadRecoveryState = stateLoadPressure
 		accumulator.analysis.State.Directive = "prioritise aerobic work and recovery spacing"
 
 		return
@@ -403,17 +610,23 @@ func (accumulator *cyclingAnalysisAccumulator) finishPerformance() {
 		Repeatability: accumulator.repeatabilitySignal(),
 		Durability:    accumulator.durabilitySignal(),
 		NeuralDensity: accumulator.neuralDensitySignal(),
+		Efficiency:    accumulator.efficiencySignal(),
 	}
 }
 
 func (accumulator *cyclingAnalysisAccumulator) repeatabilitySignal() CyclingRepeatability {
 	return CyclingRepeatability{
-		TotalWorkAboveFTP:     accumulator.analysis.Anaerobic.TotalJoulesAboveFTP,
-		MaxWBalDepletion:      accumulator.analysis.Anaerobic.MaxWBalDepletion,
-		MeanMaxWBalDepletion:  round2(accumulator.wbalDepletion.average()),
-		SessionsWithWBalData:  accumulator.analysis.Anaerobic.WBalActivities,
-		Classification:        "informational",
-		ClassificationContext: "local_activity_fields",
+		TotalWorkAboveFTP:        accumulator.analysis.Anaerobic.TotalJoulesAboveFTP,
+		MaxWBalDepletion:         accumulator.analysis.Anaerobic.MaxWBalDepletion,
+		MeanMaxWBalDepletion:     round2(accumulator.wbalDepletion.average()),
+		MaxWBalDepletionPercent:  accumulator.analysis.Anaerobic.MaxWBalDepletionPercent,
+		MeanWBalDepletionPercent: accumulator.analysis.Anaerobic.MeanWBalDepletionPercent,
+		WPrimeCapacity:           accumulator.analysis.Anaerobic.WPrimeCapacity,
+		WorkAboveFTPPerHour:      accumulator.workAboveFTPPerHour(),
+		SessionsWithWBalData:     accumulator.analysis.Anaerobic.WBalActivities,
+		Pattern:                  wPrimePattern(accumulator.maxWbalDepletionPercent),
+		Classification:           "informational",
+		ClassificationContext:    "local_activity_fields",
 	}
 }
 
@@ -424,6 +637,8 @@ func (accumulator *cyclingAnalysisAccumulator) durabilitySignal() CyclingDurabil
 		MaxDecoupling:         round2(accumulator.maxDecoupling),
 		HighDriftSessions:     accumulator.analysis.Durability.HighDecouplingActivities,
 		LongEnduranceSessions: accumulator.longEndurance,
+		ISDMState:             isdmState(accumulator.maxDecoupling, accumulator.longEndurance),
+		ISDMScore:             isdmScore(accumulator.maxDecoupling, accumulator.analysis.Durability.HighDecouplingActivities),
 		Classification:        "local_heuristic",
 	}
 }
@@ -439,13 +654,103 @@ func (accumulator *cyclingAnalysisAccumulator) neuralDensitySignal() CyclingNeur
 	}
 }
 
-func durabilityState(maxDecoupling float64) string {
-	if maxDecoupling == 0 {
-		return "unknown"
+func (accumulator *cyclingAnalysisAccumulator) efficiencySignal() CyclingEfficiencySignal {
+	meanEfficiency := accumulator.analysis.Durability.AverageEfficiencyFactor
+	meanVariability := accumulator.analysis.Durability.AverageVariabilityIndex
+
+	return CyclingEfficiencySignal{
+		State:                  efficiencyState(meanEfficiency, meanVariability),
+		MeanEfficiencyFactor:   meanEfficiency,
+		MeanVariabilityIndex:   meanVariability,
+		SessionsWithEfficiency: accumulator.efficiency.count,
+		Classification:         "local_efficiency_heuristic",
+	}
+}
+
+func (accumulator *cyclingAnalysisAccumulator) workAboveFTPPerHour() float64 {
+	if accumulator.analysis.Volume.MovingTimeSecs == 0 {
+		return 0
+	}
+
+	movingHours := float64(accumulator.analysis.Volume.MovingTimeSecs) / secondsPerHour
+
+	return round2(float64(accumulator.analysis.Anaerobic.TotalJoulesAboveFTP) / movingHours)
+}
+
+func wPrimePattern(maxDepletionPercent float64) string {
+	if maxDepletionPercent == 0 {
+		return ""
+	}
+
+	if maxDepletionPercent >= wPrimeRepeatablePct {
+		return "repeatable_w_prime_depletion"
+	}
+
+	if maxDepletionPercent >= wPrimeModeratePct {
+		return "moderate_w_prime_depletion"
+	}
+
+	return "low_w_prime_depletion"
+}
+
+func isdmState(maxDecoupling float64, longEnduranceSessions int) string {
+	if maxDecoupling == 0 && longEnduranceSessions == 0 {
+		return unknownState
 	}
 
 	if maxDecoupling >= highDecouplingPct {
-		return "watch"
+		return "durability_limiter"
+	}
+
+	if longEnduranceSessions > 0 {
+		return "durability_supported"
+	}
+
+	return "durability_unproven"
+}
+
+func isdmScore(maxDecoupling float64, highDriftSessions int) float64 {
+	if maxDecoupling == 0 && highDriftSessions == 0 {
+		return 0
+	}
+
+	score := isdmBaseScore - maxDecoupling*isdmDecouplingPenalty -
+		float64(highDriftSessions*isdmHighDriftPenalty)
+
+	if score < 0 {
+		return 0
+	}
+
+	return round2(score)
+}
+
+func efficiencyState(meanEfficiency, meanVariability float64) string {
+	if meanEfficiency == 0 {
+		return unknownState
+	}
+
+	if meanEfficiency < lowEfficiencyThreshold {
+		return "low_efficiency"
+	}
+
+	if meanEfficiency >= highEfficiencyThreshold && meanVariability >= lowEfficiencyThreshold {
+		return "efficient_variable"
+	}
+
+	if meanEfficiency >= highEfficiencyThreshold {
+		return "efficient_stable"
+	}
+
+	return "steady"
+}
+
+func durabilityState(maxDecoupling float64) string {
+	if maxDecoupling == 0 {
+		return unknownState
+	}
+
+	if maxDecoupling >= highDecouplingPct {
+		return stateDurabilityWatch
 	}
 
 	return "stable"
@@ -454,6 +759,14 @@ func durabilityState(maxDecoupling float64) string {
 func (accumulator *numericAccumulator) add(value float64) {
 	accumulator.sum += value
 	accumulator.count++
+}
+
+func (accumulator *numericAccumulator) addIfNonZero(value float64) {
+	if value == 0 {
+		return
+	}
+
+	accumulator.add(value)
 }
 
 func (accumulator *numericAccumulator) average() float64 {
@@ -500,6 +813,11 @@ func activityDate(activity *Activity) string {
 }
 
 func cyclingSessionFromActivity(activity *Activity) CyclingSession {
+	wbalDepletionPct := float64(0)
+	if activity.WPrime > 0 && activity.MaxWbalDepletion > 0 {
+		wbalDepletionPct = round2(float64(activity.MaxWbalDepletion) * percentScale / float64(activity.WPrime))
+	}
+
 	return CyclingSession{
 		ID:                 activity.ID,
 		Date:               activityDate(activity),
@@ -518,7 +836,25 @@ func cyclingSessionFromActivity(activity *Activity) CyclingSession {
 		VariabilityIndex:   activity.VariabilityIndex,
 		JoulesAboveFTP:     activity.JoulesAboveFTP,
 		MaxWBalDepletion:   activity.MaxWbalDepletion,
+		WPrime:             activity.WPrime,
+		WBalDepletionPct:   wbalDepletionPct,
+		CriticalPower:      activity.CriticalPower,
+		PMax:               activity.PMax,
+		FTP:                activity.FTP,
+		RollingFTP:         activity.RollingFTP,
+		AverageTemp:        activity.AverageTemp,
+		AverageFeelsLike:   activity.AverageFeelsLike,
+		HeadwindPercent:    activity.HeadwindPercent,
+		StrainScore:        activity.StrainScore,
 	}
+}
+
+func maxFloat(current, candidate float64) float64 {
+	if candidate > current {
+		return candidate
+	}
+
+	return current
 }
 
 func minDateString(current, candidate string) string {

@@ -64,6 +64,7 @@ Each `-` step line is `duration zone%` (e.g., `15m 55-72%`). A bare `Nx` on its 
 icu analysis cycling --oldest START --newest END --athlete-id ATHLETE_ID
 icu analysis wellness --oldest WELLNESS_START --newest END --athlete-id ATHLETE_ID
 icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END --athlete-id ATHLETE_ID
+icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --athlete-id ATHLETE_ID
 ```
 
 3. Collect supporting Intervals.icu context as needed.
@@ -72,8 +73,7 @@ icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-old
 icu athlete show --athlete-id ATHLETE_ID
 icu sports get Ride --athlete-id ATHLETE_ID
 icu events list --oldest NEXT_START --newest NEXT_END --athlete-id ATHLETE_ID
-icu curves power --type Ride --curves 42d --athlete-id ATHLETE_ID
-icu curves mmp --type Ride --athlete-id ATHLETE_ID
+icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d --athlete-id ATHLETE_ID
 ```
 
 4. Review existing calendar notes (NOTE events) for coaching context.
@@ -92,6 +92,7 @@ For planning questions, use a 12-week lookback and the next 4 weeks of events un
 icu analysis cycling --oldest HISTORY_START --newest END --athlete-id ATHLETE_ID
 icu analysis wellness --oldest WELLNESS_START --newest END --athlete-id ATHLETE_ID
 icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END --athlete-id ATHLETE_ID
+icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d --athlete-id ATHLETE_ID
 ```
 
 Planning dry-run checklist:

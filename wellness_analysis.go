@@ -15,20 +15,33 @@ const (
 	restingHRRedDelta          = 8
 	sleepWatchScore            = 75
 	sleepRedScore              = 65
+	lactateWatchThreshold      = 2.5
+	lactateHighThreshold       = 4.0
 	negativeFormWatchThreshold = -10
 	negativeFormRedThreshold   = -25
 )
 
 type WellnessAnalysis struct {
-	Scope      WellnessScope      `json:"scope"`
-	Coverage   WellnessCoverage   `json:"coverage"`
-	HRV        WellnessSignal     `json:"hrv"`
-	RestingHR  WellnessSignal     `json:"restingHr"`
-	Sleep      WellnessSignal     `json:"sleep"`
-	Subjective SubjectiveWellness `json:"subjective"`
-	Load       WellnessLoadState  `json:"load"`
-	State      PhysiologyState    `json:"state"`
-	Warnings   []string           `json:"warnings,omitempty"`
+	Scope      WellnessScope              `json:"scope"`
+	Coverage   WellnessCoverage           `json:"coverage"`
+	HRV        WellnessSignal             `json:"hrv"`
+	RestingHR  WellnessSignal             `json:"restingHr"`
+	Sleep      WellnessSignal             `json:"sleep"`
+	Lactate    WellnessLactateCalibration `json:"lactate"`
+	Subjective SubjectiveWellness         `json:"subjective"`
+	Load       WellnessLoadState          `json:"load"`
+	State      PhysiologyState            `json:"state"`
+	Warnings   []string                   `json:"warnings,omitempty"`
+}
+
+type WellnessLactateCalibration struct {
+	Mean            float64 `json:"mean,omitempty"`
+	Latest          float64 `json:"latest,omitempty"`
+	Trend7Day       float64 `json:"trend7d,omitempty"`
+	Samples         int     `json:"samples"`
+	CoveragePercent float64 `json:"coveragePercent"`
+	State           string  `json:"state,omitempty"`
+	Source          string  `json:"source,omitempty"`
 }
 
 type WellnessScope struct {
@@ -87,6 +100,7 @@ type wellnessAccumulator struct {
 	hrv        []wellnessSample
 	restingHR  []wellnessSample
 	sleep      []wellnessSample
+	lactate    []wellnessSample
 	fatigue    numericAccumulator
 	stress     numericAccumulator
 	soreness   numericAccumulator
@@ -120,8 +134,17 @@ func (accumulator *wellnessAccumulator) add(record *Wellness) {
 	accumulator.addHRV(record)
 	accumulator.addRestingHR(record)
 	accumulator.addSleep(record)
+	accumulator.addLactate(record)
 	accumulator.addSubjective(record)
 	accumulator.addLoad(record)
+}
+
+func (accumulator *wellnessAccumulator) addLactate(record *Wellness) {
+	if record.Lactate == 0 {
+		return
+	}
+
+	accumulator.lactate = append(accumulator.lactate, wellnessSample{date: record.ID, value: record.Lactate})
 }
 
 func (accumulator *wellnessAccumulator) addHRV(record *Wellness) {
@@ -193,6 +216,7 @@ func (accumulator *wellnessAccumulator) finish() WellnessAnalysis {
 	accumulator.analysis.HRV = wellnessSignal(accumulator.hrv, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.RestingHR = wellnessSignal(accumulator.restingHR, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.Sleep = wellnessSignal(accumulator.sleep, accumulator.analysis.Scope.TotalDays)
+	accumulator.analysis.Lactate = lactateCalibration(accumulator.lactate, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.Coverage = accumulator.coverage()
 	accumulator.analysis.Subjective = accumulator.subjectiveSummary()
 	accumulator.analysis.State = physiologyState(&accumulator.analysis)
@@ -202,6 +226,47 @@ func (accumulator *wellnessAccumulator) finish() WellnessAnalysis {
 	}
 
 	return accumulator.analysis
+}
+
+func lactateCalibration(samples []wellnessSample, totalDays int) WellnessLactateCalibration {
+	if len(samples) == 0 {
+		return WellnessLactateCalibration{
+			Mean:            0,
+			Latest:          0,
+			Trend7Day:       0,
+			Samples:         0,
+			CoveragePercent: 0,
+			State:           "",
+			Source:          "",
+		}
+	}
+
+	sortWellnessSamples(samples)
+
+	mean := wellnessMean(samples)
+	latest := samples[len(samples)-1].value
+
+	return WellnessLactateCalibration{
+		Mean:            mean,
+		Latest:          latest,
+		Trend7Day:       wellnessTrend7Day(samples),
+		Samples:         len(samples),
+		CoveragePercent: coveragePercent(len(samples), totalDays),
+		State:           lactateState(latest),
+		Source:          "wellness_lactate",
+	}
+}
+
+func lactateState(latest float64) string {
+	if latest >= lactateHighThreshold {
+		return "high"
+	}
+
+	if latest >= lactateWatchThreshold {
+		return "watch"
+	}
+
+	return "baseline"
 }
 
 func (accumulator *wellnessAccumulator) coverage() WellnessCoverage {

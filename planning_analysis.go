@@ -18,7 +18,6 @@ const (
 	planWorkoutCategory        = "WORKOUT"
 	planNoteCategory           = "NOTE"
 	planSourcePlannedLoad      = "planned_event_load_heuristic"
-	planAlignmentUnknown       = "unknown"
 	planAlignmentBelow         = "below_recent_tolerance"
 	planAlignmentWithin        = "within_recent_tolerance"
 	planAlignmentAboveAverage  = "above_recent_average"
@@ -45,6 +44,30 @@ const (
 	planZ2ProfileBlockCount    = 4
 	planZ2WarmupSeconds        = 900
 	planZ2CooldownSeconds      = 600
+	planForecastCtlTauDays     = 42
+	planForecastAtlTauDays     = 7
+	planForecastWatchTSB       = -10
+	planForecastRedTSB         = -20
+	planForecastStatusRed      = "red"
+	planForecastStatusWatch    = "watch"
+	planTargetRaceA            = "RACE_A"
+	planTargetRaceB            = "RACE_B"
+	planTargetRaceC            = "RACE_C"
+	planTargetCategory         = "TARGET"
+	planWellnessStateWatch     = "WATCH"
+	planWellnessStateRed       = "RED"
+	planDirectiveRecovery      = "recovery_priority"
+	planDirectiveProtectTarget = "protect_target_event"
+	planDirectiveConditional   = "conditional_build"
+	planDirectiveBuild         = "progressive_build"
+	planDecisionBaseScore      = 100
+	planDecisionWatchPenalty   = 10
+	planDecisionRedPenalty     = 25
+	planDecisionLoadPenalty    = 15
+	planDecisionPeakPenalty    = 20
+	planDecisionAdaptPenalty   = 15
+	planHeatSessionWatch       = 1
+	planDriftWatchThreshold    = 5
 	plannedClassificationRest  = "rest"
 	plannedClassificationNote  = "note"
 	plannedClassificationHigh  = "high_intensity"
@@ -63,14 +86,25 @@ type TrainingPlanOptions struct {
 }
 
 type TrainingPlanAnalysis struct {
-	Scope           TrainingPlanScope          `json:"scope"`
-	History         TrainingPlanHistory        `json:"history"`
-	Phase           TrainingPlanPhase          `json:"phase"`
-	Load            TrainingPlanLoad           `json:"load"`
-	Sessions        TrainingPlanSessionSummary `json:"sessions"`
-	Weeks           []TrainingPlanWeek         `json:"weeks,omitempty"`
-	PlannedSessions []TrainingPlanSession      `json:"plannedSessions,omitempty"`
-	Warnings        []string                   `json:"warnings,omitempty"`
+	Scope           TrainingPlanScope             `json:"scope"`
+	History         TrainingPlanHistory           `json:"history"`
+	Anchors         TrainingPlanSportAnchors      `json:"anchors"`
+	Phase           TrainingPlanPhase             `json:"phase"`
+	Load            TrainingPlanLoad              `json:"load"`
+	TargetStatus    TrainingPlanEventTargetStatus `json:"targetStatus"`
+	Forecast        TrainingPlanForecast          `json:"forecast"`
+	Decision        TrainingPlanDecisionGuidance  `json:"decision"`
+	Sessions        TrainingPlanSessionSummary    `json:"sessions"`
+	DayAdjustments  []TrainingPlanDayAdjustment   `json:"dayAdjustments,omitempty"`
+	Weeks           []TrainingPlanWeek            `json:"weeks,omitempty"`
+	PlannedSessions []TrainingPlanSession         `json:"plannedSessions,omitempty"`
+	Warnings        []string                      `json:"warnings,omitempty"`
+}
+
+type TrainingPlanContext struct {
+	SportSettings *SportSettings             `json:"-"`
+	Wellness      *WellnessAnalysis          `json:"-"`
+	Adaptation    *CyclingAdaptationAnalysis `json:"-"`
 }
 
 type TrainingPlanScope struct {
@@ -84,15 +118,106 @@ type TrainingPlanScope struct {
 }
 
 type TrainingPlanHistory struct {
-	CompletedWeeks       int     `json:"completedWeeks"`
-	AverageWeeklyLoad    float64 `json:"averageWeeklyLoad"`
-	PeakWeeklyLoad       int     `json:"peakWeeklyLoad"`
-	RecentWeeklyLoad     int     `json:"recentWeeklyLoad"`
-	AverageWeeklyHours   float64 `json:"averageWeeklyHours"`
-	CurrentStateLabel    string  `json:"currentStateLabel,omitempty"`
-	CurrentLoadPressure  float64 `json:"currentLoadPressure,omitempty"`
-	CurrentStateSource   string  `json:"currentStateSource,omitempty"`
-	PlannedLoadAlignment string  `json:"plannedLoadAlignment,omitempty"`
+	CompletedWeeks       int                         `json:"completedWeeks"`
+	AverageWeeklyLoad    float64                     `json:"averageWeeklyLoad"`
+	PeakWeeklyLoad       int                         `json:"peakWeeklyLoad"`
+	RecentWeeklyLoad     int                         `json:"recentWeeklyLoad"`
+	AverageWeeklyHours   float64                     `json:"averageWeeklyHours"`
+	CurrentStateLabel    string                      `json:"currentStateLabel,omitempty"`
+	CurrentLoadPressure  float64                     `json:"currentLoadPressure,omitempty"`
+	CurrentCTL           float64                     `json:"currentCtl,omitempty"`
+	CurrentATL           float64                     `json:"currentAtl,omitempty"`
+	CurrentTSB           float64                     `json:"currentTsb,omitempty"`
+	CurrentDecoupling    float64                     `json:"currentDecoupling,omitempty"`
+	CurrentHotSessions   int                         `json:"currentHotSessions,omitempty"`
+	CurrentStateSource   string                      `json:"currentStateSource,omitempty"`
+	PlannedLoadAlignment string                      `json:"plannedLoadAlignment,omitempty"`
+	Weeks                []TrainingPlanCompletedWeek `json:"weeks,omitempty"`
+}
+
+type TrainingPlanSportAnchors struct {
+	FTP       int    `json:"ftp,omitempty"`
+	IndoorFTP int    `json:"indoorFtp,omitempty"`
+	LTHR      int    `json:"lthr,omitempty"`
+	MaxHR     int    `json:"maxHr,omitempty"`
+	WPrime    int    `json:"wPrime,omitempty"`
+	PMax      int    `json:"pMax,omitempty"`
+	Source    string `json:"source,omitempty"`
+}
+
+type TrainingPlanEventTargetStatus struct {
+	TargetEvents   int                       `json:"targetEvents"`
+	RaceEvents     int                       `json:"raceEvents"`
+	UpcomingEvents int                       `json:"upcomingEvents"`
+	NextEventDate  string                    `json:"nextEventDate,omitempty"`
+	Readiness      string                    `json:"readiness,omitempty"`
+	Source         string                    `json:"source,omitempty"`
+	Events         []TrainingPlanTargetEvent `json:"events,omitempty"`
+}
+
+type TrainingPlanTargetEvent struct {
+	Date           string  `json:"date,omitempty"`
+	Name           string  `json:"name,omitempty"`
+	Category       string  `json:"category,omitempty"`
+	Target         string  `json:"target,omitempty"`
+	LoadTarget     int     `json:"loadTarget,omitempty"`
+	TimeTarget     int     `json:"timeTarget,omitempty"`
+	DistanceTarget float64 `json:"distanceTarget,omitempty"`
+}
+
+type TrainingPlanForecast struct {
+	StartCTL   float64                     `json:"startCtl,omitempty"`
+	StartATL   float64                     `json:"startAtl,omitempty"`
+	StartTSB   float64                     `json:"startTsb,omitempty"`
+	EndCTL     float64                     `json:"endCtl,omitempty"`
+	EndATL     float64                     `json:"endAtl,omitempty"`
+	EndTSB     float64                     `json:"endTsb,omitempty"`
+	LowestTSB  float64                     `json:"lowestTsb,omitempty"`
+	HighestTSB float64                     `json:"highestTsb,omitempty"`
+	Status     string                      `json:"status,omitempty"`
+	Source     string                      `json:"source,omitempty"`
+	Points     []TrainingPlanForecastPoint `json:"points,omitempty"`
+}
+
+type TrainingPlanForecastPoint struct {
+	Date        string  `json:"date,omitempty"`
+	PlannedLoad int     `json:"plannedLoad"`
+	CTL         float64 `json:"ctl,omitempty"`
+	ATL         float64 `json:"atl,omitempty"`
+	TSB         float64 `json:"tsb,omitempty"`
+}
+
+type TrainingPlanDayAdjustment struct {
+	Date           string `json:"date,omitempty"`
+	SessionName    string `json:"sessionName,omitempty"`
+	Classification string `json:"classification,omitempty"`
+	Severity       string `json:"severity,omitempty"`
+	Condition      string `json:"condition,omitempty"`
+	Action         string `json:"action,omitempty"`
+	Source         string `json:"source,omitempty"`
+}
+
+type TrainingPlanDecisionGuidance struct {
+	PrimaryDirective string   `json:"primaryDirective,omitempty"`
+	ADEScore         int      `json:"adeScore,omitempty"`
+	Penalties        []string `json:"penalties,omitempty"`
+	TrainingGuidance string   `json:"trainingGuidance,omitempty"`
+	Source           string   `json:"source,omitempty"`
+}
+
+type TrainingPlanCompletedWeek struct {
+	ISOWeek               string  `json:"isoWeek"`
+	StartDate             string  `json:"startDate,omitempty"`
+	EndDate               string  `json:"endDate,omitempty"`
+	Load                  int     `json:"load"`
+	MovingTimeSecs        int     `json:"movingTimeSecs"`
+	MovingTimeHours       float64 `json:"movingTimeHours"`
+	Sessions              int     `json:"sessions"`
+	HighIntensityDays     int     `json:"highIntensityDays"`
+	LongEnduranceSessions int     `json:"longEnduranceSessions"`
+	MeanIntensity         float64 `json:"meanIntensity,omitempty"`
+	MeanDecoupling        float64 `json:"meanDecoupling,omitempty"`
+	Tolerance             string  `json:"tolerance,omitempty"`
 }
 
 type TrainingPlanPhase struct {
@@ -207,11 +332,31 @@ type trainingPlanAccumulator struct {
 }
 
 type trainingPlanHistoryWeek struct {
-	load    int
-	seconds int
+	load                  int
+	seconds               int
+	sessions              int
+	highIntensityDays     int
+	longEnduranceSessions int
+	intensity             numericAccumulator
+	decoupling            numericAccumulator
+	startDate             string
+	endDate               string
 }
 
 func AnalyzeTrainingPlan(activities []Activity, events []Event, options TrainingPlanOptions) TrainingPlanAnalysis {
+	return AnalyzeTrainingPlanWithContext(activities, events, options, TrainingPlanContext{
+		SportSettings: nil,
+		Wellness:      nil,
+		Adaptation:    nil,
+	})
+}
+
+func AnalyzeTrainingPlanWithContext(
+	activities []Activity,
+	events []Event,
+	options TrainingPlanOptions,
+	context TrainingPlanContext,
+) TrainingPlanAnalysis {
 	accumulator := newTrainingPlanAccumulator(events, options)
 
 	for index := range events {
@@ -221,6 +366,11 @@ func AnalyzeTrainingPlan(activities []Activity, events []Event, options Training
 	analysis := accumulator.finish(options)
 	analysis.History = summarizeTrainingPlanHistory(activities, options)
 	analysis.History.PlannedLoadAlignment = plannedLoadAlignment(&analysis.History, &analysis.Load)
+	analysis.Anchors = trainingPlanSportAnchors(context.SportSettings, activities)
+	analysis.TargetStatus = trainingPlanTargetStatus(events, options, &analysis.History)
+	analysis.Forecast = trainingPlanForecast(&analysis)
+	analysis.DayAdjustments = trainingPlanDayAdjustments(&analysis, context.Wellness)
+	analysis.Decision = trainingPlanDecisionGuidance(&analysis, context.Wellness, context.Adaptation)
 	analysis.Warnings = trainingPlanWarnings(&analysis)
 
 	return analysis
@@ -935,7 +1085,7 @@ func classifyTrainingPlanPhase(weeks []TrainingPlanWeek) TrainingPlanPhase {
 	phase.Source = planSourcePlannedLoad
 
 	if len(weeks) == 0 {
-		phase.Label = "unknown"
+		phase.Label = unknownState
 		phase.Pattern = "no_planned_weeks"
 		phase.Intent = "planning data unavailable"
 		phase.Confidence = planConfidenceLow
@@ -1040,9 +1190,25 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		}
 
 		key := isoWeekKey(parsed)
+		weekStart := isoWeekStart(parsed)
+		weekEnd := weekStart.AddDate(0, 0, planWeekDays-1)
 		week := weeks[key]
 		week.load += activity.TrainingLoad
 		week.seconds += activity.MovingTime
+		week.sessions++
+		week.startDate = weekStart.Format(analysisDateLayout)
+		week.endDate = weekEnd.Format(analysisDateLayout)
+		week.intensity.addIfNonZero(activity.Intensity)
+		week.decoupling.addIfNonZero(activity.Decoupling)
+
+		if activity.Intensity >= highIntensityThreshold {
+			week.highIntensityDays++
+		}
+
+		if activity.MovingTime >= longEnduranceSeconds {
+			week.longEnduranceSessions++
+		}
+
 		weeks[key] = week
 	}
 
@@ -1078,6 +1244,47 @@ func finishTrainingPlanHistory(history *TrainingPlanHistory, weeks map[string]tr
 	history.AverageWeeklyLoad = round2(float64(totalLoad) / float64(len(keys)))
 	history.AverageWeeklyHours = round2(float64(totalSeconds) / secondsPerHour / float64(len(keys)))
 	history.RecentWeeklyLoad = weeks[keys[len(keys)-1]].load
+	history.Weeks = completedHistoryWeeks(keys, weeks, history.AverageWeeklyLoad)
+}
+
+func completedHistoryWeeks(keys []string, weeks map[string]trainingPlanHistoryWeek, averageWeeklyLoad float64) []TrainingPlanCompletedWeek {
+	completed := make([]TrainingPlanCompletedWeek, 0, len(keys))
+
+	for _, key := range keys {
+		week := weeks[key]
+		completed = append(completed, TrainingPlanCompletedWeek{
+			ISOWeek:               key,
+			StartDate:             week.startDate,
+			EndDate:               week.endDate,
+			Load:                  week.load,
+			MovingTimeSecs:        week.seconds,
+			MovingTimeHours:       round2(float64(week.seconds) / secondsPerHour),
+			Sessions:              week.sessions,
+			HighIntensityDays:     week.highIntensityDays,
+			LongEnduranceSessions: week.longEnduranceSessions,
+			MeanIntensity:         round3(week.intensity.average()),
+			MeanDecoupling:        round2(week.decoupling.average()),
+			Tolerance:             completedWeekTolerance(week.load, averageWeeklyLoad),
+		})
+	}
+
+	return completed
+}
+
+func completedWeekTolerance(load int, averageWeeklyLoad float64) string {
+	if averageWeeklyLoad == 0 {
+		return unknownState
+	}
+
+	if float64(load) > averageWeeklyLoad*planBuildProgressionRatio {
+		return planAlignmentAboveAverage
+	}
+
+	if float64(load) < averageWeeklyLoad*planBelowToleranceRatio {
+		return planAlignmentBelow
+	}
+
+	return planAlignmentWithin
 }
 
 func addCurrentTrainingStateToHistory(history *TrainingPlanHistory, activities []Activity, options TrainingPlanOptions) {
@@ -1088,12 +1295,17 @@ func addCurrentTrainingStateToHistory(history *TrainingPlanHistory, activities [
 
 	history.CurrentStateLabel = analysis.State.StateLabel
 	history.CurrentLoadPressure = analysis.State.LoadPressure
+	history.CurrentCTL = analysis.Load.LatestCTL
+	history.CurrentATL = analysis.Load.LatestATL
+	history.CurrentTSB = analysis.Load.LatestForm
+	history.CurrentDecoupling = analysis.Durability.AverageDecoupling
+	history.CurrentHotSessions = analysis.Environment.HotSessions
 	history.CurrentStateSource = analysis.State.Source
 }
 
 func plannedLoadAlignment(history *TrainingPlanHistory, load *TrainingPlanLoad) string {
 	if history.CompletedWeeks == 0 || load.AverageWeeklyLoad == 0 {
-		return planAlignmentUnknown
+		return unknownState
 	}
 
 	if load.PeakWeeklyLoad > 0 && history.PeakWeeklyLoad > 0 &&
@@ -1115,7 +1327,7 @@ func plannedLoadAlignment(history *TrainingPlanHistory, load *TrainingPlanLoad) 
 func trainingPlanWarnings(analysis *TrainingPlanAnalysis) []string {
 	var warnings []string
 
-	if analysis.History.CurrentStateLabel == "Load Pressure" && analysis.Sessions.HighIntensitySessions > 1 {
+	if analysis.History.CurrentStateLabel == stateLabelLoadPressure && analysis.Sessions.HighIntensitySessions > 1 {
 		warnings = append(warnings, "current load pressure with multiple planned high-intensity sessions; make intensity conditional")
 	}
 
@@ -1124,6 +1336,574 @@ func trainingPlanWarnings(analysis *TrainingPlanAnalysis) []string {
 	}
 
 	return warnings
+}
+
+func trainingPlanSportAnchors(settings *SportSettings, activities []Activity) TrainingPlanSportAnchors {
+	if settings != nil {
+		anchors := TrainingPlanSportAnchors{
+			FTP:       settings.FTP,
+			IndoorFTP: settings.IndoorFTP,
+			LTHR:      settings.LTHR,
+			MaxHR:     settings.MaxHR,
+			WPrime:    settings.WPrime,
+			PMax:      settings.PMax,
+			Source:    "",
+		}
+
+		if anchors.FTP != 0 || anchors.IndoorFTP != 0 || anchors.LTHR != 0 ||
+			anchors.MaxHR != 0 || anchors.WPrime != 0 || anchors.PMax != 0 {
+			anchors.Source = "sport_settings"
+
+			return anchors
+		}
+	}
+
+	var (
+		anchors    TrainingPlanSportAnchors
+		latestDate string
+	)
+
+	for index := range activities {
+		activity := &activities[index]
+		if !IsCyclingActivityType(activity.Type) {
+			continue
+		}
+
+		date := activityDate(activity)
+		if date < latestDate {
+			continue
+		}
+
+		latestDate = date
+		anchors.FTP = activity.FTP
+		anchors.LTHR = activity.LTHR
+		anchors.MaxHR = activity.AthleteMaxHR
+		anchors.WPrime = activity.WPrime
+		anchors.PMax = activity.PMax
+		anchors.Source = "latest_activity_model_fields"
+	}
+
+	return anchors
+}
+
+func trainingPlanTargetStatus(
+	events []Event,
+	options TrainingPlanOptions,
+	history *TrainingPlanHistory,
+) TrainingPlanEventTargetStatus {
+	var status TrainingPlanEventTargetStatus
+	status.Source = "calendar_event_targets"
+
+	for index := range events {
+		event := &events[index]
+		date := eventDate(event)
+
+		if date == "" || !dateWithinRange(date, options.PlanStartDate, options.PlanEndDate) {
+			continue
+		}
+
+		if !isTargetEventCategory(event.Category) {
+			continue
+		}
+
+		status.TargetEvents++
+		if isRaceEventCategory(event.Category) {
+			status.RaceEvents++
+		}
+
+		if status.NextEventDate == "" || date < status.NextEventDate {
+			status.NextEventDate = date
+		}
+
+		status.Events = append(status.Events, TrainingPlanTargetEvent{
+			Date:           date,
+			Name:           event.Name,
+			Category:       event.Category,
+			Target:         event.Target,
+			LoadTarget:     event.LoadTarget,
+			TimeTarget:     event.TimeTarget,
+			DistanceTarget: event.DistanceTarget,
+		})
+	}
+
+	status.UpcomingEvents = len(status.Events)
+	sort.Slice(status.Events, func(left, right int) bool {
+		return status.Events[left].Date < status.Events[right].Date
+	})
+
+	status.Readiness = targetReadiness(&status, history)
+
+	return status
+}
+
+func isTargetEventCategory(category string) bool {
+	normalized := normalizedCategory(category)
+
+	return normalized == planTargetCategory || isRaceEventCategory(normalized)
+}
+
+func isRaceEventCategory(category string) bool {
+	normalized := normalizedCategory(category)
+
+	return normalized == planTargetRaceA || normalized == planTargetRaceB || normalized == planTargetRaceC
+}
+
+func targetReadiness(status *TrainingPlanEventTargetStatus, history *TrainingPlanHistory) string {
+	if status.UpcomingEvents == 0 {
+		return "no_target_events"
+	}
+
+	if history.CurrentStateLabel == stateLabelLoadPressure ||
+		history.PlannedLoadAlignment == planAlignmentAbovePeak {
+		return "at_risk"
+	}
+
+	return "on_track"
+}
+
+func trainingPlanForecast(analysis *TrainingPlanAnalysis) TrainingPlanForecast {
+	var forecast TrainingPlanForecast
+	forecast.StartCTL = analysis.History.CurrentCTL
+	forecast.StartATL = analysis.History.CurrentATL
+	forecast.StartTSB = initialForecastTSB(&analysis.History)
+	forecast.LowestTSB = forecast.StartTSB
+	forecast.HighestTSB = forecast.StartTSB
+	forecast.Source = "planned_load_impulse_model"
+
+	if forecast.StartCTL == 0 && forecast.StartATL == 0 {
+		return forecast
+	}
+
+	start, startErr := time.Parse(analysisDateLayout, analysis.Scope.PlanStartDate)
+	end, endErr := time.Parse(analysisDateLayout, analysis.Scope.PlanEndDate)
+
+	if startErr != nil || endErr != nil || end.Before(start) {
+		return forecast
+	}
+
+	loadByDate := plannedDailyLoad(analysis.PlannedSessions)
+	ctl := forecast.StartCTL
+	atl := forecast.StartATL
+
+	for current := start; !current.After(end); current = current.AddDate(0, 0, 1) {
+		date := current.Format(analysisDateLayout)
+		load := loadByDate[date]
+
+		ctl = ewmaLoadStep(ctl, float64(load), planForecastCtlTauDays)
+		atl = ewmaLoadStep(atl, float64(load), planForecastAtlTauDays)
+		tsb := round2(ctl - atl)
+
+		forecast.Points = append(forecast.Points, TrainingPlanForecastPoint{
+			Date:        date,
+			PlannedLoad: load,
+			CTL:         round2(ctl),
+			ATL:         round2(atl),
+			TSB:         tsb,
+		})
+
+		if tsb < forecast.LowestTSB {
+			forecast.LowestTSB = tsb
+		}
+
+		if tsb > forecast.HighestTSB {
+			forecast.HighestTSB = tsb
+		}
+	}
+
+	forecast.EndCTL = round2(ctl)
+	forecast.EndATL = round2(atl)
+	forecast.EndTSB = round2(ctl - atl)
+	forecast.Status = forecastStatus(forecast.LowestTSB)
+
+	return forecast
+}
+
+func initialForecastTSB(history *TrainingPlanHistory) float64 {
+	if history.CurrentTSB != 0 {
+		return history.CurrentTSB
+	}
+
+	if history.CurrentCTL == 0 && history.CurrentATL == 0 {
+		return 0
+	}
+
+	return round2(history.CurrentCTL - history.CurrentATL)
+}
+
+func plannedDailyLoad(sessions []TrainingPlanSession) map[string]int {
+	loadByDate := map[string]int{}
+
+	for index := range sessions {
+		session := &sessions[index]
+		if session.Date == "" {
+			continue
+		}
+
+		loadByDate[session.Date] += session.TrainingLoad
+	}
+
+	return loadByDate
+}
+
+func ewmaLoadStep(previous, todayLoad float64, tauDays int) float64 {
+	if tauDays <= 0 {
+		return todayLoad
+	}
+
+	return previous + ((todayLoad - previous) / float64(tauDays))
+}
+
+func forecastStatus(lowestTSB float64) string {
+	if lowestTSB <= planForecastRedTSB {
+		return planForecastStatusRed
+	}
+
+	if lowestTSB <= planForecastWatchTSB {
+		return planForecastStatusWatch
+	}
+
+	return "stable"
+}
+
+func trainingPlanDayAdjustments(
+	analysis *TrainingPlanAnalysis,
+	wellness *WellnessAnalysis,
+) []TrainingPlanDayAdjustment {
+	rules := make([]TrainingPlanDayAdjustment, 0, len(analysis.PlannedSessions))
+	forecastByDate := map[string]TrainingPlanForecastPoint{}
+
+	for index := range analysis.Forecast.Points {
+		point := analysis.Forecast.Points[index]
+		forecastByDate[point.Date] = point
+	}
+
+	for index := range analysis.PlannedSessions {
+		session := analysis.PlannedSessions[index]
+		if normalizedCategory(session.Category) != planWorkoutCategory {
+			continue
+		}
+
+		if point, ok := forecastByDate[session.Date]; ok {
+			if rule, valid := adjustmentRuleForForecast(&session, point); valid {
+				rules = append(rules, rule)
+			}
+		}
+
+		if rule, valid := adjustmentRuleForDurability(&session, analysis.History.CurrentDecoupling); valid {
+			rules = append(rules, rule)
+		}
+
+		if rule, valid := adjustmentRuleForHeat(&session, analysis.History.CurrentHotSessions); valid {
+			rules = append(rules, rule)
+		}
+
+		if rule, valid := adjustmentRuleForWellness(&session, wellness); valid {
+			rules = append(rules, rule)
+		}
+
+		if rule, valid := adjustmentRuleForSleep(&session, wellness); valid {
+			rules = append(rules, rule)
+		}
+
+		if rule, valid := adjustmentRuleForRestingHR(&session, wellness); valid {
+			rules = append(rules, rule)
+		}
+	}
+
+	return rules
+}
+
+func adjustmentRuleForForecast(
+	session *TrainingPlanSession,
+	point TrainingPlanForecastPoint,
+) (TrainingPlanDayAdjustment, bool) {
+	if !isIntensityClassification(session.Classification) {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	if point.TSB <= planForecastRedTSB {
+		return TrainingPlanDayAdjustment{
+			Date:           session.Date,
+			SessionName:    session.Name,
+			Classification: session.Classification,
+			Severity:       "red",
+			Condition:      "forecast_tsb_red",
+			Action:         "replace with aerobic session or reduce load by 20%",
+			Source:         "planned_load_impulse_model",
+		}, true
+	}
+
+	if point.TSB <= planForecastWatchTSB {
+		return TrainingPlanDayAdjustment{
+			Date:           session.Date,
+			SessionName:    session.Name,
+			Classification: session.Classification,
+			Severity:       "watch",
+			Condition:      "forecast_tsb_watch",
+			Action:         "make key intensity conditional on readiness",
+			Source:         "planned_load_impulse_model",
+		}, true
+	}
+
+	return emptyTrainingPlanDayAdjustment(), false
+}
+
+func adjustmentRuleForDurability(
+	session *TrainingPlanSession,
+	meanDecoupling float64,
+) (TrainingPlanDayAdjustment, bool) {
+	if session.Classification != plannedClassificationLong {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	if meanDecoupling < planDriftWatchThreshold {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	return TrainingPlanDayAdjustment{
+		Date:           session.Date,
+		SessionName:    session.Name,
+		Classification: session.Classification,
+		Severity:       "watch",
+		Condition:      "recent_decoupling_high",
+		Action:         "cap endurance duration and monitor drift every 30 minutes",
+		Source:         "recent_completed_sessions",
+	}, true
+}
+
+func adjustmentRuleForHeat(
+	session *TrainingPlanSession,
+	hotSessions int,
+) (TrainingPlanDayAdjustment, bool) {
+	if hotSessions < planHeatSessionWatch {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	if session.Classification != plannedClassificationLong && session.Classification != plannedClassificationZ2 {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	return TrainingPlanDayAdjustment{
+		Date:           session.Date,
+		SessionName:    session.Name,
+		Classification: session.Classification,
+		Severity:       "watch",
+		Condition:      "recent_heat_load",
+		Action:         "start early, cap power by one zone if heat rises",
+		Source:         "activity_environment_fields",
+	}, true
+}
+
+func adjustmentRuleForWellness(
+	session *TrainingPlanSession,
+	wellness *WellnessAnalysis,
+) (TrainingPlanDayAdjustment, bool) {
+	if wellness == nil {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	if !session.KeySession {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	if wellness.State.State != planWellnessStateWatch && wellness.State.State != planWellnessStateRed {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	severity := strings.ToLower(wellness.State.State)
+
+	return TrainingPlanDayAdjustment{
+		Date:           session.Date,
+		SessionName:    session.Name,
+		Classification: session.Classification,
+		Severity:       severity,
+		Condition:      "wellness_state_" + strings.ToLower(wellness.State.State),
+		Action:         "switch to aerobic if morning readiness is not improved",
+		Source:         wellness.State.Source,
+	}, true
+}
+
+func adjustmentRuleForSleep(
+	session *TrainingPlanSession,
+	wellness *WellnessAnalysis,
+) (TrainingPlanDayAdjustment, bool) {
+	if wellness == nil || !session.KeySession || wellness.Sleep.Latest == 0 {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	if wellness.Sleep.Latest < sleepRedScore {
+		return TrainingPlanDayAdjustment{
+			Date:           session.Date,
+			SessionName:    session.Name,
+			Classification: session.Classification,
+			Severity:       planForecastStatusRed,
+			Condition:      "sleep_score_red",
+			Action:         "replace intensity with recovery unless sleep rebounds",
+			Source:         "wellness_sleep",
+		}, true
+	}
+
+	if wellness.Sleep.Latest < sleepWatchScore {
+		return TrainingPlanDayAdjustment{
+			Date:           session.Date,
+			SessionName:    session.Name,
+			Classification: session.Classification,
+			Severity:       planForecastStatusWatch,
+			Condition:      "sleep_score_watch",
+			Action:         "cap first hard block and continue only if RPE is normal",
+			Source:         "wellness_sleep",
+		}, true
+	}
+
+	return emptyTrainingPlanDayAdjustment(), false
+}
+
+func adjustmentRuleForRestingHR(
+	session *TrainingPlanSession,
+	wellness *WellnessAnalysis,
+) (TrainingPlanDayAdjustment, bool) {
+	if wellness == nil || !session.KeySession {
+		return emptyTrainingPlanDayAdjustment(), false
+	}
+
+	if wellness.RestingHR.Delta >= restingHRRedDelta {
+		return TrainingPlanDayAdjustment{
+			Date:           session.Date,
+			SessionName:    session.Name,
+			Classification: session.Classification,
+			Severity:       planForecastStatusRed,
+			Condition:      "resting_hr_delta_red",
+			Action:         "skip intensity and keep only easy aerobic load",
+			Source:         "wellness_resting_hr",
+		}, true
+	}
+
+	if wellness.RestingHR.Delta >= restingHRWatchDelta {
+		return TrainingPlanDayAdjustment{
+			Date:           session.Date,
+			SessionName:    session.Name,
+			Classification: session.Classification,
+			Severity:       planForecastStatusWatch,
+			Condition:      "resting_hr_delta_watch",
+			Action:         "make intensity conditional and extend warmup check",
+			Source:         "wellness_resting_hr",
+		}, true
+	}
+
+	return emptyTrainingPlanDayAdjustment(), false
+}
+
+func emptyTrainingPlanDayAdjustment() TrainingPlanDayAdjustment {
+	return TrainingPlanDayAdjustment{
+		Date:           "",
+		SessionName:    "",
+		Classification: "",
+		Severity:       "",
+		Condition:      "",
+		Action:         "",
+		Source:         "",
+	}
+}
+
+func isIntensityClassification(classification string) bool {
+	return classification == plannedClassificationHigh || classification == plannedClassificationTempo
+}
+
+func trainingPlanDecisionGuidance(
+	analysis *TrainingPlanAnalysis,
+	wellness *WellnessAnalysis,
+	adaptation *CyclingAdaptationAnalysis,
+) TrainingPlanDecisionGuidance {
+	var decision TrainingPlanDecisionGuidance
+	decision.Source = "local_decision_engine_v1"
+	decision.PrimaryDirective = primaryDirective(analysis, wellness, adaptation)
+	decision.ADEScore = planDecisionBaseScore
+
+	if analysis.Forecast.Status == planForecastStatusRed {
+		decision.ADEScore -= planDecisionRedPenalty
+		decision.Penalties = append(decision.Penalties, "forecast_red")
+	} else if analysis.Forecast.Status == planForecastStatusWatch {
+		decision.ADEScore -= planDecisionWatchPenalty
+		decision.Penalties = append(decision.Penalties, "forecast_watch")
+	}
+
+	if analysis.History.CurrentStateLabel == stateLabelLoadPressure {
+		decision.ADEScore -= planDecisionLoadPenalty
+		decision.Penalties = append(decision.Penalties, "load_pressure")
+	}
+
+	if analysis.History.PlannedLoadAlignment == planAlignmentAbovePeak {
+		decision.ADEScore -= planDecisionPeakPenalty
+		decision.Penalties = append(decision.Penalties, "above_recent_peak")
+	}
+
+	if wellness != nil {
+		if wellness.State.State == planWellnessStateRed {
+			decision.ADEScore -= planDecisionRedPenalty
+			decision.Penalties = append(decision.Penalties, "wellness_red")
+		}
+
+		if wellness.State.State == planWellnessStateWatch {
+			decision.ADEScore -= planDecisionWatchPenalty
+			decision.Penalties = append(decision.Penalties, "wellness_watch")
+		}
+	}
+
+	if adaptation != nil && adaptation.SystemStatus.Status == adaptationStatusDeclining {
+		decision.ADEScore -= planDecisionAdaptPenalty
+		decision.Penalties = append(decision.Penalties, "adaptation_declining")
+	}
+
+	if decision.ADEScore < 0 {
+		decision.ADEScore = 0
+	}
+
+	decision.TrainingGuidance = decisionGuidanceText(decision.PrimaryDirective)
+
+	return decision
+}
+
+func primaryDirective(
+	analysis *TrainingPlanAnalysis,
+	wellness *WellnessAnalysis,
+	adaptation *CyclingAdaptationAnalysis,
+) string {
+	if analysis.History.CurrentStateLabel == stateLabelLoadPressure ||
+		analysis.Forecast.Status == planForecastStatusRed {
+		return planDirectiveRecovery
+	}
+
+	if wellness != nil && wellness.State.State == planWellnessStateRed {
+		return planDirectiveRecovery
+	}
+
+	if analysis.TargetStatus.Readiness == "at_risk" {
+		return planDirectiveProtectTarget
+	}
+
+	if adaptation != nil && adaptation.SystemStatus.Status == adaptationStatusDeclining {
+		return planDirectiveProtectTarget
+	}
+
+	if analysis.Forecast.Status == planForecastStatusWatch ||
+		(wellness != nil && wellness.State.State == planWellnessStateWatch) {
+		return planDirectiveConditional
+	}
+
+	return planDirectiveBuild
+}
+
+func decisionGuidanceText(directive string) string {
+	switch directive {
+	case planDirectiveRecovery:
+		return "Protect recovery bandwidth, reduce intensity density, and preserve only one key stimulus."
+	case planDirectiveProtectTarget:
+		return "Keep race-specific sessions while trimming non-essential load around target events."
+	case planDirectiveConditional:
+		return "Continue build structure, but gate intensity by morning readiness and forecasted form."
+	default:
+		return "Continue progressive build with normal monitoring and recovery spacing."
+	}
 }
 
 func sortedTrainingPlanWeeks(weekMap map[string]*TrainingPlanWeek) []TrainingPlanWeek {

@@ -1,9 +1,46 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestDefaultAnalysisFieldsIncludeReportContractInputs(t *testing.T) {
+	t.Parallel()
+
+	required := []string{
+		"icu_pm_cp",
+		"icu_pm_w_prime",
+		"icu_pm_p_max",
+		"icu_pm_ftp",
+		"icu_rolling_ftp",
+		"average_temp",
+		"min_temp",
+		"max_temp",
+		"average_weather_temp",
+		"average_feels_like",
+		"average_wind_speed",
+		"headwind_percent",
+		"tailwind_percent",
+		"average_altitude",
+		"average_gradient",
+		"average_lactate",
+		"strain_score",
+	}
+
+	var missing []string
+
+	for _, field := range required {
+		if !strings.Contains(defaultAnalysisFields, field) {
+			missing = append(missing, field)
+		}
+	}
+
+	if len(missing) > 0 {
+		t.Fatalf("defaultAnalysisFields missing %v", missing)
+	}
+}
 
 func TestAnalysisDateRangeUsesExplicitDates(t *testing.T) {
 	t.Parallel()
