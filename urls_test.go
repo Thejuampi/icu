@@ -80,3 +80,52 @@ func TestBuildURL(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildURLEscapesQueryComponents(t *testing.T) {
+	t.Parallel()
+
+	got := icu.BuildURL("/api/v1/athlete/0/activities", map[string]string{
+		"fields": "id,name/start",
+		"q":      "café ride",
+	})
+	want := "https://intervals.icu/api/v1/athlete/0/activities?fields=id%2Cname%2Fstart&q=caf%C3%A9+ride"
+
+	if got != want {
+		t.Fatalf("BuildURL escaped query = %q, want %q", got, want)
+	}
+}
+
+func BenchmarkBuildPathAthleteResource(b *testing.B) {
+	var got string
+
+	b.ReportAllocs()
+
+	for range b.N {
+		got = icu.BuildPath("i445643", "activities", "search-full")
+	}
+
+	if got == "" {
+		b.Fatal("empty path")
+	}
+}
+
+func BenchmarkBuildURLMultipleParams(b *testing.B) {
+	var got string
+
+	query := map[string]string{
+		"oldest": "2026-05-20",
+		"newest": "2026-05-24",
+		"fields": "id,name,start_date_local,type,moving_time,icu_training_load",
+		"limit":  "200",
+	}
+
+	b.ReportAllocs()
+
+	for range b.N {
+		got = icu.BuildURL("/api/v1/athlete/i445643/activities", query)
+	}
+
+	if got == "" {
+		b.Fatal("empty URL")
+	}
+}

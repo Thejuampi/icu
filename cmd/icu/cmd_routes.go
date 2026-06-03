@@ -2,22 +2,22 @@ package main
 
 import icu "github.com/Thejuampi/icu"
 
-func init() {
-	RegisterCommand("routes", "list", &Command{
+func registerRoutesCommands(registry *CommandRegistry) {
+	registry.Register("routes", "list", &Command{
 		Name:        "",
 		Usage:       "routes list",
 		Description: "List routes with icu.Activity counts.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var r any
 			if err := client.Get("routes", nil, nil, &r); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), r)
+			return writeJSON(r)
 		},
 	})
 
-	RegisterCommand("routes", "get", &Command{
+	registry.Register("routes", "get", &Command{
 		Name:        "",
 		Usage:       "routes get <id> [--include-path]",
 		Description: "Get icu.Route by ID.",
@@ -33,10 +33,10 @@ func init() {
 
 			var r icu.Route
 			if err := client.Get("routes", []string{args[0]}, q, &r); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), r)
+			return writeJSON(r)
 		},
 	})
 }

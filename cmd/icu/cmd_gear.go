@@ -2,22 +2,22 @@ package main
 
 import icu "github.com/Thejuampi/icu"
 
-func init() {
-	RegisterCommand("gear", "list", &Command{
+func registerGearCommands(registry *CommandRegistry) {
+	registry.Register("gear", "list", &Command{
 		Name:        "",
 		Usage:       "gear list",
 		Description: "List all gear.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var g []icu.Gear
 			if err := client.Get("gear", nil, nil, &g); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), g)
+			return writeJSON(g)
 		},
 	})
 
-	RegisterCommand("gear", "create", &Command{
+	registry.Register("gear", "create", &Command{
 		Name:        "",
 		Usage:       "gear create --name NAME --type Bike [--distance M]",
 		Description: "Create gear or component.",
@@ -29,14 +29,14 @@ func init() {
 
 			var result icu.Gear
 			if err := client.Post("gear", nil, nil, g, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
 	})
 
-	RegisterCommand("gear", "update", &Command{
+	registry.Register("gear", "update", &Command{
 		Name:        "",
 		Usage:       "gear update <id> --name NAME",
 		Description: "Update gear.",
@@ -56,14 +56,14 @@ func init() {
 
 			var result icu.Gear
 			if err := client.Put("gear", []string{args[0]}, nil, g, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
 	})
 
-	RegisterCommand("gear", "delete", &Command{
+	registry.Register("gear", "delete", &Command{
 		Name:        "",
 		Usage:       "gear delete <id>",
 		Description: "Delete gear.",
@@ -72,7 +72,7 @@ func init() {
 				return errMissing("gear id")
 			}
 
-			return client.Delete("gear", []string{args[0]}, nil, nil)
+			return wrapCommandError(client.Delete("gear", []string{args[0]}, nil, nil))
 		},
 	})
 }

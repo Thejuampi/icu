@@ -2,22 +2,22 @@ package main
 
 import icu "github.com/Thejuampi/icu"
 
-func init() {
-	RegisterCommand("folders", "list", &Command{
+func registerFoldersCommands(registry *CommandRegistry) {
+	registry.Register("folders", "list", &Command{
 		Name:        "",
 		Usage:       "folders list",
 		Description: "List folders, plans, and workouts.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var f []icu.Folder
 			if err := client.Get("folders", nil, nil, &f); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), f)
+			return writeJSON(f)
 		},
 	})
 
-	RegisterCommand("folders", "create", &Command{
+	registry.Register("folders", "create", &Command{
 		Name:        "",
 		Usage:       "folders create --name NAME [--type icu.Folder|PLAN] [--desc DESC]",
 		Description: "Create a icu.Folder or plan.",
@@ -29,14 +29,14 @@ func init() {
 
 			var result icu.Folder
 			if err := client.Post("folders", nil, nil, f, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
 	})
 
-	RegisterCommand("folders", "update", &Command{
+	registry.Register("folders", "update", &Command{
 		Name:        "",
 		Usage:       "folders update <id> --name NAME",
 		Description: "Update a icu.Folder or plan.",
@@ -56,14 +56,14 @@ func init() {
 
 			var result icu.Folder
 			if err := client.Put("folders", []string{args[0]}, nil, f, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
 	})
 
-	RegisterCommand("folders", "delete", &Command{
+	registry.Register("folders", "delete", &Command{
 		Name:        "",
 		Usage:       "folders delete <id>",
 		Description: "Delete a icu.Folder or plan.",
@@ -72,7 +72,7 @@ func init() {
 				return errMissing("icu.Folder id")
 			}
 
-			return client.Delete("folders", []string{args[0]}, nil, nil)
+			return wrapCommandError(client.Delete("folders", []string{args[0]}, nil, nil))
 		},
 	})
 }

@@ -2,9 +2,16 @@ package main
 
 import icu "github.com/Thejuampi/icu"
 
-//nolint:gocognit,funlen
-func init() {
-	RegisterCommand("wellness", "list", &Command{
+func registerWellnessCommands(registry *CommandRegistry) {
+	registry.Register("wellness", "list", wellnessListCommand())
+	registry.Register("wellness", "get", wellnessGetCommand())
+	registry.Register("wellness", "update", wellnessUpdateCommand())
+	registry.Register("wellness", "bulk", wellnessBulkCommand())
+	registry.Register("wellness", "upload", wellnessUploadCommand())
+}
+
+func wellnessListCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "wellness list --oldest DATE --newest DATE [--fields f1,f2]",
 		Description: "List wellness records for a date range.",
@@ -13,14 +20,16 @@ func init() {
 
 			var w []icu.Wellness
 			if err := client.Get("wellness", nil, q, &w); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), w)
+			return writeJSON(w)
 		},
-	})
+	}
+}
 
-	RegisterCommand("wellness", "get", &Command{
+func wellnessGetCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "wellness get <date>",
 		Description: "Get wellness record for a date.",
@@ -31,14 +40,16 @@ func init() {
 
 			var w icu.Wellness
 			if err := client.Get("wellness", []string{args[0]}, nil, &w); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), w)
+			return writeJSON(w)
 		},
-	})
+	}
+}
 
-	RegisterCommand("wellness", "update", &Command{
+func wellnessUpdateCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "wellness update <date> --weight 81 --resting-hr 50 --hrv 72.5 [--sleep-secs 28800] [--locked]",
 		Description: "Update wellness record for a date.",
@@ -75,14 +86,16 @@ func init() {
 
 			var result icu.Wellness
 			if err := client.Put("wellness", []string{args[0]}, nil, w, &result); err != nil {
-				return err
+				return wrapCommandError(err)
 			}
 
-			return icu.WriteJSON(osStdout(), result)
+			return writeJSON(result)
 		},
-	})
+	}
+}
 
-	RegisterCommand("wellness", "bulk", &Command{
+func wellnessBulkCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "wellness bulk --file FILE.json",
 		Description: "Bulk update wellness records from a JSON array file.",
@@ -102,11 +115,13 @@ func init() {
 				return err
 			}
 
-			return client.Put("wellness-bulk", nil, nil, records, nil)
+			return wrapCommandError(client.Put("wellness-bulk", nil, nil, records, nil))
 		},
-	})
+	}
+}
 
-	RegisterCommand("wellness", "upload", &Command{
+func wellnessUploadCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "wellness upload <file.csv>",
 		Description: "Upload wellness CSV file.",
@@ -117,7 +132,7 @@ func init() {
 
 			var resp any
 
-			return client.UploadFile("wellness", "", args[0], nil, &resp)
+			return wrapCommandError(client.UploadFile("wellness", "", args[0], nil, &resp))
 		},
-	})
+	}
 }

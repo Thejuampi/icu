@@ -58,64 +58,82 @@ func WriteCSV(w io.Writer, headers []string, rows [][]string) error {
 	return nil
 }
 
-//nolint:gocognit
 func WriteTable(writer io.Writer, headers []string, rows [][]string) error {
-	cols := len(headers)
-	widths := make([]int, cols)
-
-	for i, h := range headers {
-		widths[i] = len(h)
-	}
-
-	for _, row := range rows {
-		for i, cell := range row {
-			if i < cols && len(cell) > widths[i] {
-				widths[i] = len(cell)
-			}
-		}
-	}
-
 	var sb strings.Builder
 
-	for i, h := range headers {
-		sb.WriteString(h)
+	widths := columnWidths(headers, rows)
 
-		if i < cols-1 {
-			sb.WriteString("  ")
-		}
-	}
-
-	sb.WriteString("\n")
-
-	for i, w := range widths {
-		sb.WriteString(strings.Repeat("-", w))
-
-		if i < cols-1 {
-			sb.WriteString("  ")
-		}
-	}
-
-	sb.WriteString("\n")
-
-	for _, row := range rows {
-		for i, cell := range row {
-			if i < cols {
-				writePaddedCell(&sb, widths[i], cell)
-
-				if i < cols-1 {
-					sb.WriteString("  ")
-				}
-			}
-		}
-
-		sb.WriteString("\n")
-	}
+	writeTableLine(&sb, headers)
+	writeDividerLine(&sb, widths)
+	writeTableRows(&sb, widths, rows)
 
 	if _, err := fmt.Fprint(writer, sb.String()); err != nil {
 		return fmt.Errorf("writing table: %w", err)
 	}
 
 	return nil
+}
+
+func columnWidths(headers []string, rows [][]string) []int {
+	widths := make([]int, len(headers))
+
+	for idx, header := range headers {
+		widths[idx] = len(header)
+	}
+
+	for _, row := range rows {
+		for idx, cell := range row {
+			if idx < len(widths) && len(cell) > widths[idx] {
+				widths[idx] = len(cell)
+			}
+		}
+	}
+
+	return widths
+}
+
+func writeTableLine(sb *strings.Builder, cells []string) {
+	for idx, cell := range cells {
+		sb.WriteString(cell)
+
+		if idx < len(cells)-1 {
+			sb.WriteString("  ")
+		}
+	}
+
+	sb.WriteString("\n")
+}
+
+func writeDividerLine(sb *strings.Builder, widths []int) {
+	for idx, width := range widths {
+		sb.WriteString(strings.Repeat("-", width))
+
+		if idx < len(widths)-1 {
+			sb.WriteString("  ")
+		}
+	}
+
+	sb.WriteString("\n")
+}
+
+func writeTableRows(sb *strings.Builder, widths []int, rows [][]string) {
+	for _, row := range rows {
+		writeTableRow(sb, widths, row)
+	}
+}
+
+func writeTableRow(sb *strings.Builder, widths []int, row []string) {
+	for idx, cell := range row {
+		if idx < len(widths) {
+			writePaddedCell(sb, widths[idx], cell)
+
+			if idx < len(widths)-1 {
+				sb.WriteString("  ")
+			}
+		}
+	}
+
+	sb.WriteString("\n")
 }
 
 const paddingSpaces = 2
