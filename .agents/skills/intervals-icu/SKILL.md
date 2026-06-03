@@ -1,7 +1,7 @@
 ---
 name: intervals-icu
 description: "Use when working with Intervals.icu data through the `icu` CLI: activities, wellness, workouts, events, FTP, athlete profiles, sport settings, routes, gear, chats, training load, cycling, API key setup. Prefer CLI commands over direct REST endpoint work; the CLI owns REST details."
-compatibility: opencode
+compatibility: opencode, claude
 metadata:
   cli: icu
   domain: intervals-icu-cli
