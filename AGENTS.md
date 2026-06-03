@@ -21,10 +21,38 @@ go build ./...          # Must compile
 go test ./... -count=1   # All tests pass
 go vet ./...             # Zero issues
 golangci-lint run ./...  # Zero issues, zero warnings
-go test -coverprofile=coverage.out ./...  # Coverage must be >= 90%
+go test -coverprofile coverage.out ./...  # Coverage must be >= 90%
 ```
 
-**Coverage gate:** `go tool cover -func=coverage.out | grep total` must show >= 90.0%. Less than 90% is a critical build failure.
+**Coverage gate:** `go tool cover -func coverage.out` must show `total:` >= 90.0%. Less than 90% is a critical build failure.
+
+## Documentation Gate
+
+Public changes are not done until the matching documentation is updated in the same change.
+
+### Changes That MUST Update Docs
+
+- New, removed, renamed, or behaviorally changed CLI resources, actions, or id-first dispatch paths
+- New, removed, renamed, or behaviorally changed flags, defaults, help text, or auth/config precedence
+- New, removed, renamed, or behaviorally changed analysis inputs, outputs, decision rules, or warnings
+- New, removed, renamed, or behaviorally changed exported package behavior used by `github.com/Thejuampi/icu` consumers
+- Install, build, testing, lint, or contributor workflow changes that affect how the repo is used
+- OpenAPI snapshot changes that affect the public API surface covered by this repo
+
+### Documentation Map
+
+- `README.md`: project entry point, install, quick start, auth precedence, top-level CLI surface, and doc links
+- `docs/cli-reference.md`: exhaustive CLI contract for resources, actions, flags, defaults, and command examples
+- `docs/analysis.md`: analysis command defaults, upstream inputs, output sections, interpretation, and limitations
+- `docs/library.md`: usage-oriented guide for the reusable Go package
+- `docs/api/README.md`: OpenAPI snapshot role, provenance, and when to use it
+- `AGENTS.md`: contributor policy, quality gates, and documentation expectations
+
+### Required Documentation Practice
+
+- Update the relevant docs in the same change that updates the public behavior
+- Verify every documented command example against current CLI behavior or help output
+- If a change truly has no documentation impact, state that explicitly in the final summary, commit message, or PR description
 
 ## Architecture Non-Negotiables
 
@@ -100,5 +128,8 @@ All of the following must be true:
 - [ ] `go test ./... -count=1` passes
 - [ ] Coverage >= 90%
 - [ ] `gofumpt -w .` applied
+- [ ] Relevant docs updated in the same change
+- [ ] Documented examples verified against current CLI behavior
+- [ ] Explicit note added when a change truly has no documentation impact
 - [ ] No API keys, tokens, or secrets in commits
 - [ ] No hacks, workarounds, or undocumented TODOs

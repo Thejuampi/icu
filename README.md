@@ -1,15 +1,23 @@
-# icu — Intervals.icu CLI
+# icu
 
-A fast, cross-platform CLI for the full [Intervals.icu](https://intervals.icu) API.
-Zero dependencies beyond the Go standard library.
+`icu` is a cross-platform Go CLI and reusable Go package for the [Intervals.icu](https://intervals.icu) REST API.
+It uses only the Go standard library.
 
 ## Install
 
+Install the CLI:
+
 ```bash
-go install github.com/Thejuampi/icu@latest
+go install github.com/Thejuampi/icu/cmd/icu@latest
 ```
 
-Or build from source:
+Use the Go package in another module:
+
+```bash
+go get github.com/Thejuampi/icu@latest
+```
+
+Build from source:
 
 ```bash
 git clone https://github.com/Thejuampi/icu.git
@@ -20,110 +28,126 @@ make build
 ## Quick Start
 
 ```bash
-# One-time setup: save your API key
-icu config set --api-key YOUR_INTERVALS_ICU_API_KEY
+# Save credentials once
+icu config set --api-key YOUR_INTERVALS_ICU_API_KEY --athlete-id 0
 
-# Now everything works without --api-key
+# Inspect athlete data
 icu athlete show
-icu activities list --oldest 2026-05-20 --newest 2026-05-24
-icu ftp show
-icu wellness get 2026-05-24
-icu analysis cycling --days 28
+icu activities list --oldest 2026-05-01 --newest 2026-05-31
+icu wellness get 2026-05-31
+
+# Analysis commands
+icu analysis cycling
 icu analysis wellness --days 42
 icu analysis plan
+icu analysis adaptation --days 42 --type Ride
+
+# Diagnose auth/config resolution without exposing the secret
+icu config diagnose
+icu config diagnose --verbose
 ```
 
-API key priority: `--api-key` flag → `INTERVALS_ICU_API_KEY` env → `~/.icu/config.json`
+## Auth And Config Resolution
 
-## Commands (~70)
+API key resolution order:
+
+1. `--api-key`
+2. `INTERVALS_ICU_API_KEY`
+3. `~/.icu/config.json`
+
+Athlete ID resolution order:
+
+1. `--athlete-id`
+2. `INTERVALS_ICU_ATHLETE_ID`
+3. `~/.icu/config.json`
+4. default `"0"` for the authenticated athlete
+
+`icu config show` prints the config file path and masks the stored API key.
+`icu config diagnose` prints source resolution details and a non-reversible fingerprint, not the raw secret.
+
+## Help And Discovery
+
+The CLI has resource-aware help:
+
+```bash
+icu help
+icu --help
+icu analysis --help
+icu activity i123 --help
+```
+
+Current dispatch behavior:
+
+- Resources with a `show` action default to `show` when invoked without an action, for example `icu athlete`.
+- Resources without a `show` action print resource help when invoked without an action, for example `icu activities`.
+- `activity` and `shared-event` support id-first parsing for help/dispatch.
+- Only `config` commands skip API key enforcement.
+
+## Output Behavior
+
+The CLI exposes `--output json|csv|table` and persists that preference in config, but the current command implementations primarily emit pretty JSON or raw downloaded bytes.
+Treat JSON as the effective default output format unless a command explicitly documents another format.
+
+## Documentation Map
+
+- [docs/cli-reference.md](docs/cli-reference.md): exhaustive command reference for the current CLI surface
+- [docs/analysis.md](docs/analysis.md): detailed behavior of `analysis cycling`, `analysis wellness`, `analysis plan`, and `analysis adaptation`
+- [docs/library.md](docs/library.md): usage-oriented guide for `github.com/Thejuampi/icu`
+- [docs/api/README.md](docs/api/README.md): OpenAPI snapshot provenance and usage notes
+- [AGENTS.md](AGENTS.md): contributor rules, quality gates, and the documentation gate
+
+## CLI Surface
+
+Current top-level resources:
 
 | Resource | Actions |
-| -------- | ------- |
-| `athlete` | show, update, profile, summary, plan, settings |
-| `activities` | list, get, upload, csv, search, search-full, interval-search, around, manual |
-| `activity <id>` | show, update, delete, intervals, streams, power-curve, hr-curve, pace-curve, power-vs-hr, best-efforts, map, weather, weather-summary, file, fit-file, gpx-file, segments, messages |
-| `analysis` | cycling, wellness, plan |
-| `wellness` | list, get, update, bulk, upload |
-| `events` | list, get, create, update, delete, download, tags |
-| `workouts` | list, get, create, update, delete, tags |
-| `folders` | list, create, update, delete |
-| `sports` | list, get, update, delete |
-| `ftp` | show, update |
-| `curves` | power, hr, pace, power-hr, mmp |
-| `routes` | list, get |
-| `gear` | list, create, update, delete |
-| `chats` | list, get, messages, send |
-| `custom` | list, get, create, update, delete |
-| `weather` | config, forecast |
-| `fitness-events` | list |
-| `tags` | activities, events, workouts |
-| `shared-event` | get |
-| `config` | show, set, path, diagnose |
+| --- | --- |
+| `activities` | `around`, `csv`, `get`, `interval-search`, `list`, `manual`, `search`, `search-full`, `upload` |
+| `activity` | `best-efforts`, `delete`, `file`, `fit-file`, `gpx-file`, `hr-curve`, `intervals`, `map`, `messages`, `pace-curve`, `power-curve`, `power-vs-hr`, `segments`, `show`, `streams`, `update`, `weather`, `weather-summary` |
+| `analysis` | `adaptation`, `cycling`, `plan`, `wellness` |
+| `athlete` | `plan`, `profile`, `settings`, `show`, `summary`, `update` |
+| `chats` | `get`, `list`, `messages`, `send` |
+| `config` | `diagnose`, `path`, `set`, `show` |
+| `curves` | `hr`, `mmp`, `pace`, `power`, `power-hr` |
+| `custom` | `create`, `delete`, `get`, `list`, `update` |
+| `events` | `create`, `delete`, `download`, `get`, `list`, `tags`, `update` |
+| `fitness-events` | `list` |
+| `folders` | `create`, `delete`, `list`, `update` |
+| `ftp` | `show`, `update` |
+| `gear` | `create`, `delete`, `list`, `update` |
+| `routes` | `get`, `list` |
+| `shared-event` | `get` |
+| `sports` | `delete`, `get`, `list`, `update` |
+| `tags` | `activities`, `events`, `workouts` |
+| `weather` | `config`, `forecast` |
+| `wellness` | `bulk`, `get`, `list`, `update`, `upload` |
+| `workouts` | `create`, `delete`, `get`, `list`, `tags`, `update` |
 
-## Numeric Cycling Analysis
+## Analysis Overview
 
-`icu analysis cycling` fetches completed activities from Intervals.icu and returns a JSON payload designed for downstream coaching analysis. It is intentionally numeric and read-only so it can be combined with an AI layer without hiding the underlying signals.
+`icu` currently ships four read-only analysis commands:
 
-```bash
-# Last 28 days by default
-icu analysis cycling
+- `analysis cycling` summarizes recent cycling load, intensity, environment, durability, anaerobic work, and session-level signals.
+- `analysis wellness` summarizes wellness coverage and physiology signals from wellness records.
+- `analysis plan` compares completed history with planned calendar events and emits a structured four-week planning view.
+- `analysis adaptation` compares power curves and anchors against recent activity and wellness context.
 
-# Explicit range
-icu analysis cycling --oldest 2026-05-01 --newest 2026-05-29
-
-# Rolling window
-icu analysis cycling --days 42
-```
-
-The output includes cycling activity count, volume, training load, daily load, monotony, strain, ACWR, zone totals, weighted intensity, decoupling, efficiency factor, variability index, and W' related metrics when Intervals.icu provides them.
-
-`icu analysis wellness` summarizes wellness records for physiology and planning decisions:
-
-```bash
-icu analysis wellness --days 42
-icu analysis wellness --oldest 2026-04-18 --newest 2026-05-30
-```
-
-The output includes HRV, resting heart rate, sleep score, subjective wellness coverage, CTL/ATL/TSB from wellness records, and a local physiology state (`OK`, `WATCH`, or `RED`).
-
-`icu analysis plan` compares recent completed cycling history with future calendar events to produce a numeric 4-week planning view:
-
-```bash
-# Default: 12-week completed history and the next 4-week ISO block
-icu analysis plan
-
-# Explicit planning window
-icu analysis plan --history-oldest 2026-03-08 --history-newest 2026-05-30 \
-	--plan-oldest 2026-06-01 --plan-newest 2026-06-28
-```
-
-The output includes completed-history tolerance, planned load alignment, block phase (`build`, `recovery`, `maintenance`, etc.), week roles such as `reentry`, `build`, `overload`, and `deload`, session classification (`high_intensity`, `tempo_threshold`, `long_endurance`, `recovery`, `aerobic`, `opener`, `rest`), recommended workout titles, execution intent, device-cue messages, indoor Z2 variation profiles, key sessions, weekly focus, and warnings for risky load/session combinations.
-
-For long or aerobic Z2 rides, `analysis plan` also emits an indoor-friendly `workoutProfile` with 4-minute Z2 waves, 40-second HR-control valleys, low/mid/high Z2 rotation, and max-Z2 caps so indoor endurance sessions do not become a flat steady-power block.
-
-## Auth Diagnostics
-
-Use `icu config diagnose` when authentication behaves unexpectedly. It reports where the CLI resolves values from without printing secrets.
-
-```bash
-icu config diagnose
-icu config diagnose --athlete-id i445643
-```
-
-The API key section includes only set/missing status, length, trim length, whitespace status, and a short non-reversible fingerprint for flag, environment, config file, and resolved key.
+See [docs/analysis.md](docs/analysis.md) for defaults, inputs, output sections, and current limitations.
 
 ## Development
 
+Repository quality gates:
+
 ```bash
-make build        # Build binary
-make test         # Run tests
-make test-cover   # Tests + coverage
-make test-race    # Race detector
-make lint         # golangci-lint
-make fmt          # Format code
-make vet          # go vet
-make ci           # All quality gates
+go build ./...
+go test ./... -count=1
+go vet ./...
+golangci-lint run ./...
+go test -coverprofile coverage.out ./...
+go tool cover -func coverage.out
 ```
+
+`AGENTS.md` requires documentation updates for every public feature change.
 
 ## License
 
