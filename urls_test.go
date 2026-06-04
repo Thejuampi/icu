@@ -24,6 +24,18 @@ func TestBuildPath(t *testing.T) {
 		{"wellness date", "0", "wellness", []string{"2026-05-24"}, "/api/v1/athlete/0/wellness/2026-05-24"},
 		{"event by id", "0", "events", []string{"456"}, "/api/v1/athlete/0/events/456"},
 		{"sport settings by type", "0", "sport-settings", []string{"Ride"}, "/api/v1/athlete/0/sport-settings/Ride"},
+		{"shared event with id", "0", "shared-event", []string{"event-id"}, "/api/v1/shared-event/event-id"},
+		{"shared event no id", "0", "shared-event", nil, "/api/v1/shared-event/0"},
+		{"download workout with param", "0", "download-workout", []string{"?format=zwo"}, "/api/v1/download-workout?format=zwo"},
+		{"download workout no param", "0", "download-workout", nil, "/api/v1/download-workout"},
+		{"chats list", "0", "chats", nil, "/api/v1/athlete/0/chats"},
+		{"chats send message", "0", "chats", []string{"send-message"}, "/api/v1/chats/send-message"},
+		{"chats with id", "0", "chats", []string{"chat-id", "messages"}, "/api/v1/athlete/0/chats/chat-id/messages"},
+		{"disconnect app", "0", "disconnect-app", nil, "/api/v1/disconnect-app"},
+		{"pace distances", "0", "pace-distances", nil, "/api/v1/pace_distances"},
+		{"athlete plans", "0", "athlete-plans", nil, "/api/v1/athlete-plans"},
+		{"default resource", "0", "some-resource", nil, "/api/v1/some-resource"},
+		{"default resource with parts", "0", "some-resource", []string{"p1", "p2"}, "/api/v1/some-resource/p1/p2"},
 	}
 
 	for _, tt := range tests {
@@ -78,6 +90,26 @@ func TestBuildURL(t *testing.T) {
 				t.Errorf("BuildURL(%q, %v) = %q, want %q", tt.path, tt.query, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildPathActivityWithNoParts(t *testing.T) {
+	t.Parallel()
+
+	got := icu.BuildPath("0", "activity", []string{}...)
+	want := "/api/v1/activity/0"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestBuildPathAthleteWithParts(t *testing.T) {
+	t.Parallel()
+
+	got := icu.BuildPath("0", "athlete", "ftp")
+	want := "/api/v1/athlete/0/ftp"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 

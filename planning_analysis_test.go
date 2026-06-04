@@ -7,6 +7,55 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
+func TestAnalyzeTrainingPlanExecutionHasCues(t *testing.T) {
+	t.Parallel()
+
+	events := []icu.Event{
+		plannedWorkout("2026-06-02T08:00:00", "Aerobic Ride", 60, 3600, 0.68),
+	}
+
+	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
+		PlanStartDate: "2026-06-01",
+		PlanEndDate:   "2026-06-07",
+	})
+
+	if len(got.PlannedSessions) == 0 || len(got.PlannedSessions[0].Execution.Cues) == 0 {
+		t.Fatalf("expected cues in planned session, got %+v", got.PlannedSessions)
+	}
+}
+
+func TestAnalyzeTrainingPlanAerobicCuesAreTriggered(t *testing.T) {
+	t.Parallel()
+
+	events := []icu.Event{
+		plannedWorkout("2026-06-02T08:00:00", "Aerobic Base", 60, 3600, 0.68),
+	}
+
+	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
+		PlanStartDate: "2026-06-01",
+		PlanEndDate:   "2026-06-07",
+	})
+
+	if len(got.PlannedSessions) == 0 {
+		t.Fatalf("expected planned sessions, got none")
+	}
+
+	cues := got.PlannedSessions[0].Execution.Cues
+	found := false
+
+	for _, c := range cues {
+		if c.Tone == "focus" {
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected focus-tone aerobic cue, got %+v", cues)
+	}
+}
+
 func TestAnalyzeTrainingPlanClassifiesBuildWithDeload(t *testing.T) {
 	t.Parallel()
 

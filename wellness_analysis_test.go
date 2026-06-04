@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"fmt"
 	"testing"
 
 	icu "github.com/Thejuampi/icu"
@@ -79,6 +80,131 @@ func TestAnalyzeWellnessComputesPhysiologyState(t *testing.T) {
 
 	if got.State.State != "WATCH" || got.State.Confidence != "high" || got.Load.TSB != -14 {
 		t.Fatalf("State = %+v Load = %+v, want WATCH high TSB -14", got.State, got.Load)
+	}
+}
+
+func TestAnalyzeWellnessTrend7DayWithEnoughSamples(t *testing.T) {
+	t.Parallel()
+
+	var records []icu.Wellness
+
+	for i := range 21 {
+		records = append(records, icu.Wellness{
+			ID:      fmt.Sprintf("2026-05-%02d", i+1),
+			Lactate: 1.0 + float64(i)*0.1,
+		})
+	}
+
+	got := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: "2026-05-01",
+		EndDate:   "2026-05-21",
+	})
+
+	if got.Lactate.Trend7Day == 0 {
+		t.Fatalf("expected non-zero trend with 21 samples, got %f", got.Lactate.Trend7Day)
+	}
+}
+
+func TestAnalyzeWellnessLactateStateHigh(t *testing.T) {
+	t.Parallel()
+
+	var first icu.Wellness
+	first.ID = "2026-05-01"
+	first.Lactate = 5.0
+
+	got := icu.AnalyzeWellness([]icu.Wellness{first}, icu.AnalysisOptions{
+		StartDate: "2026-05-01",
+		EndDate:   "2026-05-01",
+	})
+
+	if got.Lactate.State != "high" {
+		t.Fatalf("expected high state for lactate 5.0, got %q", got.Lactate.State)
+	}
+}
+
+func TestAnalyzeWellnessLactateStateBaseline(t *testing.T) {
+	t.Parallel()
+
+	var first icu.Wellness
+	first.ID = "2026-05-01"
+	first.Lactate = 1.0
+
+	got := icu.AnalyzeWellness([]icu.Wellness{first}, icu.AnalysisOptions{
+		StartDate: "2026-05-01",
+		EndDate:   "2026-05-01",
+	})
+
+	if got.Lactate.State != "baseline" {
+		t.Fatalf("expected baseline state for lactate 1.0, got %q", got.Lactate.State)
+	}
+}
+
+func TestAnalyzeWellnessTotalDaysFallsBackToUniqueDays(t *testing.T) {
+	t.Parallel()
+
+	records := []icu.Wellness{
+		{ID: "2026-05-01", HRV: 50},
+		{ID: "2026-05-01", HRV: 52},
+		{ID: "2026-05-02", HRV: 48},
+	}
+
+	got := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: "9999-99-99",
+		EndDate:   "9999-99-99",
+	})
+
+	if got.Scope.TotalDays <= 0 {
+		t.Fatalf("expected >0 total days, got %d", got.Scope.TotalDays)
+	}
+}
+
+func TestCoveragePercentReturnsZeroForZeroTotalDays(t *testing.T) {
+	t.Parallel()
+
+	got := icu.AnalyzeWellness(nil, icu.AnalysisOptions{
+		StartDate: "",
+		EndDate:   "",
+	})
+
+	if got.Scope.TotalDays != 0 {
+		t.Fatalf("expected 0 total days with empty range, got %d", got.Scope.TotalDays)
+	}
+}
+
+func TestAnalyzeWellnessAddSubjectiveMetricTracksValues(t *testing.T) {
+	t.Parallel()
+
+	var first icu.Wellness
+	first.ID = "2026-05-01"
+	first.Fatigue = 3
+	first.Stress = 0
+	first.Soreness = 5
+	first.Motivation = 4
+
+	got := icu.AnalyzeWellness([]icu.Wellness{first}, icu.AnalysisOptions{
+		StartDate: "2026-05-01",
+		EndDate:   "2026-05-01",
+	})
+
+	if got.Subjective.MeanFatigue == 0 {
+		t.Fatalf("expected non-zero fatigue, got %+v", got.Subjective)
+	}
+}
+
+func TestDaysBetweenReturnsZeroForInvalidDates(t *testing.T) {
+	t.Parallel()
+
+	records := []icu.Wellness{
+		{ID: "2026-05-01", HRV: 50},
+	}
+
+	got := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: "9999-99-99",
+		EndDate:   "9999-98-98",
+	})
+
+	if got.Scope.TotalDays != 1 {
+		t.Fatalf("expected 1 total day (unique), got %d", got.Scope.TotalDays)
 	}
 }
 

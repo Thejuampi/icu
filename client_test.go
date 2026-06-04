@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -236,32 +238,60 @@ func TestClientQueryParams(t *testing.T) {
 	}
 }
 
-func TestClientUploadFile(t *testing.T) {
+func TestClientUploadFileNotFound(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST, got %s", r.Method)
-		}
-
-		ct := r.Header.Get("Content-Type")
-		if !strings.Contains(ct, "multipart/form-data") {
-			t.Errorf("expected multipart, got %s", ct)
-		}
-
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		writeTestResponse(t, w, `{"activities":[]}`)
 	}))
-
 	defer srv.Close()
 
 	client := newTestClient("test-key", "0", srv.URL, srv.Client())
 
-	var resp icu.UploadResponse
-
-	err := client.UploadFile("activities", "", "testdata/activity.fit", map[string]string{"name": "Test"}, &resp)
+	err := client.UploadFile("activities", "", "testdata/nonexistent.fit", nil, nil)
 	if err == nil {
 		t.Fatal("expected file not found error")
+	}
+}
+
+func TestClientUploadFileSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		writeTestResponse(t, w, `{"activities":[]}`)
+	}))
+	defer srv.Close()
+
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
+
+	tmpFile := filepath.Join(t.TempDir(), "test.fit")
+	if err := os.WriteFile(tmpFile, []byte("fake-fit-data"), 0o600); err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+
+	var resp icu.UploadResponse
+
+	err := client.UploadFile("activities", "", tmpFile, nil, &resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientDownloadHTTPError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		writeTestResponse(t, w, `{"error":"not found"}`)
+	}))
+	defer srv.Close()
+
+	client := newTestClient("test-key", "0", srv.URL, srv.Client())
+
+	_, err := client.Download("activity", []string{"i123", "file"}, nil)
+	if err == nil {
+		t.Fatal("expected error for 404")
 	}
 }
 

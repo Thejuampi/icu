@@ -168,6 +168,7 @@ linters-settings:
         allow:
           - $gostd
           - github.com/Thejuampi/icu
+          - golang.org/x/term
   wrapcheck:
     ignore-sigs:
       - 'fmt.Errorf('

@@ -10,7 +10,21 @@ import (
 
 const strTrue = "true"
 
-func osStdout() io.Writer { return os.Stdout }
+var stdoutOverride io.Writer
+
+func osStdout() io.Writer {
+	if stdoutOverride != nil {
+		return stdoutOverride
+	}
+
+	return os.Stdout
+}
+
+func setStdoutForTest(w io.Writer) {
+	stdoutOverride = w
+}
+
+func osGetenv(key string) string { return os.Getenv(key) }
 
 func wrapCommandError(err error) error {
 	if err == nil {

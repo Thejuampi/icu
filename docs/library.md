@@ -13,6 +13,9 @@ go get github.com/Thejuampi/icu@latest
 
 - `Client`: authenticated HTTP client for the supported Intervals.icu resources
 - DTOs from `types.go`: activities, wellness, events, sport settings, workouts, routes, chats, and more
+- `ZeppClient`: read-only client for Zepp/Amazfit wellness data (sleep, HR,
+  SpO2, stress, PAI, steps, workouts). Use it for the same data the Zepp
+  mobile app shows that Intervals.icu does not mirror.
 - Config and auth helpers: API key, athlete ID, config file storage, and diagnostics
 - Output helpers: pretty JSON, compact JSON, CSV, and table writers
 - Analysis functions: cycling, wellness, adaptation, and training-plan analysis
@@ -237,12 +240,113 @@ Relevant exported analysis types:
 
 See [docs/analysis.md](analysis.md) for the meaning of the major output sections.
 
+## Using The Zepp Client
+
+The `ZeppClient` is a separate client from `Client` because the Zepp API is
+hosted on `api-mifit.huami.com` and uses its own auth flow. The flow is:
+
+1. `ZeppLogin(email, password)` (or `ZeppLoginWithURLs` for tests) returns a
+   `ZeppAuthResult` with `LoginToken`, `AppToken`, `UserID`, and
+   `CountryCode`. The auth flow is two-step: an AES-CBC encrypted POST to
+   `/v2/registrations/tokens` that returns a 303 redirect, then a form POST
+   to `/v2/client/login` that returns the token bundle.
+2. `NewZeppClientFromAuth(auth, ...)` constructs a `ZeppClient`.
+3. Call `BandData`, `SleepDays`, `HeartRateSeries`, `StressDays`, `SpO2Readings`,
+   `PAIDays`, `Workouts`, `Workout`, or `UserInfo` to fetch data.
+
+```go
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+
+	icu "github.com/Thejuampi/icu"
+)
+
+func main() {
+	auth, err := icu.ZeppLogin(os.Getenv("ZEPP_EMAIL"), os.Getenv("ZEPP_PASSWORD"))
+	if err != nil {
+		panic(err)
+	}
+
+	client := icu.NewZeppClientFromAuth(auth, icu.WithZeppCountryCode(auth.CountryCode))
+
+	ctx := context.Background()
+	days, err := client.BandData(ctx, "2026-05-01", "2026-05-07")
+	if err != nil {
+		panic(err)
+	}
+
+	for _, d := range days {
+		// SummaryRaw is the base64-packed "summary" blob from Zepp;
+		// Summary is the decoded version with stp/slp typed structs.
+		fmt.Println(d.Date, d.Summary.Steps.Total, d.Summary.Sleep.DeepMinutes)
+	}
+
+	// Per-day SpO2 events come from a separate host (api-mifit.zepp.com).
+	spo2, err := client.SpO2Readings(ctx, "2026-05-01", "2026-05-07")
+	if err != nil {
+		panic(err)
+	}
+
+	for _, r := range spo2 {
+		b, _ := json.Marshal(r)
+		fmt.Println(string(b))
+	}
+}
+```
+
+### Regional hosts
+
+`api-mifit.huami.com` is the global data host. Zepp routes CN users to
+`api-mifit-cn.huami.com` and a list of EU country codes to
+`api-mifit-de.huami.com`. `WithZeppCountryCode` picks the right host for you;
+otherwise the client derives it from `auth.CountryCode`. `WithZeppBaseURL` and
+`WithZeppEventsURL` exist for tests and self-hosted proxies.
+
+### Decoded vs raw payloads
+
+For binary data, the client returns both the raw form Zepp sends and the
+decoded typed form so downstream code can do whichever is convenient:
+
+- `BandDataDay.SummaryRaw` (`json.RawMessage`): the base64-decoded JSON that
+  was packed inside `summary`. `BandDataDay.Summary` is the typed
+  `BandDataSummary` parsed from it.
+- `BandDataDay.DataHRRaw` (`[]byte`): the raw 2-byte little-endian shorts.
+  `BandDataDay.HeartRate` is the slice of `BandDataHeartPoint` decoded from it.
+- `WorkoutDetail.HRSeries` / `PaceSeries` / `AltSeries` / `PowerSeries` /
+  `StepSeries` are decoded from Zepp's delta-encoded 2-byte shorts back into
+  absolute values. The first short is absolute, each subsequent short is the
+  signed delta from the previous one. The cumulative sum reconstructs the
+  absolute series.
+
+### BioCharge / HybridCharge
+
+Zepp 10.4.0+ calculates **BioCharge** (renamed to **HybridCharge**) on-device
+from sleep, stress, PAI, and workout history. The public HTTP API does not
+return the score itself, so the CLI exposes the raw inputs the score is
+derived from. To compute BioCharge in your analysis agent, combine `sleep`
+(deep/light/REM minutes), `stress` (relax%/normal%/medium%/high%), `pai`
+(daily PAI), and `workouts` (HR zones and duration). The exact weighting is
+documented only inside the Zepp mobile app and changes between releases; this
+library does not implement the proprietary formula.
+
+### Error sentinel
+
+`ErrZeppNotAuthenticated` is returned when `BandData`/`SleepDays`/etc. are
+called without `AppToken` and `UserID` set. Use `errors.Is(err,
+icu.ErrZeppNotAuthenticated)` to detect it.
+
 ## Testing Patterns
 
 The repo itself uses:
 
 - `httptest.NewServer` for HTTP-client tests
-- `WithBaseURL` and `WithHTTPClient` to redirect the client into test servers
+- `WithBaseURL`, `WithHTTPClient`, `WithZeppBaseURL`, and `WithZeppEventsURL`
+  to redirect the client into test servers
+- `ZeppLoginWithURLs(tokensURL, loginURL, email, password)` to drive the
+  auth flow against mock servers
 - `bytes.Buffer` for output-writer tests
 
 That is the recommended pattern for consumers extending or embedding the package in their own tests.

@@ -211,6 +211,29 @@ func TestResourceHelpShowsDescriptions(t *testing.T) {
 	}
 }
 
+func TestRunIDFirstWithPositionalArgsGivesErrorWithoutServer(t *testing.T) {
+	t.Parallel()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"icu", "activity", "i123", "show", "--fields", "id"}, &stdout, &stderr)
+
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1 (no server)\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestParseShortFlagWithValue(t *testing.T) {
+	flags := parseFlags([]string{"-o", "value", "pos"})
+
+	if flags["o"] != "value" {
+		t.Fatalf("short flag value = %q, want value", flags["o"])
+	}
+
+	if flags["_posargs_"] != "pos" {
+		t.Fatalf("positional = %q, want pos", flags["_posargs_"])
+	}
+}
+
 func TestRunMissingAPIKey(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -358,6 +358,37 @@ func TestCustomItemUnmarshalSnakeCaseFields(t *testing.T) {
 	}
 }
 
+func TestPowerHRCurveUnmarshalSnakeCaseFields(t *testing.T) {
+	t.Parallel()
+
+	var curve icu.PowerHRCurve
+
+	data := []byte(`{"athlete_id":"` + testAthleteID + `","min_watts":50,"max_watts":600,"bucket_size":5,"max_hr":198}`)
+
+	if err := json.Unmarshal(data, &curve); err != nil {
+		t.Fatal(err)
+	}
+
+	got := struct {
+		AthleteID  string
+		MinWatts   int
+		MaxWatts   int
+		BucketSize int
+		MaxHR      int
+	}{curve.AthleteID, curve.MinWatts, curve.MaxWatts, curve.BucketSize, curve.MaxHR}
+	want := struct {
+		AthleteID  string
+		MinWatts   int
+		MaxWatts   int
+		BucketSize int
+		MaxHR      int
+	}{testAthleteID, 50, 600, 5, 198}
+
+	if got != want {
+		t.Fatalf("PowerHRCurve snake fields = %+v, want %+v", got, want)
+	}
+}
+
 func TestGearJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 

@@ -8,9 +8,13 @@ import (
 )
 
 type Config struct {
-	APIKey    string `json:"apiKey,omitempty"`
-	AthleteID string `json:"athleteId,omitempty"`
-	Output    string `json:"output,omitempty"`
+	APIKey          string `json:"apiKey,omitempty"`
+	AthleteID       string `json:"athleteId,omitempty"`
+	Output          string `json:"output,omitempty"`
+	ZeppLoginToken  string `json:"zeppLoginToken,omitempty"`
+	ZeppAppToken    string `json:"zeppAppToken,omitempty"`
+	ZeppUserID      string `json:"zeppUserId,omitempty"`
+	ZeppCountryCode string `json:"zeppCountryCode,omitempty"`
 }
 
 func configDir() string {
@@ -125,4 +129,72 @@ func ResolveOutputFormat(flags map[string]string) OutputFormat {
 	default:
 		return FormatJSON
 	}
+}
+
+func ResolveZeppLoginToken(flags map[string]string) string {
+	if token, ok := flags["zepp-login-token"]; ok && token != "" {
+		return token
+	}
+
+	if token := os.Getenv("ZEPP_LOGIN_TOKEN"); token != "" {
+		return token
+	}
+
+	cfg, _ := LoadConfig()
+	if cfg != nil && cfg.ZeppLoginToken != "" {
+		return cfg.ZeppLoginToken
+	}
+
+	return ""
+}
+
+func ResolveZeppAppToken(flags map[string]string) string {
+	if token, ok := flags["zepp-app-token"]; ok && token != "" {
+		return token
+	}
+
+	if token := os.Getenv("ZEPP_APP_TOKEN"); token != "" {
+		return token
+	}
+
+	cfg, _ := LoadConfig()
+	if cfg != nil && cfg.ZeppAppToken != "" {
+		return cfg.ZeppAppToken
+	}
+
+	return ""
+}
+
+func ResolveZeppUserID(flags map[string]string) string {
+	if id, ok := flags["zepp-user-id"]; ok && id != "" {
+		return id
+	}
+
+	if id := os.Getenv("ZEPP_USER_ID"); id != "" {
+		return id
+	}
+
+	cfg, _ := LoadConfig()
+	if cfg != nil && cfg.ZeppUserID != "" {
+		return cfg.ZeppUserID
+	}
+
+	return ""
+}
+
+func ResolveZeppCountryCode(flags map[string]string) string {
+	if code, ok := flags["zepp-country-code"]; ok && code != "" {
+		return code
+	}
+
+	if code := os.Getenv("ZEPP_COUNTRY_CODE"); code != "" {
+		return code
+	}
+
+	cfg, _ := LoadConfig()
+	if cfg != nil && cfg.ZeppCountryCode != "" {
+		return cfg.ZeppCountryCode
+	}
+
+	return ""
 }

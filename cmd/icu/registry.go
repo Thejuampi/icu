@@ -19,4 +19,5 @@ func registerAllCommands(registry *CommandRegistry) {
 	registerWeatherCommands(registry)
 	registerWellnessCommands(registry)
 	registerWorkoutsCommands(registry)
+	registerZeppCommands(registry)
 }

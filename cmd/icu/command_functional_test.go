@@ -63,6 +63,37 @@ func TestRegisteredCommandsFunctionalHTTPFlows(t *testing.T) {
 	}
 }
 
+func TestRegisteredCommandsReturnErrorsOnClientFailure(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+
+	errServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"server error"}`))
+	}))
+	t.Cleanup(errServer.Close)
+
+	errClient := icu.NewClient(
+		"test-key",
+		"0",
+		icu.WithHTTPClient(errServer.Client()),
+		icu.WithBaseURL(errServer.URL),
+	)
+
+	for _, tc := range errorCommandCases() {
+		cmd, ok := registry.Lookup(tc.Resource, tc.Action)
+		if !ok {
+			t.Fatalf("%s: missing command %s %s", tc.Name, tc.Resource, tc.Action)
+		}
+
+		if err := cmd.Run(tc.Args, tc.Flags, errClient); err == nil {
+			t.Fatalf("%s: expected error, got nil", tc.Name)
+		}
+	}
+}
+
 func TestCLIParsingAndHelpFunctional(t *testing.T) {
 	t.Parallel()
 
@@ -123,6 +154,98 @@ func functionalCommandCases(uploadFile, wellnessCSV, wellnessBulk string) []comm
 	cases = append(cases, utilityCommandCases()...)
 
 	return cases
+}
+
+func errorCommandCases() []commandCase {
+	return []commandCase{
+		commandFlow("error activity show", "activity", "show", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity intervals", "activity", "intervals", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity streams", "activity", "streams", []string{"i1"}, flags("types", "watts"), "", "", ""),
+		commandFlow("error activity power-curve", "activity", "power-curve", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity hr-curve", "activity", "hr-curve", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity pace-curve", "activity", "pace-curve", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity power-vs-hr", "activity", "power-vs-hr", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity best-efforts", "activity", "best-efforts", []string{"i1"}, flags("duration", "300"), "", "", ""),
+		commandFlow("error activity map", "activity", "map", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity weather", "activity", "weather", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity file", "activity", "file", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activities get", "activities", "get", []string{"i1", "i2"}, nil, "", "", ""),
+		commandFlow("error activities search", "activities", "search", []string{"tempo"}, flags("limit", "1"), "", "", ""),
+		commandFlow("error activities around", "activities", "around", []string{"i1"}, flags("limit", "2", "route-id", "r1"), "", "", ""),
+		commandFlow("error athlete get", "athlete", "show", nil, nil, "", "", ""),
+		commandFlow("error athlete summary", "athlete", "summary", nil, nil, "", "", ""),
+		commandFlow("error athlete profile", "athlete", "profile", nil, nil, "", "", ""),
+		commandFlow("error wellness list", "wellness", "list", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
+		commandFlow("error wellness get", "wellness", "get", nil, flags("oldest", "2026-06-01"), "", "", ""),
+		commandFlow("error events list", "events", "list", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
+		commandFlow("error workouts list", "workouts", "list", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
+		commandFlow("error ftp show", "ftp", "show", nil, nil, "", "", ""),
+		commandFlow("error gear list", "gear", "list", nil, nil, "", "", ""),
+		commandFlow("error gear update", "gear", "update", []string{"g1"}, flags("name", "Bike", "distance", "2000"), "", "", ""),
+		commandFlow("error gear create", "gear", "create", nil, flags("name", "Bike", "type", "Bike", "distance", "1000"), "", "", ""),
+		commandFlow("error routes list", "routes", "list", nil, nil, "", "", ""),
+		commandFlow("error routes get", "routes", "get", []string{"r1"}, nil, "", "", ""),
+		commandFlow("error chats list", "chats", "list", nil, nil, "", "", ""),
+		commandFlow("error chats get", "chats", "get", []string{"c1"}, nil, "", "", ""),
+
+		commandFlow("error sports list", "sports", "list", nil, nil, "", "", ""),
+		commandFlow("error sports get", "sports", "get", []string{"Ride"}, nil, "", "", ""),
+		commandFlow("error folders list", "folders", "list", nil, nil, "", "", ""),
+		commandFlow("error folders create", "folders", "create", nil, flags("name", "Test"), "", "", ""),
+		commandFlow("error events delete", "events", "delete", []string{"1"}, nil, "", "", ""),
+		commandFlow("error events download", "events", "download", []string{"1"}, nil, "", "", ""),
+		commandFlow("error workouts delete", "workouts", "delete", []string{"1"}, nil, "", "", ""),
+		commandFlow("error wellness update", "wellness", "update", []string{"2026-06-01"}, flags("weight", "80"), "", "", ""),
+		commandFlow("error curves power", "curves", "power", nil, nil, "", "", ""),
+		commandFlow("error curves hr", "curves", "hr", nil, nil, "", "", ""),
+		commandFlow("error custom list", "custom", "list", nil, nil, "", "", ""),
+		commandFlow("error custom get", "custom", "get", []string{"1"}, nil, "", "", ""),
+		commandFlow("error fitness-events list", "fitness-events", "list", nil, nil, "", "", ""),
+		commandFlow("error shared-event get", "shared-event", "get", []string{"1"}, nil, "", "", ""),
+		commandFlow("error weather forecast", "weather", "forecast", nil, nil, "", "", ""),
+		commandFlow("error weather config", "weather", "config", nil, nil, "", "", ""),
+		commandFlow("error chats messages", "chats", "messages", []string{"c1"}, nil, "", "", ""),
+		commandFlow("error chats send", "chats", "send", nil, flags("message", "hello"), "", "", ""),
+		commandFlow("error tags activities", "tags", "activities", nil, nil, "", "", ""),
+		commandFlow("error tags events", "tags", "events", nil, nil, "", "", ""),
+		commandFlow("error tags workouts", "tags", "workouts", nil, nil, "", "", ""),
+		commandFlow("error activity delete", "activity", "delete", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error ftp update", "ftp", "update", nil, flags("ftp", "290"), "", "", ""),
+		commandFlow("error sports update", "sports", "update", []string{"Ride"}, flags("ftp", "290"), "", "", ""),
+		commandFlow("error sports delete", "sports", "delete", []string{"Ride"}, nil, "", "", ""),
+		commandFlow("error curves pace", "curves", "pace", nil, nil, "", "", ""),
+		commandFlow("error curves power-hr", "curves", "power-hr", nil, nil, "", "", ""),
+		commandFlow("error curves mmp", "curves", "mmp", nil, nil, "", "", ""),
+		commandFlow("error custom create", "custom", "create", nil, flags("name", "Test", "type", "NUMBER"), "", "", ""),
+		commandFlow("error custom update", "custom", "update", []string{"1"}, flags("name", "Test"), "", "", ""),
+		commandFlow("error folders update", "folders", "update", []string{"f1"}, flags("name", "Test"), "", "", ""),
+		commandFlow("error analysis cycling", "analysis", "cycling", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
+		commandFlow("error analysis wellness", "analysis", "wellness", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
+		commandFlow("error analysis plan", "analysis", "plan", nil, flags("plan-start", "2026-06-01", "plan-end", "2026-06-07"), "", "", ""),
+		commandFlow("error analysis adaptation", "analysis", "adaptation", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
+		commandFlow("error events create", "events", "create", nil, flags("name", "Test"), "", "", ""),
+		commandFlow("error events update", "events", "update", []string{"1"}, flags("name", "Test"), "", "", ""),
+		commandFlow("error activity best-efforts", "activity", "best-efforts", []string{"i1"}, flags("duration", "300"), "", "", ""),
+		commandFlow("error activity map", "activity", "map", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activities csv", "activities", "csv", nil, nil, "", "", ""),
+		commandFlow("error activities manual", "activities", "manual", nil, flags("type", "Ride", "name", "Manual", "moving-time", "3600"), "", "", ""),
+		commandFlow("error athlete update", "athlete", "update", nil, flags("weight", "81"), "", "", ""),
+		commandFlow("error athlete settings", "athlete", "settings", nil, nil, "", "", ""),
+		commandFlow("error athlete plan", "athlete", "plan", nil, nil, "", "", ""),
+		commandFlow("error analysis plan with plan-start", "analysis", "plan", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07", "plan-start", "2026-06-01"), "", "", ""),
+		commandFlow("error events tags", "events", "tags", nil, nil, "", "", ""),
+		commandFlow("error workouts list", "workouts", "list", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
+		commandFlow("error workouts get", "workouts", "get", []string{"1"}, nil, "", "", ""),
+		commandFlow("error workouts tags", "workouts", "tags", nil, nil, "", "", ""),
+		commandFlow("error custom delete", "custom", "delete", []string{"1"}, nil, "", "", ""),
+		commandFlow("error activity fit-file", "activity", "fit-file", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error activity gpx-file", "activity", "gpx-file", []string{"i1"}, nil, "", "", ""),
+		commandFlow("error workouts tags second", "workouts", "tags", nil, nil, "", "", ""),
+		commandFlow("error ftp show again", "ftp", "show", nil, nil, "", "", ""),
+		commandFlow("error gear delete", "gear", "delete", []string{"g1"}, nil, "", "", ""),
+		commandFlow("error curves pace again", "curves", "pace", nil, nil, "", "", ""),
+		commandFlow("error shared-event get again", "shared-event", "get", []string{"1"}, nil, "", "", ""),
+	}
 }
 
 func activityListCommandCases(uploadFile string) []commandCase {
