@@ -67,6 +67,7 @@ func TestBuildZeppEventsURL(t *testing.T) {
 
 	got := icu.BuildZeppEventsURL("user-123")
 	want := "https://api-mifit.zepp.com/users/user-123/events"
+
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -76,18 +77,19 @@ func TestZeppCommonHeadersExposeApptoken(t *testing.T) {
 	t.Parallel()
 
 	headers := icu.ZeppCommonHeaders("my-app-token")
-	if headers.Get("apptoken") != "my-app-token" {
-		t.Fatalf("apptoken = %q, want my-app-token", headers.Get("apptoken"))
+	if headers.Get("Apptoken") != "my-app-token" {
+		t.Fatalf("apptoken = %q, want my-app-token", headers.Get("Apptoken"))
 	}
 }
 
-func TestZeppDTOsJSONRoundtrip(t *testing.T) {
+func TestZeppDTOsJSONRoundtrip(t *testing.T) { //nolint:gocognit // many subtests ensure all DTOs roundtrip
 	t.Parallel()
 
 	t.Run("user info", func(t *testing.T) {
 		t.Parallel()
 
 		original := icu.ZeppUserInfo{UserID: "u1", Nickname: "Tester", Height: 180, Weight: 75}
+
 		raw, err := json.Marshal(original)
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
@@ -116,6 +118,7 @@ func TestZeppDTOsJSONRoundtrip(t *testing.T) {
 				Steps:  &icu.BandDataSteps{Total: 1000, Calories: 50, Distance: 800},
 			},
 		}
+
 		raw, err := json.Marshal(original)
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
@@ -140,6 +143,7 @@ func TestZeppDTOsJSONRoundtrip(t *testing.T) {
 			AvgHR:     150,
 			HRSeries:  []int{120, 130, 140, 150},
 		}
+
 		raw, err := json.Marshal(original)
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
@@ -160,6 +164,7 @@ func TestResolveAPIKeyFlagBeatsEnvBeatsConfig(t *testing.T) {
 	t.Setenv("INTERVALS_ICU_API_KEY", "env-key")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
+
 	if err := icu.SaveConfig(&icu.Config{APIKey: "config-key"}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -173,6 +178,7 @@ func TestResolveAPIKeyFlagBeatsEnvBeatsConfig(t *testing.T) {
 	}
 
 	t.Setenv("INTERVALS_ICU_API_KEY", "")
+
 	if got := icu.ResolveAPIKey(nil); got != "config-key" {
 		t.Fatalf("config: got %q, want config-key", got)
 	}
@@ -182,6 +188,7 @@ func TestResolveAthleteIDFlagBeatsEnvBeatsConfig(t *testing.T) {
 	t.Setenv("INTERVALS_ICU_ATHLETE_ID", "env-id")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
+
 	if err := icu.SaveConfig(&icu.Config{AthleteID: "config-id"}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -195,6 +202,7 @@ func TestResolveAthleteIDFlagBeatsEnvBeatsConfig(t *testing.T) {
 	}
 
 	t.Setenv("INTERVALS_ICU_ATHLETE_ID", "")
+
 	if got := icu.ResolveAthleteID(nil); got != "config-id" {
 		t.Fatalf("config: got %q, want config-id", got)
 	}
@@ -204,18 +212,24 @@ func TestResolveOutputFormatUsesFlagsThenConfigThenDefaults(t *testing.T) {
 	t.Parallel()
 
 	t.Run("flag csv", func(t *testing.T) {
+		t.Parallel()
+
 		if got := icu.ResolveOutputFormat(map[string]string{"output": "csv"}); got != icu.FormatCSV {
 			t.Fatalf("got %v, want csv", got)
 		}
 	})
 
 	t.Run("flag table", func(t *testing.T) {
+		t.Parallel()
+
 		if got := icu.ResolveOutputFormat(map[string]string{"output": "table"}); got != icu.FormatTable {
 			t.Fatalf("got %v, want table", got)
 		}
 	})
 
 	t.Run("default json", func(t *testing.T) {
+		t.Parallel()
+
 		if got := icu.ResolveOutputFormat(nil); got != icu.FormatJSON {
 			t.Fatalf("got %v, want json", got)
 		}
@@ -226,6 +240,7 @@ func TestResolveZeppAppTokenFlagBeatsEnvBeatsConfig(t *testing.T) {
 	t.Setenv("ZEPP_APP_TOKEN", "env-token")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
+
 	if err := icu.SaveConfig(&icu.Config{ZeppAppToken: "config-token"}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -239,6 +254,7 @@ func TestResolveZeppAppTokenFlagBeatsEnvBeatsConfig(t *testing.T) {
 	}
 
 	t.Setenv("ZEPP_APP_TOKEN", "")
+
 	if got := icu.ResolveZeppAppToken(nil); got != "config-token" {
 		t.Fatalf("config: got %q, want config-token", got)
 	}
@@ -248,6 +264,7 @@ func TestResolveZeppUserIDFlagBeatsEnvBeatsConfig(t *testing.T) {
 	t.Setenv("ZEPP_USER_ID", "env-id")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
+
 	if err := icu.SaveConfig(&icu.Config{ZeppUserID: "config-id"}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -261,12 +278,15 @@ func TestResolveZeppUserIDFlagBeatsEnvBeatsConfig(t *testing.T) {
 	}
 
 	t.Setenv("ZEPP_USER_ID", "")
+
 	if got := icu.ResolveZeppUserID(nil); got != "config-id" {
 		t.Fatalf("config: got %q, want config-id", got)
 	}
 }
 
 func TestSaveConfigFailsOnBadPath(t *testing.T) {
+	t.Parallel()
+
 	cfg := &icu.Config{APIKey: "test"}
 	err := icu.SaveConfig(cfg)
 	// Should succeed in temp dir; we just verify it doesn't panic on basic save
@@ -304,6 +324,7 @@ func TestResolveZeppLoginTokenFlagBeatsEnvBeatsConfig(t *testing.T) {
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
+
 	if err := icu.SaveConfig(cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -313,11 +334,13 @@ func TestResolveZeppLoginTokenFlagBeatsEnvBeatsConfig(t *testing.T) {
 	}
 
 	t.Setenv("ZEPP_LOGIN_TOKEN", "env-token-2")
+
 	if got := icu.ResolveZeppLoginToken(nil); got != "env-token-2" {
 		t.Fatalf("env-token precedence: got %q, want env-token-2", got)
 	}
 
 	t.Setenv("ZEPP_LOGIN_TOKEN", "")
+
 	if got := icu.ResolveZeppLoginToken(nil); got != "config-token" {
 		t.Fatalf("config-token precedence: got %q, want config-token", got)
 	}
@@ -327,6 +350,7 @@ func TestResolveZeppLoginTokenEmptyWhenAllEmpty(t *testing.T) {
 	t.Setenv("ZEPP_LOGIN_TOKEN", "")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
+
 	if err := icu.SaveConfig(&icu.Config{}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -340,6 +364,7 @@ func TestResolveZeppCountryCodePrecedence(t *testing.T) {
 	t.Setenv("ZEPP_COUNTRY_CODE", "env-cc")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
+
 	if err := icu.SaveConfig(&icu.Config{ZeppCountryCode: "config-cc"}); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -353,6 +378,7 @@ func TestResolveZeppCountryCodePrecedence(t *testing.T) {
 	}
 
 	t.Setenv("ZEPP_COUNTRY_CODE", "")
+
 	if got := icu.ResolveZeppCountryCode(nil); got != "config-cc" {
 		t.Fatalf("config precedence: got %q, want config-cc", got)
 	}
@@ -366,7 +392,7 @@ func TestParseZeppDateToMillisUsesLocalTime(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	expected := time.Date(2026, 6, 1, 0, 0, 0, 0, time.Local).UnixMilli()
+	expected := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC).UnixMilli()
 	if got != expected {
 		t.Fatalf("got %d, want %d", got, expected)
 	}
@@ -386,6 +412,7 @@ func TestSecretFingerprintMatchesKnownValue(t *testing.T) {
 
 	want := "ba7816bf8f01"
 	got := icu.SecretFingerprint("abc")
+
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

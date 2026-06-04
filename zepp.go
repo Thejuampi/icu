@@ -84,9 +84,11 @@ type BandDataSleep struct {
 }
 
 type BandDataSleepStage struct {
-	Start int `json:"start,omitempty"`
-	Stop  int `json:"stop,omitempty"`
-	Mode  int `json:"mode,omitempty"`
+	Start      int   `json:"start,omitempty"`      // minutes since midnight
+	Stop       int   `json:"stop,omitempty"`       // minutes since midnight
+	StartEpoch int64 `json:"startEpoch,omitempty"` // converted to epoch seconds
+	EndEpoch   int64 `json:"endEpoch,omitempty"`   // converted to epoch seconds
+	Mode       int   `json:"mode,omitempty"`
 }
 
 // BandDataHeartPoint is one minute of heart rate (decoded from DataHRRaw).
@@ -219,56 +221,16 @@ type WorkoutDetail struct {
 // Source: reverse-engineered from huami-token and the Zepp app.
 // Not exhaustive; falls back to "unknown" for unmapped values.
 func SportTypeName(t int) string {
-	switch t {
-	case 1:
-		return "running"
-	case 2:
-		return "walking"
-	case 3:
-		return "cycling"
-	case 4:
-		return "hiking"
-	case 5:
-		return "swimming_pool"
-	case 6:
-		return "open_water_swim"
-	case 7:
-		return "elliptical"
-	case 8:
-		return "rowing"
-	case 9:
-		return "climbing"
-	case 10:
-		return "treadmill"
-	case 11:
-		return "strength_training"
-	case 12:
-		return "yoga"
-	case 13:
-		return "pilates"
-	case 14:
-		return "indoor_cycling"
-	case 15:
-		return "basketball"
-	case 16:
-		return "football"
-	case 17:
-		return "tennis"
-	case 18:
-		return "badminton"
-	case 19:
-		return "table_tennis"
-	case 20:
-		return "golf"
-	case 21:
-		return "skiing"
-	case 22:
-		return "snowboarding"
-	case 23:
-		return "jump_rope"
-	case 24:
-		return "dance"
-	default:
-		return "unknown"
+	sportNames := map[int]string{
+		1: "running", 2: "walking", 3: "cycling", 4: "hiking",
+		5: "swimming_pool", 6: "open_water_swim", 7: "elliptical", 8: "rowing",
+		9: "climbing", 10: "treadmill", 11: "strength_training", 12: "yoga",
+		13: "pilates", 14: "indoor_cycling", 15: "basketball", 16: "football",
+		17: "tennis", 18: "badminton", 19: "table_tennis", 20: "golf",
+		21: "skiing", 22: "snowboarding", 23: "jump_rope", 24: "dance",
 	}
+	if name, ok := sportNames[t]; ok {
+		return name
+	}
+	return "unknown"
 }

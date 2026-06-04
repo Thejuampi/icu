@@ -98,6 +98,7 @@ func TestBuildPathActivityWithNoParts(t *testing.T) {
 
 	got := icu.BuildPath("0", "activity", []string{}...)
 	want := "/api/v1/activity/0"
+
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -108,6 +109,7 @@ func TestBuildPathAthleteWithParts(t *testing.T) {
 
 	got := icu.BuildPath("0", "athlete", "ftp")
 	want := "/api/v1/athlete/0/ftp"
+
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

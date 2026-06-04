@@ -10,7 +10,7 @@ import (
 
 const strTrue = "true"
 
-var stdoutOverride io.Writer
+var stdoutOverride io.Writer //nolint:gochecknoglobals // test output redirection
 
 func osStdout() io.Writer {
 	if stdoutOverride != nil {

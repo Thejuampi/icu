@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,12 +34,12 @@ func zeppTokenCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "zepp token --email EMAIL [--password PASSWORD]",
-		Description: "Get Zepp API tokens from email/password. Prompts for password if --password omitted. Outputs JSON, does NOT save. Save manually with 'config set --zepp-login-token ... --zepp-app-token ... --zepp-user-id ...'",
+		Description: "Get Zepp API tokens from email/password. Prompts for password if --password omitted. Outputs JSON, does NOT save. Save manually with 'config set --zepp-login-token ... --zepp-app-token ... --zepp-user-id ...'", //nolint:lll // long flag description
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
 			email := icu.StringFlag(flags, "email", "")
 
 			if email == "" {
-				return fmt.Errorf("email is required: use --email flag")
+				return errors.New("email is required: use --email flag")
 			}
 
 			password, err := promptPasswordFlagOrInteractive(flags["password"])
@@ -60,7 +61,7 @@ func zeppLoginCommand() *Command {
 			email := icu.StringFlag(flags, "email", "")
 
 			if email == "" {
-				return fmt.Errorf("email is required: use --email flag")
+				return errors.New("email is required: use --email flag")
 			}
 
 			password, err := promptPasswordFlagOrInteractive(flags["password"])
@@ -112,15 +113,12 @@ func zeppSummaryCommand() *Command {
 		Usage:       "zepp summary --oldest YYYY-MM-DD --newest YYYY-MM-DD",
 		Description: "Daily band summary (steps, sleep, HR, SpO2, weight, stress).",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			oldest, newest, err := zeppDateRange(flags)
-			if err != nil {
-				return err
-			}
+			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				records, err := client.BandData(ctx, oldest, newest)
 				if err != nil {
-					return err
+					return fmt.Errorf("fetch band data: %w", err)
 				}
 
 				return writeJSON(records)
@@ -135,15 +133,12 @@ func zeppSleepCommand() *Command {
 		Usage:       "zepp sleep --oldest YYYY-MM-DD --newest YYYY-MM-DD",
 		Description: "Sleep records with stages, score, and average HR.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			oldest, newest, err := zeppDateRange(flags)
-			if err != nil {
-				return err
-			}
+			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				records, err := client.SleepDays(ctx, oldest, newest)
 				if err != nil {
-					return err
+					return fmt.Errorf("fetch sleep: %w", err)
 				}
 
 				return writeJSON(records)
@@ -158,15 +153,12 @@ func zeppHeartRateCommand() *Command {
 		Usage:       "zepp heart-rate --oldest YYYY-MM-DD --newest YYYY-MM-DD",
 		Description: "Heart rate time series for the date range.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			oldest, newest, err := zeppDateRange(flags)
-			if err != nil {
-				return err
-			}
+			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				records, err := client.HeartRateSeries(ctx, oldest, newest)
 				if err != nil {
-					return err
+					return fmt.Errorf("fetch heart rate: %w", err)
 				}
 
 				return writeJSON(records)
@@ -181,15 +173,12 @@ func zeppSpO2Command() *Command {
 		Usage:       "zepp spo2 --oldest YYYY-MM-DD --newest YYYY-MM-DD",
 		Description: "Blood oxygen measurements for the date range.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			oldest, newest, err := zeppDateRange(flags)
-			if err != nil {
-				return err
-			}
+			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				records, err := client.SpO2Readings(ctx, oldest, newest)
 				if err != nil {
-					return err
+					return fmt.Errorf("fetch SpO2: %w", err)
 				}
 
 				return writeJSON(records)
@@ -204,15 +193,12 @@ func zeppStressCommand() *Command {
 		Usage:       "zepp stress --oldest YYYY-MM-DD --newest YYYY-MM-DD",
 		Description: "Stress scores for the date range.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			oldest, newest, err := zeppDateRange(flags)
-			if err != nil {
-				return err
-			}
+			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				records, err := client.StressDays(ctx, oldest, newest)
 				if err != nil {
-					return err
+					return fmt.Errorf("fetch stress: %w", err)
 				}
 
 				return writeJSON(records)
@@ -227,15 +213,12 @@ func zeppPAICommand() *Command {
 		Usage:       "zepp pai --oldest YYYY-MM-DD --newest YYYY-MM-DD",
 		Description: "Personal Activity Intelligence (PAI) daily scores and zone breakdown.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			oldest, newest, err := zeppDateRange(flags)
-			if err != nil {
-				return err
-			}
+			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				records, err := client.PAIDays(ctx, oldest, newest)
 				if err != nil {
-					return err
+					return fmt.Errorf("fetch PAI: %w", err)
 				}
 
 				return writeJSON(records)
@@ -250,15 +233,12 @@ func zeppWorkoutsCommand() *Command {
 		Usage:       "zepp workouts [--oldest YYYY-MM-DD --newest YYYY-MM-DD]",
 		Description: "List workouts recorded in Zepp. Defaults: last 7 days.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			oldest, newest, err := zeppDateRange(flags)
-			if err != nil {
-				return err
-			}
+			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				records, err := client.Workouts(ctx, oldest, newest)
 				if err != nil {
-					return err
+					return fmt.Errorf("fetch workouts: %w", err)
 				}
 
 				return writeJSON(records)
@@ -282,7 +262,7 @@ func zeppWorkoutCommand() *Command {
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				detail, err := client.Workout(ctx, trackID)
 				if err != nil {
-					return err
+					return fmt.Errorf("fetch workout detail: %w", err)
 				}
 
 				return writeJSON(detail)
@@ -291,7 +271,7 @@ func zeppWorkoutCommand() *Command {
 	}
 }
 
-func zeppDateRange(flags map[string]string) (string, string, error) {
+func zeppDateRange(flags map[string]string) (string, string) { //nolint:gocritic // unnamed results are clearer here
 	oldest := icu.StringFlag(flags, "oldest", "")
 	newest := icu.StringFlag(flags, "newest", "")
 
@@ -306,11 +286,11 @@ func zeppDateRange(flags map[string]string) (string, string, error) {
 		}
 	}
 
-	return oldest, newest, nil
+	return oldest, newest
 }
 
-func zeppDefaultDateRange() (string, string) {
-	now := time.Now().Local()
+func zeppDefaultDateRange() (string, string) { //nolint:gocritic // unnamed results are clearer here
+	now := time.Now()
 	end := now.Format("2006-01-02")
 	start := now.AddDate(0, 0, -zeppDefaultDateRangeDays+1).Format("2006-01-02")
 
@@ -336,7 +316,7 @@ func runZeppWithClient(fn func(ctx context.Context, client *icu.ZeppClient) erro
 
 	client := icu.NewZeppClientFromAuth(auth, zeppClientOptionsForRun()...)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) //nolint:mnd // reasonable timeout for Zepp API
 	defer cancel()
 
 	return fn(ctx, client)
@@ -361,6 +341,7 @@ func runZeppToken(email, password string) error {
 	loginURL := osGetenv("ZEPP_LOGIN_URL")
 
 	var auth *icu.ZeppAuthResult
+
 	var err error
 
 	if tokensURL != "" && loginURL != "" {
@@ -388,6 +369,7 @@ func runZeppLogin(email, password string) error {
 	loginURL := osGetenv("ZEPP_LOGIN_URL")
 
 	var auth *icu.ZeppAuthResult
+
 	var err error
 
 	if tokensURL != "" && loginURL != "" {
@@ -457,7 +439,7 @@ func runZeppStatus(flags map[string]string) error {
 		return writeJSON(out)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) //nolint:mnd // reasonable timeout for status check
 	defer cancel()
 
 	auth := &icu.ZeppAuthResult{
@@ -487,7 +469,7 @@ func runZeppProfile() error {
 	return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 		info, err := client.UserInfo(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("fetch user info: %w", err)
 		}
 
 		return writeJSON(info)

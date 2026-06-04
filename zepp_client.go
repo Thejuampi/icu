@@ -26,12 +26,12 @@ func (f *flexInt) UnmarshalJSON(data []byte) error {
 		var s string
 
 		if err := json.Unmarshal(data, &s); err != nil {
-			return err
+			return fmt.Errorf("unmarshal flexInt string: %w", err)
 		}
 
 		v, err := strconv.Atoi(s)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // invalid string defaults to zero
 		}
 
 		*f = flexInt(v)
@@ -42,7 +42,7 @@ func (f *flexInt) UnmarshalJSON(data []byte) error {
 	var v int
 
 	if err := json.Unmarshal(data, &v); err != nil {
-		return err
+		return fmt.Errorf("unmarshal flexInt number: %w", err)
 	}
 
 	*f = flexInt(v)
@@ -62,12 +62,12 @@ func (f *flexFloat) UnmarshalJSON(data []byte) error {
 		var s string
 
 		if err := json.Unmarshal(data, &s); err != nil {
-			return err
+			return fmt.Errorf("unmarshal flexFloat string: %w", err)
 		}
 
 		v, err := strconv.ParseFloat(s, 64)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // invalid string defaults to zero
 		}
 
 		*f = flexFloat(v)
@@ -78,7 +78,7 @@ func (f *flexFloat) UnmarshalJSON(data []byte) error {
 	var v float64
 
 	if err := json.Unmarshal(data, &v); err != nil {
-		return err
+		return fmt.Errorf("unmarshal flexFloat number: %w", err)
 	}
 
 	*f = flexFloat(v)
@@ -91,6 +91,7 @@ func atoiOrZero(s string) int {
 	if err != nil {
 		return 0
 	}
+
 	return v
 }
 
@@ -192,18 +193,18 @@ func (c *ZeppClient) doGet(ctx context.Context, path string, query url.Values) (
 	}
 
 	endpoint := c.dataHost + path
-	if query != nil && len(query) > 0 {
+	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("apptoken", c.appToken)
-	req.Header.Set("appname", "com.xiaomi.hm.health")
-	req.Header.Set("appplatform", "web")
+	req.Header.Set("Apptoken", c.appToken)
+	req.Header.Set("Appname", "com.xiaomi.hm.health")
+	req.Header.Set("Appplatform", "web")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -243,7 +244,7 @@ func (c *ZeppClient) BandData(ctx context.Context, oldest, newest string) ([]Ban
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
 	}
 
@@ -271,23 +272,25 @@ func (c *ZeppClient) BandData(ctx context.Context, oldest, newest string) ([]Ban
 	}
 
 	days := make([]BandDataDay, 0, len(raw.Data))
-	for _, d := range raw.Data {
+
+	for i := range raw.Data {
+		item := raw.Data[i]
 		day := BandDataDay{
-			Date:       d.DateTime,
-			UID:        d.UID,
-			DataType:   d.DataType,
-			Source:     d.Source,
-			UUID:       d.UUID,
-			SummaryRaw: d.Summary,
-			DataRaw:    d.Data,
-			DataHRRaw:  d.DataHR,
+			Date:       item.DateTime,
+			UID:        item.UID,
+			DataType:   item.DataType,
+			Source:     item.Source,
+			UUID:       item.UUID,
+			SummaryRaw: item.Summary,
+			DataRaw:    item.Data,
+			DataHRRaw:  item.DataHR,
 		}
 
-		if summary, err := decodeBandDataSummary(d.Summary); err == nil {
+		if summary, err := decodeBandDataSummary(item.Summary, item.DateTime); err == nil {
 			day.Summary = summary
 		}
 
-		if points, err := decodeBandDataHeartRate(d.DataHR, d.DateTime); err == nil {
+		if points, err := decodeBandDataHeartRate(item.DataHR, item.DateTime); err == nil {
 			day.HeartRate = points
 		}
 
@@ -306,12 +309,13 @@ func (c *ZeppClient) SleepDays(ctx context.Context, oldest, newest string) ([]Ba
 	}
 
 	sleeps := make([]BandDataSleep, 0, len(days))
-	for _, d := range days {
-		if d.Summary == nil || d.Summary.Sleep == nil {
+
+	for i := range days {
+		if days[i].Summary == nil || days[i].Summary.Sleep == nil {
 			continue
 		}
 
-		sleeps = append(sleeps, *d.Summary.Sleep)
+		sleeps = append(sleeps, *days[i].Summary.Sleep)
 	}
 
 	return sleeps, nil
@@ -326,8 +330,8 @@ func (c *ZeppClient) HeartRateSeries(ctx context.Context, oldest, newest string)
 	}
 
 	series := make([][]BandDataHeartPoint, 0, len(days))
-	for _, d := range days {
-		series = append(series, d.HeartRate)
+	for i := range days {
+		series = append(series, days[i].HeartRate)
 	}
 
 	return series, nil
@@ -362,7 +366,7 @@ func (c *ZeppClient) StressDays(ctx context.Context, oldest, newest string) ([]S
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
 	}
 
@@ -385,6 +389,7 @@ func (c *ZeppClient) StressDays(ctx context.Context, oldest, newest string) ([]S
 	}
 
 	out := make([]StressDay, 0, len(raw.Items))
+
 	for _, item := range raw.Items {
 		day := StressDay{
 			RawTime:   item.Timestamp,
@@ -403,6 +408,7 @@ func (c *ZeppClient) StressDays(ctx context.Context, oldest, newest string) ([]S
 				Time  int64 `json:"time"`
 				Value int   `json:"value"`
 			}
+
 			if err := json.Unmarshal(item.Data, &points); err == nil {
 				day.Points = make([]StressPoint, 0, len(points))
 				for _, p := range points {
@@ -446,7 +452,7 @@ func (c *ZeppClient) SpO2Readings(ctx context.Context, oldest, newest string) ([
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
 	}
 
@@ -465,8 +471,9 @@ func (c *ZeppClient) SpO2Readings(ctx context.Context, oldest, newest string) ([
 	}
 
 	out := make([]SpO2Reading, 0, len(raw.Items))
+
 	for _, item := range raw.Items {
-		r := SpO2Reading{
+		reading := SpO2Reading{
 			Timestamp: item.Timestamp,
 			SubType:   item.SubType,
 			ODI:       float64(item.ODI),
@@ -476,21 +483,30 @@ func (c *ZeppClient) SpO2Readings(ctx context.Context, oldest, newest string) ([
 
 		if item.Extra != "" {
 			var extra map[string]any
-			if err := json.Unmarshal([]byte(item.Extra), &extra); err == nil {
-				if v, ok := extra["spo2"].(float64); ok {
-					r.Value = v
-				}
 
-				if v, ok := extra["spo2_decrease"].(float64); ok {
-					r.SpO2Decrease = v
-				}
+			if err := json.Unmarshal([]byte(item.Extra), &extra); err == nil {
+				reading.Value = zeppExtraFloat(extra, "spo2")
+				reading.SpO2Decrease = zeppExtraFloat(extra, "spo2Decrease")
 			}
 		}
 
-		out = append(out, r)
+		out = append(out, reading)
 	}
 
 	return out, nil
+}
+
+func zeppExtraFloat(extra map[string]any, key string) float64 {
+	switch v := extra[key].(type) {
+	case float64:
+		return v
+	case string:
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+
+	return 0
 }
 
 // PAIDays fetches Personal Activity Intelligence data.
@@ -522,7 +538,7 @@ func (c *ZeppClient) PAIDays(ctx context.Context, oldest, newest string) ([]PAID
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
 	}
 
@@ -550,6 +566,7 @@ func (c *ZeppClient) PAIDays(ctx context.Context, oldest, newest string) ([]PAID
 	}
 
 	out := make([]PAIDay, 0, len(raw.Items))
+
 	for _, item := range raw.Items {
 		day := PAIDay{
 			Timestamp:            item.Timestamp,
@@ -575,126 +592,130 @@ func (c *ZeppClient) PAIDays(ctx context.Context, oldest, newest string) ([]PAID
 	return out, nil
 }
 
-// Workouts fetches the list of workouts in the date range. The result is
-// the first page only; if the API returns a `next` cursor, callers can pass
-// it to WorkoutsPage for the next page.
+// Workouts fetches all workouts. The API returns all workouts (pagination
+// via trackid cursor). Date filtering is done client-side from the trackid
+// (which is a Unix timestamp in seconds).
 func (c *ZeppClient) Workouts(ctx context.Context, oldest, newest string) ([]WorkoutSummary, error) {
-	items, _, err := c.WorkoutsPage(ctx, oldest, newest, "", "")
-	if err != nil {
+	if err := c.ensureAuthenticated(); err != nil {
 		return nil, err
 	}
 
-	return items, nil
+	// trackid is UTC epoch seconds, so parse dates as UTC.
+	oldestSec, err := parseDateToSecondsUTC(oldest)
+	if err != nil {
+		return nil, fmt.Errorf("parse oldest date: %w", err)
+	}
+
+	newestSec, err := parseDateEndOfDaySecondsUTC(newest)
+	if err != nil {
+		return nil, fmt.Errorf("parse newest date: %w", err)
+	}
+
+	var summaries []WorkoutSummary
+
+	nextID := int64(0)
+
+	for {
+		page, next, err := c.workoutsPage(ctx, nextID)
+		if err != nil {
+			return nil, err
+		}
+
+		for i := range page {
+			trackSec, err := strconv.ParseInt(page[i].TrackID, 10, 64)
+			if err != nil {
+				continue
+			}
+
+			if trackSec > newestSec {
+				continue
+			}
+
+			if trackSec < oldestSec {
+				return summaries, nil
+			}
+
+			summaries = append(summaries, page[i])
+		}
+
+		if next == -1 {
+			break
+		}
+
+		nextID = next
+	}
+
+	return summaries, nil
 }
 
-// WorkoutsPage fetches a single page of workouts. startTrackID/stopTrackID
-// can be passed from a previous page's `next` cursor to page backwards.
-func (c *ZeppClient) WorkoutsPage(ctx context.Context, oldest, newest, startTrackID, stopTrackID string) ([]WorkoutSummary, string, error) {
-	if err := c.ensureAuthenticated(); err != nil {
-		return nil, "", err
-	}
+func (c *ZeppClient) workoutsPage(ctx context.Context, trackID int64) ([]WorkoutSummary, int64, error) {
+	query := url.Values{}
 
-	from, err := parseDateToMillis(oldest)
-	if err != nil {
-		return nil, "", fmt.Errorf("parse oldest date: %w", err)
-	}
-
-	to, err := parseDateEndOfDayMillis(newest)
-	if err != nil {
-		return nil, "", fmt.Errorf("parse newest date: %w", err)
-	}
-
-	query := url.Values{
-		"query_type":  {"summary"},
-		"device_type": {"android_phone"},
-		"userid":      {c.userID},
-		"from_date":   {oldest},
-		"to_date":     {newest},
-		"from":        {strconv.FormatInt(from/1000, 10)},
-		"to":          {strconv.FormatInt(to/1000, 10)},
-		"source":      {"run.mifit.huami.com"},
-	}
-
-	if startTrackID != "" {
-		query.Set("startTrackId", startTrackID)
-	}
-
-	if stopTrackID != "" {
-		query.Set("stopTrackId", stopTrackID)
+	if trackID > 0 {
+		query.Set("trackid", strconv.FormatInt(trackID, 10))
 	}
 
 	resp, err := c.doGet(ctx, zeppSportHistoryPath, query)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return nil, "", fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return nil, 0, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
 	}
 
 	var raw struct {
 		Code    int    `json:"code"`
 		Message string `json:"message,omitempty"`
-		Data    []struct {
-			TrackID   string `json:"trackid"`
-			Date      string `json:"date"`
-			Type      int    `json:"type"`
-			StartTime int64  `json:"startTime"`
-			EndTime   int64  `json:"endTime"`
-			Duration  int    `json:"duration"`
-			Distance  int    `json:"distance"`
-			Calories  int    `json:"calories"`
-			AvgHR     int    `json:"avgHR"`
-			MaxHR     int    `json:"maxHR"`
-			MinHR     int    `json:"minHR"`
-			AvgPace   int    `json:"avgPace"`
-			MaxPace   int    `json:"maxPace"`
-			AvgPower  int    `json:"avgPower"`
-			MaxPower  int    `json:"maxPower"`
-			Steps     int    `json:"step"`
-			Next      string `json:"next"`
+		Data    struct {
+			Next    int `json:"next"`
+			Summary []struct {
+				TrackID    string `json:"trackid"`
+				WorkoutDis string `json:"dis"`
+				Calorie    string `json:"calorie"`
+				EndTime    string `json:"end_time"`
+				RunTime    string `json:"run_time"`
+				AvgPace    string `json:"avg_pace"`
+				AvgHR      string `json:"avg_heart_rate"`
+				SportType  int    `json:"type"`
+			} `json:"summary"`
 		} `json:"data"`
-		Next string `json:"next"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, "", fmt.Errorf("decode response: %w", err)
+		return nil, 0, fmt.Errorf("decode response: %w", err)
 	}
 
 	if raw.Code != 1 && raw.Code != 0 {
-		return nil, "", fmt.Errorf("%w: %s", ErrZeppServer, raw.Message)
+		return nil, 0, fmt.Errorf("%w: %s", ErrZeppServer, raw.Message)
 	}
 
-	out := make([]WorkoutSummary, 0, len(raw.Data))
-	for _, item := range raw.Data {
+	out := make([]WorkoutSummary, 0, len(raw.Data.Summary))
+
+	for _, item := range raw.Data.Summary {
+		endTime, _ := strconv.ParseInt(item.EndTime, 10, 64)
+		distance, _ := strconv.Atoi(item.WorkoutDis)
+		calories, _ := strconv.Atoi(item.Calorie)
+		runTime, _ := strconv.Atoi(item.RunTime)
+		avgPace, _ := strconv.Atoi(item.AvgPace)
+		avgHR, _ := strconv.Atoi(item.AvgHR)
+
 		summary := WorkoutSummary{
 			TrackID:   item.TrackID,
-			SportType: item.Type,
-			StartTime: item.StartTime,
-			EndTime:   item.EndTime,
-			Duration:  item.Duration,
-			Distance:  item.Distance,
-			Calories:  item.Calories,
-			AvgHR:     item.AvgHR,
-			MaxHR:     item.MaxHR,
-			MinHR:     item.MinHR,
-			AvgPace:   item.AvgPace,
-			MaxPace:   item.MaxPace,
-			AvgPower:  item.AvgPower,
-			MaxPower:  item.MaxPower,
-			Steps:     item.Steps,
+			SportType: item.SportType,
+			EndTime:   endTime,
+			Duration:  runTime,
+			Distance:  distance,
+			Calories:  calories,
+			AvgPace:   avgPace,
+			AvgHR:     avgHR,
 		}
 
 		out = append(out, summary)
 	}
 
-	next := raw.Next
-	if next == "" && len(raw.Data) > 0 {
-		next = raw.Data[len(raw.Data)-1].Next
-	}
-
-	return out, next, nil
+	return out, int64(raw.Data.Next), nil
 }
 
 // Workout fetches the full per-second detail for a single workout.
@@ -715,7 +736,7 @@ func (c *ZeppClient) Workout(ctx context.Context, trackID string) (WorkoutDetail
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return WorkoutDetail{}, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
 	}
 
@@ -757,46 +778,46 @@ func (c *ZeppClient) Workout(ctx context.Context, trackID string) (WorkoutDetail
 		return WorkoutDetail{}, fmt.Errorf("%w: %s", ErrZeppServer, raw.Message)
 	}
 
-	d := raw.Data
+	workoutData := raw.Data
 
 	detail := WorkoutDetail{
-		TrackID:     d.TrackID,
-		SportType:   d.Type,
-		StartTime:   d.StartTime,
-		EndTime:     d.EndTime,
-		Duration:    d.Duration,
-		Distance:    d.Distance,
-		Calories:    d.Calories,
-		AvgHR:       d.AvgHR,
-		MaxHR:       d.MaxHR,
-		MinHR:       d.MinHR,
-		AvgPower:    d.AvgPower,
-		MaxPower:    d.MaxPower,
-		AvgPace:     d.AvgPace,
-		MaxAltitude: d.MaxAltitude,
-		MinAltitude: d.MinAltitude,
-		Ascent:      d.Ascent,
-		Descent:     d.Descent,
-		Steps:       d.Steps,
+		TrackID:     workoutData.TrackID,
+		SportType:   workoutData.Type,
+		StartTime:   workoutData.StartTime,
+		EndTime:     workoutData.EndTime,
+		Duration:    workoutData.Duration,
+		Distance:    workoutData.Distance,
+		Calories:    workoutData.Calories,
+		AvgHR:       workoutData.AvgHR,
+		MaxHR:       workoutData.MaxHR,
+		MinHR:       workoutData.MinHR,
+		AvgPower:    workoutData.AvgPower,
+		MaxPower:    workoutData.MaxPower,
+		AvgPace:     workoutData.AvgPace,
+		MaxAltitude: workoutData.MaxAltitude,
+		MinAltitude: workoutData.MinAltitude,
+		Ascent:      workoutData.Ascent,
+		Descent:     workoutData.Descent,
+		Steps:       workoutData.Steps,
 	}
 
-	if decoded, err := decodeDeltaEncodedShorts(d.HRDelta); err == nil {
+	if decoded, err := decodeDeltaEncodedShorts(workoutData.HRDelta); err == nil {
 		detail.HRSeries = decoded
 	}
 
-	if decoded, err := decodeDeltaEncodedShorts(d.PaceDelta); err == nil {
+	if decoded, err := decodeDeltaEncodedShorts(workoutData.PaceDelta); err == nil {
 		detail.PaceSeries = decoded
 	}
 
-	if decoded, err := decodeDeltaEncodedShorts(d.AltDelta); err == nil {
+	if decoded, err := decodeDeltaEncodedShorts(workoutData.AltDelta); err == nil {
 		detail.AltSeries = decoded
 	}
 
-	if decoded, err := decodeDeltaEncodedShorts(d.PowerDelta); err == nil {
+	if decoded, err := decodeDeltaEncodedShorts(workoutData.PowerDelta); err == nil {
 		detail.PowerSeries = decoded
 	}
 
-	if decoded, err := decodeDeltaEncodedShorts(d.StepDelta); err == nil {
+	if decoded, err := decodeDeltaEncodedShorts(workoutData.StepDelta); err == nil {
 		detail.StepSeries = decoded
 	}
 
@@ -827,6 +848,7 @@ func (c *ZeppClient) UserInfo(ctx context.Context) (ZeppUserInfo, error) {
 func (c *ZeppClient) userInfoFromHost(ctx context.Context, host string) (ZeppUserInfo, error) {
 	saved := c.dataHost
 	c.dataHost = host
+
 	defer func() { c.dataHost = saved }()
 
 	query := url.Values{
@@ -849,7 +871,7 @@ func (c *ZeppClient) userInfoFromHost(ctx context.Context, host string) (ZeppUse
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return ZeppUserInfo{}, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
 	}
 
@@ -876,17 +898,17 @@ func (c *ZeppClient) userInfoFromHost(ctx context.Context, host string) (ZeppUse
 		return ZeppUserInfo{}, fmt.Errorf("%w: %s", ErrZeppServer, raw.Message)
 	}
 
-	d := raw.Data
+	userData := raw.Data
 
 	return ZeppUserInfo{
-		UserID:   d.UserID,
-		Nickname: d.Nickname,
-		Email:    d.Email,
-		Gender:   d.Gender,
-		Height:   d.Height,
-		Weight:   d.Weight,
-		Birthday: d.Birthday,
-		Region:   d.Region,
+		UserID:   userData.UserID,
+		Nickname: userData.Nickname,
+		Email:    userData.Email,
+		Gender:   userData.Gender,
+		Height:   userData.Height,
+		Weight:   userData.Weight,
+		Birthday: userData.Birthday,
+		Region:   userData.Region,
 	}, nil
 }
 
@@ -894,27 +916,29 @@ func (c *ZeppClient) userInfoFromHost(ctx context.Context, host string) (ZeppUse
 // Unlike the data endpoints, this host is regional-agnostic.
 func (c *ZeppClient) doGetEvents(ctx context.Context, query url.Values) (*http.Response, error) {
 	endpoint := c.eventsBase + "/users/" + c.userID + "/events"
-	if query != nil && len(query) > 0 {
+	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("apptoken", c.appToken)
+	req.Header.Set("Apptoken", c.appToken)
 
-	return c.httpClient.Do(req)
+	return c.httpClient.Do(req) //nolint:wrapcheck // caller wraps the error
 }
 
 // decodeBandDataSummary decodes the base64-packed JSON summary for one day.
 // The summary may include stp (steps), slp (sleep), goal, sn (serial), and
 // sync (last-sync epoch). Returns an error only if the base64 decode itself
 // fails; missing or malformed inner fields are tolerated.
-func decodeBandDataSummary(encoded string) (*BandDataSummary, error) {
+var errEmptySummary = errors.New("empty summary")
+
+func decodeBandDataSummary(encoded, date string) (*BandDataSummary, error) {
 	if encoded == "" {
-		return nil, errors.New("empty summary")
+		return nil, errEmptySummary
 	}
 
 	raw, err := base64.StdEncoding.DecodeString(encoded)
@@ -948,7 +972,7 @@ func decodeBandDataSummary(encoded string) (*BandDataSummary, error) {
 	}
 
 	if len(rawSummary.Slp) > 0 {
-		sleep, err := decodeSleep(rawSummary.Slp)
+		sleep, err := decodeSleep(rawSummary.Slp, date)
 		if err == nil {
 			summary.Sleep = sleep
 		}
@@ -958,7 +982,7 @@ func decodeBandDataSummary(encoded string) (*BandDataSummary, error) {
 }
 
 func decodeSteps(raw json.RawMessage) (*BandDataSteps, error) {
-	var s struct {
+	var stepData struct {
 		Total    int             `json:"ttl,omitempty"`
 		Calories int             `json:"cal,omitempty"`
 		Distance int             `json:"dis,omitempty"`
@@ -966,21 +990,21 @@ func decodeSteps(raw json.RawMessage) (*BandDataSteps, error) {
 		Stages   []BandDataStage `json:"stage,omitempty"`
 	}
 
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return nil, err
+	if err := json.Unmarshal(raw, &stepData); err != nil {
+		return nil, fmt.Errorf("unmarshal steps: %w", err)
 	}
 
 	return &BandDataSteps{
-		Total:    s.Total,
-		Calories: s.Calories,
-		Distance: s.Distance,
-		RunDist:  s.RunDist,
-		Stages:   s.Stages,
+		Total:    stepData.Total,
+		Calories: stepData.Calories,
+		Distance: stepData.Distance,
+		RunDist:  stepData.RunDist,
+		Stages:   stepData.Stages,
 	}, nil
 }
 
-func decodeSleep(raw json.RawMessage) (*BandDataSleep, error) {
-	var s struct {
+func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
+	var sleepRaw struct {
 		StartEpoch   int64                `json:"st,omitempty"`
 		EndEpoch     int64                `json:"ed,omitempty"`
 		DeepMinutes  int                  `json:"dp,omitempty"`
@@ -988,16 +1012,28 @@ func decodeSleep(raw json.RawMessage) (*BandDataSleep, error) {
 		Stages       []BandDataSleepStage `json:"stage,omitempty"`
 	}
 
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return nil, err
+	if err := json.Unmarshal(raw, &sleepRaw); err != nil {
+		return nil, fmt.Errorf("unmarshal sleep: %w", err)
+	}
+
+	midnightSec, err := parseDateToSecondsUTC(date)
+	if err != nil {
+		return nil, fmt.Errorf("parse sleep date: %w", err)
+	}
+
+	const secondsPerMinute = 60
+
+	for i := range sleepRaw.Stages {
+		sleepRaw.Stages[i].StartEpoch = midnightSec + int64(sleepRaw.Stages[i].Start*secondsPerMinute)
+		sleepRaw.Stages[i].EndEpoch = midnightSec + int64(sleepRaw.Stages[i].Stop*secondsPerMinute)
 	}
 
 	return &BandDataSleep{
-		StartEpoch:   s.StartEpoch,
-		EndEpoch:     s.EndEpoch,
-		DeepMinutes:  s.DeepMinutes,
-		LightMinutes: s.LightMinutes,
-		Stages:       s.Stages,
+		StartEpoch:   sleepRaw.StartEpoch,
+		EndEpoch:     sleepRaw.EndEpoch,
+		DeepMinutes:  sleepRaw.DeepMinutes,
+		LightMinutes: sleepRaw.LightMinutes,
+		Stages:       sleepRaw.Stages,
 	}, nil
 }
 
@@ -1023,22 +1059,25 @@ func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, err
 	midnight := int64(0)
 
 	if dateStr != "" {
-		if t, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC); err == nil {
 			midnight = t.UnixMilli()
 		}
 	}
 
 	const sentinel = 254
+	const millisPerMinute = 60_000
+
 	points := make([]BandDataHeartPoint, 0, len(raw)/2)
 
 	for i := 0; i < len(raw); i += 2 {
 		bpm := int(binary.LittleEndian.Uint16(raw[i : i+2]))
 		if bpm >= sentinel {
 			points = append(points, BandDataHeartPoint{BPM: 0})
+
 			continue
 		}
 
-		ts := midnight + int64(i/2)*60_000
+		ts := midnight + int64(i/2)*millisPerMinute
 		points = append(points, BandDataHeartPoint{Timestamp: ts, BPM: bpm})
 	}
 
@@ -1072,7 +1111,7 @@ func decodeDeltaEncodedShorts(encoded string) ([]int, error) {
 	first := true
 
 	for i := 0; i < len(raw); i += 2 {
-		delta := int(int16(binary.LittleEndian.Uint16(raw[i : i+2])))
+		delta := int(int16(binary.LittleEndian.Uint16(raw[i : i+2]))) //nolint:gosec // intentional signed overflow for delta decoding
 		if first {
 			cumulative = delta
 			first = false
@@ -1087,12 +1126,30 @@ func decodeDeltaEncodedShorts(encoded string) ([]int, error) {
 }
 
 func parseDateToMillis(dateStr string) (int64, error) {
-	t, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
+	t, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("parse date %s to millis: %w", dateStr, err)
 	}
 
 	return t.UnixMilli(), nil
+}
+
+func parseDateToSecondsUTC(dateStr string) (int64, error) {
+	t, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return 0, fmt.Errorf("parse date %s to seconds: %w", dateStr, err)
+	}
+
+	return t.Unix(), nil
+}
+
+func parseDateEndOfDaySecondsUTC(dateStr string) (int64, error) {
+	t, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return 0, fmt.Errorf("parse date %s end of day: %w", dateStr, err)
+	}
+
+	return t.Add(24*time.Hour - time.Second).Unix(), nil
 }
 
 // ParseZeppDateToMillisForTest is a test-friendly alias of parseDateToMillis.
@@ -1102,9 +1159,9 @@ func ParseZeppDateToMillisForTest(dateStr string) (int64, error) {
 }
 
 func parseDateEndOfDayMillis(dateStr string) (int64, error) {
-	t, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
+	t, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("parse date %s end of day millis: %w", dateStr, err)
 	}
 
 	return t.Add(24*time.Hour - time.Millisecond).UnixMilli(), nil

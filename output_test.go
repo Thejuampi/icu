@@ -103,6 +103,7 @@ func TestWriteCSVError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for write failure")
 	}
+
 	r.Close()
 }
 

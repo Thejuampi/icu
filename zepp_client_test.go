@@ -12,6 +12,14 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
+const (
+	err404              = `{"code":404}`
+	err500              = `{"code":500}`
+	errTokenExpired     = `{"code":3001,"message":"token expired"}` //nolint:gosec // test fixture, not a real credential
+	errMissingEventType = `{"code":0,"message":"missing eventType"}`
+	eventsPath          = "/users/u1/events"
+)
+
 type zeppTestServer struct {
 	server  *httptest.Server
 	records []zeppRequestRecord
@@ -37,6 +45,7 @@ func newZeppTestServer(handler func(record zeppRequestRecord) (status int, body 
 		}
 		state.records = append(state.records, record)
 		status, payload := handler(record)
+
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(status)
 		_, _ = writer.Write([]byte(payload))
@@ -76,10 +85,10 @@ func TestZeppClientUserInfoHitsCorrectPath(t *testing.T) {
 
 	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
 		if record.Path != "/huami.health.getUserInfo.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404
 		}
 
-		if record.Method != "GET" {
+		if record.Method != http.MethodGet {
 			return http.StatusMethodNotAllowed, `{"code":405}`
 		}
 
@@ -115,7 +124,7 @@ func TestZeppClientUserInfoSendsApptokenHeader(t *testing.T) {
 	t.Parallel()
 
 	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
-		if record.Header.Get("apptoken") != "test-app-token" {
+		if record.Header.Get("Apptoken") != "test-app-token" {
 			return http.StatusOK, `{"code":0,"message":"missing token"}`
 		}
 
@@ -135,10 +144,10 @@ func TestZeppClientBandDataHitsV1Endpoint(t *testing.T) {
 
 	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
 		if record.Path != "/v1/data/band_data.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404
 		}
 
-		if record.Method != "GET" {
+		if record.Method != http.MethodGet {
 			return http.StatusMethodNotAllowed, `{"code":405}`
 		}
 
@@ -162,15 +171,16 @@ func TestZeppClientBandDataHitsV1Endpoint(t *testing.T) {
 	}
 }
 
-func TestZeppClientBandDataDecodesSummary(t *testing.T) {
+func TestZeppClientBandDataDecodesSummary(t *testing.T) { //nolint:gocyclo,cyclop // many assertions validate decoded band data
 	t.Parallel()
 
-	rawSummary := `{"stp":{"ttl":8500,"cal":2100,"dis":6200,"stage":[{"start":0,"stop":30,"mode":3,"step":1200,"cal":30,"dis":800}]},"slp":{"st":1717200000,"ed":1717230000,"dp":90,"lt":210,"stage":[{"start":0,"stop":30,"mode":5},{"start":30,"stop":120,"mode":4}]},"goal":8000,"sn":"ABC123","sync":1717250000}`
+	rawSummary := `{"stp":{"ttl":8500,"cal":2100,"dis":6200,"stage":[{"start":0,"stop":30,"mode":3,"step":1200,"cal":30,"dis":800}]},"slp":{"st":1717200000,"ed":1717230000,"dp":90,"lt":210,"stage":[{"start":0,"stop":30,"mode":5},{"start":30,"stop":120,"mode":4}]},"goal":8000,"sn":"ABC123","sync":1717250000}` //nolint:lll // long JSON fixture
 
 	encodedSummary := base64.StdEncoding.EncodeToString([]byte(rawSummary))
 
-	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"uid":"u1","data_type":0,"date_time":"2026-06-01","source":256,"uuid":"null","summary":"` + encodedSummary + `","data":"","data_hr":""}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -212,6 +222,35 @@ func TestZeppClientBandDataDecodesSummary(t *testing.T) {
 		t.Fatalf("sleep = %+v, want dp=90 lt=210", day.Summary.Sleep)
 	}
 
+	// start/stop in stages are minutes since midnight; decodeSleep converts
+	// them to epoch seconds using the day's date (2026-06-01 = midnight 1780272000).
+	if len(day.Summary.Sleep.Stages) != 2 {
+		t.Fatalf("sleep stages length = %d, want 2", len(day.Summary.Sleep.Stages))
+	}
+
+	// midnight 2026-06-01 UTC = 1780272000
+	const midnight2026_06_01 int64 = 1780272000
+
+	if day.Summary.Sleep.Stages[0].Start != 0 || day.Summary.Sleep.Stages[0].Stop != 30 {
+		t.Fatalf("stage0 minutes = %d-%d, want 0-30", day.Summary.Sleep.Stages[0].Start, day.Summary.Sleep.Stages[0].Stop)
+	}
+
+	if day.Summary.Sleep.Stages[0].StartEpoch != midnight2026_06_01 {
+		t.Fatalf("stage0 startEpoch = %d, want %d", day.Summary.Sleep.Stages[0].StartEpoch, midnight2026_06_01)
+	}
+
+	if day.Summary.Sleep.Stages[0].EndEpoch != midnight2026_06_01+30*60 {
+		t.Fatalf("stage0 endEpoch = %d, want %d", day.Summary.Sleep.Stages[0].EndEpoch, midnight2026_06_01+30*60)
+	}
+
+	if day.Summary.Sleep.Stages[1].StartEpoch != midnight2026_06_01+30*60 {
+		t.Fatalf("stage1 startEpoch = %d, want %d", day.Summary.Sleep.Stages[1].StartEpoch, midnight2026_06_01+30*60)
+	}
+
+	if day.Summary.Sleep.Stages[1].EndEpoch != midnight2026_06_01+120*60 {
+		t.Fatalf("stage1 endEpoch = %d, want %d", day.Summary.Sleep.Stages[1].EndEpoch, midnight2026_06_01+120*60)
+	}
+
 	if day.Summary.Goal != 8000 {
 		t.Fatalf("goal = %d, want 8000", day.Summary.Goal)
 	}
@@ -225,6 +264,7 @@ func TestZeppClientBandDataDecodesHeartRate(t *testing.T) {
 	t.Parallel()
 
 	hrBytes := make([]byte, 0, 6)
+
 	for _, bpm := range []uint16{72, 95, 110} {
 		buf := make([]byte, 2)
 		binary.LittleEndian.PutUint16(buf, bpm)
@@ -233,8 +273,9 @@ func TestZeppClientBandDataDecodesHeartRate(t *testing.T) {
 
 	encodedHR := base64.StdEncoding.EncodeToString(hrBytes)
 
-	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"uid":"u1","date_time":"2026-06-01","summary":"","data":"","data_hr":"` + encodedHR + `"}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -282,8 +323,9 @@ func TestZeppClientSleepDaysExtractsFromBandData(t *testing.T) {
 	rawSummary := `{"slp":{"st":1717200000,"ed":1717230000,"dp":90,"lt":210}}`
 	encodedSummary := base64.StdEncoding.EncodeToString([]byte(rawSummary))
 
-	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"date_time":"2026-06-01","summary":"` + encodedSummary + `","data":"","data_hr":""}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -308,6 +350,7 @@ func TestZeppClientHeartRateSeriesExtractsFromBandData(t *testing.T) {
 	t.Parallel()
 
 	hrBytes := make([]byte, 0, 4)
+
 	for _, bpm := range []uint16{60, 75} {
 		buf := make([]byte, 2)
 		binary.LittleEndian.PutUint16(buf, bpm)
@@ -316,8 +359,9 @@ func TestZeppClientHeartRateSeriesExtractsFromBandData(t *testing.T) {
 
 	encodedHR := base64.StdEncoding.EncodeToString(hrBytes)
 
-	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"date_time":"2026-06-01","summary":"","data":"","data_hr":"` + encodedHR + `"}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -342,15 +386,16 @@ func TestZeppClientStressDaysHitsEventsEndpoint(t *testing.T) {
 	t.Parallel()
 
 	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
-		if record.Path != "/users/u1/events" {
-			return http.StatusNotFound, `{"code":404}`
+		if record.Path != eventsPath {
+			return http.StatusNotFound, err404
 		}
 
 		if !strings.Contains(record.Query, "eventType=all_day_stress") {
-			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+			return http.StatusOK, errMissingEventType
 		}
 
-		body := `{"items":[{"timestamp":1717200000000,"minStress":20,"maxStress":80,"avgStress":45,"relaxProportion":40,"normalProportion":30,"mediumProportion":20,"highProportion":10}]}`
+		body := `{"items":[{"timestamp":1717200000000,"minStress":"20","maxStress":"80","avgStress":"45","relaxProportion":"40","normalProportion":"30","mediumProportion":"20","highProportion":"10","data":[{"time":1717200000000,"value":30}]}]}` //nolint:lll // long JSON fixture
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -369,21 +414,26 @@ func TestZeppClientStressDaysHitsEventsEndpoint(t *testing.T) {
 	if days[0].Average != 45 || days[0].Min != 20 || days[0].Max != 80 {
 		t.Fatalf("day = %+v, want avg=45 min=20 max=80", days[0])
 	}
+
+	if len(days[0].Points) != 1 || days[0].Points[0].Value != 30 {
+		t.Fatalf("points = %+v, want 1 point with value=30", days[0].Points)
+	}
 }
 
 func TestZeppClientSpO2ReadingsHitsEventsEndpoint(t *testing.T) {
 	t.Parallel()
 
 	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
-		if record.Path != "/users/u1/events" {
-			return http.StatusNotFound, `{"code":404}`
+		if record.Path != eventsPath {
+			return http.StatusNotFound, err404
 		}
 
 		if !strings.Contains(record.Query, "eventType=blood_oxygen") {
-			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+			return http.StatusOK, errMissingEventType
 		}
 
-		body := `{"items":[{"timestamp":1717200000000,"subType":"click","extra":"{\"spo2\":97}"}]}`
+		body := `{"items":[{"timestamp":1717200000000,"subType":"click","extra":"{\"spo2\":\"97\"}"}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -408,15 +458,16 @@ func TestZeppClientPAIDaysHitsEventsEndpoint(t *testing.T) {
 	t.Parallel()
 
 	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
-		if record.Path != "/users/u1/events" {
-			return http.StatusNotFound, `{"code":404}`
+		if record.Path != eventsPath {
+			return http.StatusNotFound, err404
 		}
 
 		if !strings.Contains(record.Query, "eventType=PaiHealthInfo") {
-			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+			return http.StatusOK, errMissingEventType
 		}
 
-		body := `{"items":[{"timestamp":1717200000000,"dailyPai":42.5,"totalPai":120.0,"maxHr":165,"restHr":58,"lowZoneMinutes":30,"lowZoneLowerLimit":1,"lowZonePai":5.0,"mediumZoneMinutes":15,"mediumZoneLowerLimit":50,"mediumZonePai":12.5,"highZoneMinutes":5,"highZoneLowerLimit":85,"highZonePai":25.0}]}`
+		body := `{"items":[{"timestamp":1717200000000,"dailyPai":"42.5","totalPai":"120.0","maxHr":"165","restHr":"58","lowZoneMinutes":"30","lowZoneLowerLimit":"1","lowZonePai":"5.0","mediumZoneMinutes":"15","mediumZoneLowerLimit":"50","mediumZonePai":"12.5","highZoneMinutes":"5","highZoneLowerLimit":"85","highZonePai":"25.0"}]}` //nolint:lll // long JSON fixture
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -442,14 +493,11 @@ func TestZeppClientWorkoutsHitsV1SportEndpoint(t *testing.T) {
 
 	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
 		if record.Path != "/v1/sport/run/history.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404
 		}
 
-		if !strings.Contains(record.Query, "source=run.mifit.huami.com") {
-			return http.StatusOK, `{"code":1,"message":"missing source"}`
-		}
+		body := `{"code":1,"data":{"next":-1,"summary":[{"trackid":"1780272000","dis":"10000","calorie":"450","end_time":"1780275600","run_time":"3600","avg_pace":"0","avg_heart_rate":"150","type":1}]}}`
 
-		body := `{"code":1,"message":"success","data":[{"trackid":"1717200000","type":1,"startTime":1717200000,"endTime":1717203600,"duration":3600,"distance":10000,"calories":450,"avgHR":150,"maxHR":175,"minHR":120}]}`
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -465,8 +513,40 @@ func TestZeppClientWorkoutsHitsV1SportEndpoint(t *testing.T) {
 		t.Fatalf("summaries length = %d, want 1", len(summaries))
 	}
 
-	if summaries[0].TrackID != "1717200000" || summaries[0].SportType != 1 {
+	if summaries[0].TrackID != "1780272000" || summaries[0].SportType != 1 {
 		t.Fatalf("summary = %+v", summaries[0])
+	}
+}
+
+func TestZeppClientWorkoutsReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.Workouts(t.Context(), "2026-06-01", "2026-06-07")
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestZeppClientWorkoutsReturnsErrorOnNonZeroCode(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusOK, errTokenExpired
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.Workouts(t.Context(), "2026-06-01", "2026-06-07")
+	if err == nil {
+		t.Fatalf("expected error for non-zero code")
 	}
 }
 
@@ -474,9 +554,10 @@ func TestZeppClientWorkoutDecodesDeltaSeries(t *testing.T) {
 	t.Parallel()
 
 	hrDelta := make([]byte, 0, 6)
+
 	for _, v := range []int16{150, 10, -5} {
 		buf := make([]byte, 2)
-		binary.LittleEndian.PutUint16(buf, uint16(v))
+		binary.LittleEndian.PutUint16(buf, uint16(v)) //nolint:gosec // test helper, v is always small
 		hrDelta = append(hrDelta, buf...)
 	}
 
@@ -484,14 +565,15 @@ func TestZeppClientWorkoutDecodesDeltaSeries(t *testing.T) {
 
 	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
 		if record.Path != "/v1/sport/run/detail.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404
 		}
 
 		if !strings.Contains(record.Query, "trackid=1717200000") {
 			return http.StatusOK, `{"code":1,"message":"missing trackid"}`
 		}
 
-		body := `{"code":1,"message":"success","data":{"trackid":"1717200000","type":1,"startTime":1717200000,"endTime":1717203600,"duration":3600,"distance":10000,"calories":450,"avgHR":150,"maxHR":175,"minHR":120,"hr_split":"` + encodedHR + `"}}`
+		body := `{"code":1,"message":"success","data":{"trackid":"1717200000","type":1,"startTime":1717200000,"endTime":1717203600,"duration":3600,"distance":10000,"calories":450,"avgHR":150,"maxHR":175,"minHR":120,"hr_split":"` + encodedHR + `"}}` //nolint:lll // long JSON fixture
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -508,6 +590,7 @@ func TestZeppClientWorkoutDecodesDeltaSeries(t *testing.T) {
 	}
 
 	wantHR := []int{150, 160, 155}
+
 	if len(detail.HRSeries) != 3 {
 		t.Fatalf("hrSeries length = %d, want 3", len(detail.HRSeries))
 	}
@@ -523,7 +606,7 @@ func TestZeppClientNonZeroCodeReturnsError(t *testing.T) {
 	t.Parallel()
 
 	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
-		return http.StatusOK, `{"code":3001,"message":"token expired"}`
+		return http.StatusOK, errTokenExpired
 	})
 	t.Cleanup(srv.Close)
 
@@ -584,5 +667,85 @@ func TestZeppClientCountryCodeSelectsRegionalHost(t *testing.T) {
 				t.Fatalf("dataHost = %q, want %q", got, tc.wantHost)
 			}
 		})
+	}
+}
+
+func TestZeppClientWorkoutReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.Workout(t.Context(), "1717200000")
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestZeppClientWorkoutReturnsErrorOnNonZeroCode(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusOK, errTokenExpired
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.Workout(t.Context(), "1717200000")
+	if err == nil {
+		t.Fatalf("expected error for non-zero code")
+	}
+}
+
+func TestZeppClientUserInfoReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.UserInfo(t.Context())
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestZeppClientSpO2ReadingsReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.SpO2Readings(t.Context(), "2026-06-01", "2026-06-01")
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestZeppClientPAIDaysReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.PAIDays(t.Context(), "2026-06-01", "2026-06-01")
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
 	}
 }

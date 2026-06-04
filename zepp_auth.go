@@ -17,7 +17,7 @@ import (
 const (
 	zeppEncryptionKey = "xeNtBVqzDc6tuNTh"
 	zeppEncryptionIV  = "MAAAYAAAAAAAAABg"
-	zeppTokensURL     = "https://api-user-us2.zepp.com/v2/registrations/tokens"
+	zeppTokensURL     = "https://api-user-us2.zepp.com/v2/registrations/tokens" //nolint:gosec // false positive; this is a URL, not credentials
 	zeppLoginURL      = "https://api-mifit-us2.zepp.com/v2/client/login"
 	zeppDevicesURL    = "https://api-mifit.zepp.com/users/%s/devices"
 )
@@ -49,11 +49,7 @@ func ZeppLoginWithURLs(tokensURL, loginURL, email, password string) (*ZeppAuthRe
 	return result, nil
 }
 
-func getAccessToken(email, password string) (string, string, error) {
-	return getAccessTokenWithURL(zeppTokensURL, email, password)
-}
-
-func getAccessTokenWithURL(tokensURL, email, password string) (string, string, error) {
+func getAccessTokenWithURL(tokensURL, email, password string) (string, string, error) { //nolint:gocritic // unnamed results are clearer here
 	payload := url.Values{
 		"emailOrPhone": {email},
 		"state":        {"REDIRECTION"},
@@ -66,30 +62,31 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	}
 
 	encodedPayload := payload.Encode()
+
 	encrypted, err := encryptPayload([]byte(encodedPayload))
 	if err != nil {
 		return "", "", fmt.Errorf("encrypt payload: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", tokensURL, bytes.NewReader(encrypted))
+	req, err := http.NewRequest(http.MethodPost, tokensURL, bytes.NewReader(encrypted)) //nolint:noctx // internal auth, context not plumbed
 	if err != nil {
 		return "", "", fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("app_name", "com.huami.midong")
-	req.Header.Set("appname", "com.huami.midong")
-	req.Header.Set("cv", "151689_9.12.5")
-	req.Header.Set("v", "2.0")
-	req.Header.Set("appplatform", "android_phone")
-	req.Header.Set("vb", "202509151347")
-	req.Header.Set("vn", "9.12.5")
-	req.Header.Set("user-agent", "Zepp/9.12.5 (Pixel 4; Android 12; Density/2.75)")
-	req.Header.Set("x-hm-ekv", "1")
-	req.Header.Set("content-type", "application/x-www-form-urlencoded; charset=UTF-8")
-	req.Header.Set("accept-encoding", "gzip")
+	req.Header.Set("App_name", "com.huami.midong")
+	req.Header.Set("Appname", "com.huami.midong")
+	req.Header.Set("Cv", "151689_9.12.5")
+	req.Header.Set("V", "2.0")
+	req.Header.Set("Appplatform", "android_phone")
+	req.Header.Set("Vb", "202509151347")
+	req.Header.Set("Vn", "9.12.5")
+	req.Header.Set("User-Agent", "Zepp/9.12.5 (Pixel 4; Android 12; Density/2.75)")
+	req.Header.Set("X-Hm-Ekv", "1")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	req.Header.Set("Accept-Encoding", "gzip")
 
 	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
@@ -100,7 +97,7 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 303 {
+	if resp.StatusCode != http.StatusSeeOther {
 		return "", "", fmt.Errorf("expected status 303, got %d", resp.StatusCode)
 	}
 
@@ -115,6 +112,7 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	}
 
 	query := parsedURL.Query()
+
 	accessToken := query.Get("access")
 	if accessToken == "" {
 		return "", "", errors.New("no access token in redirect URL")
@@ -126,10 +124,6 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	}
 
 	return accessToken, countryCode, nil
-}
-
-func performLogin(accessToken, countryCode string) (*ZeppAuthResult, error) {
-	return performLoginWithURL(zeppLoginURL, accessToken, countryCode)
 }
 
 func performLoginWithURL(loginURL, accessToken, countryCode string) (*ZeppAuthResult, error) {
@@ -150,19 +144,19 @@ func performLoginWithURL(loginURL, accessToken, countryCode string) (*ZeppAuthRe
 		"lang":               {"en"},
 	}
 
-	req, err := http.NewRequest("POST", loginURL, strings.NewReader(payload.Encode()))
+	req, err := http.NewRequest(http.MethodPost, loginURL, strings.NewReader(payload.Encode())) //nolint:noctx // internal auth, context not plumbed
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("app_name", "com.huami.webapp")
-	req.Header.Set("appname", "com.huami.webapp")
-	req.Header.Set("origin", "https://user.zepp.com")
-	req.Header.Set("referer", "https://user.zepp.com/")
-	req.Header.Set("user-agent", "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0")
-	req.Header.Set("content-type", "application/x-www-form-urlencoded; charset=UTF-8")
-	req.Header.Set("accept", "application/json, text/plain, */*")
-	req.Header.Set("accept-language", "en-US,en;q=0.5")
+	req.Header.Set("App_name", "com.huami.webapp")
+	req.Header.Set("Appname", "com.huami.webapp")
+	req.Header.Set("Origin", "https://user.zepp.com")
+	req.Header.Set("Referer", "https://user.zepp.com/")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -170,7 +164,7 @@ func performLoginWithURL(loginURL, accessToken, countryCode string) (*ZeppAuthRe
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("expected status 200, got %d", resp.StatusCode)
 	}
 
@@ -223,9 +217,11 @@ func encryptPayload(data []byte) ([]byte, error) {
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - (len(data) % blockSize)
 	padtext := make([]byte, padding)
+
 	for i := range padtext {
 		padtext[i] = byte(padding)
 	}
+
 	return append(data, padtext...)
 }
 
@@ -240,11 +236,13 @@ func PKCS7PadForTest(data []byte, blockSize int) ([]byte, error) {
 }
 
 func generateUUID() string {
-	uuid := make([]byte, 16)
+	uuid := make([]byte, 16) //nolint:mnd // UUID length
 	if _, err := io.ReadFull(rand.Reader, uuid); err != nil {
 		panic(err)
 	}
-	uuid[6] = (uuid[6] & 0x0f) | 0x40
-	uuid[8] = (uuid[8] & 0x3f) | 0x80
+
+	uuid[6] = (uuid[6] & 0x0f) | 0x40 //nolint:mnd // UUID v4 version bits
+	uuid[8] = (uuid[8] & 0x3f) | 0x80 //nolint:mnd // UUID v4 variant bits
+
 	return fmt.Sprintf("%x-%x-%x-%x-%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:])
 }

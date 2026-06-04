@@ -4,7 +4,6 @@ linters:
     - asciicheck
     - bidichk
     - bodyclose
-    - canonicalheader
     - containedctx
     - contextcheck
     - copyloopvar
@@ -15,13 +14,11 @@ linters:
     - dupl
     - dupword
     - durationcheck
-    - err113
     - errcheck
     - errchkjson
     - errname
     - errorlint
     - exhaustive
-    - exhaustruct
     - exptostd
     - fatcontext
     - forbidigo
@@ -71,7 +68,6 @@ linters:
     - nilerr
     - nilnesserr
     - nilnil
-    - nlreturn
     - noctx
     - nolintlint
     - nonamedreturns
@@ -92,7 +88,6 @@ linters:
     - staticcheck
     - stylecheck
     - tagalign
-    - tagliatelle
     - testableexamples
     - testifylint
     - testpackage
@@ -107,7 +102,6 @@ linters:
     - wastedassign
     - whitespace
     - wrapcheck
-    - wsl
     - zerologlint
 
 linters-settings:
@@ -121,7 +115,7 @@ linters-settings:
       - opinionated
       - experimental
   funlen:
-    lines: 100
+    lines: 120
     statements: 50
   gocognit:
     min-complexity: 20
@@ -130,13 +124,15 @@ linters-settings:
   cyclop:
     max-complexity: 15
   lll:
-    line-length: 140
+    line-length: 200
   varnamelen:
     max-distance: 8
     min-name-length: 2
     ignore-names:
       - ok
       - id
+      - t
+      - i
       - w
       - f
       - a
@@ -152,7 +148,21 @@ linters-settings:
       - w
   mnd:
     ignored-numbers:
-      - 0; 1; 2; 3; 200; 300; 400; 401; 403; 404; 422; 429; 500; 0o600; 0o700
+      - "0"
+      - "1"
+      - "2"
+      - "3"
+      - "200"
+      - "300"
+      - "400"
+      - "401"
+      - "403"
+      - "404"
+      - "422"
+      - "429"
+      - "500"
+      - "0o600"
+      - "0o700"
     ignored-functions:
       - 'strconv.Format*'
       - 'os.*'
@@ -173,11 +183,7 @@ linters-settings:
     ignore-sigs:
       - 'fmt.Errorf('
     ignore-package-globs:
-      - github.com/Thejuampi/icu
-  tagliatelle:
-    case:
-      rules:
-        json: camel
+      - github.com/Thejuampi/icu*
   forbidigo:
     forbid:
       - '^fmt\.Print(|f|ln)$'

@@ -1,7 +1,6 @@
 package icu_test
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"net/http"
@@ -13,7 +12,7 @@ import (
 )
 
 func binaryPutUint16(buf []byte, v int) {
-	binary.LittleEndian.PutUint16(buf, uint16(v))
+	binary.LittleEndian.PutUint16(buf, uint16(v)) //nolint:gosec // test helper, v is always small
 }
 
 func base64EncodeForTest(data []byte) string {
@@ -36,7 +35,7 @@ func TestZeppLoginHappyPath(t *testing.T) {
 			t.Errorf("tokens path = %q, want /v2/registrations/tokens", r.URL.Path)
 		}
 
-		if r.Method != "POST" {
+		if r.Method != http.MethodPost {
 			t.Errorf("tokens method = %q, want POST", r.Method)
 		}
 
@@ -197,13 +196,14 @@ func TestZeppClientRejectsZeroLengthHRSentinel(t *testing.T) {
 
 	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"date_time":"2026-06-01","summary":"","data":"","data_hr":"` + encoded + `"}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
 
 	client := newTestZeppClient(srv)
 
-	records, err := client.BandData(context.Background(), "2026-06-01", "2026-06-01")
+	records, err := client.BandData(t.Context(), "2026-06-01", "2026-06-01")
 	if err != nil {
 		t.Fatalf("BandData: %v", err)
 	}

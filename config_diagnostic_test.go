@@ -48,6 +48,8 @@ func TestSaveConfigMkdirFailsOnFileAtPath(t *testing.T) {
 }
 
 func TestBuildConfigDiagnosticHandlesNilConfig(t *testing.T) {
+	t.Parallel()
+
 	diag := icu.BuildConfigDiagnostic(nil, "", "", "", nil, "test.json", "")
 	if diag.ConfigPath != "test.json" {
 		t.Fatalf("ConfigPath = %q, want test.json", diag.ConfigPath)

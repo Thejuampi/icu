@@ -223,6 +223,8 @@ func TestRunIDFirstWithPositionalArgsGivesErrorWithoutServer(t *testing.T) {
 }
 
 func TestParseShortFlagWithValue(t *testing.T) {
+	t.Parallel()
+
 	flags := parseFlags([]string{"-o", "value", "pos"})
 
 	if flags["o"] != "value" {

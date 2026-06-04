@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -8,7 +9,7 @@ import (
 
 func openBrowserURL(rawURL string) error {
 	if rawURL == "" {
-		return fmt.Errorf("empty url")
+		return errors.New("empty url")
 	}
 
 	var name string

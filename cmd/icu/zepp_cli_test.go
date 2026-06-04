@@ -12,6 +12,12 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
+const (
+	err404CLI              = `{"code":404}`
+	errMissingEventTypeCLI = `{"code":0,"message":"missing eventType"}`
+	eventsPathCLI          = "/users/u1/events"
+)
+
 type zeppMockServer struct {
 	server  *httptest.Server
 	records []zeppMockRequest
@@ -34,6 +40,7 @@ func newZeppMockServer(handler func(req zeppMockRequest) (int, string)) *zeppMoc
 			Query:  request.URL.RawQuery,
 		})
 		status, payload := handler(state.records[len(state.records)-1])
+
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(status)
 		_, _ = writer.Write([]byte(payload))
@@ -67,10 +74,13 @@ func withZeppTestEnv(t *testing.T) {
 }
 
 func TestRunZeppLoginRequiresEmailAndPassword(t *testing.T) {
+	t.Parallel()
+
 	registry := NewCommandRegistry()
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "login")
+
 	err := cmd.Run(nil, map[string]string{}, nil)
 	if err == nil {
 		t.Fatalf("expected error when email missing")
@@ -82,10 +92,13 @@ func TestRunZeppLoginRequiresEmailAndPassword(t *testing.T) {
 }
 
 func TestRunZeppLoginRequiresPassword(t *testing.T) {
+	t.Parallel()
+
 	registry := NewCommandRegistry()
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "login")
+
 	err := cmd.Run(nil, map[string]string{"email": "u@example.com"}, nil)
 	if err == nil {
 		t.Fatalf("expected error when password missing")
@@ -164,8 +177,9 @@ func TestRunZeppLogoutClearsToken(t *testing.T) {
 	}
 }
 
-func TestRunZeppLogoutWithoutTokenIsNoop(t *testing.T) {
+func TestRunZeppLogoutWithoutTokenIsNoop(t *testing.T) { //nolint:paralleltest // uses t.Setenv
 	withZeppTestEnv(t)
+
 	if err := icu.SaveConfig(&icu.Config{}); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -184,7 +198,7 @@ func TestZeppProfileCommandHitsCorrectEndpoint(t *testing.T) {
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
 		if req.Path != "/huami.health.getUserInfo.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404CLI
 		}
 
 		return http.StatusOK, `{"code":1,"message":"success","data":{"userId":"u1","nickname":"ProfileTester"}}`
@@ -212,7 +226,7 @@ func TestZeppSummaryCommandHitsBandDataEndpoint(t *testing.T) {
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
 		if req.Path != "/v1/data/band_data.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404CLI
 		}
 
 		return http.StatusOK, `{"code":1,"message":"success","data":[]}`
@@ -241,10 +255,11 @@ func TestZeppSleepCommandReturnsDecodedSleep(t *testing.T) {
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
 		if req.Path != "/v1/data/band_data.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404CLI
 		}
 
 		body := `{"code":1,"message":"success","data":[{"date_time":"2026-06-01","summary":"` + encodedSummary + `","data":"","data_hr":""}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -263,6 +278,7 @@ func TestZeppHeartRateCommandDecodesHR(t *testing.T) {
 	withZeppTestEnv(t)
 
 	hrBytes := make([]byte, 0, 4)
+
 	for _, bpm := range []uint16{72, 95} {
 		buf := make([]byte, 2)
 		binary.LittleEndian.PutUint16(buf, bpm)
@@ -271,8 +287,9 @@ func TestZeppHeartRateCommandDecodesHR(t *testing.T) {
 
 	encodedHR := base64.StdEncoding.EncodeToString(hrBytes)
 
-	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
+	srv := newZeppMockServer(func(_ zeppMockRequest) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"date_time":"2026-06-01","summary":"","data":"","data_hr":"` + encodedHR + `"}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -291,15 +308,16 @@ func TestZeppSpO2CommandHitsEventsEndpoint(t *testing.T) {
 	withZeppTestEnv(t)
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
-		if req.Path != "/users/u1/events" {
-			return http.StatusNotFound, `{"code":404}`
+		if req.Path != eventsPathCLI {
+			return http.StatusNotFound, err404CLI
 		}
 
 		if !strings.Contains(req.Query, "eventType=blood_oxygen") {
-			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+			return http.StatusOK, errMissingEventTypeCLI
 		}
 
 		body := `{"items":[{"timestamp":1717200000000,"subType":"click","extra":"{\"spo2\":97}"}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -319,15 +337,16 @@ func TestZeppPAICommandHitsEventsEndpoint(t *testing.T) {
 	withZeppTestEnv(t)
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
-		if req.Path != "/users/u1/events" {
-			return http.StatusNotFound, `{"code":404}`
+		if req.Path != eventsPathCLI {
+			return http.StatusNotFound, err404CLI
 		}
 
 		if !strings.Contains(req.Query, "eventType=PaiHealthInfo") {
-			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+			return http.StatusOK, errMissingEventTypeCLI
 		}
 
 		body := `{"items":[{"timestamp":1717200000000,"dailyPai":42.5,"totalPai":120.0,"maxHr":170,"restHr":52,"lowZoneMinutes":120,"mediumZoneMinutes":30,"highZoneMinutes":10}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -343,7 +362,7 @@ func TestZeppPAICommandHitsEventsEndpoint(t *testing.T) {
 	}
 }
 
-func TestZeppStatusReportsValidTrue(t *testing.T) {
+func TestZeppStatusReportsValidTrue(t *testing.T) { //nolint:paralleltest // uses t.Setenv
 	withZeppTestEnv(t)
 
 	if err := icu.SaveConfig(&icu.Config{
@@ -364,7 +383,7 @@ func TestZeppStatusReportsValidTrue(t *testing.T) {
 	}
 }
 
-func TestZeppStatusReportsNotValidWhenNoTokens(t *testing.T) {
+func TestZeppStatusReportsNotValidWhenNoTokens(t *testing.T) { //nolint:paralleltest // uses t.Setenv
 	withZeppTestEnv(t)
 
 	registry := NewCommandRegistry()
@@ -380,15 +399,16 @@ func TestZeppStressCommandHitsEventsEndpoint(t *testing.T) {
 	withZeppTestEnv(t)
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
-		if req.Path != "/users/u1/events" {
-			return http.StatusNotFound, `{"code":404}`
+		if req.Path != eventsPathCLI {
+			return http.StatusNotFound, err404CLI
 		}
 
 		if !strings.Contains(req.Query, "eventType=all_day_stress") {
-			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+			return http.StatusOK, errMissingEventTypeCLI
 		}
 
 		body := `{"items":[{"timestamp":1717200000000,"minStress":20,"maxStress":80,"avgStress":45,"relaxProportion":40,"normalProportion":30,"mediumProportion":20,"highProportion":10}]}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -409,10 +429,11 @@ func TestZeppWorkoutsCommandHitsSportEndpoint(t *testing.T) {
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
 		if req.Path != "/v1/sport/run/history.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404CLI
 		}
 
-		body := `{"code":1,"message":"success","data":[{"trackid":"t1","type":1}]}`
+		body := `{"code":1,"data":{"next":-1,"summary":[{"trackid":"1780272000","dis":"10000","calorie":"450","end_time":"1780275600","run_time":"3600","avg_pace":"0","avg_heart_rate":"150","type":1}]}}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -436,7 +457,7 @@ func TestZeppWorkoutCommandHitsSportDetailEndpoint(t *testing.T) {
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
 		if req.Path != "/v1/sport/run/detail.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404CLI
 		}
 
 		if !strings.Contains(req.Query, "trackid=track1") {
@@ -444,6 +465,7 @@ func TestZeppWorkoutCommandHitsSportDetailEndpoint(t *testing.T) {
 		}
 
 		body := `{"code":1,"message":"success","data":{"trackid":"track1","type":1,"avgHR":150}}`
+
 		return http.StatusOK, body
 	})
 	t.Cleanup(srv.Close)
@@ -464,6 +486,7 @@ func TestZeppCommandWithoutTokenReturnsClearError(t *testing.T) {
 	t.Setenv("ZEPP_LOGIN_TOKEN", "")
 	t.Setenv("ZEPP_APP_TOKEN", "")
 	t.Setenv("ZEPP_USER_ID", "")
+
 	if err := icu.SaveConfig(&icu.Config{}); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -472,6 +495,7 @@ func TestZeppCommandWithoutTokenReturnsClearError(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "summary")
+
 	err := cmd.Run(nil, map[string]string{}, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing token")
@@ -482,13 +506,14 @@ func TestZeppCommandWithoutTokenReturnsClearError(t *testing.T) {
 	}
 }
 
-func TestZeppCommandWithInvalidDateReturnsError(t *testing.T) {
+func TestZeppCommandWithInvalidDateReturnsError(t *testing.T) { //nolint:paralleltest // uses t.Setenv
 	withZeppTestEnv(t)
 
 	registry := NewCommandRegistry()
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "summary")
+
 	err := cmd.Run(nil, map[string]string{"oldest": "garbage"}, nil)
 	if err == nil {
 		t.Fatalf("expected error for invalid date")
@@ -497,6 +522,7 @@ func TestZeppCommandWithInvalidDateReturnsError(t *testing.T) {
 
 func TestZeppStatusInvalidTokenReportsValidFalse(t *testing.T) {
 	sentinel := "SENTINEL-INVALID-TOKEN-XYZ"
+
 	withZeppTestEnv(t)
 	t.Setenv("ZEPP_LOGIN_TOKEN", sentinel)
 
@@ -532,7 +558,7 @@ func TestRunZeppProfileWithToken(t *testing.T) {
 
 	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
 		if req.Path != "/huami.health.getUserInfo.json" {
-			return http.StatusNotFound, `{"code":404}`
+			return http.StatusNotFound, err404CLI
 		}
 
 		return http.StatusOK, `{"code":1,"message":"success","data":{"userId":"u1","nickname":"ProfileNamer"}}`

@@ -86,7 +86,7 @@ func TestAnalyzeWellnessComputesPhysiologyState(t *testing.T) {
 func TestAnalyzeWellnessTrend7DayWithEnoughSamples(t *testing.T) {
 	t.Parallel()
 
-	var records []icu.Wellness
+	records := make([]icu.Wellness, 0, 21)
 
 	for i := range 21 {
 		records = append(records, icu.Wellness{
@@ -109,11 +109,11 @@ func TestAnalyzeWellnessLactateStateHigh(t *testing.T) {
 	t.Parallel()
 
 	var first icu.Wellness
-	first.ID = "2026-05-01"
+	first.ID = testWellnessStartDate
 	first.Lactate = 5.0
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first}, icu.AnalysisOptions{
-		StartDate: "2026-05-01",
+		StartDate: testWellnessStartDate,
 		EndDate:   "2026-05-01",
 	})
 
@@ -126,11 +126,11 @@ func TestAnalyzeWellnessLactateStateBaseline(t *testing.T) {
 	t.Parallel()
 
 	var first icu.Wellness
-	first.ID = "2026-05-01"
+	first.ID = testWellnessStartDate
 	first.Lactate = 1.0
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first}, icu.AnalysisOptions{
-		StartDate: "2026-05-01",
+		StartDate: testWellnessStartDate,
 		EndDate:   "2026-05-01",
 	})
 
@@ -175,15 +175,15 @@ func TestAnalyzeWellnessAddSubjectiveMetricTracksValues(t *testing.T) {
 	t.Parallel()
 
 	var first icu.Wellness
-	first.ID = "2026-05-01"
+	first.ID = testWellnessStartDate
 	first.Fatigue = 3
 	first.Stress = 0
 	first.Soreness = 5
 	first.Motivation = 4
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first}, icu.AnalysisOptions{
-		StartDate: "2026-05-01",
-		EndDate:   "2026-05-01",
+		StartDate: testWellnessStartDate,
+		EndDate:   testWellnessStartDate,
 	})
 
 	if got.Subjective.MeanFatigue == 0 {

@@ -55,19 +55,13 @@ func BuildZeppEventsURL(userID string) string {
 	return fmt.Sprintf("%s/users/%s/events", zeppEventsHost, userID)
 }
 
-// Common query parameters used by /v1/data/band_data.json.
-const (
-	zeppApptokenHeader = "apptoken"
-	zeppAppNameHeader  = "appname"
-)
-
 // ZeppCommonHeaders returns the common HTTP headers for Zepp data requests.
 // The apptoken is the user's app token obtained from the auth flow.
 func ZeppCommonHeaders(appToken string) http.Header {
 	headers := http.Header{}
-	headers.Set("apptoken", appToken)
-	headers.Set("appname", "com.xiaomi.hm.health")
-	headers.Set("appplatform", "web")
+	headers.Set("Apptoken", appToken)
+	headers.Set("Appname", "com.xiaomi.hm.health")
+	headers.Set("Appplatform", "web")
 	headers.Set("Accept-Encoding", "gzip")
 
 	return headers
