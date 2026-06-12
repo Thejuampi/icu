@@ -581,7 +581,7 @@ type Forecast struct {
 	Location string  `json:"location,omitempty"`
 	Lat      float64 `json:"lat,omitempty"`
 	Lon      float64 `json:"lon,omitempty"`
-	Enabled  bool    `json:"enabled,omitempty"`
+	Enabled  *bool   `json:"enabled,omitempty"`
 }
 
 type WeatherDTO struct {

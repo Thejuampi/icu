@@ -77,6 +77,17 @@ func BoolFlag(args map[string]string, name string) bool {
 	return ok && (v == strTrue || v == "1" || v == "")
 }
 
+func BoolPtrFlag(args map[string]string, name string) *bool {
+	v, ok := args[name]
+	if !ok {
+		return nil
+	}
+
+	enabled := v == strTrue || v == "1" || v == ""
+
+	return &enabled
+}
+
 func IntFlag(args map[string]string, name string, defaultVal int) int {
 	if v, ok := args[name]; ok && v != "" {
 		var val int

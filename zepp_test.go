@@ -285,7 +285,8 @@ func TestResolveZeppUserIDFlagBeatsEnvBeatsConfig(t *testing.T) {
 }
 
 func TestSaveConfigFailsOnBadPath(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
 
 	cfg := &icu.Config{APIKey: "test"}
 	err := icu.SaveConfig(cfg)

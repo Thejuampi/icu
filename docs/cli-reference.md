@@ -441,9 +441,10 @@ Invoke these commands as `icu activity <id> <action>`.
 ## weather
 
 - `config`
-  Invocation: `icu weather config` or `icu weather config --lat LAT --lon LON [--label NAME] [--enabled]`
-  Notes: update mode is triggered by `--lat`; the optional literal `update` shown in help is not required.
-  Example: `icu weather config --lat -34.60 --lon -58.38 --label "Buenos Aires" --enabled`
+  Invocation: `icu weather config` or `icu weather config update --lat LAT --lon LON [--label NAME] [--location NAME] [--provider NAME] [--enabled true|false]`
+  Notes: update mode is triggered by any of `--lat`, `--lon`, `--label`, `--location`, `--provider`, or `--enabled`. The current forecast is fetched first and merged with the supplied flags, so `--enabled false` works without re-specifying coordinates.
+  Example: `icu weather config --lat -34.60 --lon -58.38 --label "Buenos Aires" --enabled true`
+  Example: `icu weather config --enabled false`
 
 - `forecast`
   Invocation: `icu weather forecast`

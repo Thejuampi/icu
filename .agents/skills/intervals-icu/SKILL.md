@@ -69,6 +69,19 @@ icu sports get Ride
 
 Use sport settings for FTP, indoor FTP, W prime, p-max, LTHR, max HR, power zones, HR zones, pace zones, threshold pace, and load model settings.
 
+### Weather Config
+
+```bash
+icu weather config
+icu weather config --lat 40.7282 --lon -73.7949 --label "Queens" --enabled true
+icu weather config --enabled false
+icu weather forecast
+```
+
+The forecast location controls the weather strip shown on the training calendar. `update` is triggered by any flag; the CLI fetches the existing config first and merges in your changes, so `--enabled false` works without re-entering coordinates.
+
+If `icu weather forecast` returns an HTTP 500, the issue is on the Intervals.icu backend (OpenWeatherMap integration). In that case leave `weather-config` empty or report it on the forum; the CLI cannot fix a server-side weather provider failure.
+
 ### Activities
 
 ```bash
@@ -102,6 +115,27 @@ icu events create --category WORKOUT --type Ride --name "Morning Intervals" --st
 ```
 
 Common event categories: `WORKOUT`, `RACE_A`, `RACE_B`, `RACE_C`, `NOTE`, `PLAN`, `HOLIDAY`, `SICK`, `INJURED`, `SET_EFTP`, `FITNESS_DAYS`, `SEASON_START`, `TARGET`, `SET_FITNESS`.
+
+### Flexible Planning With Optional Alternatives
+
+When planning day-by-day decisions based on recovery markers (HRV, resting HR, sleep, readiness), load the primary session as a `WORKOUT` event so Intervals.icu projects CTL/ATL correctly, and add fallback sessions as `NOTE` events so they do not inflate projected load.
+
+```bash
+# Primary session: contributes to projected load
+icu events create --category WORKOUT --type Ride --name "4x5 VO2Max" --start-date "2026-06-16T07:00:00" --moving-time 4380 --training-load 91 --desc "- 15m 55-72%\n4x\n  - 5m 112-115%\n  - 4m 60%\n- 22m Z2"
+
+# Alternative session: does NOT contribute to projected load
+# Note: the CLI treats the two characters '\n' literally. Use your shell's real newline mechanism
+# (e.g. PowerShell backtick-n: `n, bash $'...\n...') so the description renders with line breaks.
+icu events create --category NOTE --type Ride --name "ALT B — 90m Z2" --start-date "2026-06-16T07:00:00" --desc "Do if HRV <= baseline, resting HR elevated, or legs flat.`n- 15m 55-70%`n- 60m 68-72%`n- 15m 55-60%"
+```
+
+Decision rules commonly used:
+- HRV below personal baseline or resting HR elevated → choose the NOTE alternative.
+- Sleep score < 70 or high subjective fatigue → choose the NOTE alternative or take the OFF day.
+- If the alternative is chosen consistently for several days, consider converting it into the new WORKOUT and deleting/re-scheduling the harder primary session rather than accumulating skipped workouts.
+
+This keeps projected fitness/fatigue curves clean while preserving fallback options in the calendar.
 
 ### Workouts And Library
 

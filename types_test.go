@@ -339,6 +339,26 @@ func TestForecastUnmarshalLocation(t *testing.T) {
 	}
 }
 
+func TestForecastUnmarshalEnabledFalse(t *testing.T) {
+	t.Parallel()
+
+	var forecast icu.Forecast
+
+	data := []byte(`{"id":7,"label":"Home","location":"Medellin","lat":6.2,"lon":-75.6,"enabled":false}`)
+
+	if err := json.Unmarshal(data, &forecast); err != nil {
+		t.Fatal(err)
+	}
+
+	if forecast.Enabled == nil {
+		t.Fatal("Forecast.Enabled = nil, want false")
+	}
+
+	if *forecast.Enabled {
+		t.Fatalf("Forecast.Enabled = true, want false")
+	}
+}
+
 func TestCustomItemUnmarshalSnakeCaseFields(t *testing.T) {
 	t.Parallel()
 
