@@ -170,7 +170,11 @@ func isIDFirstResource(resource string) bool {
 }
 
 func commandRequiresAuth(resource, _ string) bool {
-	return resource != "config"
+	if resource == "config" || resource == "zepp" {
+		return false
+	}
+
+	return true
 }
 
 func executeCommand(

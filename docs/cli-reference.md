@@ -441,9 +441,10 @@ Invoke these commands as `icu activity <id> <action>`.
 ## weather
 
 - `config`
-  Invocation: `icu weather config` or `icu weather config --lat LAT --lon LON [--label NAME] [--enabled]`
-  Notes: update mode is triggered by `--lat`; the optional literal `update` shown in help is not required.
-  Example: `icu weather config --lat -34.60 --lon -58.38 --label "Buenos Aires" --enabled`
+  Invocation: `icu weather config` or `icu weather config update --lat LAT --lon LON [--label NAME] [--location NAME] [--provider NAME] [--enabled true|false]`
+  Notes: update mode is triggered by any of `--lat`, `--lon`, `--label`, `--location`, `--provider`, or `--enabled`. The current forecast is fetched first and merged with the supplied flags, so `--enabled false` works without re-specifying coordinates.
+  Example: `icu weather config --lat -34.60 --lon -58.38 --label "Buenos Aires" --enabled true`
+  Example: `icu weather config --enabled false`
 
 - `forecast`
   Invocation: `icu weather forecast`
@@ -471,6 +472,101 @@ Invoke these commands as `icu activity <id> <action>`.
 - `upload`
   Invocation: `icu wellness upload <file.csv>`
   Example: `icu wellness upload wellness.csv`
+
+## zepp
+
+Zepp (Amazfit) read-only access to wellness data not exposed by Intervals.icu.
+Auth uses email/password against the same `api-mifit.huami.com` host the official
+Zepp mobile app uses, and then exchanges the result for a per-request
+`appToken`. The `country_code` returned by the auth redirect picks the regional
+data host automatically (US → `api-mifit.huami.com`, CN → `api-mifit-cn.huami.com`,
+DE/FR/IT/ES/GB/NL/PL/RU/TR/SE/NO/FI/DK → `api-mifit-de.huami.com`); you can also
+pin it explicitly with `--zepp-country-code` or `ZEPP_COUNTRY_CODE`.
+
+The `summary` and `data_hr` fields from `/v1/data/band_data.json` are returned
+as raw base64 **and** decoded into typed structs so the CLI can render them.
+Workout `hrSeries`/`paceSeries`/`altitudeSeries`/`powerSeries`/`stepSeries` are
+decoded from Zepp's delta-encoded 2-byte shorts back into absolute series.
+
+The Zepp mobile app calculates **BioCharge** (renamed to **HybridCharge** in
+Zepp 10.4.0+) on-device from sleep, stress, PAI, and workout history. The public
+HTTP API does not return the score itself, so the CLI exposes the raw inputs
+the score is derived from. Compute BioCharge in your analysis agent.
+
+- `login`
+  Invocation: `icu zepp login --email EMAIL --password PASSWORD`
+  Notes: Persists `zeppLoginToken`, `zeppAppToken`, `zeppUserID`, and
+  `zeppCountryCode` in the config file. Set `ZEPP_TOKENS_URL` and
+  `ZEPP_LOGIN_URL` to point at a mock server when running the tests.
+  Example: `icu zepp login --email jane@example.com --password '...'` (the CLI
+  will prompt for the password if it is not provided).
+
+- `logout`
+  Invocation: `icu zepp logout`
+  Notes: Clears the persisted Zepp tokens from the config file.
+  Example: `icu zepp logout`
+
+- `status`
+  Invocation: `icu zepp status`
+  Notes: Reports whether the local config has a `login_token`. Does not call
+  the Zepp API.
+  Example: `icu zepp status`
+
+- `profile`
+  Invocation: `icu zepp profile`
+  Notes: Calls `/v2/user/info` on the regional data host. Falls back to the
+  global host on error.
+  Example: `icu zepp profile`
+
+- `summary`
+  Invocation: `icu zepp summary --oldest DATE --newest DATE`
+  Notes: Calls `/v1/data/band_data.json` and decodes the base64-packed
+  `summary` field into step and sleep totals.
+  Example: `icu zepp summary --oldest 2026-05-01 --newest 2026-05-07`
+
+- `sleep`
+  Invocation: `icu zepp sleep --oldest DATE --newest DATE`
+  Notes: Decodes the `slp` block (light/deep minutes, stages) from
+  `band_data.json`.
+  Example: `icu zepp sleep --oldest 2026-05-01 --newest 2026-05-07`
+
+- `heart-rate`
+  Invocation: `icu zepp heart-rate --oldest DATE --newest DATE`
+  Notes: Decodes the binary `data_hr` field (1440 two-byte shorts per day).
+  Sentinel values 254 (no read) and 255 (not required) are mapped to 0.
+  Example: `icu zepp heart-rate --oldest 2026-05-01 --newest 2026-05-01`
+
+- `spo2`
+  Invocation: `icu zepp spo2 --oldest DATE --newest DATE`
+  Notes: Calls `/users/{id}/events?eventType=blood_oxygen` on the events host
+  `api-mifit.zepp.com`. The `extra` field is a JSON-encoded string parsed into
+  a typed `SpO2Reading.Extra` map.
+  Example: `icu zepp spo2 --oldest 2026-05-01 --newest 2026-05-07`
+
+- `stress`
+  Invocation: `icu zepp stress --oldest DATE --newest DATE`
+  Notes: Calls `/users/{id}/events?eventType=all_day_stress` on the events
+  host. Returns per-day min/max/avg/relax%/normal%/medium%/high%.
+  Example: `icu zepp stress --oldest 2026-05-01 --newest 2026-05-07`
+
+- `pai`
+  Invocation: `icu zepp pai --oldest DATE --newest DATE`
+  Notes: Calls `/users/{id}/events?eventType=PaiHealthInfo` on the events
+  host. Returns per-day PAI score, resting HR, max HR, and per-zone
+  minutes/PAI.
+  Example: `icu zepp pai --oldest 2026-05-01 --newest 2026-05-07`
+
+- `workouts`
+  Invocation: `icu zepp workouts --oldest DATE --newest DATE`
+  Notes: Calls `/v1/sport/run/history.json`. Supports pagination via the
+  internal `next` cursor (the CLI follows it transparently).
+  Example: `icu zepp workouts --oldest 2026-05-01 --newest 2026-05-31`
+
+- `workout`
+  Invocation: `icu zepp workout TRACKID`
+  Notes: Calls `/v1/sport/run/detail.json` and decodes the delta-encoded
+  HR/pace/altitude/power/step series.
+  Example: `icu zepp workout 1717200000`
 
 ## workouts
 

@@ -10,7 +10,21 @@ import (
 
 const strTrue = "true"
 
-func osStdout() io.Writer { return os.Stdout }
+var stdoutOverride io.Writer //nolint:gochecknoglobals // test output redirection
+
+func osStdout() io.Writer {
+	if stdoutOverride != nil {
+		return stdoutOverride
+	}
+
+	return os.Stdout
+}
+
+func setStdoutForTest(w io.Writer) {
+	stdoutOverride = w
+}
+
+func osGetenv(key string) string { return os.Getenv(key) }
 
 func wrapCommandError(err error) error {
 	if err == nil {
@@ -61,6 +75,17 @@ func BoolFlag(args map[string]string, name string) bool {
 	v, ok := args[name]
 
 	return ok && (v == strTrue || v == "1" || v == "")
+}
+
+func BoolPtrFlag(args map[string]string, name string) *bool {
+	v, ok := args[name]
+	if !ok {
+		return nil
+	}
+
+	enabled := v == strTrue || v == "1" || v == ""
+
+	return &enabled
 }
 
 func IntFlag(args map[string]string, name string, defaultVal int) int {

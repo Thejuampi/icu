@@ -65,6 +65,63 @@ Athlete ID resolution order:
 `icu config show` prints the config file path and masks the stored API key.
 `icu config diagnose` prints source resolution details and a non-reversible fingerprint, not the raw secret.
 
+### Zepp / Amazfit Authentication
+
+The `zepp` resource reads the same data the official Zepp mobile app shows
+(sleep, HR, SpO2, stress, PAI, steps, workouts) directly from the
+`api-mifit.huami.com` v1 API the app uses. Login is the standard
+email/password exchange the mobile app performs — there is no public OAuth
+flow, and Zepp does not issue developer credentials for health data.
+
+```bash
+# 1. Log in (the password can be entered interactively if --password is omitted)
+icu zepp login --email jane@example.com --password '...'
+
+# 2. Verify the connection
+icu zepp status
+
+# 3. Read data (always pass --oldest and --newest as YYYY-MM-DD)
+icu zepp summary --oldest 2026-06-01 --newest 2026-06-07
+icu zepp sleep   --oldest 2026-06-01 --newest 2026-06-07
+icu zepp heart-rate --oldest 2026-06-01 --newest 2026-06-01
+icu zepp spo2    --oldest 2026-06-01 --newest 2026-06-07
+icu zepp stress  --oldest 2026-06-01 --newest 2026-06-07
+icu zepp pai     --oldest 2026-06-01 --newest 2026-06-07
+icu zepp workouts --oldest 2026-06-01 --newest 2026-06-30
+icu zepp workout 1717200000
+```
+
+The auth flow returns a `country_code` that picks the regional data host
+automatically: `api-mifit.huami.com` for US/global, `api-mifit-cn.huami.com`
+for CN, and `api-mifit-de.huami.com` for DE/FR/IT/ES/GB/NL/PL/RU/TR/SE/NO/FI/DK.
+You can pin it explicitly with `--zepp-country-code` or `ZEPP_COUNTRY_CODE`.
+
+Zepp field/token resolution order:
+
+1. CLI flags (`--zepp-login-token`, `--zepp-country-code`, …)
+2. Environment variables (`ZEPP_LOGIN_TOKEN`, `ZEPP_APP_TOKEN`,
+   `ZEPP_USER_ID`, `ZEPP_COUNTRY_CODE`)
+3. `~/.icu/config.json` (set by `icu zepp login` or
+   `icu config set --zepp-login-token <token>`)
+
+Tokens are stored next to the Intervals.icu credentials in `~/.icu/config.json`
+and are never printed in clear text. `icu zepp status` and
+`icu config diagnose` show only a 12-character fingerprint.
+
+`ZEPP_BASE_URL` and `ZEPP_EVENTS_URL` are hidden env vars that override the
+data and events host for tests and self-hosted proxies. Production users
+should leave them unset.
+
+#### BioCharge / HybridCharge
+
+The Zepp mobile app calculates **BioCharge** (renamed **HybridCharge** in
+Zepp 10.4.0+) on-device from sleep, stress, PAI, and workout history. The
+public HTTP API does not return the score itself, so the CLI exposes the
+raw inputs the score is derived from. To compute BioCharge in your
+analysis agent, combine the data from `icu zepp sleep`, `icu zepp stress`,
+`icu zepp pai`, and `icu zepp workouts` — the proprietary weighting
+changes between app releases and is not implemented by this CLI.
+
 ## Help And Discovery
 
 The CLI has resource-aware help:
@@ -90,9 +147,9 @@ Treat JSON as the effective default output format unless a command explicitly do
 
 ## Documentation Map
 
-- [docs/cli-reference.md](docs/cli-reference.md): exhaustive command reference for the current CLI surface
+- [docs/cli-reference.md](docs/cli-reference.md): exhaustive command reference for the current CLI surface, including the `zepp` resource
 - [docs/analysis.md](docs/analysis.md): detailed behavior of `analysis cycling`, `analysis wellness`, `analysis plan`, and `analysis adaptation`
-- [docs/library.md](docs/library.md): usage-oriented guide for `github.com/Thejuampi/icu`
+- [docs/library.md](docs/library.md): usage-oriented guide for `github.com/Thejuampi/icu`, including the `ZeppClient`
 - [docs/api/README.md](docs/api/README.md): OpenAPI snapshot provenance and usage notes
 - [AGENTS.md](AGENTS.md): contributor rules, quality gates, and the documentation gate
 
@@ -122,6 +179,7 @@ Current top-level resources:
 | `weather` | `config`, `forecast` |
 | `wellness` | `bulk`, `get`, `list`, `update`, `upload` |
 | `workouts` | `create`, `delete`, `get`, `list`, `tags`, `update` |
+| `zepp` | `heart-rate`, `login`, `logout`, `pai`, `profile`, `sleep`, `spo2`, `status`, `stress`, `summary`, `workout`, `workouts` |
 
 ## Analysis Overview
 

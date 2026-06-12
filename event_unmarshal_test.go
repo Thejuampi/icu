@@ -81,3 +81,15 @@ func TestEventUnmarshalTargetSnakeCaseFields(t *testing.T) {
 		t.Fatalf("Event target fields = %+v, want %+v", got, want)
 	}
 }
+
+func TestEventUnmarshalWorkoutDocSnakeField(t *testing.T) {
+	t.Parallel()
+
+	var event icu.Event
+
+	data := []byte(`{"id":42,"workout_doc":{"name":"Test","duration":3600}}`)
+
+	if err := json.Unmarshal(data, &event); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+}

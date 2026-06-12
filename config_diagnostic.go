@@ -9,11 +9,12 @@ import (
 const fingerprintLength = 12
 
 type ConfigDiagnostic struct {
-	ConfigPath  string                `json:"configPath"`
-	ConfigError string                `json:"configError,omitempty"`
-	APIKey      APIKeyDiagnostic      `json:"apiKey"`
-	AthleteID   ConfigValueDiagnostic `json:"athleteId"`
-	Output      ConfigValueDiagnostic `json:"output"`
+	ConfigPath     string                `json:"configPath"`
+	ConfigError    string                `json:"configError,omitempty"`
+	APIKey         APIKeyDiagnostic      `json:"apiKey"`
+	AthleteID      ConfigValueDiagnostic `json:"athleteId"`
+	Output         ConfigValueDiagnostic `json:"output"`
+	ZeppLoginToken APIKeyDiagnostic      `json:"zeppLoginToken"`
 }
 
 type APIKeyDiagnostic struct {
@@ -54,6 +55,7 @@ func DiagnoseConfig(flags map[string]string) ConfigDiagnostic {
 		flags,
 		os.Getenv("INTERVALS_ICU_API_KEY"),
 		os.Getenv("INTERVALS_ICU_ATHLETE_ID"),
+		os.Getenv("ZEPP_LOGIN_TOKEN"),
 		cfg,
 		ConfigPath(),
 		configError,
@@ -64,6 +66,7 @@ func BuildConfigDiagnostic(
 	flags map[string]string,
 	envAPIKey string,
 	envAthleteID string,
+	envZeppLoginToken string,
 	cfg *Config,
 	configPath string,
 	configError string,
@@ -88,6 +91,7 @@ func BuildConfigDiagnostic(
 			cfg.Output,
 			"json",
 		),
+		ZeppLoginToken: buildAPIKeyDiagnostic(flags, envZeppLoginToken, cfg.ZeppLoginToken),
 	}
 }
 
@@ -172,6 +176,10 @@ func secretFingerprint(value string) string {
 	encoded := hex.EncodeToString(sum[:])
 
 	return encoded[:fingerprintLength]
+}
+
+func SecretFingerprint(value string) string {
+	return secretFingerprint(value)
 }
 
 func trimSpace(value string) string {

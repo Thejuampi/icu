@@ -3,6 +3,7 @@ package icu_test
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -68,6 +69,42 @@ func TestWriteCSV(t *testing.T) {
 	if !strings.Contains(got, "name,age") || !strings.Contains(got, "Juan,36") {
 		t.Errorf("WriteCSV = %q", got)
 	}
+}
+
+func TestWriteJSONError(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	err := icu.WriteJSON(&buf, func() {})
+	if err == nil {
+		t.Fatal("expected error for non-encodable value")
+	}
+}
+
+func TestWriteCompactJSONError(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	err := icu.WriteCompactJSON(&buf, func() {})
+	if err == nil {
+		t.Fatal("expected error for non-encodable value")
+	}
+}
+
+func TestWriteCSVError(t *testing.T) {
+	t.Parallel()
+
+	r, w, _ := os.Pipe()
+	w.Close()
+
+	err := icu.WriteCSV(w, []string{"h"}, [][]string{{"v"}})
+	if err == nil {
+		t.Fatal("expected error for write failure")
+	}
+
+	r.Close()
 }
 
 func TestWriteTable(t *testing.T) {

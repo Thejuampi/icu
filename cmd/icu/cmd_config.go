@@ -45,6 +45,13 @@ func configShowCommand() *Command {
 				fmt.Fprintln(out, "  output:     json (default)")
 			}
 
+			if cfg.ZeppLoginToken != "" {
+				fingerprint := icu.SecretFingerprint(cfg.ZeppLoginToken)
+				fmt.Fprintf(out, "  zepp_token: set (fingerprint=%s, length=%d)\n", fingerprint, len(cfg.ZeppLoginToken))
+			} else {
+				fmt.Fprintln(out, "  zepp_token: (not set)")
+			}
+
 			return nil
 		},
 	}
@@ -53,7 +60,7 @@ func configShowCommand() *Command {
 func configSetCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "config set --api-key KEY [--athlete-id ID] [--output json|csv|table]",
+		Usage:       "config set --api-key KEY [--athlete-id ID] [--output json|csv|table] [--zepp-login-token TOKEN]",
 		Description: "Set configuration values.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
 			cfg, _ := icu.LoadConfig()
@@ -72,6 +79,10 @@ func configSetCommand() *Command {
 
 			if v, ok := flags["output"]; ok {
 				cfg.Output = v
+			}
+
+			if v, ok := flags["zepp-login-token"]; ok {
+				cfg.ZeppLoginToken = v
 			}
 
 			if err := icu.SaveConfig(cfg); err != nil {
@@ -117,9 +128,13 @@ func configDiagnoseCommand() *Command {
 
 func configDiagnoseSafe(diag *icu.ConfigDiagnostic) map[string]any {
 	return map[string]any{
-		"configPath":   diag.ConfigPath,
-		"configError":  diag.ConfigError,
-		"apiKeySource": diag.APIKey.ResolvedSource,
+		"configPath":           diag.ConfigPath,
+		"configError":          diag.ConfigError,
+		"apiKeySource":         diag.APIKey.ResolvedSource,
+		"zeppTokenSource":      diag.ZeppLoginToken.ResolvedSource,
+		"zeppTokenSet":         diag.ZeppLoginToken.Resolved.Set,
+		"zeppTokenLength":      diag.ZeppLoginToken.Resolved.Length,
+		"zeppTokenFingerprint": diag.ZeppLoginToken.Resolved.Fingerprint,
 		"athleteId": map[string]any{
 			"config":         diag.AthleteID.Config,
 			"default":        diag.AthleteID.Default,
