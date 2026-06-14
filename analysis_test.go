@@ -130,6 +130,9 @@ func TestAnalyzeCyclingActivitiesSessionSummary(t *testing.T) {
 	ride.VariabilityIndex = 1.29
 	ride.JoulesAboveFTP = 12000
 	ride.MaxWbalDepletion = 6500
+	ride.MaxHeartRate = 185
+	ride.ZoneTimes = []icu.ZoneTime{{ID: "Z1", Secs: 2000}, {ID: "Z2", Secs: 1500}}
+	ride.HRZoneTimes = []int{1000, 1500, 800, 600, 0, 0, 0}
 
 	got := icu.AnalyzeCyclingActivities([]icu.Activity{ride}, icu.AnalysisOptions{StartDate: "", EndDate: ""})
 	want := []icu.CyclingSession{
@@ -161,6 +164,12 @@ func TestAnalyzeCyclingActivitiesSessionSummary(t *testing.T) {
 			AverageFeelsLike:   0,
 			HeadwindPercent:    0,
 			StrainScore:        0,
+			ZoneTimes: []icu.ZoneTime{
+				{ID: "Z1", Secs: 2000},
+				{ID: "Z2", Secs: 1500},
+			},
+			HRZoneTimes:  []int{1000, 1500, 800, 600, 0, 0, 0},
+			MaxHeartRate: 185,
 		},
 	}
 

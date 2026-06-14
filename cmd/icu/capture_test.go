@@ -10,10 +10,16 @@ func captureStdout(t *testing.T, fn func() error) (string, error) {
 
 	var buf bytes.Buffer
 
+	stdoutOverrideMu.Lock()
 	prev := stdoutOverride
 	stdoutOverride = &buf
+	stdoutOverrideMu.Unlock()
 
-	defer func() { stdoutOverride = prev }()
+	defer func() {
+		stdoutOverrideMu.Lock()
+		stdoutOverride = prev
+		stdoutOverrideMu.Unlock()
+	}()
 
 	err := fn()
 

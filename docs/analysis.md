@@ -1,6 +1,6 @@
 # Analysis Commands
 
-The `analysis` resource provides four read-only commands built on top of Intervals.icu data already exposed by the CLI.
+The `analysis` resource provides five read-only commands built on top of Intervals.icu data already exposed by the CLI.
 All analysis output is JSON.
 
 ## Shared Behavior
@@ -228,9 +228,99 @@ It then runs `AnalyzeWellness` and passes the result into `AnalyzeCyclingAdaptat
 - If the requested curve windows do not overlap in meaningful durations, the command may return warnings instead of comparisons.
 - Lactate context comes from wellness records only; if wellness coverage is sparse, adaptation context is narrower.
 
+## analysis microcycle
+
+### Purpose
+
+Experimental read-only diagnostic command for the current or selected training
+microcycle. The command is designed as a deterministic data and analysis
+contract for a lightweight LLM/skill layer above the CLI. It maximizes
+structured evidence, warnings, confidence, and data-quality context without
+prescribing workouts or mutating athlete data.
+
+`analysis micro` is a short alias for this command. It replaces the former
+experimental per-activity micro-analysis command.
+
+### CLI Contract
+
+```bash
+icu analysis microcycle \
+  [--date DATE | --week DATE | --from DATE --to DATE] \
+  [--json] [--full] [--no-plan] [--no-wellness] \
+  [--sport-type Ride] [--timezone TZ]
+```
+
+With no date flags, the command analyzes the current Monday-Sunday
+microcycle. `--date` and `--week` select the ISO week containing the supplied
+date. `--from` and `--to` select an explicit custom range and must be supplied
+together. Conflicting date selectors and inverted ranges are rejected.
+
+If `--timezone` is omitted, the CLI uses the system timezone and emits a
+data-quality warning because the current config and athlete types do not
+expose a reliable athlete timezone field.
+
+### Upstream Data
+
+- Completed activities from `activities`, fetched with a 90-day lookback so
+  the selected microcycle can be compared against previous 7/28/90-day load.
+- Planned calendar events from `events` unless `--no-plan` is supplied.
+  `WORKOUT` events count as planned sessions; notes are context only.
+- Wellness records from `wellness` unless `--no-wellness` is supplied.
+- Sport settings from `sport-settings/<sport-type>` for FTP and zone
+  availability.
+
+### Output Sections
+
+- `microcycle` — selected start/end, timezone, partial status, elapsed and
+  remaining days.
+- `sources` — upstream API surfaces used or intentionally excluded.
+- `dataQuality` — availability of activities, plan, power, heart rate,
+  wellness, FTP, zones, timezone, and warnings.
+- `plannedVsActual` — planned/completed/missed/remaining/extra sessions,
+  planned vs actual load, and duration compliance when plan data exists.
+- `load` — duration, distance, training load, activity count, CTL/ATL/TSB
+  when available, monotony, strain, ACWR, daily load, and sessions.
+- `intensity` — zone distribution, HR zone seconds, Z4+ session count,
+  intensity density, and warnings.
+- `wellness` — readiness availability, confidence impact, multichannel
+  wellness state, positive/negative/missing signals, and coverage.
+- `fatigueDurability` — fatigue state, long rides, decoupling, latest form,
+  and evidence.
+- `classification` / `adaptationSignal` — experimental diagnostic
+  classification, confidence, rationale, supporting evidence, main positive
+  signal, and main risk.
+- `risks`, `evidence`, `openQuestions`, `confidence`, and `sideEffects`.
+
+### Interpretation
+
+JSON is the primary contract and is intended for skill/LLM consumption. Human
+output is a brief inspection view only. The command may classify the
+microcycle as `on_track`, `productive_overload`, `underloaded`, `overloaded`,
+`recovery_needed`, `disrupted`, `data_limited`, or
+`experimental_uncertain`, but the MVP uses conservative local heuristics and
+low confidence when important inputs are absent.
+
+The CLI does not prescribe future workouts. A report or adaptive-planning
+layer may consume this output, combine it with conversational context, and
+decide how to present coaching guidance.
+
+### Current Limitations
+
+- Marked experimental: field names and classification heuristics may evolve
+  before this is treated as a stable contract.
+- Planned-vs-actual matching is date-level in the MVP; it does not deeply
+  compare workout structure.
+- Timezone comes from `--timezone` or system fallback because no reliable
+  athlete timezone source exists in the current local types/config.
+- The command reads API data but does not sync external services or read
+  local caches.
+- Missing plan, wellness, FTP, zones, HR, or power data lowers confidence
+  rather than being hidden behind confident conclusions.
+
 ## Choosing The Right Analysis Command
 
 - Use `cycling` for completed-work review, intensity distribution, and durability signals.
 - Use `wellness` for readiness, coverage, and physiology trend inspection.
 - Use `plan` for future-block structure, load alignment, and event-aware decision guidance.
 - Use `adaptation` for curve-based improvement/decline analysis tied to recent load context.
+- Use `microcycle` for LLM-ready microcycle diagnostics; `micro` is its alias.

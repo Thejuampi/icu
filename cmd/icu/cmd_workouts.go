@@ -31,7 +31,7 @@ func workoutsGetCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "workouts get <id>",
-		Description: "Get a icu.Workout.",
+		Description: "Get a workout.",
 		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("icu.Workout id")
@@ -51,7 +51,7 @@ func workoutsCreateCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "workouts create --name NAME --type Ride [--folder-id ID] [--desc DESC] [--training-load N]",
-		Description: "Create a icu.Workout.",
+		Description: "Create a workout.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			var w icu.WorkoutEx
 			w.Name = icu.StringFlag(flags, "name", "")
@@ -75,7 +75,7 @@ func workoutsUpdateCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "workouts update <id> --name NAME",
-		Description: "Update a icu.Workout.",
+		Description: "Update a workout.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("icu.Workout id")
@@ -104,7 +104,7 @@ func workoutsDeleteCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "workouts delete <id>",
-		Description: "Delete a icu.Workout.",
+		Description: "Delete a workout.",
 		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("icu.Workout id")
@@ -119,7 +119,7 @@ func workoutsTagsCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "workouts tags",
-		Description: "List icu.Workout tags.",
+		Description: "List workout tags.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var tags []string
 			if err := client.Get("workouts", []string{"tags"}, nil, &tags); err != nil {

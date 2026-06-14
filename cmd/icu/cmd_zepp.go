@@ -34,7 +34,7 @@ func zeppTokenCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "zepp token --email EMAIL [--password PASSWORD]",
-		Description: "Get Zepp API tokens from email/password. Prompts for password if --password omitted. Outputs JSON, does NOT save. Save manually with 'config set --zepp-login-token ... --zepp-app-token ... --zepp-user-id ...'", //nolint:lll // long flag description
+		Description: "[debug] Get Zepp API tokens. WARNING: outputs tokens in plaintext. Use 'zepp login' for normal auth. Use this only when you need to inspect or manually manage tokens.", //nolint:lll // security warning
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
 			email := icu.StringFlag(flags, "email", "")
 

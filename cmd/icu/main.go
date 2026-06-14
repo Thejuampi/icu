@@ -31,7 +31,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) < minArgs {
 		printHelp(registry, stdout, "")
 
-		return 0
+		return 1
 	}
 
 	resource := args[1]
@@ -251,7 +251,7 @@ func parseLongFlag(flags map[string]string, args []string, idx int, name string)
 
 		return idx + 1
 	default:
-		flags[name] = strTrue
+		flags[name] = ""
 	}
 
 	return idx
@@ -264,7 +264,7 @@ func parseShortFlag(flags map[string]string, args []string, idx int, name string
 
 		return idx + 1
 	default:
-		flags[name] = strTrue
+		flags[name] = ""
 	}
 
 	return idx
@@ -295,7 +295,6 @@ func printGlobalHelp(registry *CommandRegistry, w io.Writer) {
 	fmt.Fprintln(w, "Global flags:")
 	fmt.Fprintln(w, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
 	fmt.Fprintln(w, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
-	fmt.Fprintln(w, "  --output FORMAT   Output format: json (default), csv, table")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Resources:")
 

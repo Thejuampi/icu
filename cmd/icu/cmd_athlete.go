@@ -15,7 +15,7 @@ func athleteShowCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "athlete show",
-		Description: "Get athlete profile with icu.SportSettings.",
+		Description: "Get athlete profile with sport settings.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var a icu.Athlete
 			if err := client.Get("athlete", nil, nil, &a); err != nil {

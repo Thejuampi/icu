@@ -41,7 +41,7 @@ func activityShowCommand() *Command {
 func activityUpdateCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "activity <id> update --name NAME [--desc DESC] [--type Ride]",
+		Usage:       "activity <id> update --name NAME [--description DESC] [--type Ride]",
 		Description: "Update an activity.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {

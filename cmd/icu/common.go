@@ -3,25 +3,37 @@ package main
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
+	"strconv"
+	"sync"
 
 	icu "github.com/Thejuampi/icu"
 )
 
 const strTrue = "true"
 
-var stdoutOverride io.Writer //nolint:gochecknoglobals // test output redirection
+var (
+	stdoutOverride   io.Writer  //nolint:gochecknoglobals // test output redirection
+	stdoutOverrideMu sync.Mutex //nolint:gochecknoglobals // protects stdoutOverride
+)
 
 func osStdout() io.Writer {
-	if stdoutOverride != nil {
-		return stdoutOverride
+	stdoutOverrideMu.Lock()
+	ov := stdoutOverride
+	stdoutOverrideMu.Unlock()
+
+	if ov != nil {
+		return ov
 	}
 
 	return os.Stdout
 }
 
 func setStdoutForTest(w io.Writer) {
+	stdoutOverrideMu.Lock()
 	stdoutOverride = w
+	stdoutOverrideMu.Unlock()
 }
 
 func osGetenv(key string) string { return os.Getenv(key) }
@@ -59,16 +71,21 @@ func queryFromFlags(flags map[string]string, keys ...string) map[string]string {
 }
 
 func floatFlagVal(flags map[string]string, name string, defaultVal float64) float64 {
-	if v, ok := flags[name]; ok && v != "" {
-		var f float64
-		if _, err := fmt.Sscanf(v, "%f", &f); err != nil {
-			return defaultVal
-		}
-
-		return f
+	v, ok := flags[name]
+	if !ok || v == "" {
+		return defaultVal
 	}
 
-	return defaultVal
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return defaultVal
+	}
+
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return defaultVal
+	}
+
+	return f
 }
 
 func BoolFlag(args map[string]string, name string) bool {
@@ -89,21 +106,15 @@ func BoolPtrFlag(args map[string]string, name string) *bool {
 }
 
 func IntFlag(args map[string]string, name string, defaultVal int) int {
-	if v, ok := args[name]; ok && v != "" {
-		var val int
-
-		const base = 10
-
-		for _, c := range v {
-			if c >= '0' && c <= '9' {
-				val = val*base + int(c-'0')
-			} else {
-				return defaultVal
-			}
-		}
-
-		return val
+	v, ok := args[name]
+	if !ok || v == "" {
+		return defaultVal
 	}
 
-	return defaultVal
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return defaultVal
+	}
+
+	return n
 }

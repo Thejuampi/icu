@@ -20,7 +20,7 @@ func TestRunDispatchHelpFlags(t *testing.T) {
 		{
 			Name:    "no args",
 			Args:    []string{"icu"},
-			WantOut: 0,
+			WantOut: 1,
 			Check: func(t *testing.T, stdout, _ string) {
 				t.Helper()
 				checkContains(t, stdout, "icu - Intervals.icu CLI", "global help header")

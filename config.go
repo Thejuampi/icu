@@ -2,6 +2,7 @@ package icu
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,6 +46,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var cfg Config
+	if len(data) == 0 {
+		return &cfg, nil
+	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
@@ -53,6 +57,10 @@ func LoadConfig() (*Config, error) {
 }
 
 func SaveConfig(cfg *Config) error {
+	if cfg == nil {
+		return errors.New("cannot save nil config")
+	}
+
 	dir := configDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("creating config dir: %w", err)
