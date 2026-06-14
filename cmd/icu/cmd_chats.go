@@ -6,7 +6,7 @@ func registerChatsCommands(registry *CommandRegistry) {
 	registry.Register("chats", "list", &Command{
 		Name:        "",
 		Usage:       "chats list",
-		Description: "List chats for icu.Athlete.",
+		Description: "List chats.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var c []icu.Chat
 			if err := client.Get("chats", nil, nil, &c); err != nil {
@@ -20,7 +20,7 @@ func registerChatsCommands(registry *CommandRegistry) {
 	registry.Register("chats", "get", &Command{
 		Name:        "",
 		Usage:       "chats get <id>",
-		Description: "Get icu.Chat by ID.",
+		Description: "Get chat by ID.",
 		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("icu.Chat id")
@@ -38,7 +38,7 @@ func registerChatsCommands(registry *CommandRegistry) {
 	registry.Register("chats", "messages", &Command{
 		Name:        "",
 		Usage:       "chats messages <id> [--limit N]",
-		Description: "List messages in icu.Chat.",
+		Description: "List messages in a chat.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("icu.Chat id")
@@ -58,7 +58,7 @@ func registerChatsCommands(registry *CommandRegistry) {
 	registry.Register("chats", "send", &Command{
 		Name:        "",
 		Usage:       "chats send --content MSG [--to ID]",
-		Description: "Send a icu.Message.",
+		Description: "Send a message.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			var m icu.NewMessage
 			m.Content = icu.StringFlag(flags, "content", "")

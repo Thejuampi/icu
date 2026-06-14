@@ -60,8 +60,8 @@ func activitiesGetCommand() *Command {
 func activitiesUploadCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "activities upload <file> [--name NAME] [--desc DESC] [--external-id ID]",
-		Description: "Upload icu.Activity file (fit/tcx/gpx/zip/gz).",
+		Usage:       "activities upload <file> [--name NAME] [--description DESC] [--external_id ID]",
+		Description: "Upload an activity file (fit/tcx/gpx/zip/gz).",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("file path")
@@ -145,7 +145,7 @@ func activitiesSearchFullCommand() *Command {
 func activitiesIntervalSearchCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "activities interval-search --min-secs N --max-secs N --min-intensity N --max-intensity N [--type auto|power|hr|pace]",
+		Usage:       "activities interval-search --minSecs N --maxSecs N --minIntensity N --maxIntensity N [--type auto|power|hr|pace]",
 		Description: "Find activities with intervals matching duration and intensity.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			q := queryFromFlags(flags, "minSecs", "maxSecs", "minIntensity", "maxIntensity", "type", "minReps", "maxReps", "limit")
@@ -193,7 +193,7 @@ func activitiesManualCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "activities manual --type Ride --name NAME --moving-time SECS [--distance M] [--training-load N]",
-		Description: "Create a manual icu.Activity.",
+		Description: "Create a manual activity.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			var a icu.Activity
 			a.Type = icu.StringFlag(flags, "type", "Ride")

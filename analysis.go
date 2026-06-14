@@ -157,33 +157,36 @@ type CyclingAnaerobic struct {
 }
 
 type CyclingSession struct {
-	ID                 string  `json:"id,omitempty"`
-	Date               string  `json:"date,omitempty"`
-	Name               string  `json:"name,omitempty"`
-	Type               string  `json:"type,omitempty"`
-	MovingTimeSecs     int     `json:"movingTimeSecs"`
-	MovingTimeMinutes  float64 `json:"movingTimeMinutes"`
-	DistanceMeters     float64 `json:"distanceMeters"`
-	DistanceKilometers float64 `json:"distanceKilometers"`
-	TrainingLoad       int     `json:"trainingLoad"`
-	Intensity          float64 `json:"intensity"`
-	WeightedAvgPower   int     `json:"weightedAvgPower,omitempty"`
-	AverageHeartRate   int     `json:"averageHeartRate,omitempty"`
-	Decoupling         float64 `json:"decoupling,omitempty"`
-	EfficiencyFactor   float64 `json:"efficiencyFactor,omitempty"`
-	VariabilityIndex   float64 `json:"variabilityIndex,omitempty"`
-	JoulesAboveFTP     int     `json:"joulesAboveFtp,omitempty"`
-	MaxWBalDepletion   int     `json:"maxWbalDepletion,omitempty"`
-	WPrime             int     `json:"wPrime,omitempty"`
-	WBalDepletionPct   float64 `json:"wbalDepletionPct,omitempty"`
-	CriticalPower      int     `json:"criticalPower,omitempty"`
-	PMax               int     `json:"pMax,omitempty"`
-	FTP                int     `json:"ftp,omitempty"`
-	RollingFTP         int     `json:"rollingFtp,omitempty"`
-	AverageTemp        float64 `json:"averageTemp,omitempty"`
-	AverageFeelsLike   float64 `json:"averageFeelsLike,omitempty"`
-	HeadwindPercent    float64 `json:"headwindPercent,omitempty"`
-	StrainScore        float64 `json:"strainScore,omitempty"`
+	ID                 string     `json:"id,omitempty"`
+	Date               string     `json:"date,omitempty"`
+	Name               string     `json:"name,omitempty"`
+	Type               string     `json:"type,omitempty"`
+	MovingTimeSecs     int        `json:"movingTimeSecs"`
+	MovingTimeMinutes  float64    `json:"movingTimeMinutes"`
+	DistanceMeters     float64    `json:"distanceMeters"`
+	DistanceKilometers float64    `json:"distanceKilometers"`
+	TrainingLoad       int        `json:"trainingLoad"`
+	Intensity          float64    `json:"intensity"`
+	WeightedAvgPower   int        `json:"weightedAvgPower,omitempty"`
+	AverageHeartRate   int        `json:"averageHeartRate,omitempty"`
+	Decoupling         float64    `json:"decoupling,omitempty"`
+	EfficiencyFactor   float64    `json:"efficiencyFactor,omitempty"`
+	VariabilityIndex   float64    `json:"variabilityIndex,omitempty"`
+	JoulesAboveFTP     int        `json:"joulesAboveFtp,omitempty"`
+	MaxWBalDepletion   int        `json:"maxWbalDepletion,omitempty"`
+	WPrime             int        `json:"wPrime,omitempty"`
+	WBalDepletionPct   float64    `json:"wbalDepletionPct,omitempty"`
+	CriticalPower      int        `json:"criticalPower,omitempty"`
+	PMax               int        `json:"pMax,omitempty"`
+	FTP                int        `json:"ftp,omitempty"`
+	RollingFTP         int        `json:"rollingFtp,omitempty"`
+	AverageTemp        float64    `json:"averageTemp,omitempty"`
+	AverageFeelsLike   float64    `json:"averageFeelsLike,omitempty"`
+	HeadwindPercent    float64    `json:"headwindPercent,omitempty"`
+	StrainScore        float64    `json:"strainScore,omitempty"`
+	ZoneTimes          []ZoneTime `json:"zoneTimes,omitempty"`
+	HRZoneTimes        []int      `json:"hrZoneTimes,omitempty"`
+	MaxHeartRate       int        `json:"maxHeartRate,omitempty"`
 }
 
 type CyclingPerformanceIntelligence struct {
@@ -846,6 +849,9 @@ func cyclingSessionFromActivity(activity *Activity) CyclingSession {
 		AverageFeelsLike:   activity.AverageFeelsLike,
 		HeadwindPercent:    activity.HeadwindPercent,
 		StrainScore:        activity.StrainScore,
+		ZoneTimes:          activity.ZoneTimes,
+		HRZoneTimes:        activity.HRZoneTimes,
+		MaxHeartRate:       activity.MaxHeartRate,
 	}
 }
 

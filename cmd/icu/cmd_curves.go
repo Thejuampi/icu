@@ -6,7 +6,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 	registry.Register("curves", "power", &Command{
 		Name:        "",
 		Usage:       "curves power --type Ride [--curves 1y|42d|s0] [--filters FILTERS]",
-		Description: "Get best power curves for icu.Athlete.",
+		Description: "Get best power curves for the athlete.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			q := queryFromFlags(flags, "type", "curves", "newest", "filters")
 
@@ -22,7 +22,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 	registry.Register("curves", "hr", &Command{
 		Name:        "",
 		Usage:       "curves hr --type Ride",
-		Description: "Get best HR curves for icu.Athlete.",
+		Description: "Get best HR curves for the athlete.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			q := queryFromFlags(flags, "type", "curves")
 
@@ -38,7 +38,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 	registry.Register("curves", "pace", &Command{
 		Name:        "",
 		Usage:       "curves pace --type Run",
-		Description: "Get best pace curves for icu.Athlete.",
+		Description: "Get best pace curves for the athlete.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			q := queryFromFlags(flags, "type", "curves")
 
@@ -70,7 +70,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 	registry.Register("curves", "mmp", &Command{
 		Name:        "",
 		Usage:       "curves mmp --type Ride",
-		Description: "Get power model (MMP) for icu.Athlete.",
+		Description: "Get power model (MMP) for the athlete.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			q := queryFromFlags(flags, "type")
 

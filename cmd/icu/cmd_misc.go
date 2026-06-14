@@ -20,7 +20,7 @@ func registerMiscCommands(registry *CommandRegistry) {
 	registry.Register("tags", "activities", &Command{
 		Name:        "",
 		Usage:       "tags activities",
-		Description: "List icu.Activity tags.",
+		Description: "List activity tags.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var tags []string
 			if err := client.Get("activity-tags", nil, nil, &tags); err != nil {
@@ -48,7 +48,7 @@ func registerMiscCommands(registry *CommandRegistry) {
 	registry.Register("tags", "workouts", &Command{
 		Name:        "",
 		Usage:       "tags workouts",
-		Description: "List icu.Workout tags.",
+		Description: "List workout tags.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var tags []string
 			if err := client.Get("workout-tags", nil, nil, &tags); err != nil {
@@ -62,7 +62,7 @@ func registerMiscCommands(registry *CommandRegistry) {
 	registry.Register("shared-event", "get", &Command{
 		Name:        "",
 		Usage:       "shared-event get <id>",
-		Description: "Get a shared icu.Event.",
+		Description: "Get a shared event.",
 		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("shared icu.Event id")

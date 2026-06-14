@@ -115,7 +115,7 @@ func TestCLIParsingAndHelpFunctional(t *testing.T) {
 
 	flags := parseFlags([]string{"--oldest", "2026-06-01", "--limit=10", "positional", "-h"})
 
-	if flags["oldest"] != "2026-06-01" || flags["limit"] != "10" || flags["h"] != strTrue ||
+	if flags["oldest"] != "2026-06-01" || flags["limit"] != "10" || flags["h"] != "" ||
 		flags["_posargs_"] != "positional" {
 		t.Fatalf("parse flags = %+v", flags)
 	}
@@ -223,6 +223,7 @@ func errorCommandCases() []commandCase {
 		commandFlow("error analysis wellness", "analysis", "wellness", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
 		commandFlow("error analysis plan", "analysis", "plan", nil, flags("plan-start", "2026-06-01", "plan-end", "2026-06-07"), "", "", ""),
 		commandFlow("error analysis adaptation", "analysis", "adaptation", nil, flags("oldest", "2026-06-01", "newest", "2026-06-07"), "", "", ""),
+		commandFlow("error analysis microcycle", "analysis", "microcycle", nil, flags("from", "2026-06-01", "to", "2026-06-07"), "", "", ""),
 		commandFlow("error events create", "events", "create", nil, flags("name", "Test"), "", "", ""),
 		commandFlow("error events update", "events", "update", []string{"1"}, flags("name", "Test"), "", "", ""),
 		commandFlow("error activity best-efforts", "activity", "best-efforts", []string{"i1"}, flags("duration", "300"), "", "", ""),
@@ -339,6 +340,9 @@ func athleteAndAnalysisCommandCases() []commandCase {
 		commandFlow("analysis adaptation", "analysis", "adaptation", nil,
 			flags("oldest", "2026-05-01", "newest", "2026-06-01"),
 			http.MethodGet, "/api/v1/athlete/0/wellness", "powerCurveDeltas"),
+		commandFlow("analysis microcycle", "analysis", "microcycle", nil,
+			flags("from", "2026-06-01", "to", "2026-06-07", "json", "true", "timezone", "UTC"),
+			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "classification"),
 	}
 }
 

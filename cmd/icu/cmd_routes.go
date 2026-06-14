@@ -6,7 +6,7 @@ func registerRoutesCommands(registry *CommandRegistry) {
 	registry.Register("routes", "list", &Command{
 		Name:        "",
 		Usage:       "routes list",
-		Description: "List routes with icu.Activity counts.",
+		Description: "List routes with activity counts.",
 		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
 			var r any
 			if err := client.Get("routes", nil, nil, &r); err != nil {
@@ -20,7 +20,7 @@ func registerRoutesCommands(registry *CommandRegistry) {
 	registry.Register("routes", "get", &Command{
 		Name:        "",
 		Usage:       "routes get <id> [--include-path]",
-		Description: "Get icu.Route by ID.",
+		Description: "Get route by ID.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("icu.Route id")

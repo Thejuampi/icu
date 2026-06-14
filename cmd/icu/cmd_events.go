@@ -80,7 +80,7 @@ func eventsCreateCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--desc DESC] [--upsert]",
+			" [--moving-time SECS] [--training-load N] [--description DESC] [--upsert]",
 		Description: "Create calendar event.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			var ev icu.EventEx
@@ -90,7 +90,7 @@ func eventsCreateCommand() *Command {
 			ev.StartDateLocal = icu.StringFlag(flags, "start-date", "")
 			ev.MovingTime = IntFlag(flags, "moving-time", 0)
 			ev.TrainingLoad = IntFlag(flags, "training-load", 0)
-			ev.Description = icu.StringFlag(flags, "desc", "")
+			ev.Description = icu.StringFlag(flags, "description", "")
 			ev.Color = icu.StringFlag(flags, "color", "")
 			ev.Indoor = BoolFlag(flags, "indoor")
 			ev.ExternalID = icu.StringFlag(flags, "external-id", "")
@@ -127,7 +127,7 @@ func eventsUpdateCommand() *Command {
 				ev.Name = v
 			}
 
-			if v := flags["desc"]; v != "" {
+			if v := flags["description"]; v != "" {
 				ev.Description = v
 			}
 

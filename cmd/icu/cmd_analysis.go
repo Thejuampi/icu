@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	icu "github.com/Thejuampi/icu"
@@ -41,6 +42,8 @@ func registerAnalysisCommands(registry *CommandRegistry) {
 	registry.Register("analysis", "wellness", analysisWellnessCommand())
 	registry.Register("analysis", "plan", analysisPlanCommand())
 	registry.Register("analysis", "adaptation", analysisAdaptationCommand())
+	registry.Register("analysis", "microcycle", analysisMicrocycleCommand())
+	registry.Register("analysis", "micro", analysisMicroCommand())
 }
 
 func analysisCyclingCommand() *Command {
@@ -342,4 +345,308 @@ func analysisDateRange(flags map[string]string, now time.Time) (analysisRange, e
 	start := normalizedNow.AddDate(0, 0, -days+1).Format("2006-01-02")
 
 	return analysisRange{Oldest: start, Newest: end}, nil
+}
+
+func analysisMicroCommand() *Command {
+	cmd := analysisMicrocycleCommand()
+	cmd.Usage = "analysis micro [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]"
+	cmd.Description = "[experimental alias] Analyze the current or selected training microcycle for LLM-ready diagnostics."
+
+	return cmd
+}
+
+func analysisMicrocycleCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]",
+		Description: "[experimental] Analyze the selected training microcycle as a read-only, LLM-ready diagnostic contract.",
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			now := time.Now()
+			dateRange, location, err := microcycleDateRange(flags, now)
+			if err != nil {
+				return err
+			}
+
+			lookbackStart, err := addDays(dateRange.Oldest, -90)
+			if err != nil {
+				return err
+			}
+
+			includePlan := !BoolFlag(flags, "no-plan")
+			includeWellness := !BoolFlag(flags, "no-wellness")
+
+			inputs, err := readMicrocycleInputs(client, flags, dateRange, lookbackStart, includePlan, includeWellness)
+			if err != nil {
+				return err
+			}
+
+			sportType := icu.StringFlag(flags, "sport-type", "Ride")
+			analysis := icu.AnalyzeMicrocycle(inputs.Activities, inputs.Events, inputs.Wellness, &inputs.SportSettings, &icu.MicrocycleOptions{
+				StartDate:        dateRange.Oldest,
+				EndDate:          dateRange.Newest,
+				Timezone:         location.String(),
+				TimezoneSource:   microcycleTimezoneSource(flags),
+				Now:              now.In(location),
+				PlanIncluded:     includePlan,
+				WellnessIncluded: includeWellness,
+				SportType:        sportType,
+				Full:             BoolFlag(flags, "full"),
+			})
+
+			if BoolFlag(flags, "json") || icu.ResolveOutputFormat(flags) == icu.FormatJSON {
+				return writeJSON(analysis)
+			}
+
+			return writeMicrocycleHuman(&analysis)
+		},
+	}
+}
+
+type microcycleInputs struct {
+	Activities    []icu.Activity
+	Events        []icu.Event
+	Wellness      *icu.WellnessAnalysis
+	SportSettings icu.SportSettings
+}
+
+func readMicrocycleInputs(
+	client *icu.Client,
+	flags map[string]string,
+	dateRange analysisRange,
+	lookbackStart string,
+	includePlan bool,
+	includeWellness bool,
+) (microcycleInputs, error) {
+	var inputs microcycleInputs
+
+	activities, err := readMicrocycleActivities(client, flags, dateRange, lookbackStart)
+	if err != nil {
+		return inputs, err
+	}
+	inputs.Activities = activities
+
+	if includePlan {
+		events, err := readMicrocycleEvents(client, flags, dateRange)
+		if err != nil {
+			return inputs, err
+		}
+		inputs.Events = events
+	}
+
+	if includeWellness {
+		wellness, err := readMicrocycleWellness(client, dateRange, lookbackStart)
+		if err != nil {
+			return inputs, err
+		}
+		inputs.Wellness = wellness
+	}
+
+	sportType := icu.StringFlag(flags, "sport-type", "Ride")
+	if err := client.Get("sport-settings", []string{sportType}, nil, &inputs.SportSettings); err != nil {
+		if isHTTPStatus(err, httpStatusNotFound) {
+			return inputs, nil
+		}
+
+		return inputs, wrapCommandError(err)
+	}
+
+	return inputs, nil
+}
+
+const httpStatusNotFound = 404
+
+func isHTTPStatus(err error, status int) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.Contains(err.Error(), fmt.Sprintf("HTTP status error %d", status))
+}
+
+func readMicrocycleActivities(
+	client *icu.Client,
+	flags map[string]string,
+	dateRange analysisRange,
+	lookbackStart string,
+) ([]icu.Activity, error) {
+	activityQuery := queryFromFlags(flags, "limit")
+	activityQuery["oldest"] = lookbackStart
+	activityQuery["newest"] = dateRange.Newest
+	activityQuery["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+
+	var activities []icu.Activity
+	if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	return activities, nil
+}
+
+func readMicrocycleEvents(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Event, error) {
+	eventQuery := queryFromFlags(flags, "calendar_id")
+	eventQuery["oldest"] = dateRange.Oldest
+	eventQuery["newest"] = dateRange.Newest
+	if BoolFlag(flags, "resolve") {
+		eventQuery["resolve"] = strTrue
+	}
+
+	var events []icu.Event
+	if err := client.Get("events", nil, eventQuery, &events); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	return events, nil
+}
+
+func readMicrocycleWellness(
+	client *icu.Client,
+	dateRange analysisRange,
+	lookbackStart string,
+) (*icu.WellnessAnalysis, error) {
+	wellnessQuery := map[string]string{
+		"oldest": lookbackStart,
+		"newest": dateRange.Newest,
+	}
+	var wellnessRecords []icu.Wellness
+	if err := client.Get("wellness", nil, wellnessQuery, &wellnessRecords); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	analysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+		StartDate: lookbackStart,
+		EndDate:   dateRange.Newest,
+	})
+
+	return &analysis, nil
+}
+
+func microcycleDateRange(flags map[string]string, now time.Time) (analysisRange, *time.Location, error) {
+	location, err := microcycleLocation(flags)
+	if err != nil {
+		return analysisRange{}, nil, err
+	}
+	localNow := now.In(location)
+
+	from := icu.StringFlag(flags, "from", "")
+	to := icu.StringFlag(flags, "to", "")
+	week := icu.StringFlag(flags, "week", "")
+	date := icu.StringFlag(flags, "date", "")
+
+	if from != "" || to != "" {
+		if from == "" || to == "" {
+			return analysisRange{}, nil, errMissing("--from and --to")
+		}
+		if week != "" || date != "" {
+			return analysisRange{}, nil, fmt.Errorf("%w: --from/--to cannot be combined with --week or --date", errMissingRequired)
+		}
+		if err := validateDateRange(from, to); err != nil {
+			return analysisRange{}, nil, err
+		}
+
+		return analysisRange{Oldest: from, Newest: to}, location, nil
+	}
+	if week != "" && date != "" {
+		return analysisRange{}, nil, fmt.Errorf("%w: --week cannot be combined with --date", errMissingRequired)
+	}
+	if week != "" {
+		return isoWeekRange(week, location)
+	}
+	if date != "" {
+		return isoWeekRange(date, location)
+	}
+
+	return isoWeekRange(localNow.Format("2006-01-02"), location)
+}
+
+func microcycleLocation(flags map[string]string) (*time.Location, error) {
+	name := icu.StringFlag(flags, "timezone", "")
+	if name == "" {
+		return time.Now().Location(), nil
+	}
+
+	location, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid --timezone %s", errMissingRequired, name)
+	}
+
+	return location, nil
+}
+
+func microcycleTimezoneSource(flags map[string]string) string {
+	if icu.StringFlag(flags, "timezone", "") != "" {
+		return "flag"
+	}
+
+	return "system"
+}
+
+func isoWeekRange(date string, location *time.Location) (analysisRange, *time.Location, error) {
+	parsed, err := time.ParseInLocation("2006-01-02", date, location)
+	if err != nil {
+		return analysisRange{}, nil, fmt.Errorf("%w: invalid date %s", errMissingRequired, date)
+	}
+
+	weekday := int(parsed.Weekday())
+	if weekday == 0 {
+		weekday = calendarWeekDays
+	}
+	start := parsed.AddDate(0, 0, -(weekday - 1))
+	end := start.AddDate(0, 0, calendarWeekDays-1)
+
+	return analysisRange{Oldest: start.Format("2006-01-02"), Newest: end.Format("2006-01-02")}, location, nil
+}
+
+func validateDateRange(from, to string) error {
+	start, startErr := time.Parse("2006-01-02", from)
+	end, endErr := time.Parse("2006-01-02", to)
+	if startErr != nil {
+		return fmt.Errorf("%w: invalid --from %s", errMissingRequired, from)
+	}
+	if endErr != nil {
+		return fmt.Errorf("%w: invalid --to %s", errMissingRequired, to)
+	}
+	if end.Before(start) {
+		return fmt.Errorf("%w: --from must be on or before --to", errMissingRequired)
+	}
+
+	return nil
+}
+
+func addDays(date string, days int) (string, error) {
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return "", fmt.Errorf("%w: invalid date %s", errMissingRequired, date)
+	}
+
+	return parsed.AddDate(0, 0, days).Format("2006-01-02"), nil
+}
+
+func writeMicrocycleHuman(analysis *icu.MicrocycleAnalysis) error {
+	var output strings.Builder
+	fmt.Fprintf(&output, "Microcycle: %s to %s\n", analysis.Microcycle.StartDate, analysis.Microcycle.EndDate)
+	fmt.Fprintf(
+		&output, "Status: partial=%t, elapsed=%d, remaining=%d\n",
+		analysis.Microcycle.IsPartial,
+		analysis.Microcycle.ElapsedDays,
+		analysis.Microcycle.RemainingDays,
+	)
+	fmt.Fprintf(&output, "Timezone: %s (%s)\n", analysis.Microcycle.Timezone, analysis.Microcycle.TimezoneSource)
+	fmt.Fprintf(&output, "Classification: %s\n", analysis.Classification.Value)
+	fmt.Fprintf(&output, "Confidence: %s\n", analysis.Confidence)
+	fmt.Fprintf(
+		&output, "Activities: %d, Load: %d, Z4+ sessions: %d\n",
+		analysis.Load.ActivityCount,
+		analysis.Load.TSS,
+		analysis.Intensity.Z4PlusSessions,
+	)
+	fmt.Fprintf(&output, "Data quality warnings: %d\n", len(analysis.DataQuality.Warnings))
+	if analysis.Classification.MainPositiveSignal != "" {
+		fmt.Fprintf(&output, "Main positive signal: %s\n", analysis.Classification.MainPositiveSignal)
+	}
+	if analysis.Classification.MainRisk != "" {
+		fmt.Fprintf(&output, "Main risk: %s\n", analysis.Classification.MainRisk)
+	}
+	fmt.Fprintln(&output, "Final note: diagnostic only; no plan, config, or external sync changes were made.")
+
+	return writeOutput([]byte(output.String()))
 }

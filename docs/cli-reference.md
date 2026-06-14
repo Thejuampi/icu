@@ -182,6 +182,17 @@ Invoke these commands as `icu activity <id> <action>`.
   Notes: `--newest` applies to the power-curve fetch; `--limit` applies to activity history fetch.
   Example: `icu analysis adaptation --days 42 --type Ride --curves 42d,365d`
 
+- `microcycle`
+  Invocation: `icu analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]`
+  Defaults: current Monday-Sunday microcycle, `--sport-type Ride`, system timezone fallback when `--timezone` is omitted.
+  Notes: Experimental read-only diagnostic contract for LLM/skill consumers. Reads activities with a 90-day lookback, planned events, wellness, and sport settings. JSON is the primary contract; human output is a brief inspection view.
+  Example: `icu analysis microcycle --from 2026-06-08 --to 2026-06-14 --json`
+
+- `micro`
+  Invocation: `icu analysis micro [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]`
+  Notes: Alias for `analysis microcycle`. This replaces the former experimental per-activity micro-analysis command.
+  Example: `icu analysis micro --json`
+
 ## athlete
 
 - `show`
@@ -237,7 +248,7 @@ Invoke these commands as `icu activity <id> <action>`.
   Example: `icu config show`
 
 - `set`
-  Invocation: `icu config set [--api-key KEY] [--athlete-id ID] [--output json|csv|table]`
+  Invocation: `icu config set [--api-key KEY] [--athlete-id ID] [--output json|csv|table] [--zepp-login-token TOKEN]`
   Notes: current code supports partial updates even though help text foregrounds `--api-key`.
   Example: `icu config set --api-key secret --athlete-id 0`
 
@@ -492,6 +503,11 @@ The Zepp mobile app calculates **BioCharge** (renamed to **HybridCharge** in
 Zepp 10.4.0+) on-device from sleep, stress, PAI, and workout history. The public
 HTTP API does not return the score itself, so the CLI exposes the raw inputs
 the score is derived from. Compute BioCharge in your analysis agent.
+
+- `token`
+  Invocation: `icu zepp token --email EMAIL [--password PASSWORD]`
+  Notes: Obtain Zepp API tokens without saving to config. WARNING: outputs tokens in plaintext. Use `login` for normal authentication. This command is intended for debugging and manual token management.
+  Example: `icu zepp token --email jane@example.com` (the CLI will prompt for the password if it is not provided).
 
 - `login`
   Invocation: `icu zepp login --email EMAIL --password PASSWORD`

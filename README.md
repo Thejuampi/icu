@@ -41,6 +41,7 @@ icu analysis cycling
 icu analysis wellness --days 42
 icu analysis plan
 icu analysis adaptation --days 42 --type Ride
+icu analysis microcycle --json
 
 # Diagnose auth/config resolution without exposing the secret
 icu config diagnose
@@ -138,7 +139,7 @@ Current dispatch behavior:
 - Resources with a `show` action default to `show` when invoked without an action, for example `icu athlete`.
 - Resources without a `show` action print resource help when invoked without an action, for example `icu activities`.
 - `activity` and `shared-event` support id-first parsing for help/dispatch.
-- Only `config` commands skip API key enforcement.
+- `config` and `zepp` commands skip API key enforcement.
 
 ## Output Behavior
 
@@ -148,7 +149,7 @@ Treat JSON as the effective default output format unless a command explicitly do
 ## Documentation Map
 
 - [docs/cli-reference.md](docs/cli-reference.md): exhaustive command reference for the current CLI surface, including the `zepp` resource
-- [docs/analysis.md](docs/analysis.md): detailed behavior of `analysis cycling`, `analysis wellness`, `analysis plan`, and `analysis adaptation`
+- [docs/analysis.md](docs/analysis.md): detailed behavior of `analysis cycling`, `analysis wellness`, `analysis plan`, `analysis adaptation`, and `analysis microcycle`
 - [docs/library.md](docs/library.md): usage-oriented guide for `github.com/Thejuampi/icu`, including the `ZeppClient`
 - [docs/api/README.md](docs/api/README.md): OpenAPI snapshot provenance and usage notes
 - [AGENTS.md](AGENTS.md): contributor rules, quality gates, and the documentation gate
@@ -161,7 +162,7 @@ Current top-level resources:
 | --- | --- |
 | `activities` | `around`, `csv`, `get`, `interval-search`, `list`, `manual`, `search`, `search-full`, `upload` |
 | `activity` | `best-efforts`, `delete`, `file`, `fit-file`, `gpx-file`, `hr-curve`, `intervals`, `map`, `messages`, `pace-curve`, `power-curve`, `power-vs-hr`, `segments`, `show`, `streams`, `update`, `weather`, `weather-summary` |
-| `analysis` | `adaptation`, `cycling`, `plan`, `wellness` |
+| `analysis` | `adaptation`, `cycling`, `micro`, `microcycle`, `plan`, `wellness` |
 | `athlete` | `plan`, `profile`, `settings`, `show`, `summary`, `update` |
 | `chats` | `get`, `list`, `messages`, `send` |
 | `config` | `diagnose`, `path`, `set`, `show` |
@@ -179,16 +180,17 @@ Current top-level resources:
 | `weather` | `config`, `forecast` |
 | `wellness` | `bulk`, `get`, `list`, `update`, `upload` |
 | `workouts` | `create`, `delete`, `get`, `list`, `tags`, `update` |
-| `zepp` | `heart-rate`, `login`, `logout`, `pai`, `profile`, `sleep`, `spo2`, `status`, `stress`, `summary`, `workout`, `workouts` |
+| `zepp` | `heart-rate`, `login`, `logout`, `pai`, `profile`, `sleep`, `spo2`, `status`, `stress`, `summary`, `token`, `workout`, `workouts` |
 
 ## Analysis Overview
 
-`icu` currently ships four read-only analysis commands:
+`icu` currently ships five primary read-only analysis commands plus the `analysis micro` alias:
 
 - `analysis cycling` summarizes recent cycling load, intensity, environment, durability, anaerobic work, and session-level signals.
 - `analysis wellness` summarizes wellness coverage and physiology signals from wellness records.
 - `analysis plan` compares completed history with planned calendar events and emits a structured four-week planning view.
 - `analysis adaptation` compares power curves and anchors against recent activity and wellness context.
+- `analysis microcycle` emits an experimental, LLM-ready diagnostic contract for the current or selected training microcycle. `analysis micro` is its short alias.
 
 See [docs/analysis.md](docs/analysis.md) for defaults, inputs, output sections, and current limitations.
 

@@ -11,9 +11,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var errHTTPStatus = errors.New("HTTP status error")
+
+const defaultClientTimeout = 30 * time.Second
 
 type Client struct {
 	httpClient *http.Client
@@ -43,10 +46,7 @@ func WithBaseURL(baseURL string) ClientOption {
 func NewClient(apiKey, athleteID string, options ...ClientOption) *Client {
 	client := &Client{
 		httpClient: &http.Client{
-			Transport:     nil,
-			CheckRedirect: nil,
-			Jar:           nil,
-			Timeout:       0,
+			Timeout: defaultClientTimeout,
 		},
 		apiKey:    apiKey,
 		athleteID: athleteID,

@@ -20,7 +20,7 @@ func registerFoldersCommands(registry *CommandRegistry) {
 	registry.Register("folders", "create", &Command{
 		Name:        "",
 		Usage:       "folders create --name NAME [--type icu.Folder|PLAN] [--desc DESC]",
-		Description: "Create a icu.Folder or plan.",
+		Description: "Create a folder or plan.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			var f icu.FolderCreate
 			f.Name = icu.StringFlag(flags, "name", "")
@@ -39,7 +39,7 @@ func registerFoldersCommands(registry *CommandRegistry) {
 	registry.Register("folders", "update", &Command{
 		Name:        "",
 		Usage:       "folders update <id> --name NAME",
-		Description: "Update a icu.Folder or plan.",
+		Description: "Update a folder or plan.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("icu.Folder id")
@@ -66,7 +66,7 @@ func registerFoldersCommands(registry *CommandRegistry) {
 	registry.Register("folders", "delete", &Command{
 		Name:        "",
 		Usage:       "folders delete <id>",
-		Description: "Delete a icu.Folder or plan.",
+		Description: "Delete a folder or plan.",
 		Run: func(args []string, _ map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("icu.Folder id")

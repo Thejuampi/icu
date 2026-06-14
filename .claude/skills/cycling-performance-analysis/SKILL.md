@@ -25,13 +25,29 @@ If the investigation exposes a CLI bug, parser mismatch, auth ambiguity, or data
 
 ## Lessons Learned
 
+### Data Quality & Verification
+
 - Validate auth source before blaming the API. Run `icu config diagnose --athlete-id ATHLETE_ID` when a command that used to work starts returning unauthorized or empty responses. Environment credentials can shadow config credentials.
 - Never print API keys. Use diagnostic status, length, trim checks, and fingerprints only.
 - Intervals.icu endpoints can return snake_case fields when `fields` is used, even when local DTOs use camelCase JSON tags. If a report shows suspicious zeros for dates, duration, TSS, IF, CTL, ATL, or planned-event load, verify parsing before interpreting the result.
 - Spot-check one raw activity or event after adding new fields. A plausible report with zero-valued inputs is worse than an unavailable section.
+- **Workout names are unreliable.** A ride named "Z2 Durable" may have IF 0.80 (tempo/threshold). Always classify sessions by computed data (`icu_intensity`, `icu_weighted_avg_watts`, `average_heartrate`), not by the name label.
+- **Reconstruct event timelines from activity data, not athlete memory.** When an athlete says "I was sick for a week," verify by scanning activity dates, moving times, and load drops. The data identifies the transition point more precisely than self-report.
+
+### Baseline Computation
+
+- **Never use athlete self-reported numbers as physiological baselines.** Athletes round, remember selectively, and report by feel. Always compute baselines from historical activity data.
+- **Compute zone-specific power:HR relationships, not a single average.** A post-illness athlete may show +13 bpm elevation at Z2, +10 bpm at SS, and +3 bpm at VO2. Each intensity zone tells a different part of the recovery story. A single "HR is elevated by ~12 bpm" buries the pattern.
+- **Efficiency Factor (EF = NP / HR) is an autonomic recovery metric.** When EF drops (e.g., Z2 EF from 1.42 to 1.38), it means the athlete produces less power per heartbeat — a parasympathetic deficit, not a fitness loss. Track EF recovery alongside HRV. EF returns to baseline when the parasympathetic brake is restored, independent of HRV fluctuations.
+- For baseline calculations, pull 8-12 weeks of pre-event activity data with `--fields` including at minimum: `icu_weighted_avg_watts`, `average_heartrate`, `icu_intensity`, `icu_efficiency_factor`, `decoupling`. Filter to the sport type (e.g., `Ride`, `VirtualRide`) and group by IF bands (Z2: 0.55-0.75, Tempo/SS: 0.75-0.87, VO2: 0.87+).
+- **Athlete observations are directionally valuable but numerically unreliable.** Use them to guide which questions to ask the data, never as the answer. "My HR is high at low power" → check the Z2 power:HR ratio against baseline.
+
+### Calendar & Planning
+
 - Treat existing planned workouts as the baseline plan. For planning requests, first evaluate whether the existing calendar is coherent before proposing replacement workouts.
 - Review existing NOTE events on the calendar before rendering analysis. Notes carry coaching context, block structure, decision rules, and athlete-facing communication. Skimming only WORKOUT events misses the full picture. Collect them explicitly alongside planned sessions.
-- After producing a plan review, write key findings back as NOTE events on the calendar so future analyses and the athlete can reference them. If the plan is approved, create: (a) one block-overview note with week roles, load targets, decision thresholds, and FTP; (b) weekly focus notes with session classification and conditional rules.
+- After producing a plan review, write key findings back as NOTE events on the calendar so future analyses and the athlete can reference them. If the plan is approved, create: (a) one block-overview note with week roles, load targets, decision thresholds, FTP, and zone-specific baselines; (b) weekly focus notes with session classification and conditional rules.
+- **Update notes iteratively as the analysis deepens.** A first-pass note may have approximate thresholds; refine it when computed baselines replace athlete self-report. The block overview note should be the single source of truth that subsequent analyses can trust.
 - The `--desc` text parser in Intervals.icu requires a specific format. **Never use inline `- NxMm XX%` syntax** — the API will not expand it into a repeat block. Instead use the **multi-line repeat block format**:
 
 ```
@@ -72,7 +88,17 @@ icu events list --oldest NEXT_START --newest NEXT_END --athlete-id ATHLETE_ID
 icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d --athlete-id ATHLETE_ID
 ```
 
-4. Review existing calendar notes (NOTE events) for coaching context.
+4. Compute zone-specific baselines when the report involves HR response, post-illness return, or adaptation questions.
+
+```bash
+icu activities list --oldest BASELINE_START --newest BASELINE_END --athlete-id ATHLETE_ID --fields id,name,start_date_local,type,moving_time,average_heartrate,icu_weighted_avg_watts,icu_intensity,icu_efficiency_factor,decoupling
+```
+
+Filter to the sport type (Ride, VirtualRide). Group by IF bands: Z2 (0.55-0.75), Tempo/SS (0.75-0.87), VO2 (0.87+). Compute per-band averages for NP, HR, HR%LTHR, and EF. Compare against the current period. See [Baseline Computation](#baseline-computation) for the full procedure.
+
+Never use athlete self-reported numbers as baselines — always compute from historical data. Use athlete observations to guide which questions to ask the data, not as the answer.
+
+5. Review existing calendar notes (NOTE events) for coaching context.
 
 ```bash
 icu events list --oldest PLAN_START --newest PLAN_END --athlete-id ATHLETE_ID
@@ -109,14 +135,14 @@ Use wider ranges for trend questions:
 icu activities list --oldest HISTORY_START --newest END --athlete-id ATHLETE_ID --fields id,name,start_date_local,type,moving_time,distance,icu_training_load,icu_intensity,decoupling,icu_efficiency_factor,icu_variability_index,icu_joules_above_ftp,icu_max_wbal_depletion,icu_ctl,icu_atl
 ```
 
-5. Check the data contract before writing prose.
+6. Check the data contract before writing prose.
    - Required for load/recovery report: athlete, sport settings, 7-day cycling analysis, 42-day wellness if available, next planned events if planning is discussed.
    - Required for adaptation: current power curves or MMP model plus historical activity context.
    - Required for W prime/repeatability: work above FTP and W balance fields in activities or activity intervals.
    - Required for heat/environment: weather or activity environmental fields. Do not infer heat stress from prose alone.
    - Required for 4-week planning: 12-week cycling analysis, 42-day wellness analysis, sport settings, and next 4 weeks of events.
 
-6. Render the report from facts to interpretation.
+7. Render the report from facts to interpretation.
    - Start with the headline state: e.g. `Load Pressure / recovery_priority`.
    - Separate raw metrics from interpretation.
    - Make confidence clear when data is sparse.
@@ -133,8 +159,66 @@ Use these sections when the data exists:
 - `ADAPTATION REVIEW`: power curve deltas, MMP model, strongest/weakest systems, likely training focus.
 - `PLANNED BLOCK`: upcoming events and whether the plan matches the current state.
 - `DECISION GUIDANCE`: what to do next and why.
+- `MICRO ANALYSIS`: per-session detail — zone alignment, interval quality, drift patterns, warmup/cooldown efficiency, power:HR by segment. See [Micro Analysis](#micro-analysis).
 
 For the expanded field-by-field contract, use [report-data-contract.md](./report-data-contract.md). Treat it as the source of truth for whether a field is currently supported, partial, or missing.
+
+## Micro Analysis
+
+Every report that covers a specific training week must include per-session micro analysis alongside the macro (aggregated) view. The macro tells you how much; the micro tells you how well.
+
+### Data Collection
+
+Pull full activity detail for each session in the report window:
+
+```bash
+icu activity <id> show
+icu activity <id> streams       # raw time-series (power, HR, cadence arrays)
+icu activity <id> intervals      # auto-detected intervals
+```
+
+### Micro Metrics (from `activity show`)
+
+| Metric | Field | What it means |
+|---|---|---|
+| Power:HR zone alignment | `icuZoneTimes` vs `icuHrZoneTimes` | Are HR zones tracking power zones, or is HR displaced upward? |
+| Z2 power:HR ratio | `icuPowerHrZ2` | Watts per bpm specifically at Z2 power. Baselines at ~1.42. A drop signals parasympathetic deficit. |
+| Z2 minutes | `icuPowerHrZ2Mins` | Time spent in Z2 power. If this is low on an "endurance" ride, the session wasn't Z2. |
+| Decoupling | `decoupling` | Zone-specific interpretation: >5% at Z2 → autonomic drift; >8% at SS → fatigue/heat. |
+| Variability Index | `icuVariabilityIndex` | VI > 1.15 on a "steady Z2" ride → surging. The athlete was not steady. |
+| Compliance | `compliance` | How well the ride matched the planned structure (if plan had targets). |
+| Max HR ratio | `maxHeartrate / averageHeartrate` | High ratio on an easy ride → effort spikes that don't belong. |
+| W' depletion | `icuMaxWbalDepletion` vs estimated W' | Was the anaerobic tank emptied? Above 80% of estimated W' → maximal effort. |
+
+### Zone Alignment Analysis
+
+The core micro signal: for each session, compare power zone distribution against HR zone distribution.
+
+A ride where HR lives one zone above power (e.g., power in Z2 but HR in Z3-Z4) is a parasympathetic deficit signal — the body is working harder than the power meter suggests. This is NOT "just a hard ride." It's an autonomic efficiency gap.
+
+**How to compute:**
+1. Sum `icuZoneTimes` seconds in Z1-Z2 vs Z3+.
+2. Sum `icuHrZoneTimes` seconds in Z1-Z2 vs Z3+.
+3. Compare the percentages. A >5pp gap where HR is hotter than power is meaningful.
+4. Check specifically if HR Z4 seconds are disproportionately high relative to power Z4 seconds.
+
+**Example (real data):**
+- "Aerobic Float" 63 min: Power Z1-Z2 59%, HR Z1-Z2 55% (gap -4pp). HR Z4: 28% of ride, Power Z4: 14%. This was not aerobic.
+- "2x20 SS" indoor: Power Z4 37%, HR Z4+ 41% (gap +4pp). Tight alignment, clean execution.
+
+### Micro Gaps (CLI Enhancements Needed)
+
+The following metrics require raw stream processing or per-interval data not yet available via the CLI:
+
+| Gap | Data needed | Priority |
+|---|---|---|
+| Warmup HR efficiency | HR slope (bpm/min) over first 600s vs power | High — core recovery signal |
+| Cooldown HR recovery | HR decay rate (bpm/min) over last 300-600s | High — key recovery signal |
+| Interval repeatability | Per-rep power/HR mean and std dev | Medium — quality control |
+| HRR (1-min, 2-min) | HR drop after peak effort | Medium — fitness signal |
+| Per-segment EF | EF for warmup, main set, cooldown separately | Medium — drift localization |
+
+When these are requested in a report, mark the section as `unavailable (CLI gap)` and note the specific fields/endpoints needed. Do not invent the numbers.
 
 ## Metric Policy
 
@@ -145,6 +229,50 @@ For the expanded field-by-field contract, use [report-data-contract.md](./report
 - Use `acuteChronicWorkRatio` from `icu analysis cycling` as ACWR unless a better Intervals-native value is added.
 - Do not call a field authoritative if it is derived locally; label it as local or heuristic where relevant.
 
+## Baseline Computation
+
+When physiological baselines matter (post-illness return, HR response questions, adaptation review), compute them from historical activity data — never from athlete self-report.
+
+### Procedure
+
+1. Pull 8-12 weeks of pre-event activity data:
+
+```bash
+icu activities list --oldest BASELINE_START --newest BASELINE_END --athlete-id ATHLETE_ID --fields id,name,start_date_local,type,moving_time,average_heartrate,icu_weighted_avg_watts,icu_intensity,icu_efficiency_factor,decoupling
+```
+
+2. Filter to the sport type (e.g., `Ride`, `VirtualRide`). Exclude outliers: very short rides (<15 min), obviously sick/recovery-only rides, non-cycling types.
+
+3. Group by IF bands and compute per-band averages for NP, HR, HR as %LTHR, and EF:
+
+| Band | IF range | Zone |
+|---|---|---|
+| Z2 (endurance) | 0.55 – 0.75 | Aerobic base |
+| Tempo/SS | 0.75 – 0.87 | Sub-threshold work |
+| VO2+ | 0.87+ | High intensity |
+
+4. Compute the current period's same metrics and calculate deltas per band.
+
+5. Express results as both absolute delta (bpm) and percentage-point delta (%LTHR). A +13 bpm shift at Z2 (77% → 85% LTHR) is more diagnostically useful than a single "HR elevated ~12 bpm."
+
+### Interpretation
+
+- **Z2 more affected than SS → parasympathetic deficit.** The sympathetic system (accelerator) recovers first post-illness. The parasympathetic brake takes longer, causing HR to float upward at low intensities while high-intensity response looks normal.
+- **All zones equally elevated → fitness loss or FTP/LTHR mismatch.** Re-evaluate FTP and LTHR settings.
+- **EF recovery tracks autonomic restoration.** When Z2 EF returns to baseline (~1.42 → 1.42 pre-to-post), the parasympathetic system is back online regardless of HRV numbers.
+
+### Decoupling by Zone
+
+Zone-specific decoupling thresholds differ from a single 5% rule:
+
+| Zone | Threshold | Meaning when exceeded |
+|---|---|---|
+| Z1/Z2 | > 5% | Parasympathetic drift — HR can't hold steady at low load |
+| Tempo/SS | > 8% | Accumulated fatigue or thermal stress |
+| VO2+ | > 10% | Expected during maximal efforts; check if recovery intervals recover |
+
+Four out of five sessions with high decoupling at Z2 intensity is a stronger autonomic signal than one VO2 session at 23%.
+
 ## Planning Policy
 
 - Use the athlete's existing calendar as the first candidate plan.
@@ -152,6 +280,8 @@ For the expanded field-by-field contract, use [report-data-contract.md](./report
 - When current state is `Load Pressure` or wellness is `WATCH`, keep build structure conservative: dose VO2/threshold minimally, protect endurance durability, and preserve recovery spacing.
 - For a 4-week block, prefer a simple rhythm such as re-entry, build, overload, deload when it matches the athlete's recent load tolerance.
 - Add day-level decision rules for HRV, sleep, resting HR, TSB, decoupling, and heat rather than pretending the plan is fixed regardless of recovery state.
+- **Compute decision thresholds from baseline data, not generic rules.** HR ranges for decision gates (e.g., "FC > 155 → ALT B") should be derived from the athlete's computed baseline + delta, not from a fixed %LTHR or population norm. Include both the HR gate and the baseline it was computed from in the calendar note so future reviews can verify.
+- **Track EF recovery as a block objective.** If the block goal is autonomic restoration, set an EF target (e.g., "Z2 EF > 1.38 by W27") derived from the pre-event baseline. This gives the athlete a metric to watch beyond HRV.
 - Make workout names human-scannable and device-friendly: representative interval structure first, training system second, extra context last.
 - Keep device cue messages short enough to be read during effort. Preview what is coming, cue the purpose of the next block, and only encourage when the workout intensity merits it.
 - Keep indoor Z2 profiles engaging without turning them into tempo. HR-control valleys are for drift management, not full recovery; max-Z2 peaks must stay below tempo/threshold intent.
