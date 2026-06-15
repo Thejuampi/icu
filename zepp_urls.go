@@ -70,134 +70,78 @@ func BuildZeppEventsURL(userID string) string {
 // and a date range. The base URL is typically the regional data host returned
 // by zeppDataHostFor.
 func V2EventsURL(base string, preset V2EventPreset, oldest, newest string) (string, error) {
-	from, err := parseDateToMillis(oldest)
-	if err != nil {
-		return "", fmt.Errorf("parse oldest date: %w", err)
-	}
-
-	to, err := parseDateEndOfDayMillis(newest)
-	if err != nil {
-		return "", fmt.Errorf("parse newest date: %w", err)
-	}
-
-	query := url.Values{
-		"eventType": {preset.EventType},
-		"subType":   {preset.SubType},
-		"from":      {strconv.FormatInt(from, 10)},
-		"to":        {strconv.FormatInt(to, 10)},
-		"limit":     {"1000"},
-	}
-
-	return base + "/v2/users/me/events?" + query.Encode(), nil
+	return buildZeppDateRangeURL(
+		base, "/v2/users/me/events", oldest, newest,
+		url.Values{
+			"eventType": {preset.EventType},
+			"subType":   {preset.SubType},
+			"limit":     {"1000"},
+		},
+		"from", "to",
+		parseDateToMillis, parseDateEndOfDayMillis,
+	)
 }
 
 // WatchSportStatisticsURL composes a /v2/watch/users/{userID}/WatchSportStatistics/{statType}
 // URL for a date range. The base URL is the regional data host.
 func WatchSportStatisticsURL(base, userID, statType, oldest, newest string) (string, error) {
-	from, err := parseDateToMillis(oldest)
-	if err != nil {
-		return "", fmt.Errorf("parse oldest date: %w", err)
-	}
-
-	to, err := parseDateEndOfDayMillis(newest)
-	if err != nil {
-		return "", fmt.Errorf("parse newest date: %w", err)
-	}
-
-	query := url.Values{
-		"from": {strconv.FormatInt(from, 10)},
-		"to":   {strconv.FormatInt(to, 10)},
-	}
-
-	return base + "/v2/watch/users/" + userID + "/WatchSportStatistics/" + statType + "?" + query.Encode(), nil
+	return buildZeppDateRangeURL(
+		base, "/v2/watch/users/"+userID+"/WatchSportStatistics/"+statType, oldest, newest,
+		url.Values{},
+		"from", "to",
+		parseDateToMillis, parseDateEndOfDayMillis,
+	)
 }
 
 // UserHeartRateURL composes the /users/{userID}/heartRate URL.
 func UserHeartRateURL(base, userID, oldest, newest string) (string, error) {
-	from, err := parseDateToSecondsUTC(oldest)
-	if err != nil {
-		return "", fmt.Errorf("parse oldest date: %w", err)
-	}
-
-	to, err := parseDateEndOfDaySecondsUTC(newest)
-	if err != nil {
-		return "", fmt.Errorf("parse newest date: %w", err)
-	}
-
-	query := url.Values{
-		"startTime": {strconv.FormatInt(from, 10)},
-		"endTime":   {strconv.FormatInt(to, 10)},
-		"limit":     {"1000"},
-		"type":      {"2"},
-	}
-
-	return base + "/users/" + userID + "/heartRate?" + query.Encode(), nil
+	return buildZeppDateRangeURL(
+		base, "/users/"+userID+"/heartRate", oldest, newest,
+		url.Values{
+			"limit": {"1000"},
+			"type":  {"2"},
+		},
+		"startTime", "endTime",
+		parseDateToSecondsUTC, parseDateEndOfDaySecondsUTC,
+	)
 }
 
 // WeightRecordsURL composes the /users/{userID}/members/-1/weightRecords URL.
 func WeightRecordsURL(base, userID, oldest, newest string) (string, error) {
-	from, err := parseDateToSecondsUTC(oldest)
-	if err != nil {
-		return "", fmt.Errorf("parse oldest date: %w", err)
-	}
-
-	to, err := parseDateEndOfDaySecondsUTC(newest)
-	if err != nil {
-		return "", fmt.Errorf("parse newest date: %w", err)
-	}
-
-	query := url.Values{
-		"fromTime":  {strconv.FormatInt(from, 10)},
-		"toTime":    {strconv.FormatInt(to, 10)},
-		"limit":     {"300"},
-		"isForward": {"0"},
-	}
-
-	return base + "/users/" + userID + "/members/-1/weightRecords?" + query.Encode(), nil
+	return buildZeppDateRangeURL(
+		base, "/users/"+userID+"/members/-1/weightRecords", oldest, newest,
+		url.Values{
+			"limit":     {"300"},
+			"isForward": {"0"},
+		},
+		"fromTime", "toTime",
+		parseDateToSecondsUTC, parseDateEndOfDaySecondsUTC,
+	)
 }
 
 // BloodPressureUserURL composes the /users/me/bloodPressure URL.
 func BloodPressureUserURL(base, oldest, newest string) (string, error) {
-	from, err := parseDateToMillis(oldest)
-	if err != nil {
-		return "", fmt.Errorf("parse oldest date: %w", err)
-	}
-
-	to, err := parseDateEndOfDayMillis(newest)
-	if err != nil {
-		return "", fmt.Errorf("parse newest date: %w", err)
-	}
-
-	query := url.Values{
-		"from": {strconv.FormatInt(from, 10)},
-		"to":   {strconv.FormatInt(to, 10)},
-	}
-
-	return base + "/users/me/bloodPressure?" + query.Encode(), nil
+	return buildZeppDateRangeURL(
+		base, "/users/me/bloodPressure", oldest, newest,
+		url.Values{},
+		"from", "to",
+		parseDateToMillis, parseDateEndOfDayMillis,
+	)
 }
 
 // SecondHeartRateFilesURL composes the /users/me/fileInfo/events URL used to
 // list per-second heart-rate COS file indices.
 func SecondHeartRateFilesURL(base, oldest, newest string) (string, error) {
-	from, err := parseDateToMillis(oldest)
-	if err != nil {
-		return "", fmt.Errorf("parse oldest date: %w", err)
-	}
-
-	to, err := parseDateEndOfDayMillis(newest)
-	if err != nil {
-		return "", fmt.Errorf("parse newest date: %w", err)
-	}
-
-	query := url.Values{
-		"eventType": {"second_heart_rate"},
-		"subType":   {"real_data"},
-		"from":      {strconv.FormatInt(from, 10)},
-		"to":        {strconv.FormatInt(to, 10)},
-		"limit":     {"200"},
-	}
-
-	return base + "/users/me/fileInfo/events?" + query.Encode(), nil
+	return buildZeppDateRangeURL(
+		base, "/users/me/fileInfo/events", oldest, newest,
+		url.Values{
+			"eventType": {"second_heart_rate"},
+			"subType":   {"real_data"},
+			"limit":     {"200"},
+		},
+		"from", "to",
+		parseDateToMillis, parseDateEndOfDayMillis,
+	)
 }
 
 // SpO2WindowsURL composes the /users/{userID}/events/dateString URL used for
@@ -233,22 +177,34 @@ func SpO2WindowsURL(base, userID, date, tz string) (string, error) {
 
 // ManualDataURL composes the /v1/user/manualData.json URL.
 func ManualDataURL(base, oldest, newest string) (string, error) {
-	from, err := parseDateToMillis(oldest)
+	return buildZeppDateRangeURL(
+		base, "/v1/user/manualData.json", oldest, newest,
+		url.Values{},
+		"from", "to",
+		parseDateToMillis, parseDateEndOfDayMillis,
+	)
+}
+
+func buildZeppDateRangeURL(
+	base, path, oldest, newest string,
+	query url.Values,
+	fromKey, toKey string,
+	parseFrom, parseTo func(string) (int64, error),
+) (string, error) {
+	from, err := parseFrom(oldest)
 	if err != nil {
 		return "", fmt.Errorf("parse oldest date: %w", err)
 	}
 
-	to, err := parseDateEndOfDayMillis(newest)
+	to, err := parseTo(newest)
 	if err != nil {
 		return "", fmt.Errorf("parse newest date: %w", err)
 	}
 
-	query := url.Values{
-		"from": {strconv.FormatInt(from, 10)},
-		"to":   {strconv.FormatInt(to, 10)},
-	}
+	query.Set(fromKey, strconv.FormatInt(from, 10))
+	query.Set(toKey, strconv.FormatInt(to, 10))
 
-	return base + "/v1/user/manualData.json?" + query.Encode(), nil
+	return base + path + "?" + query.Encode(), nil
 }
 
 func parseDateToMillis(dateStr string) (int64, error) {

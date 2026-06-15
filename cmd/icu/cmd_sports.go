@@ -3,47 +3,16 @@ package main
 import icu "github.com/Thejuampi/icu"
 
 func registerSportsCommands(registry *CommandRegistry) {
-	registry.Register("sports", "list", &Command{
-		Name:        "",
-		Usage:       "sports list",
-		Description: "List all sport settings.",
-		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
-			var ss []icu.SportSettings
-			if err := client.Get("sport-settings", nil, nil, &ss); err != nil {
-				return wrapCommandError(err)
-			}
+	registry.Register("sports", "list", listAllCommand[[]icu.SportSettings]("sport-settings", "sports list", "List all sport settings."))
+	registry.Register("sports", "get", getByIDCommand[icu.SportSettings]("sport-settings", "sports get <type|id>", "Get sport settings by type or ID.", "sport type or id", nil))
 
-			return writeJSON(ss)
-		},
-	})
-
-	registry.Register("sports", "get", &Command{
-		Name:        "",
-		Usage:       "sports get <type|id>",
-		Description: "Get sport settings by type or ID.",
-		Run: func(args []string, _ map[string]string, client *icu.Client) error {
-			if len(args) == 0 {
-				return errMissing("sport type or id")
-			}
-
-			var ss icu.SportSettings
-			if err := client.Get("sport-settings", []string{args[0]}, nil, &ss); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(ss)
-		},
-	})
-
-	registry.Register("sports", "update", &Command{
-		Name:        "",
-		Usage:       "sports update <type|id> --ftp WATTS [--lthr BPM] [--max-hr BPM]",
-		Description: "Update sport settings.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
-			if len(args) == 0 {
-				return errMissing("sport type or id")
-			}
-
+	registry.Register("sports", "update", updateByIDCommand[icu.SportSettings, icu.SportSettings](
+		"sport-settings",
+		"sports update <type|id> --ftp WATTS [--lthr BPM] [--max-hr BPM]",
+		"Update sport settings.",
+		"sport type or id",
+		staticQuery(map[string]string{"recalcHrZones": "false"}),
+		func(flags map[string]string) icu.SportSettings {
 			var ss icu.SportSettings
 			if v := IntFlag(flags, "ftp", -1); v >= 0 {
 				ss.FTP = v
@@ -61,25 +30,9 @@ func registerSportsCommands(registry *CommandRegistry) {
 				ss.IndoorFTP = v
 			}
 
-			var result icu.SportSettings
-			if err := client.Put("sport-settings", []string{args[0]}, map[string]string{"recalcHrZones": "false"}, ss, &result); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(result)
+			return ss
 		},
-	})
+	))
 
-	registry.Register("sports", "delete", &Command{
-		Name:        "",
-		Usage:       "sports delete <id>",
-		Description: "Delete sport settings.",
-		Run: func(args []string, _ map[string]string, client *icu.Client) error {
-			if len(args) == 0 {
-				return errMissing("sport settings id")
-			}
-
-			return wrapCommandError(client.Delete("sport-settings", []string{args[0]}, nil, nil))
-		},
-	})
+	registry.Register("sports", "delete", deleteByIDCommand("sport-settings", "sports delete <id>", "Delete sport settings.", "sport settings id"))
 }

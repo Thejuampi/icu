@@ -26,138 +26,92 @@ func jsonUnmarshal(data []byte, v any) error {
 }
 
 func registerEventsCommands(registry *CommandRegistry) {
-	registry.Register("events", "list", eventsListCommand())
-	registry.Register("events", "get", eventsGetCommand())
-	registry.Register("events", "create", eventsCreateCommand())
-	registry.Register("events", "update", eventsUpdateCommand())
-	registry.Register("events", "delete", eventsDeleteCommand())
+	registry.Register(
+		"events", "list",
+		listQueryCommand[[]icu.Event](
+			"events",
+			"events list --oldest DATE --newest DATE [--category WORKOUT] [--ext zwo|mrc|erg|fit] [--resolve]",
+			"List calendar events.",
+			eventsListQuery,
+		),
+	)
+	registry.Register("events", "get", getByIDCommand[icu.Event]("events", "events get <id>", "Get event by ID.", "event id", nil))
+
+	registry.Register(
+		"events", "create",
+		createCommand[icu.EventEx, icu.Event](
+			"events",
+			"events create --category WORKOUT --type Ride --name NAME --start-date DATE"+
+				" [--moving-time SECS] [--training-load N] [--description DESC] [--upsert]",
+			"Create calendar event.",
+			eventsCreateQuery,
+			func(flags map[string]string) icu.EventEx {
+				return icu.EventEx{
+					Category:       icu.StringFlag(flags, "category", "WORKOUT"),
+					Type:           icu.StringFlag(flags, "type", "Ride"),
+					Name:           icu.StringFlag(flags, "name", ""),
+					StartDateLocal: icu.StringFlag(flags, "start-date", ""),
+					MovingTime:     IntFlag(flags, "moving-time", 0),
+					TrainingLoad:   IntFlag(flags, "training-load", 0),
+					Description:    icu.StringFlag(flags, "description", ""),
+					Color:          icu.StringFlag(flags, "color", ""),
+					Indoor:         BoolFlag(flags, "indoor"),
+					ExternalID:     icu.StringFlag(flags, "external-id", ""),
+				}
+			},
+		),
+	)
+
+	registry.Register(
+		"events", "update",
+		updateByIDCommand[icu.EventEx, icu.Event](
+			"events",
+			"events update <id> --name NAME [--desc DESC]",
+			"Update calendar event.",
+			"event id",
+			nil,
+			func(flags map[string]string) icu.EventEx {
+				var ev icu.EventEx
+				if v := flags["name"]; v != "" {
+					ev.Name = v
+				}
+
+				if v := flags["description"]; v != "" {
+					ev.Description = v
+				}
+
+				if v := flags["training-load"]; v != "" {
+					ev.TrainingLoad = IntFlag(flags, "training-load", 0)
+				}
+
+				return ev
+			},
+		),
+	)
+
+	registry.Register("events", "delete", deleteByIDCommand("events", "events delete <id>", "Delete calendar event.", "event id"))
 	registry.Register("events", "download", eventsDownloadCommand())
-	registry.Register("events", "tags", eventsTagsCommand())
+	registry.Register("events", "tags", listAllCommand[[]string]("event-tags", "events tags", "List event tags."))
 }
 
-func eventsListCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "events list --oldest DATE --newest DATE [--category WORKOUT] [--ext zwo|mrc|erg|fit] [--resolve]",
-		Description: "List calendar events.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			q := queryFromFlags(flags, "oldest", "newest", "category", "ext", "limit", "calendar_id")
-			if BoolFlag(flags, "resolve") {
-				q["resolve"] = strTrue
-			}
-
-			var events []icu.Event
-			if err := client.Get("events", nil, q, &events); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(events)
-		},
+func eventsListQuery(flags map[string]string) map[string]string {
+	q := queryFromFlags(flags, "oldest", "newest", "category", "ext", "limit", "calendar_id")
+	if BoolFlag(flags, "resolve") {
+		q["resolve"] = strTrue
 	}
+
+	return q
 }
 
-func eventsGetCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "events get <id>",
-		Description: "Get event by ID.",
-		Run: func(args []string, _ map[string]string, client *icu.Client) error {
-			if len(args) == 0 {
-				return errMissing("event id")
-			}
-
-			var e icu.Event
-			if err := client.Get("events", []string{args[0]}, nil, &e); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(e)
-		},
+func eventsCreateQuery(flags map[string]string) map[string]string {
+	q := map[string]string{
+		"upsertOnUid": "false",
 	}
-}
-
-func eventsCreateCommand() *Command {
-	return &Command{
-		Name: "",
-		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--description DESC] [--upsert]",
-		Description: "Create calendar event.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			var ev icu.EventEx
-			ev.Category = icu.StringFlag(flags, "category", "WORKOUT")
-			ev.Type = icu.StringFlag(flags, "type", "Ride")
-			ev.Name = icu.StringFlag(flags, "name", "")
-			ev.StartDateLocal = icu.StringFlag(flags, "start-date", "")
-			ev.MovingTime = IntFlag(flags, "moving-time", 0)
-			ev.TrainingLoad = IntFlag(flags, "training-load", 0)
-			ev.Description = icu.StringFlag(flags, "description", "")
-			ev.Color = icu.StringFlag(flags, "color", "")
-			ev.Indoor = BoolFlag(flags, "indoor")
-			ev.ExternalID = icu.StringFlag(flags, "external-id", "")
-
-			query := map[string]string{
-				"upsertOnUid": "false",
-			}
-			if BoolFlag(flags, "upsert") {
-				query["upsertOnUid"] = "true"
-			}
-
-			var result icu.Event
-			if err := client.Post("events", nil, query, ev, &result); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(result)
-		},
+	if BoolFlag(flags, "upsert") {
+		q["upsertOnUid"] = "true"
 	}
-}
 
-func eventsUpdateCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "events update <id> --name NAME [--desc DESC]",
-		Description: "Update calendar event.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
-			if len(args) == 0 {
-				return errMissing("event id")
-			}
-
-			var ev icu.EventEx
-			if v := flags["name"]; v != "" {
-				ev.Name = v
-			}
-
-			if v := flags["description"]; v != "" {
-				ev.Description = v
-			}
-
-			if v := flags["training-load"]; v != "" {
-				ev.TrainingLoad = IntFlag(flags, "training-load", 0)
-			}
-
-			var result icu.Event
-			if err := client.Put("events", []string{args[0]}, nil, ev, &result); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(result)
-		},
-	}
-}
-
-func eventsDeleteCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "events delete <id>",
-		Description: "Delete calendar event.",
-		Run: func(args []string, _ map[string]string, client *icu.Client) error {
-			if len(args) == 0 {
-				return errMissing("event id")
-			}
-
-			return wrapCommandError(client.Delete("events", []string{args[0]}, nil, nil))
-		},
-	}
+	return q
 }
 
 func eventsDownloadCommand() *Command {
@@ -178,22 +132,6 @@ func eventsDownloadCommand() *Command {
 			}
 
 			return writeOutput(data)
-		},
-	}
-}
-
-func eventsTagsCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "events tags",
-		Description: "List event tags.",
-		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
-			var tags []string
-			if err := client.Get("event-tags", nil, nil, &tags); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(tags)
 		},
 	}
 }

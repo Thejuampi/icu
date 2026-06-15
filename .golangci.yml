@@ -107,6 +107,8 @@ linters:
 linters-settings:
   gofumpt:
     extra-rules: true
+  dupl:
+    threshold: 100
   gocritic:
     enabled-tags:
       - diagnostic
@@ -192,6 +194,10 @@ issues:
   exclude-dirs:
     - bin
     - vendor
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
   max-issues-per-linter: 0
   max-same-issues: 0
 
