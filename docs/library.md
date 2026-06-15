@@ -251,8 +251,21 @@ hosted on `api-mifit.huami.com` and uses its own auth flow. The flow is:
    `/v2/registrations/tokens` that returns a 303 redirect, then a form POST
    to `/v2/client/login` that returns the token bundle.
 2. `NewZeppClientFromAuth(auth, ...)` constructs a `ZeppClient`.
-3. Call `BandData`, `SleepDays`, `HeartRateSeries`, `StressDays`, `SpO2Readings`,
-   `PAIDays`, `Workouts`, `Workout`, or `UserInfo` to fetch data.
+3. Call `BandData`, `SleepDays`, `HeartRateSeries`, `HeartRateEndpoint`,
+   `StressDays`, `SpO2Readings`, `PAIDays`, `HRVSDNNDays`, `HRVRMSSDDays`,
+   `ReadinessDays`, `BodyBatteryDays`, `HealthSummaryDays`, `MoodDays`,
+   `SkinTempDays`, `StressMinuteDays`, `RespiratoryRateDays`,
+   `BloodPressureDays`, `BloodPressureUser`, `WeightRecords`, `ManualData`,
+   `SecondHeartRateFiles`, `SpO2Windows`, `SportLoad`, `VO2Max`, `Workouts`,
+   `Workout`, `UserInfo`, or `FetchV2Events` to fetch data. `FetchV2Events`
+   is the low-level escape hatch for the watch-centric `/v2/users/me/events`
+   stream (HRV, body battery, readiness, etc.). `Workouts` and `Workout`
+   accept a sport name (`run`, `walking`, `ride`/`cycling`, `swimming`)
+   resolved via `SportNameToSegment`. Exported URL builders (`V2EventsURL`,
+   `WatchSportStatisticsURL`, `UserHeartRateURL`, `WeightRecordsURL`,
+   `ManualDataURL`, `BloodPressureUserURL`, `SecondHeartRateFilesURL`,
+   `SpO2WindowsURL`, `SportHistoryURL`, `SportDetailURL`) are available for
+   consumers that need to construct signed requests manually.
 
 ```go
 import (
@@ -321,6 +334,33 @@ decoded typed form so downstream code can do whichever is convenient:
   signed delta from the previous one. The cumulative sum reconstructs the
   absolute series.
 
+### V2 wellness events
+
+`FetchV2Events` returns raw bytes from `/v2/users/me/events`. Use
+`DecodeV2Events` to normalize them, or call `V2EventPresets` /
+`V2EventPresetByName` to look up supported presets:
+
+```go
+preset, ok := icu.V2EventPresetByName("body-battery")
+if !ok {
+    panic("unknown preset")
+}
+
+raw, err := client.FetchV2Events(ctx, preset, "2026-06-01", "2026-06-07")
+if err != nil {
+    panic(err)
+}
+
+events, err := icu.DecodeV2Events(raw)
+if err != nil {
+    panic(err)
+}
+```
+
+The generic CLI command `icu zepp events --preset <name>` uses the same
+primitives. Dedicated commands (`hrv`, `readiness`, etc.) add type-specific
+decoding on top.
+
 ### BioCharge / HybridCharge
 
 Zepp 10.4.0+ calculates **BioCharge** (renamed to **HybridCharge**) on-device
@@ -332,11 +372,14 @@ derived from. To compute BioCharge in your analysis agent, combine `sleep`
 documented only inside the Zepp mobile app and changes between releases; this
 library does not implement the proprietary formula.
 
-### Error sentinel
+### Error sentinels
 
 `ErrZeppNotAuthenticated` is returned when `BandData`/`SleepDays`/etc. are
 called without `AppToken` and `UserID` set. Use `errors.Is(err,
 icu.ErrZeppNotAuthenticated)` to detect it.
+
+`ErrZeppUnknownSport` is returned by `Workouts` and `Workout` when the
+requested sport is not supported by `SportNameToSegment`.
 
 ## Testing Patterns
 

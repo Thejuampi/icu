@@ -69,11 +69,11 @@ func TestConfigDiagnoseVerboseFlag(t *testing.T) {
 		t.Fatal("missing config diagnose command")
 	}
 
-	if err := cmd.Run(nil, nil, nil); err != nil {
+	if _, err := captureStdout(t, func() error { return cmd.Run(nil, nil, nil) }); err != nil {
 		t.Fatalf("config diagnose without verbose: %v", err)
 	}
 
-	if err := cmd.Run(nil, map[string]string{"verbose": "true"}, nil); err != nil {
+	if _, err := captureStdout(t, func() error { return cmd.Run(nil, map[string]string{"verbose": "true"}, nil) }); err != nil {
 		t.Fatalf("config diagnose with verbose: %v", err)
 	}
 }

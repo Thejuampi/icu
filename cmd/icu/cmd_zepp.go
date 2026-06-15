@@ -26,8 +26,48 @@ func registerZeppCommands(registry *CommandRegistry) {
 	registry.Register("zepp", "spo2", zeppSpO2Command())
 	registry.Register("zepp", "stress", zeppStressCommand())
 	registry.Register("zepp", "pai", zeppPAICommand())
+	registry.Register("zepp", "events", zeppEventsCommand())
+	registry.Register("zepp", "hrv", zeppHRVCommand())
+	registry.Register("zepp", "weight", zeppWeightCommand())
+	registry.Register("zepp", "manual-data", zeppManualDataCommand())
+	registry.Register("zepp", "second-heart-rate", zeppSecondHeartRateCommand())
+	registry.Register("zepp", "spo2-windows", zeppSpO2WindowsCommand())
+
+	readinessDecoder := func(raw []byte) (any, error) { return icu.DecodeReadiness(raw) }
+	bodyBatteryDecoder := func(raw []byte) (any, error) { return icu.DecodeBodyBattery(raw) }
+	healthSummaryDecoder := func(raw []byte) (any, error) { return icu.DecodeHealthSummary(raw) }
+	moodDecoder := func(raw []byte) (any, error) { return icu.DecodeMood(raw) }
+	skinTempDecoder := func(raw []byte) (any, error) { return icu.DecodeSkinTemp(raw) }
+
+	registerV2EventCommand(registry, "readiness", mustV2EventPreset("readiness"), readinessDecoder, "Daily readiness scores from /v2/users/me/events.")
+	registerV2EventCommand(registry, "body-battery", mustV2EventPreset("body-battery"), bodyBatteryDecoder, "Body-battery / Charge levels from /v2/users/me/events.")
+	registerV2EventCommand(registry, "health-summary", mustV2EventPreset("daily-health"), healthSummaryDecoder, "Daily health summaries from /v2/users/me/events.")
+	registerV2EventCommand(registry, "mood", mustV2EventPreset("emotion"), moodDecoder, "Mood / emotion readings from /v2/users/me/events.")
+	registerV2EventCommand(registry, "skin-temp", mustV2EventPreset("skin-temp"), skinTempDecoder, "Skin temperature delta readings from /v2/users/me/events.")
+
+	stressMinuteDecoder := func(raw []byte) (any, error) { return icu.DecodeStressMinute(raw) }
+	respiratoryRateDecoder := func(raw []byte) (any, error) { return icu.DecodeRespiratoryRate(raw) }
+
+	registerV2EventCommand(registry, "stress-minute", mustV2EventPreset("stress-minute"), stressMinuteDecoder, "Per-minute stress readings from /v2/users/me/events.")
+	registerV2EventCommand(registry, "respiratory-rate", mustV2EventPreset("respiratory"), respiratoryRateDecoder, "Overnight respiratory rate readings from /v2/users/me/events.")
+	registry.Register("zepp", "blood-pressure", zeppBloodPressureCommand())
+
+	sportLoadFetch := func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) { return c.SportLoad(ctx, o, n) }
+	vo2Fetch := func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) { return c.VO2Max(ctx, o, n) }
+
+	registerWatchStatCommand(registry, "sport-load", sportLoadFetch, "Daily training load from the watch sport statistics.")
+	registerWatchStatCommand(registry, "vo2", vo2Fetch, "VO2 max estimates from the watch sport statistics.")
 	registry.Register("zepp", "workouts", zeppWorkoutsCommand())
 	registry.Register("zepp", "workout", zeppWorkoutCommand())
+}
+
+func mustV2EventPreset(name string) icu.V2EventPreset {
+	preset, ok := icu.V2EventPresetByName(name)
+	if !ok {
+		panic("unknown preset: " + name)
+	}
+
+	return preset
 }
 
 func zeppTokenCommand() *Command {
@@ -148,23 +188,17 @@ func zeppSleepCommand() *Command {
 }
 
 func zeppHeartRateCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "zepp heart-rate --oldest YYYY-MM-DD --newest YYYY-MM-DD",
-		Description: "Heart rate time series for the date range.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			oldest, newest := zeppDateRange(flags)
-
-			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
-				records, err := client.HeartRateSeries(ctx, oldest, newest)
-				if err != nil {
-					return fmt.Errorf("fetch heart rate: %w", err)
-				}
-
-				return writeJSON(records)
-			})
+	return zeppSwitchCommand(
+		"zepp heart-rate --source band|app --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		"Heart rate time series for the date range from band summary or the user heart-rate endpoint.",
+		"source", "band", "band", "app",
+		func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+			return c.HeartRateSeries(ctx, o, n)
 		},
-	}
+		func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+			return c.HeartRateEndpoint(ctx, o, n)
+		},
+	)
 }
 
 func zeppSpO2Command() *Command {
@@ -227,16 +261,247 @@ func zeppPAICommand() *Command {
 	}
 }
 
-func zeppWorkoutsCommand() *Command {
+func zeppEventsCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "zepp workouts [--oldest YYYY-MM-DD --newest YYYY-MM-DD]",
-		Description: "List workouts recorded in Zepp. Defaults: last 7 days.",
+		Usage:       "zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		Description: "Fetch V2 wellness events by preset.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			presetName := icu.StringFlag(flags, "preset", "")
+			if presetName == "" {
+				return errors.New("preset is required: use --preset flag")
+			}
+
+			preset, ok := icu.V2EventPresetByName(presetName)
+			if !ok {
+				return fmt.Errorf("unknown preset %q", presetName)
+			}
+
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				raw, err := client.FetchV2Events(ctx, preset, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch events: %w", err)
+				}
+
+				events, err := icu.DecodeV2Events(raw)
+				if err != nil {
+					return fmt.Errorf("decode events: %w", err)
+				}
+
+				return writeJSON(events)
+			})
+		},
+	}
+}
+
+func zeppSwitchCommand(
+	usage, description, flagName, defaultValue, optionA, optionB string,
+	fetchA, fetchB func(context.Context, *icu.ZeppClient, string, string) (any, error),
+) *Command {
+	return &Command{
+		Name:        "",
+		Usage:       usage,
+		Description: description,
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			value := icu.StringFlag(flags, flagName, defaultValue)
+			if value != optionA && value != optionB {
+				return fmt.Errorf("invalid %s %q: must be %s or %s", flagName, value, optionA, optionB)
+			}
+
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				var records any
+
+				var err error
+
+				if value == optionA {
+					records, err = fetchA(ctx, client, oldest, newest)
+				} else {
+					records, err = fetchB(ctx, client, oldest, newest)
+				}
+
+				if err != nil {
+					return fmt.Errorf("fetch %s: %w", flagName, err)
+				}
+
+				return writeJSON(records)
+			})
+		},
+	}
+}
+
+func zeppBloodPressureCommand() *Command {
+	return zeppSwitchCommand(
+		"zepp blood-pressure --source watch|user --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		"Blood-pressure readings from watch events or the user BP endpoint.",
+		"source", "watch", "watch", "user",
+		func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+			return c.BloodPressureDays(ctx, o, n)
+		},
+		func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+			return c.BloodPressureUser(ctx, o, n)
+		},
+	)
+}
+
+func registerV2EventCommand(registry *CommandRegistry, name string, preset icu.V2EventPreset, decoder func([]byte) (any, error), description string) {
+	registry.Register("zepp", name, &Command{
+		Name:        "",
+		Usage:       fmt.Sprintf("zepp %s --oldest YYYY-MM-DD --newest YYYY-MM-DD", name),
+		Description: description,
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
 			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
-				records, err := client.Workouts(ctx, oldest, newest)
+				raw, err := client.FetchV2Events(ctx, preset, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch %s: %w", name, err)
+				}
+
+				decoded, err := decoder(raw)
+				if err != nil {
+					return fmt.Errorf("decode %s: %w", name, err)
+				}
+
+				return writeJSON(decoded)
+			})
+		},
+	})
+}
+
+func registerWatchStatCommand(registry *CommandRegistry, name string, fetch func(context.Context, *icu.ZeppClient, string, string) (any, error), description string) {
+	registry.Register("zepp", name, &Command{
+		Name:        "",
+		Usage:       fmt.Sprintf("zepp %s --oldest YYYY-MM-DD --newest YYYY-MM-DD", name),
+		Description: description,
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				records, err := fetch(ctx, client, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch %s: %w", name, err)
+				}
+
+				return writeJSON(records)
+			})
+		},
+	})
+}
+
+func zeppWeightCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "zepp weight --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		Description: "Weight measurements from /users/{id}/members/-1/weightRecords.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				records, err := client.WeightRecords(ctx, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch weight: %w", err)
+				}
+
+				return writeJSON(records)
+			})
+		},
+	}
+}
+
+func zeppManualDataCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "zepp manual-data --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		Description: "Manually entered wellness records from /v1/user/manualData.json.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				records, err := client.ManualData(ctx, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch manual data: %w", err)
+				}
+
+				return writeJSON(records)
+			})
+		},
+	}
+}
+
+func zeppSecondHeartRateCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "zepp second-heart-rate --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		Description: "Per-second heart-rate COS file index from /users/me/fileInfo/events. Blobs are not downloaded.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				files, err := client.SecondHeartRateFiles(ctx, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch second heart rate files: %w", err)
+				}
+
+				return writeJSON(files)
+			})
+		},
+	}
+}
+
+func zeppSpO2WindowsCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "zepp spo2-windows --date YYYY-MM-DD [--timezone TZ]",
+		Description: "SpO2 ODI windows for a single day from /users/{id}/events/dateString.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			date := icu.StringFlag(flags, "date", "")
+			if date == "" {
+				return errors.New("date is required: use --date flag")
+			}
+
+			tz := icu.StringFlag(flags, "timezone", "UTC")
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				windows, err := client.SpO2Windows(ctx, date, tz)
+				if err != nil {
+					return fmt.Errorf("fetch spo2 windows: %w", err)
+				}
+
+				return writeJSON(windows)
+			})
+		},
+	}
+}
+
+func zeppHRVCommand() *Command {
+	return zeppSwitchCommand(
+		"zepp hrv --metric sdnn|rmssd --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		"Nightly HRV values from /v2/users/me/events.",
+		"metric", "sdnn", "sdnn", "rmssd",
+		func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+			return c.HRVSDNNDays(ctx, o, n)
+		},
+		func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+			return c.HRVRMSSDDays(ctx, o, n)
+		},
+	)
+}
+
+func zeppWorkoutsCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "zepp workouts [--sport NAME] [--oldest YYYY-MM-DD --newest YYYY-MM-DD]",
+		Description: "List workouts recorded in Zepp. Defaults: sport=run, last 7 days.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			sport := icu.StringFlag(flags, "sport", "run")
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				records, err := client.Workouts(ctx, sport, oldest, newest)
 				if err != nil {
 					return fmt.Errorf("fetch workouts: %w", err)
 				}
@@ -250,9 +515,11 @@ func zeppWorkoutsCommand() *Command {
 func zeppWorkoutCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "zepp workout <id>",
-		Description: "Fetch a single workout detail (HR, pace, altitude series).",
-		Run: func(args []string, _ map[string]string, _ *icu.Client) error {
+		Usage:       "zepp workout [--sport NAME] <id>",
+		Description: "Fetch a single workout detail (HR, pace, altitude series). Default sport=run.",
+		Run: func(args []string, flags map[string]string, _ *icu.Client) error {
+			sport := icu.StringFlag(flags, "sport", "run")
+
 			if len(args) == 0 {
 				return errMissing("zepp workout id")
 			}
@@ -260,7 +527,7 @@ func zeppWorkoutCommand() *Command {
 			trackID := args[0]
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
-				detail, err := client.Workout(ctx, trackID)
+				detail, err := client.Workout(ctx, sport, trackID)
 				if err != nil {
 					return fmt.Errorf("fetch workout detail: %w", err)
 				}
