@@ -27,6 +27,23 @@ const (
 	nextWeekdayModuloBase  = 8
 )
 
+type analysisTimezoneInfo struct {
+	timezone string
+	source   string
+}
+
+func analysisTimezone(explicit bool) analysisTimezoneInfo {
+	source := icu.DefaultAnalysisTimezoneSource
+	if explicit {
+		source = "explicit"
+	}
+
+	return analysisTimezoneInfo{
+		timezone: icu.DefaultAnalysisTimezone,
+		source:   source,
+	}
+}
+
 type analysisRange struct {
 	Oldest string
 	Newest string
@@ -48,11 +65,12 @@ func registerAnalysisCommands(registry *CommandRegistry) {
 
 func analysisCyclingCommand() *Command {
 	return &Command{
-		Name:        "",
-		Usage:       "analysis cycling [--oldest DATE --newest DATE | --days N]",
-		Description: "Compute numeric cycling analysis from completed activities.",
+		Name:  "",
+		Usage: "analysis cycling [--oldest DATE --newest DATE | --days N]",
+		Description: "Compute numeric cycling analysis from completed activities. " +
+			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRange, err := analysisDateRange(flags, time.Now())
+			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
 			}
@@ -67,9 +85,12 @@ func analysisCyclingCommand() *Command {
 				return wrapCommandError(err)
 			}
 
+			tzInfo := analysisTimezone(explicit)
 			analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
-				StartDate: dateRange.Oldest,
-				EndDate:   dateRange.Newest,
+				StartDate:      dateRange.Oldest,
+				EndDate:        dateRange.Newest,
+				Timezone:       tzInfo.timezone,
+				TimezoneSource: tzInfo.source,
 			})
 
 			return writeJSON(analysis)
@@ -82,9 +103,10 @@ func analysisPlanCommand() *Command {
 		Name: "",
 		Usage: "analysis plan [--history-oldest DATE --history-newest DATE] " +
 			"[--plan-oldest DATE --plan-newest DATE]",
-		Description: "Analyze a planned training block from recent history and future calendar events.",
+		Description: "Analyze a planned training block from recent history and future calendar events. " +
+			"Default ranges use UTC; pass explicit dates for athlete-local daily boundaries.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRanges, err := trainingPlanDateRanges(flags, time.Now())
+			dateRanges, explicit, err := trainingPlanDateRanges(flags, time.Now())
 			if err != nil {
 				return err
 			}
@@ -115,9 +137,12 @@ func analysisPlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
+			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
-				StartDate: dateRanges.History.Oldest,
-				EndDate:   dateRanges.History.Newest,
+				StartDate:      dateRanges.History.Oldest,
+				EndDate:        dateRanges.History.Newest,
+				Timezone:       tzInfo.timezone,
+				TimezoneSource: tzInfo.source,
 			})
 
 			eventQuery := queryFromFlags(flags, "calendar_id")
@@ -142,6 +167,8 @@ func analysisPlanCommand() *Command {
 				Wellness:      &wellnessAnalysis,
 				Adaptation:    nil,
 			})
+			analysis.Scope.Timezone = tzInfo.timezone
+			analysis.Scope.TimezoneSource = tzInfo.source
 
 			return writeJSON(analysis)
 		},
@@ -150,11 +177,12 @@ func analysisPlanCommand() *Command {
 
 func analysisWellnessCommand() *Command {
 	return &Command{
-		Name:        "",
-		Usage:       "analysis wellness [--oldest DATE --newest DATE | --days N]",
-		Description: "Compute wellness and physiology analysis from wellness records.",
+		Name:  "",
+		Usage: "analysis wellness [--oldest DATE --newest DATE | --days N]",
+		Description: "Compute wellness and physiology analysis from wellness records. " +
+			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRange, err := analysisDateRange(flags, time.Now())
+			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
 			}
@@ -168,9 +196,12 @@ func analysisWellnessCommand() *Command {
 				return wrapCommandError(err)
 			}
 
+			tzInfo := analysisTimezone(explicit)
 			analysis := icu.AnalyzeWellness(records, icu.AnalysisOptions{
-				StartDate: dateRange.Oldest,
-				EndDate:   dateRange.Newest,
+				StartDate:      dateRange.Oldest,
+				EndDate:        dateRange.Newest,
+				Timezone:       tzInfo.timezone,
+				TimezoneSource: tzInfo.source,
 			})
 
 			return writeJSON(analysis)
@@ -180,11 +211,12 @@ func analysisWellnessCommand() *Command {
 
 func analysisAdaptationCommand() *Command {
 	return &Command{
-		Name:        "",
-		Usage:       "analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride]",
-		Description: "Analyze cycling adaptation from power curves, MMP model, sport anchors, activities, and wellness.",
+		Name:  "",
+		Usage: "analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride]",
+		Description: "Analyze cycling adaptation from power curves, MMP model, sport anchors, activities, and wellness. " +
+			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRange, err := analysisDateRange(flags, time.Now())
+			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
 			}
@@ -205,10 +237,13 @@ func analysisAdaptationCommand() *Command {
 			curveQuery["type"] = sportType
 			curveQuery["curves"] = icu.StringFlag(flags, "curves", "42d,365d")
 
-			var curves []icu.DataCurve
-			if err := client.Get("power-curves", nil, curveQuery, &curves); err != nil {
+			var curveResponse struct {
+				List []icu.DataCurve `json:"list"`
+			}
+			if err := client.Get("power-curves", nil, curveQuery, &curveResponse); err != nil {
 				return wrapCommandError(err)
 			}
+			curves := curveResponse.List
 
 			modelQuery := map[string]string{"type": sportType}
 			var model icu.PowerModel
@@ -231,9 +266,12 @@ func analysisAdaptationCommand() *Command {
 				return wrapCommandError(err)
 			}
 
+			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
-				StartDate: dateRange.Oldest,
-				EndDate:   dateRange.Newest,
+				StartDate:      dateRange.Oldest,
+				EndDate:        dateRange.Newest,
+				Timezone:       tzInfo.timezone,
+				TimezoneSource: tzInfo.source,
 			})
 
 			analysis := icu.AnalyzeCyclingAdaptation(
@@ -242,7 +280,12 @@ func analysisAdaptationCommand() *Command {
 				&sportSettings,
 				activities,
 				&wellnessAnalysis,
-				icu.AnalysisOptions{StartDate: dateRange.Oldest, EndDate: dateRange.Newest},
+				icu.AnalysisOptions{
+					StartDate:      dateRange.Oldest,
+					EndDate:        dateRange.Newest,
+					Timezone:       tzInfo.timezone,
+					TimezoneSource: tzInfo.source,
+				},
 			)
 
 			return writeJSON(analysis)
@@ -250,64 +293,64 @@ func analysisAdaptationCommand() *Command {
 	}
 }
 
-func trainingPlanDateRanges(flags map[string]string, now time.Time) (trainingPlanRanges, error) {
-	history, err := trainingPlanHistoryRange(flags, now)
+func trainingPlanDateRanges(flags map[string]string, now time.Time) (trainingPlanRanges, bool, error) {
+	history, historyExplicit, err := trainingPlanHistoryRange(flags, now)
 	if err != nil {
-		return trainingPlanRanges{}, err
+		return trainingPlanRanges{}, false, err
 	}
 
-	plan, err := trainingPlanFutureRange(flags, now)
+	plan, planExplicit, err := trainingPlanFutureRange(flags, now)
 	if err != nil {
-		return trainingPlanRanges{}, err
+		return trainingPlanRanges{}, false, err
 	}
 
-	return trainingPlanRanges{History: history, Plan: plan}, nil
+	return trainingPlanRanges{History: history, Plan: plan}, historyExplicit || planExplicit, nil
 }
 
-func trainingPlanHistoryRange(flags map[string]string, now time.Time) (analysisRange, error) {
+func trainingPlanHistoryRange(flags map[string]string, now time.Time) (analysisRange, bool, error) {
 	oldest := icu.StringFlag(flags, "history-oldest", "")
 	newest := icu.StringFlag(flags, "history-newest", "")
 
 	if oldest != "" || newest != "" {
 		if oldest == "" || newest == "" {
-			return analysisRange{}, errMissing("--history-oldest and --history-newest")
+			return analysisRange{}, false, errMissing("--history-oldest and --history-newest")
 		}
 
-		return analysisRange{Oldest: oldest, Newest: newest}, nil
+		return analysisRange{Oldest: oldest, Newest: newest}, true, nil
 	}
 
 	days := IntFlag(flags, "history-days", defaultPlanHistoryDays)
 	if days <= 0 {
-		return analysisRange{}, fmt.Errorf("%w: --history-days must be greater than 0", errMissingRequired)
+		return analysisRange{}, false, fmt.Errorf("%w: --history-days must be greater than 0", errMissingRequired)
 	}
 
 	end := now.UTC()
 	start := end.AddDate(0, 0, -days+1)
 
-	return analysisRange{Oldest: start.Format("2006-01-02"), Newest: end.Format("2006-01-02")}, nil
+	return analysisRange{Oldest: start.Format("2006-01-02"), Newest: end.Format("2006-01-02")}, false, nil
 }
 
-func trainingPlanFutureRange(flags map[string]string, now time.Time) (analysisRange, error) {
+func trainingPlanFutureRange(flags map[string]string, now time.Time) (analysisRange, bool, error) {
 	oldest := icu.StringFlag(flags, "plan-oldest", "")
 	newest := icu.StringFlag(flags, "plan-newest", "")
 
 	if oldest != "" || newest != "" {
 		if oldest == "" || newest == "" {
-			return analysisRange{}, errMissing("--plan-oldest and --plan-newest")
+			return analysisRange{}, false, errMissing("--plan-oldest and --plan-newest")
 		}
 
-		return analysisRange{Oldest: oldest, Newest: newest}, nil
+		return analysisRange{Oldest: oldest, Newest: newest}, true, nil
 	}
 
 	days := IntFlag(flags, "plan-days", defaultPlanDays)
 	if days <= 0 {
-		return analysisRange{}, fmt.Errorf("%w: --plan-days must be greater than 0", errMissingRequired)
+		return analysisRange{}, false, fmt.Errorf("%w: --plan-days must be greater than 0", errMissingRequired)
 	}
 
 	start := nextISOBlockStart(now.UTC())
 	end := start.AddDate(0, 0, days-1)
 
-	return analysisRange{Oldest: start.Format("2006-01-02"), Newest: end.Format("2006-01-02")}, nil
+	return analysisRange{Oldest: start.Format("2006-01-02"), Newest: end.Format("2006-01-02")}, false, nil
 }
 
 func nextISOBlockStart(now time.Time) time.Time {
@@ -323,28 +366,28 @@ func nextISOBlockStart(now time.Time) time.Time {
 	return now.AddDate(0, 0, daysUntilMonday)
 }
 
-func analysisDateRange(flags map[string]string, now time.Time) (analysisRange, error) {
+func analysisDateRange(flags map[string]string, now time.Time) (analysisRange, bool, error) {
 	oldest := icu.StringFlag(flags, "oldest", "")
 	newest := icu.StringFlag(flags, "newest", "")
 
 	if oldest != "" || newest != "" {
 		if oldest == "" || newest == "" {
-			return analysisRange{}, errMissing("--oldest and --newest")
+			return analysisRange{}, false, errMissing("--oldest and --newest")
 		}
 
-		return analysisRange{Oldest: oldest, Newest: newest}, nil
+		return analysisRange{Oldest: oldest, Newest: newest}, true, nil
 	}
 
 	days := IntFlag(flags, "days", defaultAnalysisDays)
 	if days <= 0 {
-		return analysisRange{}, fmt.Errorf("%w: --days must be greater than 0", errMissingRequired)
+		return analysisRange{}, false, fmt.Errorf("%w: --days must be greater than 0", errMissingRequired)
 	}
 
 	normalizedNow := now.UTC()
 	end := normalizedNow.Format("2006-01-02")
 	start := normalizedNow.AddDate(0, 0, -days+1).Format("2006-01-02")
 
-	return analysisRange{Oldest: start, Newest: end}, nil
+	return analysisRange{Oldest: start, Newest: end}, false, nil
 }
 
 func analysisMicroCommand() *Command {
@@ -375,7 +418,16 @@ func analysisMicrocycleCommand() *Command {
 			includePlan := !BoolFlag(flags, "no-plan")
 			includeWellness := !BoolFlag(flags, "no-wellness")
 
-			inputs, err := readMicrocycleInputs(client, flags, dateRange, lookbackStart, includePlan, includeWellness)
+			inputs, err := readMicrocycleInputs(
+				client,
+				flags,
+				dateRange,
+				lookbackStart,
+				includePlan,
+				includeWellness,
+				location.String(),
+				microcycleTimezoneSource(flags),
+			)
 			if err != nil {
 				return err
 			}
@@ -416,6 +468,8 @@ func readMicrocycleInputs(
 	lookbackStart string,
 	includePlan bool,
 	includeWellness bool,
+	timezone string,
+	timezoneSource string,
 ) (microcycleInputs, error) {
 	var inputs microcycleInputs
 
@@ -434,7 +488,7 @@ func readMicrocycleInputs(
 	}
 
 	if includeWellness {
-		wellness, err := readMicrocycleWellness(client, dateRange, lookbackStart)
+		wellness, err := readMicrocycleWellness(client, dateRange, lookbackStart, timezone, timezoneSource)
 		if err != nil {
 			return inputs, err
 		}
@@ -502,6 +556,8 @@ func readMicrocycleWellness(
 	client *icu.Client,
 	dateRange analysisRange,
 	lookbackStart string,
+	timezone string,
+	timezoneSource string,
 ) (*icu.WellnessAnalysis, error) {
 	wellnessQuery := map[string]string{
 		"oldest": lookbackStart,
@@ -513,8 +569,10 @@ func readMicrocycleWellness(
 	}
 
 	analysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
-		StartDate: lookbackStart,
-		EndDate:   dateRange.Newest,
+		StartDate:      lookbackStart,
+		EndDate:        dateRange.Newest,
+		Timezone:       timezone,
+		TimezoneSource: timezoneSource,
 	})
 
 	return &analysis, nil

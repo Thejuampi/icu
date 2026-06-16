@@ -45,10 +45,12 @@ type WellnessLactateCalibration struct {
 }
 
 type WellnessScope struct {
-	Records   int    `json:"records"`
-	TotalDays int    `json:"totalDays"`
-	StartDate string `json:"startDate,omitempty"`
-	EndDate   string `json:"endDate,omitempty"`
+	Records        int    `json:"records"`
+	TotalDays      int    `json:"totalDays"`
+	StartDate      string `json:"startDate,omitempty"`
+	EndDate        string `json:"endDate,omitempty"`
+	Timezone       string `json:"timezone,omitempty"`
+	TimezoneSource string `json:"timezoneSource,omitempty"`
 }
 
 type WellnessCoverage struct {
@@ -126,6 +128,8 @@ func newWellnessAccumulator(records []Wellness, options AnalysisOptions) wellnes
 	accumulator.analysis.Scope.StartDate = options.StartDate
 	accumulator.analysis.Scope.EndDate = options.EndDate
 	accumulator.analysis.Scope.TotalDays = analysisTotalDays(records, options)
+	accumulator.analysis.Scope.Timezone = options.Timezone
+	accumulator.analysis.Scope.TimezoneSource = options.TimezoneSource
 
 	return accumulator
 }

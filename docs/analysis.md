@@ -5,9 +5,11 @@ All analysis output is JSON.
 
 ## Shared Behavior
 
-- Date windows use UTC normalization in the CLI layer.
+- Date windows use UTC normalization in the CLI layer when no explicit dates are given.
+- Use `--oldest`/`--newest` with athlete-local `YYYY-MM-DD` dates for precise daily boundaries.
 - `--oldest` and `--newest` must be provided together.
 - If explicit dates are omitted, the CLI falls back to day-based defaults.
+- Each analysis scope includes `timezone` and `timezoneSource` so consumers can verify which timezone was used for the date range.
 - Missing source metrics are represented as zeros, omitted fields, or warnings rather than fabricated estimates.
 - These commands do not write back to Intervals.icu.
 
@@ -35,7 +37,7 @@ The default activity field contract includes load, power-anchor, durability, wea
 
 ### Output Sections
 
-- `scope`: analyzed activity counts and date range
+- `scope`: analyzed activity counts, date range, and `timezone`/`timezoneSource` metadata
 - `state`: current load-pressure classification and directive
 - `volume`: time, distance, and elevation totals
 - `powerAnchors`: FTP, CP, W', Pmax, and rolling FTP when available
@@ -83,7 +85,7 @@ The CLI fetches `wellness` records for the requested range and passes them to `A
 
 ### Output Sections
 
-- `scope`: record count, total day span, and date range
+- `scope`: record count, total day span, date range, and `timezone`/`timezoneSource` metadata
 - `coverage`: percentage coverage for HRV, resting HR, sleep, and subjective wellness
 - `hrv`: mean, latest, ratio, delta, and 7-day trend
 - `restingHr`: mean, latest, delta, and trend
@@ -145,7 +147,7 @@ The CLI currently passes `Adaptation: nil`, even though the library supports ada
 
 ### Output Sections
 
-- `scope`: history window, plan window, and event counts
+- `scope`: history window, plan window, event counts, and `timezone`/`timezoneSource` metadata
 - `history`: completed weekly load/hours, recent tolerance, current state, and completed-week series
 - `anchors`: FTP, indoor FTP, LTHR, max HR, W', and Pmax from sport settings
 - `phase`: inferred block label, pattern, intent, confidence, and source
@@ -208,7 +210,7 @@ It then runs `AnalyzeWellness` and passes the result into `AnalyzeCyclingAdaptat
 
 ### Output Sections
 
-- `scope`: date range, curve count, and activity count
+- `scope`: date range, curve count, activity count, and `timezone`/`timezoneSource` metadata
 - `powerAnchors`: FTP, CP, W', and Pmax with source attribution
 - `powerCurveDeltas`: duration-by-duration comparison between current and baseline curves
 - `systemStatus`: improving/stable/declining rollup across curve deltas

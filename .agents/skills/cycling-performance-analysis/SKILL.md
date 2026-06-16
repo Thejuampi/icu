@@ -36,6 +36,7 @@ If the investigation exposes a CLI bug, parser mismatch, auth ambiguity, or data
 - Treat existing planned workouts as the baseline plan. For planning requests, first evaluate whether the existing calendar is coherent before proposing replacement workouts.
 - Review existing NOTE events on the calendar before rendering analysis. Notes carry coaching context, block structure, decision rules, and athlete-facing communication. Skimming only WORKOUT events misses the full picture. Collect them explicitly alongside planned sessions.
 - After producing a plan review, write key findings back as NOTE events on the calendar so future analyses and the athlete can reference them. If the plan is approved, create: (a) one block-overview note with week roles, load targets, decision thresholds, and FTP; (b) weekly focus notes with session classification and conditional rules.
+- `icu analysis` commands compute default date ranges in **UTC**. When the athlete is not in UTC, the implied "today" can shift by up to a day relative to the athlete's local date. Always use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate reports, and verify the `timezone`/`timezoneSource` fields in the output to confirm which timezone was used.
 - The `--desc` text parser in Intervals.icu requires a specific format. **Never use inline `- NxMm XX%` syntax** — the API will not expand it into a repeat block. Instead use the **multi-line repeat block format**:
 
 ```
@@ -54,7 +55,7 @@ Each `-` step line is `duration zone%` (e.g., `15m 55-72%`). A bare `Nx` on its 
 ## Primary Workflow
 
 1. Resolve athlete and range.
-   - Default weekly report: 7 days ending today in the athlete timezone.
+   - Default weekly report: 7 days ending today. Note: default ranges are calculated in UTC, so use absolute `YYYY-MM-DD` dates in the athlete's local timezone for precise daily boundaries.
    - If the user gives dates, use absolute `YYYY-MM-DD` dates.
    - If multiple coached athletes are possible, ask for athlete selection.
 

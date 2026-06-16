@@ -237,3 +237,26 @@ func TestAnalyzeWellnessComputesLactateCalibration(t *testing.T) {
 		t.Fatalf("Lactate = %+v, want %+v", got.Lactate, want)
 	}
 }
+
+func TestAnalyzeWellnessIncludesTimezoneMetadata(t *testing.T) {
+	t.Parallel()
+
+	var record icu.Wellness
+	record.ID = testWellnessStartDate
+	record.HRV = 50
+
+	got := icu.AnalyzeWellness([]icu.Wellness{record}, icu.AnalysisOptions{
+		StartDate:      testWellnessStartDate,
+		EndDate:        testWellnessSecondDate,
+		Timezone:       icu.DefaultAnalysisTimezone,
+		TimezoneSource: icu.DefaultAnalysisTimezoneSource,
+	})
+
+	if got.Scope.Timezone != icu.DefaultAnalysisTimezone {
+		t.Fatalf("Scope.Timezone = %q, want %s", got.Scope.Timezone, icu.DefaultAnalysisTimezone)
+	}
+
+	if got.Scope.TimezoneSource != icu.DefaultAnalysisTimezoneSource {
+		t.Fatalf("Scope.TimezoneSource = %q, want %s", got.Scope.TimezoneSource, icu.DefaultAnalysisTimezoneSource)
+	}
+}

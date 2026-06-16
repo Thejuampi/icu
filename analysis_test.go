@@ -379,3 +379,26 @@ func TestAnalyzeCyclingActivitiesStateAndPerformance(t *testing.T) {
 		t.Fatalf("State = %+v, want recovery_priority with load pressure 13.49", got.State)
 	}
 }
+
+func TestAnalyzeCyclingActivitiesIncludesTimezoneMetadata(t *testing.T) {
+	t.Parallel()
+
+	var ride icu.Activity
+	ride.Type = testRideType
+	ride.TrainingLoad = 50
+
+	got := icu.AnalyzeCyclingActivities([]icu.Activity{ride}, icu.AnalysisOptions{
+		StartDate:      "2026-06-01",
+		EndDate:        "2026-06-07",
+		Timezone:       icu.DefaultAnalysisTimezone,
+		TimezoneSource: icu.DefaultAnalysisTimezoneSource,
+	})
+
+	if got.Scope.Timezone != icu.DefaultAnalysisTimezone {
+		t.Fatalf("Scope.Timezone = %q, want %s", got.Scope.Timezone, icu.DefaultAnalysisTimezone)
+	}
+
+	if got.Scope.TimezoneSource != icu.DefaultAnalysisTimezoneSource {
+		t.Fatalf("Scope.TimezoneSource = %q, want %s", got.Scope.TimezoneSource, icu.DefaultAnalysisTimezoneSource)
+	}
+}

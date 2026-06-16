@@ -254,3 +254,29 @@ func TestAnalyzeCyclingAdaptationWarnsWithoutCurveComparison(t *testing.T) {
 		t.Fatalf("Adaptation = %+v, want empty anchors, unknown status, and warning", got)
 	}
 }
+
+func TestAnalyzeCyclingAdaptationIncludesTimezoneMetadata(t *testing.T) {
+	t.Parallel()
+
+	got := icu.AnalyzeCyclingAdaptation(
+		nil,
+		icu.PowerModel{Type: "", CriticalPower: 0, WPrime: 0, PMax: 0, FTP: 0},
+		nil,
+		nil,
+		nil,
+		icu.AnalysisOptions{
+			StartDate:      "2026-04-21",
+			EndDate:        "2026-06-01",
+			Timezone:       icu.DefaultAnalysisTimezone,
+			TimezoneSource: icu.DefaultAnalysisTimezoneSource,
+		},
+	)
+
+	if got.Scope.Timezone != icu.DefaultAnalysisTimezone {
+		t.Fatalf("Scope.Timezone = %q, want %s", got.Scope.Timezone, icu.DefaultAnalysisTimezone)
+	}
+
+	if got.Scope.TimezoneSource != icu.DefaultAnalysisTimezoneSource {
+		t.Fatalf("Scope.TimezoneSource = %q, want %s", got.Scope.TimezoneSource, icu.DefaultAnalysisTimezoneSource)
+	}
+}

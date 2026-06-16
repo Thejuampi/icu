@@ -111,10 +111,47 @@ Useful wellness fields: `id`, `weight`, `restingHR`, `hrv`, `hrvSDNN`, `sleepSec
 ```bash
 icu events list --oldest 2026-05-20 --newest 2026-05-31
 icu events list --oldest 2026-05-20 --newest 2026-05-31 --category WORKOUT
-icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc "- 20m 60% Z2\n- 4x8m 105%\n- 10m 55% cooldown"
+icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc "- 15m Ramp 55-72% FTP\n- 4x8m 105% FTP\n- 10m Ramp 55-50% FTP"
 ```
 
 Common event categories: `WORKOUT`, `RACE_A`, `RACE_B`, `RACE_C`, `NOTE`, `PLAN`, `HOLIDAY`, `SICK`, `INJURED`, `SET_EFTP`, `FITNESS_DAYS`, `SEASON_START`, `TARGET`, `SET_FITNESS`.
+
+#### Workout Description Format
+
+`icu events create` sends `description` to Intervals.icu, which parses it into a native `workoutDoc`. The CLI does **not** accept a raw `workoutDoc`; the description is the only way to shape the workout.
+
+Rules learned from real usage:
+
+- **No nested reps.** Intervals.icu does not parse `3x` blocks that contain another `13x` block. Flatten the structure into separate blocks.
+- **Dash + space.** Use `- 30s 112-115%`. `-30s ...` (no space) is not recognized as a step.
+- **Recovery between blocks must be explicit.** Write each series as its own block followed by the rest interval.
+- **Ramps work in both directions.** Use `- 20m Ramp 55-40% FTP` for a descending cooldown ramp and `- 15m Ramp 55-85% FTP` for an ascending warm-up ramp. The word `Ramp` and trailing `FTP` make the parser more reliable.
+- **Intervals.icu may recalculate `moving-time` and `training-load`.** Always verify the created event with `icu events get <id>`.
+
+Example: a 3×13×(30s/15s) VO2Max session must be written as three flat `13x` blocks, not as a nested `3x` → `13x`:
+
+```bash
+icu events create --category WORKOUT --type Ride --name "3x13 30/15 VO2Max" `
+  --start-date "2026-06-16T07:00:00" `
+  --moving-time 4455 `
+  --training-load 92 `
+  --description "VO2Max 30/15 session.`n`n- 15m Ramp 55-85% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n- 5m 50-55% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n- 5m 50-55% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n`n- 20m Ramp 55-40% FTP"
+```
+
+#### Replacing A Planned Workout
+
+When replacing an existing calendar workout, delete the old `WORKOUT` event and any associated `NOTE` alternatives so the calendar does not keep contradictory options. Recreate the primary session as `WORKOUT` so projected CTL/ATL stays accurate.
+
+```bash
+icu events list --oldest 2026-06-16 --newest 2026-06-16
+icu events delete <old-workout-id>
+icu events delete <old-alternative-note-id>
+icu events create --category WORKOUT --type Ride --name "New session" ...
+```
+
+#### Trainer Platform Sync
+
+Zwift, TrainerRoad, and similar platforms sync planned workouts automatically from Intervals.icu. There is no need to download `.zwo`, `.mrc`, or `.erg` files manually unless the user explicitly asks for an offline copy.
 
 ### Flexible Planning With Optional Alternatives
 
@@ -122,7 +159,7 @@ When planning day-by-day decisions based on recovery markers (HRV, resting HR, s
 
 ```bash
 # Primary session: contributes to projected load
-icu events create --category WORKOUT --type Ride --name "4x5 VO2Max" --start-date "2026-06-16T07:00:00" --moving-time 4380 --training-load 91 --desc "- 15m 55-72%\n4x\n  - 5m 112-115%\n  - 4m 60%\n- 22m Z2"
+icu events create --category WORKOUT --type Ride --name "4x5 VO2Max" --start-date "2026-06-16T07:00:00" --moving-time 4380 --training-load 91 --desc "- 15m Ramp 55-72% FTP\n4x\n  - 5m 112-115% FTP\n  - 4m 60% FTP\n- 22m Ramp 68-55% FTP"
 
 # Alternative session: does NOT contribute to projected load
 # Note: the CLI treats the two characters '\n' literally. Use your shell's real newline mechanism

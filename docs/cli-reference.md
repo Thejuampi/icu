@@ -162,24 +162,25 @@ Invoke these commands as `icu activity <id> <action>`.
 - `cycling`
   Invocation: `icu analysis cycling [--oldest DATE --newest DATE | --days N] [--fields CSV] [--limit N]`
   Defaults: `--days 28`
-  Notes: `--fields` overrides the built-in activity field contract used by the analyzer.
+  Notes: `--fields` overrides the built-in activity field contract used by the analyzer. Default date ranges are calculated in UTC; use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
   Example: `icu analysis cycling --days 42`
 
 - `wellness`
   Invocation: `icu analysis wellness [--oldest DATE --newest DATE | --days N] [--fields CSV]`
   Defaults: `--days 28`
+  Notes: Default date ranges are calculated in UTC; use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
   Example: `icu analysis wellness --oldest 2026-04-20 --newest 2026-05-31`
 
 - `plan`
   Invocation: `icu analysis plan [--history-oldest DATE --history-newest DATE] [--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar_id ID] [--resolve] [--activity-fields CSV]`
   Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`
-  Notes: `--calendar_id` uses an underscore; explicit history and plan ranges must be provided in pairs.
+  Notes: `--calendar_id` uses an underscore; explicit history and plan ranges must be provided in pairs. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
   Example: `icu analysis plan --history-days 84 --plan-days 28 --resolve`
 
 - `adaptation`
   Invocation: `icu analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride] [--curves 42d,365d] [--filters FILTERS] [--newest DATE] [--limit N] [--activity-fields CSV]`
   Defaults: `--days 28`, `--type Ride`, `--curves 42d,365d`
-  Notes: `--newest` applies to the power-curve fetch; `--limit` applies to activity history fetch.
+  Notes: `--newest` applies to the power-curve fetch; `--limit` applies to activity history fetch. Default date ranges are calculated in UTC; use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
   Example: `icu analysis adaptation --days 42 --type Ride --curves 42d,365d`
 
 - `microcycle`
