@@ -53,9 +53,8 @@ func TestFloatFlagValMissingKeyReturnsDefault(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // sets a package-level stdout override that would race with other writers.
 func TestWriteOutputReturnsErrorOnWriteFailure(t *testing.T) {
-	t.Parallel()
-
 	var eb errBuf
 
 	setStdoutForTest(&eb)

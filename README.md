@@ -81,15 +81,21 @@ icu zepp login --email jane@example.com --password '...'
 # 2. Verify the connection
 icu zepp status
 
-# 3. Read data (always pass --oldest and --newest as YYYY-MM-DD)
+# 3. Read data (--oldest/--newest as YYYY-MM-DD, --date as YYYY-MM-DD)
 icu zepp summary --oldest 2026-06-01 --newest 2026-06-07
 icu zepp sleep   --oldest 2026-06-01 --newest 2026-06-07
-icu zepp heart-rate --oldest 2026-06-01 --newest 2026-06-01
+icu zepp heart-rate --source band --oldest 2026-06-01 --newest 2026-06-01
 icu zepp spo2    --oldest 2026-06-01 --newest 2026-06-07
 icu zepp stress  --oldest 2026-06-01 --newest 2026-06-07
 icu zepp pai     --oldest 2026-06-01 --newest 2026-06-07
-icu zepp workouts --oldest 2026-06-01 --newest 2026-06-30
-icu zepp workout 1717200000
+icu zepp hrv     --metric rmssd --oldest 2026-06-01 --newest 2026-06-07
+icu zepp body-battery --oldest 2026-06-01 --newest 2026-06-07
+icu zepp sport-load --oldest 2026-06-01 --newest 2026-06-07
+icu zepp weight  --oldest 2026-06-01 --newest 2026-06-07
+icu zepp second-heart-rate --oldest 2026-06-01 --newest 2026-06-07
+icu zepp spo2-windows --date 2026-06-07
+icu zepp workouts --sport run --oldest 2026-06-01 --newest 2026-06-30
+icu zepp workout --sport run 1717200000
 ```
 
 The auth flow returns a `country_code` that picks the regional data host
@@ -180,7 +186,7 @@ Current top-level resources:
 | `weather` | `config`, `forecast` |
 | `wellness` | `bulk`, `get`, `list`, `update`, `upload` |
 | `workouts` | `create`, `delete`, `get`, `list`, `tags`, `update` |
-| `zepp` | `heart-rate`, `login`, `logout`, `pai`, `profile`, `sleep`, `spo2`, `status`, `stress`, `summary`, `token`, `workout`, `workouts` |
+| `zepp` | `blood-pressure`, `body-battery`, `events`, `health-summary`, `heart-rate`, `hrv`, `login`, `logout`, `manual-data`, `mood`, `pai`, `profile`, `readiness`, `respiratory-rate`, `second-heart-rate`, `skin-temp`, `sleep`, `spo2`, `spo2-windows`, `sport-load`, `status`, `stress`, `stress-minute`, `summary`, `token`, `vo2`, `weight`, `workout`, `workouts` |
 
 ## Analysis Overview
 

@@ -547,10 +547,12 @@ the score is derived from. Compute BioCharge in your analysis agent.
   Example: `icu zepp sleep --oldest 2026-05-01 --newest 2026-05-07`
 
 - `heart-rate`
-  Invocation: `icu zepp heart-rate --oldest DATE --newest DATE`
-  Notes: Decodes the binary `data_hr` field (1440 two-byte shorts per day).
-  Sentinel values 254 (no read) and 255 (not required) are mapped to 0.
-  Example: `icu zepp heart-rate --oldest 2026-05-01 --newest 2026-05-01`
+  Invocation: `icu zepp heart-rate --source band|app --oldest DATE --newest DATE`
+  Notes: Default source `band` decodes the binary `data_hr` field (1440
+  two-byte shorts per day) from `band_data.json`; sentinel values 254 (no
+  read) and 255 (not required) are mapped to 0. Source `app` calls
+  `/users/{id}/heartRate` on the regional data host.
+  Example: `icu zepp heart-rate --source app --oldest 2026-05-01 --newest 2026-05-01`
 
 - `spo2`
   Invocation: `icu zepp spo2 --oldest DATE --newest DATE`
@@ -572,16 +574,107 @@ the score is derived from. Compute BioCharge in your analysis agent.
   minutes/PAI.
   Example: `icu zepp pai --oldest 2026-05-01 --newest 2026-05-07`
 
+- `events`
+  Invocation: `icu zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Calls `/v2/users/me/events` on the regional data host. Presets map
+  to Zepp `eventType`/`subType` pairs (e.g. `body-battery` →
+  `Charge`/`real_data`). Use `icu zepp events --help` to list presets.
+  Example: `icu zepp events --preset body-battery --oldest 2026-06-01 --newest 2026-06-07`
+
+- `hrv`
+  Invocation: `icu zepp hrv --metric sdnn|rmssd --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Fetches nightly HRV from `/v2/users/me/events`. Default metric is
+  `sdnn`; use `rmssd` for the RMSSD variant.
+  Example: `icu zepp hrv --metric rmssd --oldest 2026-06-01 --newest 2026-06-07`
+
+- `readiness`
+  Invocation: `icu zepp readiness --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Daily readiness scores from `/v2/users/me/events`.
+  Example: `icu zepp readiness --oldest 2026-06-01 --newest 2026-06-07`
+
+- `body-battery`
+  Invocation: `icu zepp body-battery --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Body-battery / Charge levels from `/v2/users/me/events`.
+  Example: `icu zepp body-battery --oldest 2026-06-01 --newest 2026-06-07`
+
+- `health-summary`
+  Invocation: `icu zepp health-summary --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Daily health summaries from `/v2/users/me/events`
+  (`DailyHealth/summary`).
+  Example: `icu zepp health-summary --oldest 2026-06-01 --newest 2026-06-07`
+
+- `mood`
+  Invocation: `icu zepp mood --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Mood / emotion readings from `/v2/users/me/events`.
+  Example: `icu zepp mood --oldest 2026-06-01 --newest 2026-06-07`
+
+- `skin-temp`
+  Invocation: `icu zepp skin-temp --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Skin temperature delta readings from `/v2/users/me/events`.
+  Example: `icu zepp skin-temp --oldest 2026-06-01 --newest 2026-06-07`
+
+- `weight`
+  Invocation: `icu zepp weight --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Weight measurements from `/users/{id}/members/-1/weightRecords` on
+  the regional data host.
+  Example: `icu zepp weight --oldest 2026-06-01 --newest 2026-06-07`
+
+- `manual-data`
+  Invocation: `icu zepp manual-data --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Manually entered wellness records from `/v1/user/manualData.json`
+  on the regional data host.
+  Example: `icu zepp manual-data --oldest 2026-06-01 --newest 2026-06-07`
+
+- `second-heart-rate`
+  Invocation: `icu zepp second-heart-rate --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Per-second heart-rate COS file index from
+  `/users/me/fileInfo/events`. Blobs are not downloaded.
+  Example: `icu zepp second-heart-rate --oldest 2026-06-01 --newest 2026-06-07`
+
+- `spo2-windows`
+  Invocation: `icu zepp spo2-windows --date YYYY-MM-DD [--timezone TZ]`
+  Notes: SpO2 ODI windows for a single day from
+  `/users/{id}/events/dateString`. Defaults to `UTC`.
+  Example: `icu zepp spo2-windows --date 2026-06-07`
+
+- `stress-minute`
+  Invocation: `icu zepp stress-minute --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Per-minute stress readings from `/v2/users/me/events`
+  (`Charge`/`stress_data`).
+  Example: `icu zepp stress-minute --oldest 2026-06-01 --newest 2026-06-07`
+
+- `respiratory-rate`
+  Invocation: `icu zepp respiratory-rate --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Overnight respiratory rate readings from `/v2/users/me/events`.
+  Example: `icu zepp respiratory-rate --oldest 2026-06-01 --newest 2026-06-07`
+
+- `blood-pressure`
+  Invocation: `icu zepp blood-pressure --source watch|user --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Blood-pressure readings. Default source `watch` uses
+  `/v2/users/me/events`; `user` uses `/users/me/bloodPressure`.
+  Example: `icu zepp blood-pressure --source user --oldest 2026-06-01 --newest 2026-06-07`
+
+- `sport-load`
+  Invocation: `icu zepp sport-load --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Daily training load from `/v2/watch/users/{id}/WatchSportStatistics/SPORT_LOAD`.
+  Example: `icu zepp sport-load --oldest 2026-06-01 --newest 2026-06-07`
+
+- `vo2`
+  Invocation: `icu zepp vo2 --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: VO2 max estimates from `/v2/watch/users/{id}/WatchSportStatistics/VO2_MAX`.
+  Example: `icu zepp vo2 --oldest 2026-06-01 --newest 2026-06-07`
+
 - `workouts`
-  Invocation: `icu zepp workouts --oldest DATE --newest DATE`
-  Notes: Calls `/v1/sport/run/history.json`. Supports pagination via the
-  internal `next` cursor (the CLI follows it transparently).
-  Example: `icu zepp workouts --oldest 2026-05-01 --newest 2026-05-31`
+  Invocation: `icu zepp workouts [--sport NAME] --oldest DATE --newest DATE`
+  Notes: Calls `/v1/sport/{sport}/history.json` (default `run`). Supports
+  pagination via the internal `next` cursor (the CLI follows it
+  transparently).
+  Example: `icu zepp workouts --sport walking --oldest 2026-05-01 --newest 2026-05-31`
 
 - `workout`
-  Invocation: `icu zepp workout TRACKID`
-  Notes: Calls `/v1/sport/run/detail.json` and decodes the delta-encoded
-  HR/pace/altitude/power/step series.
+  Invocation: `icu zepp workout [--sport NAME] TRACKID`
+  Notes: Calls `/v1/sport/{sport}/detail.json` (default `run`) and decodes
+  the delta-encoded HR/pace/altitude/power/step series.
   Example: `icu zepp workout 1717200000`
 
 ## workouts

@@ -151,3 +151,19 @@ func TestDecodeStepsWithInvalidJSON(t *testing.T) {
 		t.Fatalf("expected error for invalid json")
 	}
 }
+
+func TestZeppAnyToFloat(t *testing.T) {
+	t.Parallel()
+
+	if got := zeppAnyToFloat(float64(42.5)); got != 42.5 {
+		t.Fatalf("number = %f, want 42.5", got)
+	}
+
+	if got := zeppAnyToFloat("3.14"); got != 3.14 {
+		t.Fatalf("string number = %f, want 3.14", got)
+	}
+
+	if got := zeppAnyToFloat("not-a-number"); got != 0 {
+		t.Fatalf("invalid string = %f, want 0", got)
+	}
+}

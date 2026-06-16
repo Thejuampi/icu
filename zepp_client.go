@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -98,6 +98,7 @@ func atoiOrZero(s string) int {
 var (
 	ErrZeppNotAuthenticated = errors.New("zepp not authenticated: run 'icu zepp login'")
 	ErrZeppServer           = errors.New("zepp server error")
+	ErrZeppUnknownSport     = errors.New("unknown zepp sport")
 )
 
 type ZeppClient struct {
@@ -595,9 +596,14 @@ func (c *ZeppClient) PAIDays(ctx context.Context, oldest, newest string) ([]PAID
 // Workouts fetches all workouts. The API returns all workouts (pagination
 // via trackid cursor). Date filtering is done client-side from the trackid
 // (which is a Unix timestamp in seconds).
-func (c *ZeppClient) Workouts(ctx context.Context, oldest, newest string) ([]WorkoutSummary, error) {
+func (c *ZeppClient) Workouts(ctx context.Context, sport, oldest, newest string) ([]WorkoutSummary, error) {
 	if err := c.ensureAuthenticated(); err != nil {
 		return nil, err
+	}
+
+	segment, ok := SportNameToSegment(sport)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrZeppUnknownSport, sport)
 	}
 
 	// trackid is UTC epoch seconds, so parse dates as UTC.
@@ -616,7 +622,7 @@ func (c *ZeppClient) Workouts(ctx context.Context, oldest, newest string) ([]Wor
 	nextID := int64(0)
 
 	for {
-		page, next, err := c.workoutsPage(ctx, nextID)
+		page, next, err := c.workoutsPage(ctx, segment, nextID)
 		if err != nil {
 			return nil, err
 		}
@@ -648,14 +654,14 @@ func (c *ZeppClient) Workouts(ctx context.Context, oldest, newest string) ([]Wor
 	return summaries, nil
 }
 
-func (c *ZeppClient) workoutsPage(ctx context.Context, trackID int64) ([]WorkoutSummary, int64, error) {
+func (c *ZeppClient) workoutsPage(ctx context.Context, sport string, trackID int64) ([]WorkoutSummary, int64, error) {
 	query := url.Values{}
 
 	if trackID > 0 {
 		query.Set("trackid", strconv.FormatInt(trackID, 10))
 	}
 
-	resp, err := c.doGet(ctx, zeppSportHistoryPath, query)
+	resp, err := c.doGet(ctx, SportHistoryURL("", sport), query)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -720,17 +726,22 @@ func (c *ZeppClient) workoutsPage(ctx context.Context, trackID int64) ([]Workout
 
 // Workout fetches the full per-second detail for a single workout.
 // The returned `WorkoutDetail` includes the decoded (absolute) numeric series.
-func (c *ZeppClient) Workout(ctx context.Context, trackID string) (WorkoutDetail, error) {
+func (c *ZeppClient) Workout(ctx context.Context, sport, trackID string) (WorkoutDetail, error) {
 	if err := c.ensureAuthenticated(); err != nil {
 		return WorkoutDetail{}, err
 	}
 
-	query := url.Values{
-		"trackid": {trackID},
-		"source":  {"run.mifit.huami.com"},
+	segment, ok := SportNameToSegment(sport)
+	if !ok {
+		return WorkoutDetail{}, fmt.Errorf("%w: %s", ErrZeppUnknownSport, sport)
 	}
 
-	resp, err := c.doGet(ctx, zeppSportDetailPath, query)
+	query := url.Values{
+		"trackid": {trackID},
+		"source":  {segment + ".mifit.huami.com"},
+	}
+
+	resp, err := c.doGet(ctx, SportDetailURL("", segment), query)
 	if err != nil {
 		return WorkoutDetail{}, err
 	}
@@ -910,6 +921,338 @@ func (c *ZeppClient) userInfoFromHost(ctx context.Context, host string) (ZeppUse
 		Birthday: userData.Birthday,
 		Region:   userData.Region,
 	}, nil
+}
+
+// FetchV2Events fetches raw bytes from /v2/users/me/events for a given preset
+// and date range. The request goes to the regional data host (matching the
+// behaviour observed in m4ary/zepp-health-cli).
+func (c *ZeppClient) FetchV2Events(ctx context.Context, preset V2EventPreset, oldest, newest string) ([]byte, error) {
+	if err := c.ensureAuthenticated(); err != nil {
+		return nil, err
+	}
+
+	endpoint, err := V2EventsURL(c.dataHost, preset, oldest, newest)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Apptoken", c.appToken)
+	req.Header.Set("Appname", "com.xiaomi.hm.health")
+	req.Header.Set("Appplatform", "web")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	return body, nil
+}
+
+// HRVSDNNDays fetches nightly HRV SDNN values from /v2/users/me/events.
+func (c *ZeppClient) HRVSDNNDays(ctx context.Context, oldest, newest string) ([]ZeppHRVEvent, error) {
+	preset, _ := V2EventPresetByName("hrv-sdnn")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch hrv sdnn: %w", err)
+	}
+
+	return DecodeHRV(raw, "sdnn")
+}
+
+// HRVRMSSDDays fetches nightly HRV RMSSD values from /v2/users/me/events.
+func (c *ZeppClient) HRVRMSSDDays(ctx context.Context, oldest, newest string) ([]ZeppHRVEvent, error) {
+	preset, _ := V2EventPresetByName("hrv-rmssd")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch hrv rmssd: %w", err)
+	}
+
+	return DecodeHRV(raw, "rmssd")
+}
+
+// ReadinessDays fetches daily readiness scores from /v2/users/me/events.
+func (c *ZeppClient) ReadinessDays(ctx context.Context, oldest, newest string) ([]ZeppReadinessEvent, error) {
+	preset, _ := V2EventPresetByName("readiness")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch readiness: %w", err)
+	}
+
+	return DecodeReadiness(raw)
+}
+
+// BodyBatteryDays fetches daily body-battery levels from /v2/users/me/events.
+func (c *ZeppClient) BodyBatteryDays(ctx context.Context, oldest, newest string) ([]ZeppBodyBatteryEvent, error) {
+	preset, _ := V2EventPresetByName("body-battery")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch body battery: %w", err)
+	}
+
+	return DecodeBodyBattery(raw)
+}
+
+// HealthSummaryDays fetches daily health summaries from /v2/users/me/events.
+func (c *ZeppClient) HealthSummaryDays(ctx context.Context, oldest, newest string) ([]ZeppHealthSummaryEvent, error) {
+	preset, _ := V2EventPresetByName("daily-health")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch health summary: %w", err)
+	}
+
+	return DecodeHealthSummary(raw)
+}
+
+// MoodDays fetches mood / emotion readings from /v2/users/me/events.
+func (c *ZeppClient) MoodDays(ctx context.Context, oldest, newest string) ([]ZeppMoodEvent, error) {
+	preset, _ := V2EventPresetByName("emotion")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch mood: %w", err)
+	}
+
+	return DecodeMood(raw)
+}
+
+// SkinTempDays fetches skin temperature readings from /v2/users/me/events.
+func (c *ZeppClient) SkinTempDays(ctx context.Context, oldest, newest string) ([]ZeppSkinTempEvent, error) {
+	preset, _ := V2EventPresetByName("skin-temp")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch skin temp: %w", err)
+	}
+
+	return DecodeSkinTemp(raw)
+}
+
+// StressMinuteDays fetches per-minute stress readings from /v2/users/me/events.
+func (c *ZeppClient) StressMinuteDays(ctx context.Context, oldest, newest string) ([]ZeppStressMinuteEvent, error) {
+	preset, _ := V2EventPresetByName("stress-minute")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch stress minute: %w", err)
+	}
+
+	return DecodeStressMinute(raw)
+}
+
+// RespiratoryRateDays fetches overnight respiratory rate readings.
+func (c *ZeppClient) RespiratoryRateDays(ctx context.Context, oldest, newest string) ([]ZeppRespiratoryRateEvent, error) {
+	preset, _ := V2EventPresetByName("respiratory")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch respiratory rate: %w", err)
+	}
+
+	return DecodeRespiratoryRate(raw)
+}
+
+// BloodPressureDays fetches blood-pressure readings from /v2/users/me/events.
+func (c *ZeppClient) BloodPressureDays(ctx context.Context, oldest, newest string) ([]ZeppBloodPressureEvent, error) {
+	preset, _ := V2EventPresetByName("blood-pressure")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch blood pressure: %w", err)
+	}
+
+	return DecodeBloodPressure(raw)
+}
+
+// SportLoad fetches daily training load from the watch's sport statistics.
+func (c *ZeppClient) SportLoad(ctx context.Context, oldest, newest string) ([]ZeppSportLoad, error) {
+	raw, err := c.watchSportStatistics(ctx, "SPORT_LOAD", oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch sport load: %w", err)
+	}
+
+	return DecodeSportLoad(raw)
+}
+
+// VO2Max fetches VO2 max estimates from the watch's sport statistics.
+func (c *ZeppClient) VO2Max(ctx context.Context, oldest, newest string) ([]ZeppVO2Max, error) {
+	raw, err := c.watchSportStatistics(ctx, "VO2_MAX", oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch vo2 max: %w", err)
+	}
+
+	return DecodeVO2Max(raw)
+}
+
+// SecondHeartRateFiles fetches the per-second heart-rate COS file index from
+// /users/me/fileInfo/events. Only the file metadata is returned; the actual
+// blobs are not downloaded.
+func (c *ZeppClient) SecondHeartRateFiles(ctx context.Context, oldest, newest string) ([]ZeppSecondHeartRateFile, error) {
+	endpoint, err := SecondHeartRateFilesURL(c.dataHost, oldest, newest)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := c.fetchDataHostURL(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("fetch second heart rate files: %w", err)
+	}
+
+	return DecodeSecondHeartRateFiles(raw)
+}
+
+// SpO2Windows fetches SpO2 ODI windows for a single day from
+// /users/{id}/events/dateString.
+func (c *ZeppClient) SpO2Windows(ctx context.Context, date, tz string) ([]ZeppSpO2Window, error) {
+	endpoint, err := SpO2WindowsURL(c.dataHost, c.userID, date, tz)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := c.fetchDataHostURL(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("fetch spo2 windows: %w", err)
+	}
+
+	return DecodeSpO2Windows(raw)
+}
+
+func (c *ZeppClient) watchSportStatistics(ctx context.Context, statType, oldest, newest string) ([]byte, error) {
+	if err := c.ensureAuthenticated(); err != nil {
+		return nil, err
+	}
+
+	endpoint, err := WatchSportStatisticsURL(c.dataHost, c.userID, statType, oldest, newest)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Apptoken", c.appToken)
+	req.Header.Set("Appname", "com.xiaomi.hm.health")
+	req.Header.Set("Appplatform", "web")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	return body, nil
+}
+
+// HeartRateEndpoint fetches heart-rate readings from /users/{id}/heartRate.
+func (c *ZeppClient) HeartRateEndpoint(ctx context.Context, oldest, newest string) ([]ZeppHeartRateReading, error) {
+	endpoint, err := UserHeartRateURL(c.dataHost, c.userID, oldest, newest)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := c.fetchDataHostURL(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("fetch heart rate endpoint: %w", err)
+	}
+
+	return DecodeHeartRateEndpoint(raw)
+}
+
+// WeightRecords fetches weight measurements from /users/{id}/members/-1/weightRecords.
+func (c *ZeppClient) WeightRecords(ctx context.Context, oldest, newest string) ([]ZeppWeightRecord, error) {
+	endpoint, err := WeightRecordsURL(c.dataHost, c.userID, oldest, newest)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := c.fetchDataHostURL(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("fetch weight records: %w", err)
+	}
+
+	return DecodeWeightRecords(raw)
+}
+
+// ManualData fetches manually entered wellness records from /v1/user/manualData.json.
+func (c *ZeppClient) ManualData(ctx context.Context, oldest, newest string) ([]ZeppManualDataEntry, error) {
+	endpoint, err := ManualDataURL(c.dataHost, oldest, newest)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := c.fetchDataHostURL(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("fetch manual data: %w", err)
+	}
+
+	return DecodeManualData(raw)
+}
+
+// BloodPressureUser fetches blood-pressure readings from /users/me/bloodPressure.
+func (c *ZeppClient) BloodPressureUser(ctx context.Context, oldest, newest string) ([]ZeppBloodPressureEvent, error) {
+	endpoint, err := BloodPressureUserURL(c.dataHost, oldest, newest)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := c.fetchDataHostURL(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("fetch blood pressure user: %w", err)
+	}
+
+	return DecodeBloodPressureUser(raw)
+}
+
+func (c *ZeppClient) fetchDataHostURL(ctx context.Context, endpoint string) ([]byte, error) {
+	if err := c.ensureAuthenticated(); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Apptoken", c.appToken)
+	req.Header.Set("Appname", "com.xiaomi.hm.health")
+	req.Header.Set("Appplatform", "web")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	return body, nil
 }
 
 // doGetEvents performs a GET to the Zepp events endpoint (api-mifit.zepp.com).
@@ -1125,52 +1468,8 @@ func decodeDeltaEncodedShorts(encoded string) ([]int, error) {
 	return out, nil
 }
 
-func parseDateToMillis(dateStr string) (int64, error) {
-	t, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC)
-	if err != nil {
-		return 0, fmt.Errorf("parse date %s to millis: %w", dateStr, err)
-	}
-
-	return t.UnixMilli(), nil
-}
-
-func parseDateToSecondsUTC(dateStr string) (int64, error) {
-	t, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		return 0, fmt.Errorf("parse date %s to seconds: %w", dateStr, err)
-	}
-
-	return t.Unix(), nil
-}
-
-func parseDateEndOfDaySecondsUTC(dateStr string) (int64, error) {
-	t, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		return 0, fmt.Errorf("parse date %s end of day: %w", dateStr, err)
-	}
-
-	return t.Add(24*time.Hour - time.Second).Unix(), nil
-}
-
-// ParseZeppDateToMillisForTest is a test-friendly alias of parseDateToMillis.
-// It exists so that the public test package can verify date parsing.
-func ParseZeppDateToMillisForTest(dateStr string) (int64, error) {
-	return parseDateToMillis(dateStr)
-}
-
-func parseDateEndOfDayMillis(dateStr string) (int64, error) {
-	t, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC)
-	if err != nil {
-		return 0, fmt.Errorf("parse date %s end of day millis: %w", dateStr, err)
-	}
-
-	return t.Add(24*time.Hour - time.Millisecond).UnixMilli(), nil
-}
-
 // randomRequestID returns a fresh UUID v4 for use as the `r` query parameter
 // required by some Zepp endpoints. We don't need cryptographic strength here.
 func randomRequestID() string {
 	return generateUUID()
 }
-
-var _ = strings.TrimSpace

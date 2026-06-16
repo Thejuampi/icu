@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
@@ -10,6 +11,11 @@ import (
 	"testing"
 
 	icu "github.com/Thejuampi/icu"
+)
+
+const (
+	zeppV2EventRaw = `{"items":[{"timestamp":1780272000000,"value":42.5}]}`
+	zeppBPRaw      = `{"items":[{"timestamp":1780272000000,"systolic":120,"diastolic":80}]}`
 )
 
 const (
@@ -504,7 +510,7 @@ func TestZeppClientWorkoutsHitsV1SportEndpoint(t *testing.T) {
 
 	client := newTestZeppClient(srv)
 
-	summaries, err := client.Workouts(t.Context(), "2026-06-01", "2026-06-07")
+	summaries, err := client.Workouts(t.Context(), "run", "2026-06-01", "2026-06-07")
 	if err != nil {
 		t.Fatalf("Workouts: %v", err)
 	}
@@ -528,7 +534,7 @@ func TestZeppClientWorkoutsReturnsErrorOnNon2xx(t *testing.T) {
 
 	client := newTestZeppClient(srv)
 
-	_, err := client.Workouts(t.Context(), "2026-06-01", "2026-06-07")
+	_, err := client.Workouts(t.Context(), "run", "2026-06-01", "2026-06-07")
 	if err == nil {
 		t.Fatalf("expected error on 5xx")
 	}
@@ -544,7 +550,7 @@ func TestZeppClientWorkoutsReturnsErrorOnNonZeroCode(t *testing.T) {
 
 	client := newTestZeppClient(srv)
 
-	_, err := client.Workouts(t.Context(), "2026-06-01", "2026-06-07")
+	_, err := client.Workouts(t.Context(), "run", "2026-06-01", "2026-06-07")
 	if err == nil {
 		t.Fatalf("expected error for non-zero code")
 	}
@@ -580,7 +586,7 @@ func TestZeppClientWorkoutDecodesDeltaSeries(t *testing.T) {
 
 	client := newTestZeppClient(srv)
 
-	detail, err := client.Workout(t.Context(), "1717200000")
+	detail, err := client.Workout(t.Context(), "run", "1717200000")
 	if err != nil {
 		t.Fatalf("Workout: %v", err)
 	}
@@ -680,7 +686,7 @@ func TestZeppClientWorkoutReturnsErrorOnNon2xx(t *testing.T) {
 
 	client := newTestZeppClient(srv)
 
-	_, err := client.Workout(t.Context(), "1717200000")
+	_, err := client.Workout(t.Context(), "run", "1717200000")
 	if err == nil {
 		t.Fatalf("expected error on 5xx")
 	}
@@ -696,7 +702,7 @@ func TestZeppClientWorkoutReturnsErrorOnNonZeroCode(t *testing.T) {
 
 	client := newTestZeppClient(srv)
 
-	_, err := client.Workout(t.Context(), "1717200000")
+	_, err := client.Workout(t.Context(), "run", "1717200000")
 	if err == nil {
 		t.Fatalf("expected error for non-zero code")
 	}
@@ -747,5 +753,1238 @@ func TestZeppClientPAIDaysReturnsErrorOnNon2xx(t *testing.T) {
 	_, err := client.PAIDays(t.Context(), "2026-06-01", "2026-06-01")
 	if err == nil {
 		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestV2EventPresetsIncludesExpectedEntries(t *testing.T) {
+	t.Parallel()
+
+	presets := icu.V2EventPresets()
+	if len(presets) == 0 {
+		t.Fatalf("presets is empty")
+	}
+
+	if _, ok := presets["hrv-sdnn"]; !ok {
+		t.Fatalf("missing hrv-sdnn preset")
+	}
+}
+
+func TestV2EventPresetByNameReturnsKnownPreset(t *testing.T) {
+	t.Parallel()
+
+	preset, ok := icu.V2EventPresetByName("body-battery")
+	if !ok {
+		t.Fatalf("expected body-battery preset")
+	}
+
+	if preset.EventType != "Charge" || preset.SubType != "real_data" {
+		t.Fatalf("preset = %+v", preset)
+	}
+}
+
+func TestV2EventPresetByNameReturnsFalseForUnknown(t *testing.T) {
+	t.Parallel()
+
+	_, ok := icu.V2EventPresetByName("not-real")
+	if ok {
+		t.Fatalf("expected unknown preset to be false")
+	}
+}
+
+func TestV2EventsURLBuildsCorrectPathAndQuery(t *testing.T) {
+	t.Parallel()
+
+	preset := icu.V2EventPreset{EventType: "hrv_sdnn", SubType: "real_data"}
+	got, err := icu.V2EventsURL("https://api-mifit.huami.com", preset, "2026-06-01", "2026-06-07")
+	if err != nil {
+		t.Fatalf("V2EventsURL: %v", err)
+	}
+
+	if !strings.Contains(got, "/v2/users/me/events?") {
+		t.Fatalf("url missing v2 path: %s", got)
+	}
+
+	if !strings.Contains(got, "eventType=hrv_sdnn") {
+		t.Fatalf("url missing eventType: %s", got)
+	}
+
+	if !strings.Contains(got, "subType=real_data") {
+		t.Fatalf("url missing subType: %s", got)
+	}
+
+	if !strings.Contains(got, "limit=1000") {
+		t.Fatalf("url missing limit: %s", got)
+	}
+}
+
+func TestV2EventsURLRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	preset := icu.V2EventPreset{EventType: "hrv_sdnn", SubType: "real_data"}
+	_, err := icu.V2EventsURL("https://api-mifit.huami.com", preset, "garbage", "2026-06-07")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestDecodeV2EventsExtractsCommonFields(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"items":[{"timestamp":1780272000000,"type":"hrv_sdnn","subType":"real_data","value":"45.5","extra_field":"x"}]}`
+
+	events, err := icu.DecodeV2Events([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeV2Events: %v", err)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("events length = %d, want 1", len(events))
+	}
+
+	ev := events[0]
+	if ev.Timestamp != 1780272000000 {
+		t.Fatalf("timestamp = %d, want 1780272000000", ev.Timestamp)
+	}
+
+	if ev.Date != "2026-06-01" {
+		t.Fatalf("date = %q, want 2026-06-01", ev.Date)
+	}
+
+	if ev.Type != "hrv_sdnn" {
+		t.Fatalf("type = %q, want hrv_sdnn", ev.Type)
+	}
+
+	if ev.SubType != "real_data" {
+		t.Fatalf("subtype = %q, want real_data", ev.SubType)
+	}
+
+	if ev.Value != 45.5 {
+		t.Fatalf("value = %v, want 45.5", ev.Value)
+	}
+
+	if ev.Extra["extra_field"] != "x" {
+		t.Fatalf("extra = %+v", ev.Extra)
+	}
+}
+
+func TestDecodeV2EventsReturnsEmptyForEmptyInput(t *testing.T) {
+	t.Parallel()
+
+	events, err := icu.DecodeV2Events(nil)
+	if err != nil {
+		t.Fatalf("DecodeV2Events: %v", err)
+	}
+
+	if events != nil {
+		t.Fatalf("events = %+v, want nil", events)
+	}
+}
+
+func TestZeppClientFetchV2EventsHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/v2/users/me/events" {
+			return http.StatusNotFound, err404
+		}
+
+		if !strings.Contains(record.Query, "eventType=Charge") {
+			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"real_data","value":85}]}`
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	preset := icu.V2EventPreset{EventType: "Charge", SubType: "real_data"}
+	raw, err := client.FetchV2Events(t.Context(), preset, "2026-06-01", "2026-06-01")
+	if err != nil {
+		t.Fatalf("FetchV2Events: %v", err)
+	}
+
+	events, err := icu.DecodeV2Events(raw)
+	if err != nil {
+		t.Fatalf("DecodeV2Events: %v", err)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("events length = %d, want 1", len(events))
+	}
+
+	if events[0].Value != 85 {
+		t.Fatalf("value = %v, want 85", events[0].Value)
+	}
+}
+
+func TestZeppClientFetchV2EventsSendsApptokenHeader(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Header.Get("Apptoken") != "test-app-token" {
+			return http.StatusUnauthorized, `{"code":3001,"message":"missing token"}`
+		}
+
+		return http.StatusOK, `{"items":[]}`
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.FetchV2Events(t.Context(), icu.V2EventPreset{EventType: "Charge", SubType: "real_data"}, "2026-06-01", "2026-06-01")
+	if err != nil {
+		t.Fatalf("FetchV2Events: %v", err)
+	}
+}
+
+func TestZeppClientFetchV2EventsMissingAuthReturnsError(t *testing.T) {
+	t.Parallel()
+
+	auth := &icu.ZeppAuthResult{AppToken: "", UserID: ""}
+	client := icu.NewZeppClientFromAuth(auth)
+
+	_, err := client.FetchV2Events(t.Context(), icu.V2EventPreset{}, "2026-06-01", "2026-06-01")
+	if !errors.Is(err, icu.ErrZeppNotAuthenticated) {
+		t.Fatalf("expected ErrZeppNotAuthenticated, got %v", err)
+	}
+}
+
+func TestZeppClientFetchV2EventsReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	_, err := client.FetchV2Events(t.Context(), icu.V2EventPreset{EventType: "Charge", SubType: "real_data"}, "2026-06-01", "2026-06-01")
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestDecodeHRV(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeHRV([]byte(raw), "sdnn")
+	if err != nil {
+		t.Fatalf("DecodeHRV: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Metric != "sdnn" || events[0].Value != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeReadiness(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeReadiness([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeReadiness: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Score != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeBodyBattery(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeBodyBattery([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeBodyBattery: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Level != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeHealthSummary(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"items":[{"timestamp":1780272000000,"extra":"z"}]}`
+
+	events, err := icu.DecodeHealthSummary([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeHealthSummary: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Extra["extra"] != "z" {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeMood(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeMood([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeMood: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Mood != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeSkinTemp(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeSkinTemp([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeSkinTemp: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Delta != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func newZeppV2EventTestServer(t *testing.T, eventType, subType string) *icu.ZeppClient {
+	t.Helper()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/v2/users/me/events" {
+			return http.StatusNotFound, err404
+		}
+
+		if !strings.Contains(record.Query, "eventType="+eventType) || !strings.Contains(record.Query, "subType="+subType) {
+			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"value":42}]}`
+	})
+	t.Cleanup(srv.Close)
+
+	return newTestZeppClient(srv)
+}
+
+func TestZeppClientHRVSDNNDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "hrv_sdnn", "real_data")
+	if _, err := client.HRVSDNNDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("HRVSDNNDays: %v", err)
+	}
+}
+
+func TestZeppClientHRVRMSSDDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "HRVRMSSD", "real_data")
+	if _, err := client.HRVRMSSDDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("HRVRMSSDDays: %v", err)
+	}
+}
+
+func TestZeppClientReadinessDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "readiness", "watch_score")
+	if _, err := client.ReadinessDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("ReadinessDays: %v", err)
+	}
+}
+
+func TestZeppClientBodyBatteryDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "Charge", "real_data")
+	if _, err := client.BodyBatteryDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("BodyBatteryDays: %v", err)
+	}
+}
+
+func TestZeppClientHealthSummaryDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "DailyHealth", "summary")
+	if _, err := client.HealthSummaryDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("HealthSummaryDays: %v", err)
+	}
+}
+
+func TestZeppClientMoodDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "Emotion", "real_data")
+	if _, err := client.MoodDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("MoodDays: %v", err)
+	}
+}
+
+func TestZeppClientSkinTempDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "skinTemp", "real_data")
+	if _, err := client.SkinTempDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("SkinTempDays: %v", err)
+	}
+}
+
+func TestDecodeStressMinute(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeStressMinute([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeStressMinute: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Stress != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeRespiratoryRate(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeRespiratoryRate([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeRespiratoryRate: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Rate != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeBloodPressure(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppBPRaw
+
+	events, err := icu.DecodeBloodPressure([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeBloodPressure: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Systolic != 120 || events[0].Diastolic != 80 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeBloodPressureUser(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppBPRaw
+
+	events, err := icu.DecodeBloodPressureUser([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeBloodPressureUser: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Systolic != 120 || events[0].Diastolic != 80 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestZeppClientStressMinuteDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "Charge", "stress_data")
+	if _, err := client.StressMinuteDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("StressMinuteDays: %v", err)
+	}
+}
+
+func TestZeppClientRespiratoryRateDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "RespiratoryRate", "real_data")
+	if _, err := client.RespiratoryRateDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("RespiratoryRateDays: %v", err)
+	}
+}
+
+func TestZeppClientBloodPressureDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "blood_pressure", "real_data")
+	if _, err := client.BloodPressureDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("BloodPressureDays: %v", err)
+	}
+}
+
+func TestZeppClientBloodPressureUserHitsEndpoint(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/users/me/bloodPressure" {
+			return http.StatusNotFound, err404
+		}
+
+		return http.StatusOK, zeppBPRaw
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	if _, err := client.BloodPressureUser(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("BloodPressureUser: %v", err)
+	}
+}
+
+func TestZeppClientBloodPressureUserMissingAuthReturnsError(t *testing.T) {
+	t.Parallel()
+
+	auth := &icu.ZeppAuthResult{AppToken: "", UserID: ""}
+	client := icu.NewZeppClientFromAuth(auth)
+
+	_, err := client.BloodPressureUser(t.Context(), "2026-06-01", "2026-06-01")
+	if !errors.Is(err, icu.ErrZeppNotAuthenticated) {
+		t.Fatalf("expected ErrZeppNotAuthenticated, got %v", err)
+	}
+}
+
+func TestZeppClientBloodPressureUserRejectsBadDate(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusOK, zeppBPRaw
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	_, err := client.BloodPressureUser(t.Context(), "garbage", "2026-06-01")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestZeppClientBloodPressureUserRejectsBadNewestDate(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusOK, zeppBPRaw
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	_, err := client.BloodPressureUser(t.Context(), "2026-06-01", "garbage")
+	if err == nil {
+		t.Fatalf("expected error for invalid newest date")
+	}
+}
+
+func TestZeppClientBloodPressureUserReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	_, err := client.BloodPressureUser(t.Context(), "2026-06-01", "2026-06-01")
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestWatchSportStatisticsURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got, err := icu.WatchSportStatisticsURL("https://api-mifit.huami.com", "u1", "SPORT_LOAD", "2026-06-01", "2026-06-07")
+	if err != nil {
+		t.Fatalf("WatchSportStatisticsURL: %v", err)
+	}
+
+	if !strings.Contains(got, "/v2/watch/users/u1/WatchSportStatistics/SPORT_LOAD?") {
+		t.Fatalf("url missing path: %s", got)
+	}
+
+	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
+		t.Fatalf("url missing query: %s", got)
+	}
+}
+
+func TestDecodeSportLoad(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeSportLoad([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeSportLoad: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Load != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeVO2Max(t *testing.T) {
+	t.Parallel()
+
+	raw := zeppV2EventRaw
+
+	events, err := icu.DecodeVO2Max([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeVO2Max: %v", err)
+	}
+
+	if len(events) != 1 || events[0].VO2Max != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestZeppClientSportLoadHitsEndpoint(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/v2/watch/users/u1/WatchSportStatistics/SPORT_LOAD" {
+			return http.StatusNotFound, err404
+		}
+
+		return http.StatusOK, zeppV2EventRaw
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	if _, err := client.SportLoad(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("SportLoad: %v", err)
+	}
+}
+
+func TestZeppClientVO2MaxHitsEndpoint(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/v2/watch/users/u1/WatchSportStatistics/VO2_MAX" {
+			return http.StatusNotFound, err404
+		}
+
+		return http.StatusOK, zeppV2EventRaw
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	if _, err := client.VO2Max(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("VO2Max: %v", err)
+	}
+}
+
+func TestWatchSportStatisticsURLRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.WatchSportStatisticsURL("https://api-mifit.huami.com", "u1", "SPORT_LOAD", "garbage", "2026-06-07")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestUserHeartRateURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got, err := icu.UserHeartRateURL("https://api-mifit.huami.com", "u1", "2026-06-01", "2026-06-07")
+	if err != nil {
+		t.Fatalf("UserHeartRateURL: %v", err)
+	}
+
+	if !strings.Contains(got, "/users/u1/heartRate?") {
+		t.Fatalf("url missing path: %s", got)
+	}
+
+	if !strings.Contains(got, "startTime=") || !strings.Contains(got, "endTime=") {
+		t.Fatalf("url missing query: %s", got)
+	}
+}
+
+func TestUserHeartRateURLRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.UserHeartRateURL("https://api-mifit.huami.com", "u1", "garbage", "2026-06-07")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestWeightRecordsURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got, err := icu.WeightRecordsURL("https://api-mifit.huami.com", "u1", "2026-06-01", "2026-06-07")
+	if err != nil {
+		t.Fatalf("WeightRecordsURL: %v", err)
+	}
+
+	if !strings.Contains(got, "/users/u1/members/-1/weightRecords?") {
+		t.Fatalf("url missing path: %s", got)
+	}
+
+	if !strings.Contains(got, "fromTime=") || !strings.Contains(got, "toTime=") {
+		t.Fatalf("url missing query: %s", got)
+	}
+}
+
+func TestWeightRecordsURLRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.WeightRecordsURL("https://api-mifit.huami.com", "u1", "2026-06-01", "garbage")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestManualDataURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got, err := icu.ManualDataURL("https://api-mifit.huami.com", "2026-06-01", "2026-06-07")
+	if err != nil {
+		t.Fatalf("ManualDataURL: %v", err)
+	}
+
+	if !strings.Contains(got, "/v1/user/manualData.json?") {
+		t.Fatalf("url missing path: %s", got)
+	}
+
+	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
+		t.Fatalf("url missing query: %s", got)
+	}
+}
+
+func TestManualDataURLRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.ManualDataURL("https://api-mifit.huami.com", "not-a-date", "2026-06-07")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestBloodPressureUserURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got, err := icu.BloodPressureUserURL("https://api-mifit.huami.com", "2026-06-01", "2026-06-07")
+	if err != nil {
+		t.Fatalf("BloodPressureUserURL: %v", err)
+	}
+
+	if !strings.Contains(got, "/users/me/bloodPressure?") {
+		t.Fatalf("url missing path: %s", got)
+	}
+
+	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
+		t.Fatalf("url missing query: %s", got)
+	}
+}
+
+func TestBloodPressureUserURLRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.BloodPressureUserURL("https://api-mifit.huami.com", "2026-06-01", "bad")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestSecondHeartRateFilesURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got, err := icu.SecondHeartRateFilesURL("https://api-mifit.huami.com", "2026-06-01", "2026-06-07")
+	if err != nil {
+		t.Fatalf("SecondHeartRateFilesURL: %v", err)
+	}
+
+	if !strings.Contains(got, "/users/me/fileInfo/events?") {
+		t.Fatalf("url missing path: %s", got)
+	}
+
+	if !strings.Contains(got, "eventType=second_heart_rate") || !strings.Contains(got, "subType=real_data") {
+		t.Fatalf("url missing event query: %s", got)
+	}
+}
+
+func TestSecondHeartRateFilesURLRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.SecondHeartRateFilesURL("https://api-mifit.huami.com", "bad", "2026-06-07")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestSpO2WindowsURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got, err := icu.SpO2WindowsURL("https://api-mifit.huami.com", "u1", "2026-06-07", "UTC")
+	if err != nil {
+		t.Fatalf("SpO2WindowsURL: %v", err)
+	}
+
+	if !strings.Contains(got, "/users/u1/events/dateString?") {
+		t.Fatalf("url missing path: %s", got)
+	}
+
+	if !strings.Contains(got, "eventType=blood_oxygen") || !strings.Contains(got, "subType=odi") {
+		t.Fatalf("url missing event query: %s", got)
+	}
+}
+
+func TestSpO2WindowsURLRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.SpO2WindowsURL("https://api-mifit.huami.com", "u1", "not-a-date", "UTC")
+	if err == nil {
+		t.Fatalf("expected error for invalid date")
+	}
+}
+
+func TestSpO2WindowsURLRejectsInvalidTimezone(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.SpO2WindowsURL("https://api-mifit.huami.com", "u1", "2026-06-07", "Mars/Phobos")
+	if err == nil {
+		t.Fatalf("expected error for invalid timezone")
+	}
+}
+
+func TestSportHistoryURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got := icu.SportHistoryURL("https://api-mifit.huami.com", "walking")
+	if got != "https://api-mifit.huami.com/v1/sport/walking/history.json" {
+		t.Fatalf("url = %s", got)
+	}
+}
+
+func TestSportDetailURLBuildsCorrectPath(t *testing.T) {
+	t.Parallel()
+
+	got := icu.SportDetailURL("https://api-mifit.huami.com", "ride")
+	if got != "https://api-mifit.huami.com/v1/sport/ride/detail.json" {
+		t.Fatalf("url = %s", got)
+	}
+}
+
+func TestSportNameToSegmentMapsKnownSports(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		want string
+	}{
+		{"run", "run"},
+		{"walking", "walking"},
+		{"cycling", "ride"},
+		{"ride", "ride"},
+		{"swimming", "swimming"},
+	}
+
+	for _, tc := range cases {
+		segment, ok := icu.SportNameToSegment(tc.name)
+		if !ok || segment != tc.want {
+			t.Fatalf("%s = %s/%v, want %s", tc.name, segment, ok, tc.want)
+		}
+	}
+}
+
+func TestSportNameToSegmentReturnsFalseForUnknownSport(t *testing.T) {
+	t.Parallel()
+
+	_, ok := icu.SportNameToSegment("quidditch")
+	if ok {
+		t.Fatalf("expected false for unknown sport")
+	}
+}
+
+func TestZeppClientSportLoadReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	_, err := client.SportLoad(t.Context(), "2026-06-01", "2026-06-01")
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestZeppClientVO2MaxReturnsErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusInternalServerError, err500
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	_, err := client.VO2Max(t.Context(), "2026-06-01", "2026-06-01")
+	if err == nil {
+		t.Fatalf("expected error on 5xx")
+	}
+}
+
+func TestDecodeBloodPressureUserRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.DecodeBloodPressureUser([]byte("not-json"))
+	if err == nil {
+		t.Fatalf("expected error for malformed JSON")
+	}
+}
+
+func TestDecodeBloodPressureUsesAliasFields(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"items":[{"timestamp":1780272000000,"highPressure":130,"lowPressure":85}]}`
+
+	events, err := icu.DecodeBloodPressure([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeBloodPressure: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Systolic != 130 || events[0].Diastolic != 85 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeBloodPressureParsesStringValues(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"items":[{"timestamp":1780272000000,"systolic":"125","diastolic":"82"}]}`
+
+	events, err := icu.DecodeBloodPressure([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeBloodPressure: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Systolic != 125 || events[0].Diastolic != 82 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeBloodPressureKeepsNonBPFieldsInExtra(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"items":[{"timestamp":1780272000000,"systolic":120,"diastolic":80,"deviceId":"abc"}]}`
+
+	events, err := icu.DecodeBloodPressure([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeBloodPressure: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Extra["deviceId"] != "abc" {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeV2EventsHandlesEmptyItems(t *testing.T) {
+	t.Parallel()
+
+	events, err := icu.DecodeV2Events([]byte(`{"items":[]}`))
+	if err != nil {
+		t.Fatalf("DecodeV2Events: %v", err)
+	}
+
+	if len(events) != 0 {
+		t.Fatalf("events = %+v, want empty", events)
+	}
+}
+
+func TestDecodeHeartRateEndpoint(t *testing.T) {
+	t.Parallel()
+
+	events, err := icu.DecodeHeartRateEndpoint([]byte(zeppV2EventRaw))
+	if err != nil {
+		t.Fatalf("DecodeHeartRateEndpoint: %v", err)
+	}
+
+	if len(events) != 1 || events[0].HR != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeWeightRecords(t *testing.T) {
+	t.Parallel()
+
+	events, err := icu.DecodeWeightRecords([]byte(zeppV2EventRaw))
+	if err != nil {
+		t.Fatalf("DecodeWeightRecords: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Weight != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeManualData(t *testing.T) {
+	t.Parallel()
+
+	events, err := icu.DecodeManualData([]byte(zeppV2EventRaw))
+	if err != nil {
+		t.Fatalf("DecodeManualData: %v", err)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeSecondHeartRateFiles(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"items":[{"timestamp":1780272000000,"url":"https://cos.example/1.zip","size":1234}]}`
+
+	files, err := icu.DecodeSecondHeartRateFiles([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeSecondHeartRateFiles: %v", err)
+	}
+
+	if len(files) != 1 || files[0].URL != "https://cos.example/1.zip" {
+		t.Fatalf("files = %+v", files)
+	}
+
+	if files[0].Extra["size"] != float64(1234) {
+		t.Fatalf("extra = %+v", files[0].Extra)
+	}
+}
+
+func TestDecodeSpO2Windows(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"items":[{"timestamp":1780272000000,"spo2":98,"duration":60}]}`
+
+	windows, err := icu.DecodeSpO2Windows([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeSpO2Windows: %v", err)
+	}
+
+	if len(windows) != 1 {
+		t.Fatalf("windows = %+v", windows)
+	}
+}
+
+func TestZeppClientSecondHeartRateFilesHitsEndpoint(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/users/me/fileInfo/events" {
+			return http.StatusNotFound, err404
+		}
+
+		if !strings.Contains(record.Query, "eventType=second_heart_rate") || !strings.Contains(record.Query, "subType=real_data") {
+			return http.StatusOK, errMissingEventType
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"url":"https://cos.example/1.zip"}]}`
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	if _, err := client.SecondHeartRateFiles(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("SecondHeartRateFiles: %v", err)
+	}
+}
+
+func TestZeppClientSpO2WindowsHitsEndpoint(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/users/u1/events/dateString" {
+			return http.StatusNotFound, err404
+		}
+
+		if !strings.Contains(record.Query, "eventType=blood_oxygen") || !strings.Contains(record.Query, "subType=odi") {
+			return http.StatusOK, errMissingEventType
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"extra":{"value":98}}]}`
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	if _, err := client.SpO2Windows(t.Context(), "2026-06-07", "UTC"); err != nil {
+		t.Fatalf("SpO2Windows: %v", err)
+	}
+}
+
+func TestZeppClientSpO2WindowsRejectsInvalidTimezone(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		return http.StatusOK, `{"items":[]}`
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	if _, err := client.SpO2Windows(t.Context(), "2026-06-07", "invalid"); err == nil {
+		t.Fatalf("expected error for invalid timezone")
+	}
+}
+
+func TestZeppClientDataHostDateRangeMethodsHitEndpoints(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		path string
+		call func(context.Context, *icu.ZeppClient, string, string) (any, error)
+	}{
+		{
+			name: "HeartRateEndpoint",
+			path: "/users/u1/heartRate",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.HeartRateEndpoint(ctx, o, n)
+			},
+		},
+		{
+			name: "WeightRecords",
+			path: "/users/u1/members/-1/weightRecords",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.WeightRecords(ctx, o, n)
+			},
+		},
+		{
+			name: "ManualData",
+			path: "/v1/user/manualData.json",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.ManualData(ctx, o, n)
+			},
+		},
+		{
+			name: "BloodPressureUser",
+			path: "/users/me/bloodPressure",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.BloodPressureUser(ctx, o, n)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+				if record.Path != tc.path {
+					return http.StatusNotFound, err404
+				}
+
+				return http.StatusOK, zeppV2EventRaw
+			})
+			t.Cleanup(srv.Close)
+
+			client := newTestZeppClient(srv)
+			if _, err := tc.call(t.Context(), client, "2026-06-01", "2026-06-01"); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+		})
+	}
+}
+
+func TestZeppClientDataHostDateRangeMethodsRejectBadDates(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		oldest string
+		newest string
+		call   func(context.Context, *icu.ZeppClient, string, string) (any, error)
+	}{
+		{
+			name:   "HeartRateEndpointBadOldest",
+			oldest: "garbage",
+			newest: "2026-06-01",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.HeartRateEndpoint(ctx, o, n)
+			},
+		},
+		{
+			name:   "WeightRecordsBadNewest",
+			oldest: "2026-06-01",
+			newest: "garbage",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.WeightRecords(ctx, o, n)
+			},
+		},
+		{
+			name:   "ManualDataBadOldest",
+			oldest: "not-a-date",
+			newest: "2026-06-01",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.ManualData(ctx, o, n)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+				return http.StatusOK, zeppV2EventRaw
+			})
+			t.Cleanup(srv.Close)
+
+			client := newTestZeppClient(srv)
+			if _, err := tc.call(t.Context(), client, tc.oldest, tc.newest); err == nil {
+				t.Fatalf("%s: expected error for invalid date", tc.name)
+			}
+		})
+	}
+}
+
+func TestZeppClientDataHostDateRangeMethodsReturnErrorOnNon2xx(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		call func(context.Context, *icu.ZeppClient, string, string) (any, error)
+	}{
+		{
+			name: "HeartRateEndpoint",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.HeartRateEndpoint(ctx, o, n)
+			},
+		},
+		{
+			name: "WeightRecords",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.WeightRecords(ctx, o, n)
+			},
+		},
+		{
+			name: "ManualData",
+			call: func(ctx context.Context, c *icu.ZeppClient, o, n string) (any, error) {
+				return c.ManualData(ctx, o, n)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+				return http.StatusInternalServerError, err500
+			})
+			t.Cleanup(srv.Close)
+
+			client := newTestZeppClient(srv)
+			if _, err := tc.call(t.Context(), client, "2026-06-01", "2026-06-01"); err == nil {
+				t.Fatalf("%s: expected error on 5xx", tc.name)
+			}
+		})
 	}
 }

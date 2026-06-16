@@ -1,6 +1,11 @@
 package icu
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+)
 
 // Zepp DTOs reflect the real Zepp/Amazfit cloud API as reverse-engineered
 // from huami-token, bentasker/zepp_to_influxdb, and rolandsz/Mi-Fit-and-Zepp-workout-exporter.
@@ -233,4 +238,606 @@ func SportTypeName(t int) string {
 		return name
 	}
 	return "unknown"
+}
+
+// V2EventPreset identifies a Zepp /v2/users/me/events eventType/subType pair.
+// Presets are used by the generic `zepp events` command and as building blocks
+// for dedicated wellness commands.
+type V2EventPreset struct {
+	Name      string
+	EventType string
+	SubType   string
+}
+
+// ZeppV2Event is the normalized output of the generic `zepp events` command.
+// It captures the common fields shared by most V2 event items; any additional
+// fields are preserved in Extra.
+type ZeppV2Event struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Type      string         `json:"type"`
+	SubType   string         `json:"subtype,omitempty"`
+	Value     float64        `json:"value,omitempty"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// v2EventPresets returns the registry of supported /v2/users/me/events presets.
+func v2EventPresets() map[string]V2EventPreset {
+	return map[string]V2EventPreset{
+		"hrv-sdnn":       {Name: "hrv-sdnn", EventType: "hrv_sdnn", SubType: "real_data"},
+		"hrv-rmssd":      {Name: "hrv-rmssd", EventType: "HRVRMSSD", SubType: "real_data"},
+		"readiness":      {Name: "readiness", EventType: "readiness", SubType: "watch_score"},
+		"body-battery":   {Name: "body-battery", EventType: "Charge", SubType: "real_data"},
+		"stress-minute":  {Name: "stress-minute", EventType: "Charge", SubType: "stress_data"},
+		"respiratory":    {Name: "respiratory", EventType: "RespiratoryRate", SubType: "real_data"},
+		"daily-health":   {Name: "daily-health", EventType: "DailyHealth", SubType: "summary"},
+		"blood-pressure": {Name: "blood-pressure", EventType: "blood_pressure", SubType: "real_data"},
+		"emotion":        {Name: "emotion", EventType: "Emotion", SubType: "real_data"},
+		"skin-temp":      {Name: "skin-temp", EventType: "skinTemp", SubType: "real_data"},
+	}
+}
+
+// V2EventPresets returns a copy of the registered V2 event presets.
+func V2EventPresets() map[string]V2EventPreset {
+	presets := v2EventPresets()
+	out := make(map[string]V2EventPreset, len(presets))
+	for k, v := range presets {
+		out[k] = v
+	}
+
+	return out
+}
+
+// V2EventPresetByName returns a preset by name, or ok=false if unknown.
+func V2EventPresetByName(name string) (V2EventPreset, bool) {
+	p, ok := v2EventPresets()[name]
+	return p, ok
+}
+
+const (
+	zeppTimestampKey = "timestamp"
+	zeppSportRide    = "ride"
+)
+
+// SportNameToSegment returns the Zepp URL segment for a sport name.
+func SportNameToSegment(name string) (string, bool) {
+	switch name {
+	case "run":
+		return "run", true
+	case "walking":
+		return "walking", true
+	case zeppSportRide, "cycling":
+		return zeppSportRide, true
+	case "swimming":
+		return "swimming", true
+	default:
+		return "", false
+	}
+}
+
+// DecodeV2Events normalizes a raw /v2/users/me/events response into a slice of
+// ZeppV2Event. It extracts common fields (timestamp, type, subtype, value) and
+// preserves any remaining item fields in Extra.
+func DecodeV2Events(raw []byte) ([]ZeppV2Event, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	var payload struct {
+		Items []map[string]any `json:"items"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("decode v2 events: %w", err)
+	}
+
+	events := make([]ZeppV2Event, 0, len(payload.Items))
+	for _, item := range payload.Items {
+		ev := ZeppV2Event{Extra: make(map[string]any)}
+
+		if ts, ok := item[zeppTimestampKey].(float64); ok {
+			ev.Timestamp = int64(ts)
+			ev.Date = time.UnixMilli(ev.Timestamp).UTC().Format("2006-01-02")
+		}
+
+		if t, ok := item["type"].(string); ok {
+			ev.Type = t
+		} else if t, ok := item["eventType"].(string); ok {
+			ev.Type = t
+		}
+
+		if st, ok := item["subType"].(string); ok {
+			ev.SubType = st
+		}
+
+		if v, ok := item["value"]; ok {
+			ev.Value = zeppAnyToFloat(v)
+		}
+
+		for k, v := range item {
+			switch k {
+			case zeppTimestampKey, "type", "eventType", "subType", "value":
+				continue
+			default:
+				ev.Extra[k] = v
+			}
+		}
+
+		events = append(events, ev)
+	}
+
+	return events, nil
+}
+
+// zeppAnyToFloat coerces a JSON value (number or numeric string) to float64.
+func zeppAnyToFloat(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case string:
+		if f, err := strconv.ParseFloat(n, 64); err == nil {
+			return f
+		}
+	}
+
+	return 0
+}
+
+// decodeV2EventsAs maps a raw /v2/users/me/events response to a typed slice
+// using the provided conversion function.
+func decodeV2EventsAs[T any](raw []byte, fn func(ZeppV2Event) T) ([]T, error) {
+	events, err := DecodeV2Events(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]T, 0, len(events))
+	for _, ev := range events {
+		out = append(out, fn(ev))
+	}
+
+	return out, nil
+}
+
+// ZeppHRVEvent is one nightly HRV reading from /v2/users/me/events.
+type ZeppHRVEvent struct {
+	Timestamp int64   `json:"timestamp"`
+	Date      string  `json:"date"`
+	Metric    string  `json:"metric"`
+	Value     float64 `json:"value"`
+}
+
+// DecodeHRV decodes a raw V2 events response into HRV events for the given metric.
+func DecodeHRV(raw []byte, metric string) ([]ZeppHRVEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppHRVEvent {
+		return ZeppHRVEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Metric:    metric,
+			Value:     ev.Value,
+		}
+	})
+}
+
+// ZeppReadinessEvent is one daily readiness score.
+type ZeppReadinessEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Score     float64        `json:"score"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeReadiness decodes a raw readiness V2 events response.
+func DecodeReadiness(raw []byte) ([]ZeppReadinessEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppReadinessEvent {
+		return ZeppReadinessEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Score:     ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppBodyBatteryEvent is one body-battery / Charge reading.
+type ZeppBodyBatteryEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Level     float64        `json:"level"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeBodyBattery decodes a raw body-battery V2 events response.
+func DecodeBodyBattery(raw []byte) ([]ZeppBodyBatteryEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppBodyBatteryEvent {
+		return ZeppBodyBatteryEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Level:     ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppHealthSummaryEvent is one daily health summary from DailyHealth/summary.
+type ZeppHealthSummaryEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeHealthSummary decodes a raw daily-health V2 events response.
+func DecodeHealthSummary(raw []byte) ([]ZeppHealthSummaryEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppHealthSummaryEvent {
+		return ZeppHealthSummaryEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppMoodEvent is one mood / emotion reading.
+type ZeppMoodEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Mood      float64        `json:"mood"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeMood decodes a raw emotion V2 events response.
+func DecodeMood(raw []byte) ([]ZeppMoodEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppMoodEvent {
+		return ZeppMoodEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Mood:      ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppSkinTempEvent is one skin temperature reading.
+type ZeppSkinTempEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Delta     float64        `json:"delta"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeSkinTemp decodes a raw skinTemp V2 events response.
+func DecodeSkinTemp(raw []byte) ([]ZeppSkinTempEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppSkinTempEvent {
+		return ZeppSkinTempEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Delta:     ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppStressMinuteEvent is one per-minute stress reading from
+// /v2/users/me/events?eventType=Charge&subType=stress_data.
+type ZeppStressMinuteEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Stress    float64        `json:"stress"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeStressMinute decodes a raw per-minute stress V2 events response.
+func DecodeStressMinute(raw []byte) ([]ZeppStressMinuteEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppStressMinuteEvent {
+		return ZeppStressMinuteEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Stress:    ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppRespiratoryRateEvent is one overnight respiratory rate reading.
+type ZeppRespiratoryRateEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Rate      float64        `json:"rate"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeRespiratoryRate decodes a raw respiratory rate V2 events response.
+func DecodeRespiratoryRate(raw []byte) ([]ZeppRespiratoryRateEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppRespiratoryRateEvent {
+		return ZeppRespiratoryRateEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Rate:      ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppBloodPressureEvent is one blood-pressure reading.
+type ZeppBloodPressureEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Systolic  int            `json:"systolic"`
+	Diastolic int            `json:"diastolic"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeBloodPressure decodes a raw blood_pressure V2 events response.
+func DecodeBloodPressure(raw []byte) ([]ZeppBloodPressureEvent, error) {
+	events, err := DecodeV2Events(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]ZeppBloodPressureEvent, 0, len(events))
+	for _, ev := range events {
+		bp := ZeppBloodPressureEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+		}
+
+		bp.Systolic = zeppIntFromExtra(ev.Extra, "systolic", "highPressure", "sys")
+		bp.Diastolic = zeppIntFromExtra(ev.Extra, "diastolic", "lowPressure", "dia")
+
+		bp.Extra = make(map[string]any)
+		for k, v := range ev.Extra {
+			switch k {
+			case "systolic", "highPressure", "sys", "diastolic", "lowPressure", "dia":
+				continue
+			default:
+				bp.Extra[k] = v
+			}
+		}
+
+		out = append(out, bp)
+	}
+
+	return out, nil
+}
+
+// ZeppSportLoad is one daily training load reading from the watch's
+// WatchSportStatistics/SPORT_LOAD endpoint.
+type ZeppSportLoad struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Load      float64        `json:"load"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeSportLoad decodes a raw SPORT_LOAD response.
+func DecodeSportLoad(raw []byte) ([]ZeppSportLoad, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppSportLoad {
+		return ZeppSportLoad{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Load:      ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppVO2Max is one VO2 max estimate from the watch's
+// WatchSportStatistics/VO2_MAX endpoint.
+type ZeppVO2Max struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	VO2Max    float64        `json:"vo2max"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeVO2Max decodes a raw VO2_MAX response.
+func DecodeVO2Max(raw []byte) ([]ZeppVO2Max, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppVO2Max {
+		return ZeppVO2Max{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			VO2Max:    ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppHeartRateReading is one heart-rate reading from /users/{id}/heartRate.
+type ZeppHeartRateReading struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	HR        float64        `json:"hr"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeHeartRateEndpoint decodes a raw /users/{id}/heartRate response.
+func DecodeHeartRateEndpoint(raw []byte) ([]ZeppHeartRateReading, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppHeartRateReading {
+		return ZeppHeartRateReading{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			HR:        ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppWeightRecord is one weight measurement from /users/{id}/members/-1/weightRecords.
+type ZeppWeightRecord struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Weight    float64        `json:"weight"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeWeightRecords decodes a raw weight records response.
+func DecodeWeightRecords(raw []byte) ([]ZeppWeightRecord, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppWeightRecord {
+		return ZeppWeightRecord{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Weight:    ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppManualDataEntry is one manually-entered wellness record from
+// /v1/user/manualData.json.
+type ZeppManualDataEntry struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeManualData decodes a raw manual data response.
+func DecodeManualData(raw []byte) ([]ZeppManualDataEntry, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppManualDataEntry {
+		return ZeppManualDataEntry{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppSecondHeartRateFile is one COS file index entry for per-second HR
+// data from /users/me/fileInfo/events.
+type ZeppSecondHeartRateFile struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	URL       string         `json:"url"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeSecondHeartRateFiles decodes a raw /users/me/fileInfo/events response.
+func DecodeSecondHeartRateFiles(raw []byte) ([]ZeppSecondHeartRateFile, error) {
+	var payload struct {
+		Items []map[string]any `json:"items"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("decode second heart rate files: %w", err)
+	}
+
+	out := make([]ZeppSecondHeartRateFile, 0, len(payload.Items))
+	for _, item := range payload.Items {
+		f := ZeppSecondHeartRateFile{Extra: make(map[string]any)}
+
+		if ts, ok := item[zeppTimestampKey].(float64); ok {
+			f.Timestamp = int64(ts)
+			f.Date = time.UnixMilli(f.Timestamp).UTC().Format("2006-01-02")
+		}
+
+		if u, ok := item["url"].(string); ok {
+			f.URL = u
+		}
+
+		for k, v := range item {
+			if k == zeppTimestampKey || k == "url" {
+				continue
+			}
+
+			f.Extra[k] = v
+		}
+
+		out = append(out, f)
+	}
+
+	return out, nil
+}
+
+// ZeppSpO2Window is one SpO2 ODI/OSA window from
+// /users/{id}/events/dateString.
+type ZeppSpO2Window struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeSpO2Windows decodes a raw /users/{id}/events/dateString response.
+func DecodeSpO2Windows(raw []byte) ([]ZeppSpO2Window, error) {
+	var payload struct {
+		Items []map[string]any `json:"items"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("decode spo2 windows: %w", err)
+	}
+
+	out := make([]ZeppSpO2Window, 0, len(payload.Items))
+	for _, item := range payload.Items {
+		w := ZeppSpO2Window{Extra: make(map[string]any)}
+
+		if ts, ok := item[zeppTimestampKey].(float64); ok {
+			w.Timestamp = int64(ts)
+			w.Date = time.UnixMilli(w.Timestamp).UTC().Format("2006-01-02")
+		}
+
+		for k, v := range item {
+			if k == zeppTimestampKey {
+				continue
+			}
+
+			w.Extra[k] = v
+		}
+
+		out = append(out, w)
+	}
+
+	return out, nil
+}
+
+// DecodeBloodPressureUser decodes the /users/me/bloodPressure response. It
+// accepts the same field aliases as DecodeBloodPressure.
+func DecodeBloodPressureUser(raw []byte) ([]ZeppBloodPressureEvent, error) {
+	var payload struct {
+		Items []map[string]any `json:"items"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("decode blood pressure user: %w", err)
+	}
+
+	out := make([]ZeppBloodPressureEvent, 0, len(payload.Items))
+	for _, item := range payload.Items {
+		bp := ZeppBloodPressureEvent{Extra: make(map[string]any)}
+
+		if ts, ok := item[zeppTimestampKey].(float64); ok {
+			bp.Timestamp = int64(ts)
+			bp.Date = time.UnixMilli(bp.Timestamp).UTC().Format("2006-01-02")
+		}
+
+		bp.Systolic = zeppIntFromExtra(item, "systolic", "highPressure", "sys")
+		bp.Diastolic = zeppIntFromExtra(item, "diastolic", "lowPressure", "dia")
+
+		for k, v := range item {
+			switch k {
+			case zeppTimestampKey, "systolic", "highPressure", "sys", "diastolic", "lowPressure", "dia":
+				continue
+			default:
+				bp.Extra[k] = v
+			}
+		}
+
+		out = append(out, bp)
+	}
+
+	return out, nil
+}
+
+// zeppIntFromExtra returns the first integer value found under the given keys.
+func zeppIntFromExtra(extra map[string]any, keys ...string) int {
+	for _, key := range keys {
+		switch v := extra[key].(type) {
+		case float64:
+			return int(v)
+		case string:
+			if n, err := strconv.Atoi(v); err == nil {
+				return n
+			}
+		}
+	}
+
+	return 0
 }
