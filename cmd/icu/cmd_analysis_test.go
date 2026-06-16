@@ -56,13 +56,13 @@ func TestAnalysisDateRangeUsesExplicitDates(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.May, 29, 12, 0, 0, 0, time.UTC)
-	got, err := analysisDateRange(map[string]string{
+	got, explicit, err := analysisDateRange(map[string]string{
 		"oldest": "2026-05-01",
 		"newest": "2026-05-29",
 	}, now)
 
-	if err != nil || got.Oldest != "2026-05-01" || got.Newest != "2026-05-29" {
-		t.Fatalf("analysisDateRange explicit = %+v %v, want 2026-05-01 2026-05-29 nil", got, err)
+	if err != nil || got.Oldest != "2026-05-01" || got.Newest != "2026-05-29" || !explicit {
+		t.Fatalf("analysisDateRange explicit = %+v explicit=%v %v, want 2026-05-01 2026-05-29 true nil", got, explicit, err)
 	}
 }
 
@@ -70,10 +70,10 @@ func TestAnalysisDateRangeDefaultsToDays(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.May, 29, 12, 0, 0, 0, time.UTC)
-	got, err := analysisDateRange(map[string]string{"days": "7"}, now)
+	got, explicit, err := analysisDateRange(map[string]string{"days": "7"}, now)
 
-	if err != nil || got.Oldest != "2026-05-23" || got.Newest != "2026-05-29" {
-		t.Fatalf("analysisDateRange days = %+v %v, want 2026-05-23 2026-05-29 nil", got, err)
+	if err != nil || got.Oldest != "2026-05-23" || got.Newest != "2026-05-29" || explicit {
+		t.Fatalf("analysisDateRange days = %+v explicit=%v %v, want 2026-05-23 2026-05-29 false nil", got, explicit, err)
 	}
 }
 
@@ -81,10 +81,10 @@ func TestAnalysisDateRangeRejectsMissingPairAndInvalidDays(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.May, 29, 12, 0, 0, 0, time.UTC)
-	if _, err := analysisDateRange(map[string]string{"oldest": "2026-05-01"}, now); err == nil {
+	if _, _, err := analysisDateRange(map[string]string{"oldest": "2026-05-01"}, now); err == nil {
 		t.Fatal("analysisDateRange missing newest error = nil, want error")
 	}
-	if _, err := analysisDateRange(map[string]string{"days": "0"}, now); err == nil {
+	if _, _, err := analysisDateRange(map[string]string{"days": "0"}, now); err == nil {
 		t.Fatal("analysisDateRange days=0 error = nil, want error")
 	}
 }
@@ -93,14 +93,14 @@ func TestTrainingPlanDateRangesDefaultToTwelveWeekHistoryAndNextISOBlock(t *test
 	t.Parallel()
 
 	now := time.Date(2026, time.May, 30, 12, 0, 0, 0, time.UTC)
-	got, err := trainingPlanDateRanges(map[string]string{}, now)
+	got, explicit, err := trainingPlanDateRanges(map[string]string{}, now)
 	want := trainingPlanRanges{
 		History: analysisRange{Oldest: "2026-03-08", Newest: "2026-05-30"},
 		Plan:    analysisRange{Oldest: "2026-06-01", Newest: "2026-06-28"},
 	}
 
-	if err != nil || got != want {
-		t.Fatalf("trainingPlanDateRanges default = %+v %v, want %+v nil", got, err, want)
+	if err != nil || got != want || explicit {
+		t.Fatalf("trainingPlanDateRanges default = %+v explicit=%v %v, want %+v false nil", got, explicit, err, want)
 	}
 }
 
@@ -108,7 +108,7 @@ func TestTrainingPlanDateRangesUseExplicitDates(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.May, 30, 12, 0, 0, 0, time.UTC)
-	got, err := trainingPlanDateRanges(map[string]string{
+	got, explicit, err := trainingPlanDateRanges(map[string]string{
 		"history-oldest": "2026-03-01",
 		"history-newest": "2026-05-30",
 		"plan-oldest":    "2026-06-01",
@@ -119,8 +119,8 @@ func TestTrainingPlanDateRangesUseExplicitDates(t *testing.T) {
 		Plan:    analysisRange{Oldest: "2026-06-01", Newest: "2026-06-28"},
 	}
 
-	if err != nil || got != want {
-		t.Fatalf("trainingPlanDateRanges explicit = %+v %v, want %+v nil", got, err, want)
+	if err != nil || got != want || !explicit {
+		t.Fatalf("trainingPlanDateRanges explicit = %+v explicit=%v %v, want %+v true nil", got, explicit, err, want)
 	}
 }
 
@@ -135,7 +135,7 @@ func TestTrainingPlanDateRangesRejectInvalidInputs(t *testing.T) {
 		{"plan-days": "0"},
 	}
 	for _, flags := range cases {
-		if _, err := trainingPlanDateRanges(flags, now); err == nil {
+		if _, _, err := trainingPlanDateRanges(flags, now); err == nil {
 			t.Fatalf("trainingPlanDateRanges(%v) error = nil, want error", flags)
 		}
 	}
@@ -525,6 +525,8 @@ func TestReadMicrocycleInputsReturnsSourceErrors(t *testing.T) {
 				"2026-03-03",
 				tc.includePlan,
 				tc.includeWell,
+				"UTC",
+				"flag",
 			)
 			if err == nil {
 				t.Fatal("readMicrocycleInputs error = nil, want source error")
@@ -571,6 +573,8 @@ func TestReadMicrocycleInputsAllowsMissingSportSettings(t *testing.T) {
 		"2026-03-03",
 		false,
 		false,
+		"UTC",
+		"flag",
 	)
 	if err != nil {
 		t.Fatalf("readMicrocycleInputs error = %v, want nil on 404 sport-settings", err)

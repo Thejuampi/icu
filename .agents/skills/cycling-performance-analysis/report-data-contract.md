@@ -88,6 +88,15 @@ Planning output should compare the existing calendar against the athlete's recen
 | Intervals snake_case payload not mapped to DTO | add unmarshal tests for raw activity/event/supporting fields before trusting reports | supported for activities/events/weather/curves/sports/custom items |
 | Suspicious zero-valued activity/event fields | spot-check raw API or CLI JSON before writing coaching prose | manual |
 
+## Timezone and Date Range Contract
+
+| Concern | Current behavior | Recommendation |
+| --- | --- | --- |
+| Default analysis date range | Calculated in **UTC** (`timezone: "UTC"`, `timezoneSource: "default_utc"` in scope output) | Use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate reports. |
+| API timestamps | `startDateLocal` and related fields are returned by Intervals.icu in the athlete's configured timezone; `icu` does not convert them. | Treat API timestamps as athlete-local unless the output scope says otherwise. |
+| Wellness "latest" value | Uses the newest record inside the requested date range; if today's wellness has not synced, the latest value will be from yesterday. | Spot-check `icu wellness get YYYY-MM-DD` when a value looks stale. |
+| Readiness score | Not stored in Intervals.icu wellness records unless the source syncs it. | Do not assume readiness score from another app is available in `icu analysis wellness`. |
+
 ## Implementation Priority
 
 1. Add aggregate `analysis report` output that fuses cycling, wellness, plan, adaptation, and decision sections.

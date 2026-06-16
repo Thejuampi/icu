@@ -16,19 +16,7 @@ func registerWeatherCommands(registry *CommandRegistry) {
 		},
 	})
 
-	registry.Register("weather", "forecast", &Command{
-		Name:        "",
-		Usage:       "weather forecast",
-		Description: "Get weather forecast.",
-		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
-			var w icu.WeatherDTO
-			if err := client.Get("weather-forecast", nil, nil, &w); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(w)
-		},
-	})
+	registry.Register("weather", "forecast", listAllCommand[icu.WeatherDTO]("weather-forecast", "weather forecast", "Get weather forecast."))
 }
 
 func weatherConfigHasUpdate(flags map[string]string) bool {

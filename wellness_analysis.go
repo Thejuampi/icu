@@ -45,10 +45,12 @@ type WellnessLactateCalibration struct {
 }
 
 type WellnessScope struct {
-	Records   int    `json:"records"`
-	TotalDays int    `json:"totalDays"`
-	StartDate string `json:"startDate,omitempty"`
-	EndDate   string `json:"endDate,omitempty"`
+	Records        int    `json:"records"`
+	TotalDays      int    `json:"totalDays"`
+	StartDate      string `json:"startDate,omitempty"`
+	EndDate        string `json:"endDate,omitempty"`
+	Timezone       string `json:"timezone,omitempty"`
+	TimezoneSource string `json:"timezoneSource,omitempty"`
 }
 
 type WellnessCoverage struct {
@@ -126,52 +128,27 @@ func newWellnessAccumulator(records []Wellness, options AnalysisOptions) wellnes
 	accumulator.analysis.Scope.StartDate = options.StartDate
 	accumulator.analysis.Scope.EndDate = options.EndDate
 	accumulator.analysis.Scope.TotalDays = analysisTotalDays(records, options)
+	accumulator.analysis.Scope.Timezone = options.Timezone
+	accumulator.analysis.Scope.TimezoneSource = options.TimezoneSource
 
 	return accumulator
 }
 
 func (accumulator *wellnessAccumulator) add(record *Wellness) {
-	accumulator.addHRV(record)
-	accumulator.addRestingHR(record)
-	accumulator.addSleep(record)
-	accumulator.addLactate(record)
+	addWellnessSample(record.HRV, &accumulator.hrv, record.ID)
+	addWellnessSample(float64(record.RestingHR), &accumulator.restingHR, record.ID)
+	addWellnessSample(record.SleepScore, &accumulator.sleep, record.ID)
+	addWellnessSample(record.Lactate, &accumulator.lactate, record.ID)
 	accumulator.addSubjective(record)
 	accumulator.addLoad(record)
 }
 
-func (accumulator *wellnessAccumulator) addLactate(record *Wellness) {
-	if record.Lactate == 0 {
+func addWellnessSample(value float64, samples *[]wellnessSample, date string) {
+	if value == 0 {
 		return
 	}
 
-	accumulator.lactate = append(accumulator.lactate, wellnessSample{date: record.ID, value: record.Lactate})
-}
-
-func (accumulator *wellnessAccumulator) addHRV(record *Wellness) {
-	if record.HRV == 0 {
-		return
-	}
-
-	accumulator.hrv = append(accumulator.hrv, wellnessSample{date: record.ID, value: record.HRV})
-}
-
-func (accumulator *wellnessAccumulator) addRestingHR(record *Wellness) {
-	if record.RestingHR == 0 {
-		return
-	}
-
-	accumulator.restingHR = append(accumulator.restingHR, wellnessSample{
-		date:  record.ID,
-		value: float64(record.RestingHR),
-	})
-}
-
-func (accumulator *wellnessAccumulator) addSleep(record *Wellness) {
-	if record.SleepScore == 0 {
-		return
-	}
-
-	accumulator.sleep = append(accumulator.sleep, wellnessSample{date: record.ID, value: record.SleepScore})
+	*samples = append(*samples, wellnessSample{date: date, value: value})
 }
 
 func (accumulator *wellnessAccumulator) addSubjective(record *Wellness) {
@@ -230,15 +207,7 @@ func (accumulator *wellnessAccumulator) finish() WellnessAnalysis {
 
 func lactateCalibration(samples []wellnessSample, totalDays int) WellnessLactateCalibration {
 	if len(samples) == 0 {
-		return WellnessLactateCalibration{
-			Mean:            0,
-			Latest:          0,
-			Trend7Day:       0,
-			Samples:         0,
-			CoveragePercent: 0,
-			State:           "",
-			Source:          "",
-		}
+		return WellnessLactateCalibration{}
 	}
 
 	sortWellnessSamples(samples)
@@ -291,15 +260,7 @@ func (accumulator *wellnessAccumulator) subjectiveSummary() SubjectiveWellness {
 
 func wellnessSignal(samples []wellnessSample, totalDays int) WellnessSignal {
 	if len(samples) == 0 {
-		return WellnessSignal{
-			Mean:            0,
-			Latest:          0,
-			Ratio:           0,
-			Delta:           0,
-			Trend7Day:       0,
-			Samples:         0,
-			CoveragePercent: 0,
-		}
+		return WellnessSignal{}
 	}
 
 	sortWellnessSamples(samples)

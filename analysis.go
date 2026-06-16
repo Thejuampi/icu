@@ -36,11 +36,18 @@ const (
 	isdmHighDriftPenalty     = 10
 	lowEfficiencyThreshold   = 1.2
 	highEfficiencyThreshold  = 1.4
+
+	// DefaultAnalysisTimezone is the timezone used for computed analysis date ranges.
+	DefaultAnalysisTimezone = "UTC"
+	// DefaultAnalysisTimezoneSource documents how the analysis timezone was selected.
+	DefaultAnalysisTimezoneSource = "default_utc"
 )
 
 type AnalysisOptions struct {
-	StartDate string `json:"startDate,omitempty"`
-	EndDate   string `json:"endDate,omitempty"`
+	StartDate      string `json:"startDate,omitempty"`
+	EndDate        string `json:"endDate,omitempty"`
+	Timezone       string `json:"timezone,omitempty"`
+	TimezoneSource string `json:"timezoneSource,omitempty"`
 }
 
 type CyclingAnalysis struct {
@@ -102,6 +109,8 @@ type CyclingScope struct {
 	CyclingActivities int    `json:"cyclingActivities"`
 	StartDate         string `json:"startDate,omitempty"`
 	EndDate           string `json:"endDate,omitempty"`
+	Timezone          string `json:"timezone,omitempty"`
+	TimezoneSource    string `json:"timezoneSource,omitempty"`
 }
 
 type CyclingVolume struct {
@@ -491,6 +500,8 @@ func (accumulator *cyclingAnalysisAccumulator) updateLatestLoad(activity *Activi
 }
 
 func (accumulator *cyclingAnalysisAccumulator) finish(options AnalysisOptions) CyclingAnalysis {
+	accumulator.analysis.Scope.Timezone = options.Timezone
+	accumulator.analysis.Scope.TimezoneSource = options.TimezoneSource
 	accumulator.finishVolume()
 
 	if accumulator.analysis.Scope.CyclingActivities == 0 {

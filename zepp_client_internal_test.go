@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestFlexIntUnmarshalJSON(t *testing.T) { //nolint:dupl // similar structure to TestFlexFloatUnmarshalJSON
+func TestFlexIntUnmarshalJSON(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -44,7 +44,7 @@ func TestFlexIntUnmarshalJSON(t *testing.T) { //nolint:dupl // similar structure
 	}
 }
 
-func TestFlexFloatUnmarshalJSON(t *testing.T) { //nolint:dupl // similar structure to TestFlexIntUnmarshalJSON
+func TestFlexFloatUnmarshalJSON(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {

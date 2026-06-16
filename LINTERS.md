@@ -135,6 +135,10 @@ The repository configuration now enables the supported linters explicitly instea
 
 `tenv` is deprecated and replaced by `usetesting`, so it is intentionally omitted from the explicit enabled-linter list.
 
+## Duplication Detection
+
+`dupl` is enabled with a threshold of `100` tokens and test files are excluded from duplication reporting. This catches non-trivial duplicated logic while allowing small, incidental structural similarities and table-driven test helpers.
+
 ## Inline Suppressions
 
-There are currently no code-level `//nolint` directives in the Go source tree.
+A small number of `//nolint` directives remain for unavoidable cases such as `gocritic` unnamed-result preferences and `lll` security warnings.

@@ -3,7 +3,12 @@ package main
 import icu "github.com/Thejuampi/icu"
 
 func registerFTPCommands(registry *CommandRegistry) {
-	registry.Register("ftp", "show", &Command{
+	registry.Register("ftp", "show", ftpShowCommand())
+	registry.Register("ftp", "update", ftpUpdateCommand())
+}
+
+func ftpShowCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "ftp show [--sport Ride]",
 		Description: "Show FTP for a sport type.",
@@ -29,9 +34,11 @@ func registerFTPCommands(registry *CommandRegistry) {
 				LTHR:      ss.LTHR,
 			})
 		},
-	})
+	}
+}
 
-	registry.Register("ftp", "update", &Command{
+func ftpUpdateCommand() *Command {
+	return &Command{
 		Name:        "",
 		Usage:       "ftp update --value WATTS [--sport Ride] [--indoor]",
 		Description: "Update FTP for a sport.",
@@ -56,5 +63,5 @@ func registerFTPCommands(registry *CommandRegistry) {
 
 			return writeJSON(result)
 		},
-	})
+	}
 }

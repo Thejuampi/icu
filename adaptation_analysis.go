@@ -31,10 +31,12 @@ type CyclingAdaptationAnalysis struct {
 }
 
 type AdaptationScope struct {
-	StartDate  string `json:"startDate,omitempty"`
-	EndDate    string `json:"endDate,omitempty"`
-	Curves     int    `json:"curves"`
-	Activities int    `json:"activities"`
+	StartDate      string `json:"startDate,omitempty"`
+	EndDate        string `json:"endDate,omitempty"`
+	Curves         int    `json:"curves"`
+	Activities     int    `json:"activities"`
+	Timezone       string `json:"timezone,omitempty"`
+	TimezoneSource string `json:"timezoneSource,omitempty"`
 }
 
 type AdaptationPowerAnchors struct {
@@ -94,10 +96,12 @@ func AnalyzeCyclingAdaptation(
 ) CyclingAdaptationAnalysis {
 	analysis := CyclingAdaptationAnalysis{
 		Scope: AdaptationScope{
-			StartDate:  options.StartDate,
-			EndDate:    options.EndDate,
-			Curves:     len(curves),
-			Activities: len(activities),
+			StartDate:      options.StartDate,
+			EndDate:        options.EndDate,
+			Curves:         len(curves),
+			Activities:     len(activities),
+			Timezone:       options.Timezone,
+			TimezoneSource: options.TimezoneSource,
 		},
 		PowerAnchors:     adaptationPowerAnchors(model, settings),
 		PowerCurveDeltas: adaptationPowerCurveDeltas(curves),

@@ -3,33 +3,67 @@ package main
 import icu "github.com/Thejuampi/icu"
 
 func registerActivitiesCommands(registry *CommandRegistry) {
-	registry.Register("activities", "list", activitiesListCommand())
+	registry.Register(
+		"activities", "list",
+		listQueryCommand[[]icu.Activity](
+			"activities",
+			"activities list --oldest DATE --newest DATE [--fields f1,f2] [--limit N]",
+			"List activities for a date range.",
+			queryBuilder("oldest", "newest", "fields", "limit", "route_id"),
+		),
+	)
 	registry.Register("activities", "get", activitiesGetCommand())
 	registry.Register("activities", "upload", activitiesUploadCommand())
-	registry.Register("activities", "csv", activitiesCSVCommand())
-	registry.Register("activities", "search", activitiesSearchCommand())
-	registry.Register("activities", "search-full", activitiesSearchFullCommand())
-	registry.Register("activities", "interval-search", activitiesIntervalSearchCommand())
+	registry.Register("activities", "csv", downloadCommand("activities", "activities csv", "Download all activities as CSV."))
+	registry.Register(
+		"activities", "search",
+		searchCommand[[]icu.ActivitySearchResult](
+			"activities",
+			"activities search <query> [--limit N]",
+			"Search activities by name or #tag.",
+			"search",
+		),
+	)
+	registry.Register(
+		"activities", "search-full",
+		searchCommand[[]icu.Activity](
+			"activities",
+			"activities search-full <query> [--limit N]",
+			"Search activities returning full objects.",
+			"search-full",
+		),
+	)
+	registry.Register(
+		"activities", "interval-search",
+		listQueryCommand[[]icu.Activity](
+			"activities",
+			"activities interval-search --minSecs N --maxSecs N --minIntensity N --maxIntensity N [--type auto|power|hr|pace]",
+			"Find activities with intervals matching duration and intensity.",
+			queryBuilder("minSecs", "maxSecs", "minIntensity", "maxIntensity", "type", "minReps", "maxReps", "limit"),
+			"interval-search",
+		),
+	)
 	registry.Register("activities", "around", activitiesAroundCommand())
-	registry.Register("activities", "manual", activitiesManualCommand())
-}
-
-func activitiesListCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "activities list --oldest DATE --newest DATE [--fields f1,f2] [--limit N]",
-		Description: "List activities for a date range.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			q := queryFromFlags(flags, "oldest", "newest", "fields", "limit", "route_id")
-
-			var acts []icu.Activity
-			if err := client.Get("activities", nil, q, &acts); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(acts)
-		},
-	}
+	registry.Register(
+		"activities", "manual",
+		createCommand[icu.Activity, icu.Activity](
+			"activities",
+			"activities manual --type Ride --name NAME --moving-time SECS [--distance M] [--training-load N]",
+			"Create a manual activity.",
+			nil,
+			func(flags map[string]string) icu.Activity {
+				return icu.Activity{
+					Type:           icu.StringFlag(flags, "type", "Ride"),
+					Name:           icu.StringFlag(flags, "name", ""),
+					MovingTime:     IntFlag(flags, "moving-time", 0),
+					Distance:       floatFlagVal(flags, "distance", 0),
+					TrainingLoad:   IntFlag(flags, "training-load", 0),
+					StartDateLocal: icu.StringFlag(flags, "start-date", ""),
+				}
+			},
+			"manual",
+		),
+	)
 }
 
 func activitiesGetCommand() *Command {
@@ -76,27 +110,11 @@ func activitiesUploadCommand() *Command {
 	}
 }
 
-func activitiesCSVCommand() *Command {
+func searchCommand[T any](resource, usage, description, endpoint string) *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "activities csv",
-		Description: "Download all activities as CSV.",
-		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
-			data, err := client.Download("activities", []string{}, nil)
-			if err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeOutput(data)
-		},
-	}
-}
-
-func activitiesSearchCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "activities search <query> [--limit N]",
-		Description: "Search activities by name or #tag.",
+		Usage:       usage,
+		Description: description,
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("search query")
@@ -107,55 +125,12 @@ func activitiesSearchCommand() *Command {
 				q["limit"] = v
 			}
 
-			var results []icu.ActivitySearchResult
-			if err := client.Get("activities", []string{"search"}, q, &results); err != nil {
+			var results T
+			if err := client.Get(resource, []string{endpoint}, q, &results); err != nil {
 				return wrapCommandError(err)
 			}
 
 			return writeJSON(results)
-		},
-	}
-}
-
-func activitiesSearchFullCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "activities search-full <query> [--limit N]",
-		Description: "Search activities returning full objects.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
-			if len(args) == 0 {
-				return errMissing("search query")
-			}
-
-			q := map[string]string{"q": args[0]}
-			if v := flags["limit"]; v != "" {
-				q["limit"] = v
-			}
-
-			var results []icu.Activity
-			if err := client.Get("activities", []string{"search-full"}, q, &results); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(results)
-		},
-	}
-}
-
-func activitiesIntervalSearchCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "activities interval-search --minSecs N --maxSecs N --minIntensity N --maxIntensity N [--type auto|power|hr|pace]",
-		Description: "Find activities with intervals matching duration and intensity.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			q := queryFromFlags(flags, "minSecs", "maxSecs", "minIntensity", "maxIntensity", "type", "minReps", "maxReps", "limit")
-
-			var acts []icu.Activity
-			if err := client.Get("activities", []string{"interval-search"}, q, &acts); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(acts)
 		},
 	}
 }
@@ -185,30 +160,6 @@ func activitiesAroundCommand() *Command {
 			}
 
 			return writeJSON(acts)
-		},
-	}
-}
-
-func activitiesManualCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "activities manual --type Ride --name NAME --moving-time SECS [--distance M] [--training-load N]",
-		Description: "Create a manual activity.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			var a icu.Activity
-			a.Type = icu.StringFlag(flags, "type", "Ride")
-			a.Name = icu.StringFlag(flags, "name", "")
-			a.MovingTime = IntFlag(flags, "moving-time", 0)
-			a.Distance = floatFlagVal(flags, "distance", 0)
-			a.TrainingLoad = IntFlag(flags, "training-load", 0)
-			a.StartDateLocal = icu.StringFlag(flags, "start-date", "")
-
-			var result icu.Activity
-			if err := client.Post("activities", []string{"manual"}, nil, a, &result); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(result)
 		},
 	}
 }

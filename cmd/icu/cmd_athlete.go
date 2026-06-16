@@ -3,28 +3,20 @@ package main
 import icu "github.com/Thejuampi/icu"
 
 func registerAthleteCommands(registry *CommandRegistry) {
-	registry.Register("athlete", "show", athleteShowCommand())
+	registry.Register("athlete", "show", listAllCommand[icu.Athlete]("athlete", "athlete show", "Get athlete profile with sport settings."))
 	registry.Register("athlete", "update", athleteUpdateCommand())
-	registry.Register("athlete", "profile", athleteProfileCommand())
-	registry.Register("athlete", "summary", athleteSummaryCommand())
+	registry.Register("athlete", "profile", listAllCommand[icu.AthleteProfile]("profile", "athlete profile", "Get athlete profile info."))
+	registry.Register(
+		"athlete", "summary",
+		listQueryCommand[[]icu.SummaryWithCats](
+			"athlete-summary",
+			"athlete summary [--start DATE] [--end DATE]",
+			"Summary info for followed athletes.",
+			queryBuilder("start", "end"),
+		),
+	)
 	registry.Register("athlete", "plan", athletePlanCommand())
 	registry.Register("athlete", "settings", athleteSettingsCommand())
-}
-
-func athleteShowCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "athlete show",
-		Description: "Get athlete profile with sport settings.",
-		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
-			var a icu.Athlete
-			if err := client.Get("athlete", nil, nil, &a); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(a)
-		},
-	}
 }
 
 func athleteUpdateCommand() *Command {
@@ -52,40 +44,6 @@ func athleteUpdateCommand() *Command {
 			}
 
 			return writeJSON(a)
-		},
-	}
-}
-
-func athleteProfileCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "athlete profile",
-		Description: "Get athlete profile info.",
-		Run: func(_ []string, _ map[string]string, client *icu.Client) error {
-			var p icu.AthleteProfile
-			if err := client.Get("profile", nil, nil, &p); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(p)
-		},
-	}
-}
-
-func athleteSummaryCommand() *Command {
-	return &Command{
-		Name:        "",
-		Usage:       "athlete summary [--start DATE] [--end DATE]",
-		Description: "Summary info for followed athletes.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			q := queryFromFlags(flags, "start", "end")
-
-			var s []icu.SummaryWithCats
-			if err := client.Get("athlete-summary", nil, q, &s); err != nil {
-				return wrapCommandError(err)
-			}
-
-			return writeJSON(s)
 		},
 	}
 }

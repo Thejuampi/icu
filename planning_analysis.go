@@ -115,6 +115,8 @@ type TrainingPlanScope struct {
 	Events           int    `json:"events"`
 	WorkoutEvents    int    `json:"workoutEvents"`
 	NoteEvents       int    `json:"noteEvents"`
+	Timezone         string `json:"timezone,omitempty"`
+	TimezoneSource   string `json:"timezoneSource,omitempty"`
 }
 
 type TrainingPlanHistory struct {

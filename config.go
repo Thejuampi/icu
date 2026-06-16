@@ -87,37 +87,11 @@ func StringFlag(args map[string]string, name, defaultVal string) string {
 }
 
 func ResolveAPIKey(flags map[string]string) string {
-	if key, ok := flags["api-key"]; ok && key != "" {
-		return key
-	}
-
-	if key := os.Getenv("INTERVALS_ICU_API_KEY"); key != "" {
-		return key
-	}
-
-	cfg, _ := LoadConfig()
-	if cfg != nil && cfg.APIKey != "" {
-		return cfg.APIKey
-	}
-
-	return ""
+	return resolveString(flags, "api-key", "INTERVALS_ICU_API_KEY", "", func(c *Config) string { return c.APIKey })
 }
 
 func ResolveAthleteID(flags map[string]string) string {
-	if id, ok := flags["athlete-id"]; ok && id != "" {
-		return id
-	}
-
-	if id := os.Getenv("INTERVALS_ICU_ATHLETE_ID"); id != "" {
-		return id
-	}
-
-	cfg, _ := LoadConfig()
-	if cfg != nil && cfg.AthleteID != "" {
-		return cfg.AthleteID
-	}
-
-	return "0"
+	return resolveString(flags, "athlete-id", "INTERVALS_ICU_ATHLETE_ID", "0", func(c *Config) string { return c.AthleteID })
 }
 
 func ResolveOutputFormat(flags map[string]string) OutputFormat {
@@ -140,69 +114,36 @@ func ResolveOutputFormat(flags map[string]string) OutputFormat {
 }
 
 func ResolveZeppLoginToken(flags map[string]string) string {
-	if token, ok := flags["zepp-login-token"]; ok && token != "" {
-		return token
-	}
-
-	if token := os.Getenv("ZEPP_LOGIN_TOKEN"); token != "" {
-		return token
-	}
-
-	cfg, _ := LoadConfig()
-	if cfg != nil && cfg.ZeppLoginToken != "" {
-		return cfg.ZeppLoginToken
-	}
-
-	return ""
+	return resolveString(flags, "zepp-login-token", "ZEPP_LOGIN_TOKEN", "", func(c *Config) string { return c.ZeppLoginToken })
 }
 
 func ResolveZeppAppToken(flags map[string]string) string {
-	if token, ok := flags["zepp-app-token"]; ok && token != "" {
-		return token
-	}
-
-	if token := os.Getenv("ZEPP_APP_TOKEN"); token != "" {
-		return token
-	}
-
-	cfg, _ := LoadConfig()
-	if cfg != nil && cfg.ZeppAppToken != "" {
-		return cfg.ZeppAppToken
-	}
-
-	return ""
+	return resolveString(flags, "zepp-app-token", "ZEPP_APP_TOKEN", "", func(c *Config) string { return c.ZeppAppToken })
 }
 
 func ResolveZeppUserID(flags map[string]string) string {
-	if id, ok := flags["zepp-user-id"]; ok && id != "" {
-		return id
-	}
-
-	if id := os.Getenv("ZEPP_USER_ID"); id != "" {
-		return id
-	}
-
-	cfg, _ := LoadConfig()
-	if cfg != nil && cfg.ZeppUserID != "" {
-		return cfg.ZeppUserID
-	}
-
-	return ""
+	return resolveString(flags, "zepp-user-id", "ZEPP_USER_ID", "", func(c *Config) string { return c.ZeppUserID })
 }
 
 func ResolveZeppCountryCode(flags map[string]string) string {
-	if code, ok := flags["zepp-country-code"]; ok && code != "" {
-		return code
+	return resolveString(flags, "zepp-country-code", "ZEPP_COUNTRY_CODE", "", func(c *Config) string { return c.ZeppCountryCode })
+}
+
+func resolveString(flags map[string]string, flagName, envName, defaultVal string, configVal func(*Config) string) string {
+	if v, ok := flags[flagName]; ok && v != "" {
+		return v
 	}
 
-	if code := os.Getenv("ZEPP_COUNTRY_CODE"); code != "" {
-		return code
+	if v := os.Getenv(envName); v != "" {
+		return v
 	}
 
 	cfg, _ := LoadConfig()
-	if cfg != nil && cfg.ZeppCountryCode != "" {
-		return cfg.ZeppCountryCode
+	if cfg != nil {
+		if v := configVal(cfg); v != "" {
+			return v
+		}
 	}
 
-	return ""
+	return defaultVal
 }
