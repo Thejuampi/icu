@@ -311,6 +311,57 @@ func TestAnalyzeTrainingPlanAddsExecutionGuidanceForKeyWorkout(t *testing.T) {
 	}
 }
 
+func TestAnalyzeTrainingPlanRecognizesThirtyFifteenAsHighIntensity(t *testing.T) {
+	t.Parallel()
+
+	var events []icu.Event
+	events = append(events, plannedWorkout("2026-07-21T08:00:00", "W30 Tue 2026-07-21 3x13 30/15 Deload", 73, 4335, 0.779))
+
+	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
+		PlanStartDate: "2026-07-21",
+		PlanEndDate:   "2026-07-21",
+	})
+	want := "high_intensity"
+
+	if got.PlannedSessions[0].Classification != want {
+		t.Fatalf("Classification = %q, want %q", got.PlannedSessions[0].Classification, want)
+	}
+}
+
+func TestAnalyzeTrainingPlanUsesThirtyFifteenRecommendedTitle(t *testing.T) {
+	t.Parallel()
+
+	var events []icu.Event
+	events = append(events, plannedWorkout("2026-07-21T08:00:00", "W30 Tue 2026-07-21 3x13 30/15 Deload", 73, 4335, 0.779))
+
+	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
+		PlanStartDate: "2026-07-21",
+		PlanEndDate:   "2026-07-21",
+	})
+	want := "3x13 30/15"
+
+	if got.PlannedSessions[0].Execution.RecommendedTitle != want {
+		t.Fatalf("RecommendedTitle = %q, want %q", got.PlannedSessions[0].Execution.RecommendedTitle, want)
+	}
+}
+
+func TestAnalyzeTrainingPlanUsesOverUnderRecommendedTitle(t *testing.T) {
+	t.Parallel()
+
+	var events []icu.Event
+	events = append(events, plannedWorkout("2026-07-02T08:00:00", "W27 Thu 2026-07-02 3x12 Over/Unders", 98, 5340, 0.813))
+
+	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
+		PlanStartDate: "2026-07-02",
+		PlanEndDate:   "2026-07-02",
+	})
+	want := "3x12 O/U"
+
+	if got.PlannedSessions[0].Execution.RecommendedTitle != want {
+		t.Fatalf("RecommendedTitle = %q, want %q", got.PlannedSessions[0].Execution.RecommendedTitle, want)
+	}
+}
+
 func TestAnalyzeTrainingPlanUsesSportAnchorsFromContext(t *testing.T) {
 	t.Parallel()
 

@@ -16,6 +16,7 @@ Use this skill when the task is about reading, changing, importing, exporting, o
 
 - Treat `icu` as the source of truth for authentication, base URL, athlete ID shorthand, request formatting, response parsing, and REST errors.
 - Discover exact flags from the installed build with `icu help` and `icu <resource> --help` before assuming a command shape.
+- Prefer hyphen-case CLI flags in examples and command entry, such as `--calendar-id`, `--external-id`, and `--route-id`. Treat snake_case as the API naming layer; raw responses and `--fields` values may still use snake_case.
 - Use athlete ID `0` unless the user specifies another athlete.
 - Prefer narrow reads with date ranges, `--fields`, and resource-specific filters.
 - Never print, store, or invent API keys. Use `icu config diagnose` for safe credential checks.
@@ -89,9 +90,12 @@ icu activities list --oldest 2026-05-20 --newest 2026-05-24
 icu activities list --oldest 2026-05-20 --newest 2026-05-24 --fields id,name,type,moving_time,distance,icu_training_load,icu_intensity
 icu activities upload activity.fit --name "Morning Ride"
 icu activity i123 show
+icu activity i123 show --intervals
 icu activity i123 intervals
 icu activity i123 streams
 ```
+
+Use `icu activity <id> show --intervals` when the task needs the full activity payload plus interval data in a single response. Use `icu activity <id> intervals` when only the interval block is needed.
 
 Useful activity fields: `id`, `name`, `start_date_local`, `type`, `moving_time`, `elapsed_time`, `distance`, `total_elevation_gain`, `average_heartrate`, `max_heartrate`, `icu_average_watts`, `icu_weighted_avg_watts`, `calories`, `icu_training_load`, `icu_intensity`, `icu_ftp`, `icu_pm_cp`, `icu_pm_w_prime`, `icu_pm_p_max`, `icu_rolling_cp`, `icu_rolling_w_prime`, `icu_rolling_ftp`, `decoupling`, `icu_efficiency_factor`, `icu_variability_index`, `icu_power_hr`, `icu_rpe`, `feel`, `perceived_exertion`, `session_rpe`, `compliance`, `average_speed`, `average_temp`, `source`, `external_id`, `tags`, `description`, `device_name`, `gear`.
 
@@ -116,6 +120,12 @@ icu events create --category WORKOUT --type Ride --name "Morning Intervals" --st
 
 Common event categories: `WORKOUT`, `RACE_A`, `RACE_B`, `RACE_C`, `NOTE`, `PLAN`, `HOLIDAY`, `SICK`, `INJURED`, `SET_EFTP`, `FITNESS_DAYS`, `SEASON_START`, `TARGET`, `SET_FITNESS`.
 
+Practical behavior to remember:
+
+- `WORKOUT` events keep their planned start time and contribute to projected load.
+- `NOTE` events behave like all-day calendar notes in Intervals.icu. The date is preserved, but the time-of-day portion of `--start-date` may be normalized away in the stored event.
+- Keep `NOTE` descriptions compact. Long planning notes can fail upstream with HTTP 500; split large decision logic across multiple notes when needed.
+
 #### Workout Description Format
 
 `icu events create` sends `description` to Intervals.icu, which parses it into a native `workoutDoc`. The CLI does **not** accept a raw `workoutDoc`; the description is the only way to shape the workout.
@@ -135,7 +145,7 @@ icu events create --category WORKOUT --type Ride --name "3x13 30/15 VO2Max" `
   --start-date "2026-06-16T07:00:00" `
   --moving-time 4455 `
   --training-load 92 `
-  --description "VO2Max 30/15 session.`n`n- 15m Ramp 55-85% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n- 5m 50-55% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n- 5m 50-55% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n`n- 20m Ramp 55-40% FTP"
+  --desc "VO2Max 30/15 session.`n`n- 15m Ramp 55-85% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n- 5m 50-55% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n- 5m 50-55% FTP`n`n13x`n  - 30s 112-115% FTP`n  - 15s 50% FTP`n`n- 20m Ramp 55-40% FTP"
 ```
 
 #### Replacing A Planned Workout
@@ -173,6 +183,8 @@ Decision rules commonly used:
 - If the alternative is chosen consistently for several days, consider converting it into the new WORKOUT and deleting/re-scheduling the harder primary session rather than accumulating skipped workouts.
 
 This keeps projected fitness/fatigue curves clean while preserving fallback options in the calendar.
+
+When publishing a full block, prefer one compact block-overview note plus short weekly notes and short `ALT B` notes. Do not rely on a single long NOTE to carry every threshold and branch.
 
 ### Workouts And Library
 

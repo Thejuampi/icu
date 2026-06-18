@@ -42,7 +42,7 @@ func registerEventsCommands(registry *CommandRegistry) {
 		createCommand[icu.EventEx, icu.Event](
 			"events",
 			"events create --category WORKOUT --type Ride --name NAME --start-date DATE"+
-				" [--moving-time SECS] [--training-load N] [--description DESC] [--upsert]",
+				" [--moving-time SECS] [--training-load N] [--desc DESC] [--upsert]",
 			"Create calendar event.",
 			eventsCreateQuery,
 			func(flags map[string]string) icu.EventEx {
@@ -53,7 +53,7 @@ func registerEventsCommands(registry *CommandRegistry) {
 					StartDateLocal: icu.StringFlag(flags, "start-date", ""),
 					MovingTime:     IntFlag(flags, "moving-time", 0),
 					TrainingLoad:   IntFlag(flags, "training-load", 0),
-					Description:    icu.StringFlag(flags, "description", ""),
+					Description:    stringFlagAlias(flags, "desc", "description"),
 					Color:          icu.StringFlag(flags, "color", ""),
 					Indoor:         BoolFlag(flags, "indoor"),
 					ExternalID:     icu.StringFlag(flags, "external-id", ""),
@@ -76,7 +76,7 @@ func registerEventsCommands(registry *CommandRegistry) {
 					ev.Name = v
 				}
 
-				if v := flags["description"]; v != "" {
+				if v := stringFlagAlias(flags, "desc", "description"); v != "" {
 					ev.Description = v
 				}
 
@@ -95,7 +95,7 @@ func registerEventsCommands(registry *CommandRegistry) {
 }
 
 func eventsListQuery(flags map[string]string) map[string]string {
-	q := queryFromFlags(flags, "oldest", "newest", "category", "ext", "limit", "calendar_id")
+	q := queryFromFlags(flags, "oldest", "newest", "category", "ext", "limit", "calendar-id")
 	if BoolFlag(flags, "resolve") {
 		q["resolve"] = strTrue
 	}

@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	icu "github.com/Thejuampi/icu"
@@ -63,7 +64,7 @@ func queryFromFlags(flags map[string]string, keys ...string) map[string]string {
 
 	for _, k := range keys {
 		if v, ok := flags[k]; ok && v != "" {
-			q[k] = v
+			q[strings.ReplaceAll(k, "-", "_")] = v
 		}
 	}
 
@@ -117,4 +118,16 @@ func IntFlag(args map[string]string, name string, defaultVal int) int {
 	}
 
 	return n
+}
+
+func stringFlagAlias(flags map[string]string, primary, fallback string) string {
+	if v, ok := flags[primary]; ok && v != "" {
+		return v
+	}
+
+	if v, ok := flags[fallback]; ok && v != "" {
+		return v
+	}
+
+	return ""
 }

@@ -242,16 +242,18 @@ func parseFlags(args []string) map[string]string {
 const splitCount = 2
 
 func parseLongFlag(flags map[string]string, args []string, idx int, name string) int {
+	key := strings.ReplaceAll(name, "_", "-")
+
 	switch {
 	case strings.Contains(name, "="):
 		parts := strings.SplitN(name, "=", splitCount)
-		flags[parts[0]] = parts[1]
+		flags[strings.ReplaceAll(parts[0], "_", "-")] = parts[1]
 	case idx+1 < len(args) && !strings.HasPrefix(args[idx+1], "--"):
-		flags[name] = args[idx+1]
+		flags[key] = args[idx+1]
 
 		return idx + 1
 	default:
-		flags[name] = ""
+		flags[key] = ""
 	}
 
 	return idx

@@ -165,6 +165,7 @@ The CLI currently passes `Adaptation: nil`, even though the library supports ada
 
 - The planner is designed around completed-load tolerance plus event heuristics, not a full workout-builder engine.
 - Long and aerobic endurance sessions may include an indoor-friendly `workoutProfile` with Z2 waves and HR-control valleys.
+- Planned session titles use simple name heuristics for common structures such as `40/20`, `30/15`, and `over/under` workouts when those patterns are present in the event name.
 - `forecast` is the fast planning view for expected CTL/ATL/TSB trajectory, not a guarantee of adaptation outcome.
 - `decision` is the main top-level recommendation surface for downstream agents.
 

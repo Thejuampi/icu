@@ -636,6 +636,18 @@ func recommendedTrainingPlanTitle(event *Event, classification string) string {
 		return "40/20 VO2Max"
 	}
 
+	if isThirtyFifteenPatternName(name) {
+		if pattern != "" {
+			return pattern + " 30/15"
+		}
+
+		return "30/15 VO2Max"
+	}
+
+	if isOverUnderPatternName(name) {
+		return intervalOrDurationTitle(pattern, event.MovingTime, "O/U")
+	}
+
 	switch classification {
 	case plannedClassificationHigh:
 		return intervalOrDurationTitle(pattern, event.MovingTime, "VO2Max")
@@ -659,6 +671,10 @@ func recommendedTrainingPlanTitle(event *Event, classification string) string {
 func tempoTitleLabel(name string) string {
 	if strings.Contains(name, "sweet") || strings.Contains(name, "ss") {
 		return "SS"
+	}
+
+	if isOverUnderPatternName(name) {
+		return "O/U"
 	}
 
 	if strings.Contains(name, "threshold") {
@@ -961,14 +977,8 @@ func addClassificationToWeek(classification string, week *TrainingPlanWeek) {
 }
 
 func classifyPlannedEvent(event *Event) string {
-	category := normalizedCategory(event.Category)
-
-	if category != planWorkoutCategory {
-		if isRestEvent(event) {
-			return plannedClassificationRest
-		}
-
-		return plannedClassificationNote
+	if normalizedCategory(event.Category) != planWorkoutCategory {
+		return classifyNonWorkoutPlannedEvent(event)
 	}
 
 	name := strings.ToLower(event.Name)
@@ -977,11 +987,11 @@ func classifyPlannedEvent(event *Event) string {
 		return plannedClassificationOpen
 	}
 
-	if strings.Contains(name, "vo2") || event.Intensity >= highIntensityThreshold {
+	if isHighIntensityPlannedName(name) || event.Intensity >= highIntensityThreshold {
 		return plannedClassificationHigh
 	}
 
-	if strings.Contains(name, "threshold") || strings.Contains(name, "tempo") || event.Intensity >= planTempoIntensity {
+	if isTempoPlannedName(name) || event.Intensity >= planTempoIntensity {
 		return plannedClassificationTempo
 	}
 
@@ -996,10 +1006,34 @@ func classifyPlannedEvent(event *Event) string {
 	return plannedClassificationZ2
 }
 
+func classifyNonWorkoutPlannedEvent(event *Event) string {
+	if isRestEvent(event) {
+		return plannedClassificationRest
+	}
+
+	return plannedClassificationNote
+}
+
 func isRestEvent(event *Event) bool {
 	name := strings.ToLower(event.Name)
 
 	return strings.Contains(name, "off") || strings.Contains(name, "rest") || strings.Contains(name, "recovery")
+}
+
+func isThirtyFifteenPatternName(name string) bool {
+	return strings.Contains(name, "30/15") || strings.Contains(name, "30-15")
+}
+
+func isOverUnderPatternName(name string) bool {
+	return strings.Contains(name, "over/under") || strings.Contains(name, "over-under") || strings.Contains(name, "over under")
+}
+
+func isHighIntensityPlannedName(name string) bool {
+	return strings.Contains(name, "vo2") || isThirtyFifteenPatternName(name)
+}
+
+func isTempoPlannedName(name string) bool {
+	return strings.Contains(name, "threshold") || strings.Contains(name, "tempo") || isOverUnderPatternName(name)
 }
 
 func isKeyTrainingPlanSession(classification string) bool {

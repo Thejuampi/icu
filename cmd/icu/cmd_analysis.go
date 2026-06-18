@@ -145,7 +145,7 @@ func analysisPlanCommand() *Command {
 				TimezoneSource: tzInfo.source,
 			})
 
-			eventQuery := queryFromFlags(flags, "calendar_id")
+			eventQuery := queryFromFlags(flags, "calendar-id")
 			eventQuery["oldest"] = dateRanges.Plan.Oldest
 			eventQuery["newest"] = dateRanges.Plan.Newest
 			if BoolFlag(flags, "resolve") {

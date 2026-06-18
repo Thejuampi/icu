@@ -5,7 +5,8 @@ import icu "github.com/Thejuampi/icu"
 func registerActivityCommands(registry *CommandRegistry) {
 	registry.Register(
 		"activity", "show",
-		getByIDCommand[icu.Activity]("activity", "activity <id> show [--intervals]", "Get a single activity.", "activity id", nil),
+		getByIDCommand[icu.Activity]("activity", "activity <id> show [--intervals]", "Get a single activity.", "activity id",
+			queryBuilder("intervals")),
 	)
 	registry.Register(
 		"activity", "update",

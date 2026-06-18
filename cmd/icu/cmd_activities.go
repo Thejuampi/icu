@@ -9,7 +9,7 @@ func registerActivitiesCommands(registry *CommandRegistry) {
 			"activities",
 			"activities list --oldest DATE --newest DATE [--fields f1,f2] [--limit N]",
 			"List activities for a date range.",
-			queryBuilder("oldest", "newest", "fields", "limit", "route_id"),
+			queryBuilder("oldest", "newest", "fields", "limit", "route-id"),
 		),
 	)
 	registry.Register("activities", "get", activitiesGetCommand())
@@ -94,14 +94,14 @@ func activitiesGetCommand() *Command {
 func activitiesUploadCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "activities upload <file> [--name NAME] [--description DESC] [--external_id ID]",
+		Usage:       "activities upload <file> [--name NAME] [--description DESC] [--external-id ID]",
 		Description: "Upload an activity file (fit/tcx/gpx/zip/gz).",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("file path")
 			}
 
-			q := queryFromFlags(flags, "name", "description", "external_id", "device_name", "paired_event_id")
+			q := queryFromFlags(flags, "name", "description", "external-id", "device-name", "paired-event-id")
 
 			var resp icu.UploadResponse
 

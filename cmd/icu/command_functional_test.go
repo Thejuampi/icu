@@ -31,6 +31,7 @@ type requestRecord struct {
 	Method string
 	Path   string
 	Query  string
+	Body   string
 }
 
 type commandServer struct {
@@ -118,6 +119,93 @@ func TestCLIParsingAndHelpFunctional(t *testing.T) {
 	if flags["oldest"] != "2026-06-01" || flags["limit"] != "10" || flags["h"] != "" ||
 		flags["_posargs_"] != "positional" {
 		t.Fatalf("parse flags = %+v", flags)
+	}
+}
+
+func TestParseFlagsNormalizesUnderscoresToHyphens(t *testing.T) {
+	t.Parallel()
+
+	flags := parseFlags([]string{"--calendar_id", "1", "--route_id", "r5", "--external_id", "x"})
+
+	if flags["calendar-id"] != "1" {
+		t.Fatalf("calendar-id = %q, want 1", flags["calendar-id"])
+	}
+
+	if flags["route-id"] != "r5" {
+		t.Fatalf("route-id = %q, want r5", flags["route-id"])
+	}
+
+	if flags["external-id"] != "x" {
+		t.Fatalf("external-id = %q, want x", flags["external-id"])
+	}
+
+	if _, exists := flags["calendar_id"]; exists {
+		t.Fatalf("calendar_id should not exist, only calendar-id")
+	}
+}
+
+func TestQueryFromFlagsConvertsHyphensToUnderscores(t *testing.T) {
+	t.Parallel()
+
+	flags := map[string]string{
+		"calendar-id":     "1",
+		"route-id":        "r5",
+		"oldest":          "2026-06-01",
+		"activity-fields": "id,name",
+	}
+
+	q := queryFromFlags(flags, "oldest", "calendar-id", "route-id", "activity-fields")
+
+	if q["oldest"] != "2026-06-01" {
+		t.Fatalf("oldest = %q, want 2026-06-01", q["oldest"])
+	}
+
+	if q["calendar_id"] != "1" {
+		t.Fatalf("calendar_id = %q, want 1", q["calendar_id"])
+	}
+
+	if q["route_id"] != "r5" {
+		t.Fatalf("route_id = %q, want r5", q["route_id"])
+	}
+
+	if q["activity_fields"] != "id,name" {
+		t.Fatalf("activity_fields = %q, want id,name", q["activity_fields"])
+	}
+}
+
+func TestActivityShowPassesIntervalsFlag(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+
+	serverState := &commandServer{}
+	server := httptest.NewServer(http.HandlerFunc(serverState.handle))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient(
+		"test-key",
+		"0",
+		icu.WithHTTPClient(server.Client()),
+		icu.WithBaseURL(server.URL),
+	)
+
+	cmd, ok := registry.Lookup("activity", "show")
+	if !ok {
+		t.Fatalf("missing command activity show")
+	}
+
+	if err := cmd.Run([]string{"i123"}, flags("intervals", "true"), client); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	if len(serverState.Requests) == 0 {
+		t.Fatalf("no request recorded")
+	}
+
+	last := serverState.Requests[len(serverState.Requests)-1]
+	if !strings.Contains(last.Query, "intervals=true") {
+		t.Fatalf("query = %q, want intervals=true", last.Query)
 	}
 }
 
@@ -640,13 +728,15 @@ func commandTestFile(t *testing.T, name, contents string) string {
 }
 
 func (server *commandServer) handle(response http.ResponseWriter, request *http.Request) {
+	bodyBytes, _ := io.ReadAll(request.Body)
+	_ = request.Body.Close()
+
 	server.Requests = append(server.Requests, requestRecord{
 		Method: request.Method,
 		Path:   request.URL.Path,
 		Query:  request.URL.RawQuery,
+		Body:   string(bodyBytes),
 	})
-
-	_, _ = io.Copy(io.Discard, request.Body)
 
 	if isDownloadRequest(request) {
 		response.WriteHeader(http.StatusOK)
@@ -899,4 +989,87 @@ func folderJSON() string {
 
 func gearJSON() string {
 	return `{"id":"g1","name":"Bike","type":"Bike","distance":1000}`
+}
+
+func TestEventsDescFlagAlias(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+
+	serverState := &commandServer{}
+	server := httptest.NewServer(http.HandlerFunc(serverState.handle))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient(
+		"test-key",
+		"0",
+		icu.WithHTTPClient(server.Client()),
+		icu.WithBaseURL(server.URL),
+	)
+
+	descText := "test description for alias"
+
+	verifyBody := func(name, wantBody string) {
+		t.Helper()
+		if len(serverState.Requests) == 0 {
+			t.Fatalf("%s: no request recorded", name)
+		}
+		last := serverState.Requests[len(serverState.Requests)-1]
+		if !strings.Contains(last.Body, wantBody) {
+			t.Fatalf("%s: body = %s, want substring %q", name, last.Body, wantBody)
+		}
+	}
+
+	tests := []struct {
+		name      string
+		action    string
+		args      []string
+		flags     map[string]string
+		wantValue string
+	}{
+		{
+			name:      "events create --desc",
+			action:    "create",
+			args:      nil,
+			flags:     flags("name", "Test", "start-date", "2026-06-01", "desc", descText),
+			wantValue: descText,
+		},
+		{
+			name:      "events create --description",
+			action:    "create",
+			args:      nil,
+			flags:     flags("name", "Test", "start-date", "2026-06-01", "description", descText),
+			wantValue: descText,
+		},
+		{
+			name:      "events update --desc",
+			action:    "update",
+			args:      []string{"1"},
+			flags:     flags("desc", descText),
+			wantValue: descText,
+		},
+		{
+			name:      "events update --description",
+			action:    "update",
+			args:      []string{"1"},
+			flags:     flags("description", descText),
+			wantValue: descText,
+		},
+	}
+
+	for _, tc := range tests {
+		serverState.Requests = nil
+
+		cmd, ok := registry.Lookup("events", tc.action)
+		if !ok {
+			t.Fatalf("%s: missing command events %s", tc.name, tc.action)
+		}
+
+		if err := cmd.Run(tc.args, tc.flags, client); err != nil {
+			t.Fatalf("%s: Run error: %v", tc.name, err)
+		}
+
+		verifyBody(tc.name, tc.wantValue)
+	}
 }

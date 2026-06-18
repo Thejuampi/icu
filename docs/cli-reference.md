@@ -80,12 +80,12 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `show`
   Invocation: `icu activity <id> show [--intervals]`
-  Notes: `--intervals` is accepted by help/parse flow but is not currently used by the handler.
+  Notes: `--intervals` adds interval data to the response.
   Example: `icu activity i123 show`
+  Example: `icu activity i123 show --intervals`
 
 - `update`
   Invocation: `icu activity <id> update --name NAME [--description DESC] [--type Ride]`
-  Notes: current code expects `--description`; help text says `--desc`.
   Example: `icu activity i123 update --name "Afternoon Ride" --description "Updated title"`
 
 - `delete`
@@ -324,6 +324,7 @@ Invoke these commands as `icu activity <id> <action>`.
 - `create`
   Invocation: `icu events create [--category WORKOUT] [--type Ride] --name NAME --start-date DATE [--moving-time SECS] [--training-load N] [--desc DESC] [--color VALUE] [--indoor] [--external-id ID] [--upsert]`
   Defaults: `--category WORKOUT`, `--type Ride`
+  Notes: `NOTE` events behave like all-day calendar notes in Intervals.icu; the date is preserved, but the time-of-day portion of `--start-date` may be normalized away. Long `NOTE` descriptions can also fail upstream with HTTP 500, so prefer shorter notes or split large guidance across multiple notes.
   Example: `icu events create --name "Threshold" --start-date 2026-06-03 --training-load 90 --indoor`
 
 - `update`
