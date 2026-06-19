@@ -18,7 +18,7 @@ go get github.com/Thejuampi/icu@latest
   mobile app shows that Intervals.icu does not mirror.
 - Config and auth helpers: API key, athlete ID, config file storage, and diagnostics
 - Output helpers: pretty JSON, compact JSON, CSV, and table writers
-- Analysis functions: cycling, wellness, adaptation, and training-plan analysis
+- Analysis functions: cycling, wellness, adaptation, training-plan, microcycle, and workout-execution analysis
 
 For field-level DTO reference, use `go doc github.com/Thejuampi/icu` or inspect [types.go](../types.go).
 
@@ -228,6 +228,24 @@ plan := icu.AnalyzeTrainingPlanWithContext(
 )
 ```
 
+### Workout execution analysis
+
+```go
+analysis := icu.AnalyzeWorkoutExecution(
+	icu.WorkoutExecutionInputs{
+		Activity:      &activity,
+		Streams:       streams,
+		Intervals:     &intervals,
+		Events:        events,
+		SportSettings: &sportSettings,
+	},
+	icu.WorkoutExecutionOptions{MatchWindowHours: 24},
+)
+```
+
+Use `DecodeWorkoutDoc` and `ExpandWorkoutSteps` when you need to inspect or
+pre-process a planned event's structured workout document directly.
+
 Relevant exported analysis types:
 
 - `AnalysisOptions`
@@ -237,6 +255,11 @@ Relevant exported analysis types:
 - `TrainingPlanOptions`
 - `TrainingPlanAnalysis`
 - `TrainingPlanContext`
+- `WorkoutExecutionInputs`
+- `WorkoutExecutionOptions`
+- `WorkoutExecutionAnalysis`
+- `WorkoutDoc`
+- `PlannedWorkoutStep`
 
 See [docs/analysis.md](analysis.md) for the meaning of the major output sections.
 

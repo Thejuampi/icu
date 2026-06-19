@@ -17,7 +17,7 @@ const (
 
 func DetectSectionsByHRStabilization(hr, _ []float64) (ActivitySection, ActivitySection, ActivitySection) { //nolint:gocritic
 	count := len(hr)
-	if count < 3 {
+	if count < minSectionLen {
 		return ActivitySection{Name: "main", StartIndex: 0, EndIndex: count},
 			ActivitySection{},
 			ActivitySection{}

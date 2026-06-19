@@ -33,6 +33,19 @@ func TestDetectSectionsByHRStabilization(t *testing.T) {
 	}
 }
 
+func TestDetectSectionsByHRStabilizationShortStreams(t *testing.T) {
+	t.Parallel()
+
+	hr := []float64{100, 101, 102}
+	watts := []float64{200, 200, 200}
+
+	main, _, _ := icu.DetectSectionsByHRStabilization(hr, watts)
+
+	if main.EndIndex != len(hr) {
+		t.Fatalf("main end = %d, want %d", main.EndIndex, len(hr))
+	}
+}
+
 func TestDetectIntervalsFromDTO(t *testing.T) {
 	t.Parallel()
 

@@ -42,6 +42,7 @@ icu analysis wellness --days 42
 icu analysis plan
 icu analysis adaptation --days 42 --type Ride
 icu analysis microcycle --json
+icu analysis workout i123
 
 # Diagnose auth/config resolution without exposing the secret
 icu config diagnose
@@ -168,7 +169,7 @@ Current top-level resources:
 | --- | --- |
 | `activities` | `around`, `csv`, `get`, `interval-search`, `list`, `manual`, `search`, `search-full`, `upload` |
 | `activity` | `best-efforts`, `delete`, `file`, `fit-file`, `gpx-file`, `hr-curve`, `intervals`, `map`, `messages`, `pace-curve`, `power-curve`, `power-vs-hr`, `segments`, `show`, `streams`, `update`, `weather`, `weather-summary` |
-| `analysis` | `adaptation`, `cycling`, `micro`, `microcycle`, `plan`, `wellness` |
+| `analysis` | `adaptation`, `cycling`, `micro`, `microcycle`, `plan`, `wellness`, `workout` |
 | `athlete` | `plan`, `profile`, `settings`, `show`, `summary`, `update` |
 | `chats` | `get`, `list`, `messages`, `send` |
 | `config` | `diagnose`, `path`, `set`, `show` |
@@ -190,13 +191,14 @@ Current top-level resources:
 
 ## Analysis Overview
 
-`icu` currently ships five primary read-only analysis commands plus the `analysis micro` alias:
+`icu` currently ships six primary read-only analysis commands plus the `analysis micro` alias:
 
 - `analysis cycling` summarizes recent cycling load, intensity, environment, durability, anaerobic work, and session-level signals.
 - `analysis wellness` summarizes wellness coverage and physiology signals from wellness records.
 - `analysis plan` compares completed history with planned calendar events and emits a structured four-week planning view.
 - `analysis adaptation` compares power curves and anchors against recent activity and wellness context.
 - `analysis microcycle` emits an experimental, LLM-ready diagnostic contract for the current or selected training microcycle. `analysis micro` is its short alias.
+- `analysis workout` compares one completed activity against its planned workout event, structured workout steps, intervals, and streams.
 
 See [docs/analysis.md](docs/analysis.md) for defaults, inputs, output sections, and current limitations.
 

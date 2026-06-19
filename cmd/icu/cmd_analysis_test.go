@@ -257,6 +257,73 @@ func TestAnalysisMicrocycleCommandRegistered(t *testing.T) {
 	}
 }
 
+func TestAnalysisWorkoutCommandRegistered(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAnalysisCommands(registry)
+
+	cmd, ok := registry.Lookup("analysis", "workout")
+	if !ok {
+		t.Fatal("analysis workout not found")
+	}
+	if cmd == nil {
+		t.Fatal("analysis workout command is nil")
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisWorkoutCommandWritesJSON(t *testing.T) {
+	streamWatts := "[" + strings.TrimRight(strings.Repeat("250,", 120), ",") + "]"
+	streamHR := "[" + strings.TrimRight(strings.Repeat("150,", 120), ",") + "]"
+	activityBody := `{"id":"a1","name":"3x18 Sweet Spot","type":"Ride",` +
+		`"startDateLocal":"2026-06-18T18:09:46","movingTime":6743,` +
+		`"icuTrainingLoad":106,"icuIntensity":0.751,"icuWeightedAvgWatts":214,"averageHeartrate":136}`
+	eventBody := `[{"id":2,"category":"WORKOUT","type":"Ride",` +
+		`"name":"W3 Thu 2026-06-18 ALT 3x18 Sweet Spot",` +
+		`"startDateLocal":"2026-06-18T00:00:00","movingTime":6420,` +
+		`"icuTrainingLoad":118,"icuIntensity":0.813,` +
+		`"workoutDoc":{"steps":[{"reps":1,"steps":[{"duration":1080,` +
+		`"power":{"start":90,"end":94,"units":"%ftp"}}]}]}}]`
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/activity/a1/intervals"):
+			_, _ = response.Write([]byte(`{"icuIntervals":[{"startIndex":0,"endIndex":1080,"type":"WORK","movingTime":1080,"averageWatts":258,"averageHeartrate":158}]}`))
+		case strings.Contains(request.URL.Path, "/activity/a1/streams"):
+			_, _ = response.Write([]byte(`[{"type":"watts","data":` + streamWatts + `},{"type":"heartrate","data":` + streamHR + `}]`))
+		case strings.Contains(request.URL.Path, "/activity/a1"):
+			_, _ = response.Write([]byte(activityBody))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(eventBody))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		default:
+			_, _ = response.Write([]byte(okJSON))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient(
+		"test-key",
+		"0",
+		icu.WithHTTPClient(server.Client()),
+		icu.WithBaseURL(server.URL),
+	)
+	cmd := analysisWorkoutCommand()
+	out, err := captureStdout(t, func() error {
+		return cmd.Run([]string{"a1"}, map[string]string{"json": "true"}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.WorkoutExecutionAnalysis
+	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Match.EventID != 2 {
+		t.Fatalf("json = %q err=%v match=%+v", out, err, got.Match)
+	}
+}
+
 func newMicrocycleCommandTestClient(serverURL string, httpClient *http.Client) *icu.Client {
 	return icu.NewClient(
 		"test-key",

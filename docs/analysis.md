@@ -121,7 +121,7 @@ icu analysis plan \
   [--history-oldest DATE --history-newest DATE] \
   [--plan-oldest DATE --plan-newest DATE] \
   [--history-days N] [--plan-days N] \
-  [--sport-type TYPE] [--calendar_id ID] [--resolve] \
+  [--sport-type TYPE] [--calendar-id ID] [--resolve] \
   [--activity-fields CSV]
 ```
 
@@ -174,7 +174,6 @@ The CLI currently passes `Adaptation: nil`, even though the library supports ada
 - The CLI does not currently add adaptation context, even though the library supports it.
 - Event classification depends on available event category, timing, and load hints; sparse events reduce forecast quality.
 - Explicit date overrides must be supplied in complete pairs for history and plan windows.
-- `--calendar_id` uses an underscore because the parser matches exact flag names.
 
 ## analysis adaptation
 
@@ -320,6 +319,75 @@ decide how to present coaching guidance.
 - Missing plan, wellness, FTP, zones, HR, or power data lowers confidence
   rather than being hidden behind confident conclusions.
 
+## analysis workout
+
+### Purpose
+
+Analyze one completed workout against its planned calendar workout context.
+This command is designed for `plan vs execution` review: it does not treat the
+plan as absolute truth, but it does make the planned intent explicit before
+interpreting the executed activity.
+
+### CLI Contract
+
+```bash
+icu analysis workout <activity-id> \
+  [--event-id ID] [--calendar-id ID] [--sport-type TYPE] \
+  [--match-window-hours N] [--stream-types CSV]
+```
+
+Defaults:
+
+- `--match-window-hours 24`
+- `--stream-types watts,heartrate,cadence`
+- `--sport-type` inferred from the activity type, falling back to `Ride`
+
+### Upstream Data
+
+The CLI fetches:
+
+- the completed activity by ID
+- detected activity intervals from `activity/<id>/intervals`
+- activity streams from `activity/<id>/streams`
+- sport settings for FTP/LTHR target resolution
+- either the explicit `--event-id` or nearby resolved calendar events around
+  the activity local date
+
+### Output Sections
+
+- `scope`: activity ID, matched event ID, and match window.
+- `activity`: completed session rollup using the same `CyclingSession` contract
+  as `analysis cycling`.
+- `match`: selected calendar event, confidence, score, reasons, and alternates.
+- `plan`: matched event summary plus expanded planned workout steps when
+  `workoutDoc` is available.
+- `execution`: stream/interval-derived micro-analysis, including warmup,
+  cooldown, repeatability, and zone alignment when source data is present.
+- `comparison`: session duration/load/intensity deltas, planned vs executed
+  work-rep count, step comparisons, repeatability, and zone alignment.
+- `warnings`: missing or low-confidence sources such as missing plan, streams,
+  intervals, FTP, LTHR, or structured workout steps.
+
+### Interpretation
+
+- `match.confidence` should be checked before treating the selected event as
+  authoritative.
+- `plan.steps` is expanded from nested repeats so consumers can reason about
+  work and recovery steps directly.
+- `comparison.repCount` compares planned work steps against executed `WORK`
+  intervals when interval data exists.
+- The command degrades to session-level comparison when structured plan or
+  interval/stream data is unavailable.
+
+### Current Limitations
+
+- Step matching is best-effort. It uses planned order and detected `WORK`
+  intervals; unsupported freeride or until-lap behavior is reported through
+  warnings rather than invented precision.
+- `workout_file_base64` decoding currently supports JSON workout docs only.
+- The command is read-only and does not update calendar notes or planned
+  workouts.
+
 ## Choosing The Right Analysis Command
 
 - Use `cycling` for completed-work review, intensity distribution, and durability signals.
@@ -327,3 +395,4 @@ decide how to present coaching guidance.
 - Use `plan` for future-block structure, load alignment, and event-aware decision guidance.
 - Use `adaptation` for curve-based improvement/decline analysis tied to recent load context.
 - Use `microcycle` for LLM-ready microcycle diagnostics; `micro` is its alias.
+- Use `workout` for one completed workout against planned-event execution review.

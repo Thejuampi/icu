@@ -10,7 +10,7 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 - A bare resource defaults to `show` if that resource has a `show` action, for example `icu athlete`.
 - A bare resource without `show` prints resource help, for example `icu activities`.
 - `activity` and `shared-event` support id-first parsing. Example: `icu activity i123 show`.
-- Long flags are parsed literally. If a command expects `--calendar_id`, `--minSecs`, or `--external_id`, that exact spelling matters.
+- Long flags prefer hyphen-case. Snake_case spellings are normalized for compatibility where applicable, and API query fields are converted back to snake_case internally.
 - Download commands return raw bytes, not wrapped JSON.
 - The global `--output` preference exists in config resolution, but current commands mostly emit JSON regardless of that preference.
 
@@ -172,9 +172,9 @@ Invoke these commands as `icu activity <id> <action>`.
   Example: `icu analysis wellness --oldest 2026-04-20 --newest 2026-05-31`
 
 - `plan`
-  Invocation: `icu analysis plan [--history-oldest DATE --history-newest DATE] [--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar_id ID] [--resolve] [--activity-fields CSV]`
+  Invocation: `icu analysis plan [--history-oldest DATE --history-newest DATE] [--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve] [--activity-fields CSV]`
   Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`
-  Notes: `--calendar_id` uses an underscore; explicit history and plan ranges must be provided in pairs. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
+  Notes: explicit history and plan ranges must be provided in pairs. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
   Example: `icu analysis plan --history-days 84 --plan-days 28 --resolve`
 
 - `adaptation`
@@ -193,6 +193,12 @@ Invoke these commands as `icu activity <id> <action>`.
   Invocation: `icu analysis micro [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]`
   Notes: Alias for `analysis microcycle`. This replaces the former experimental per-activity micro-analysis command.
   Example: `icu analysis micro --json`
+
+- `workout`
+  Invocation: `icu analysis workout <activity-id> [--event-id ID] [--calendar-id ID] [--sport-type TYPE] [--match-window-hours N] [--stream-types CSV]`
+  Defaults: `--match-window-hours 24`, `--stream-types watts,heartrate,cadence`, `--sport-type` inferred from the activity type and falling back to `Ride`.
+  Notes: Read-only JSON contract for planned-workout execution review. The command fetches the activity, detected intervals, raw streams, sport settings, and either the explicit `--event-id` or nearby resolved calendar events. It emits match confidence, planned workout steps, execution micro metrics, session/rep/step comparison, and warnings when plan, stream, interval, FTP, or LTHR data is missing.
+  Example: `icu analysis workout i123 --calendar-id 1`
 
 ## athlete
 

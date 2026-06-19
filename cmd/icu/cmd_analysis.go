@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,11 +21,12 @@ const defaultAnalysisFields = "id,name,start_date_local,type,moving_time,distanc
 	"icu_ctl,icu_atl"
 
 const (
-	defaultAnalysisDays    = 28
-	defaultPlanHistoryDays = 84
-	defaultPlanDays        = 28
-	calendarWeekDays       = 7
-	nextWeekdayModuloBase  = 8
+	defaultAnalysisDays      = 28
+	defaultPlanHistoryDays   = 84
+	defaultPlanDays          = 28
+	calendarWeekDays         = 7
+	nextWeekdayModuloBase    = 8
+	defaultWorkoutMatchHours = 24
 )
 
 type analysisTimezoneInfo struct {
@@ -61,6 +63,7 @@ func registerAnalysisCommands(registry *CommandRegistry) {
 	registry.Register("analysis", "adaptation", analysisAdaptationCommand())
 	registry.Register("analysis", "microcycle", analysisMicrocycleCommand())
 	registry.Register("analysis", "micro", analysisMicroCommand())
+	registry.Register("analysis", "workout", analysisWorkoutCommand())
 }
 
 func analysisCyclingCommand() *Command {
@@ -207,6 +210,133 @@ func analysisWellnessCommand() *Command {
 			return writeJSON(analysis)
 		},
 	}
+}
+
+func analysisWorkoutCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "analysis workout <activity-id> [--event-id ID] [--calendar-id ID] [--sport-type TYPE] [--match-window-hours N]",
+		Description: "Analyze one completed workout against its planned workout event, intervals, and streams.",
+		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+			if len(args) == 0 {
+				return errMissing("activity id")
+			}
+
+			activityID := args[0]
+			inputs, options, err := readWorkoutExecutionInputs(client, flags, activityID)
+			if err != nil {
+				return err
+			}
+
+			analysis := icu.AnalyzeWorkoutExecution(inputs, options)
+
+			return writeJSON(analysis)
+		},
+	}
+}
+
+func readWorkoutExecutionInputs(
+	client *icu.Client,
+	flags map[string]string,
+	activityID string,
+) (icu.WorkoutExecutionInputs, icu.WorkoutExecutionOptions, error) {
+	var inputs icu.WorkoutExecutionInputs
+	options := icu.WorkoutExecutionOptions{
+		ExplicitEventID:  IntFlag(flags, "event-id", 0),
+		MatchWindowHours: IntFlag(flags, "match-window-hours", defaultWorkoutMatchHours),
+	}
+
+	var activity icu.Activity
+	if err := client.Get("activity", []string{activityID}, nil, &activity); err != nil {
+		return inputs, options, wrapCommandError(err)
+	}
+	inputs.Activity = &activity
+
+	var intervals icu.IntervalsDTO
+	if err := client.Get("activity", []string{activityID, "intervals"}, nil, &intervals); err != nil {
+		return inputs, options, wrapCommandError(err)
+	}
+	inputs.Intervals = &intervals
+
+	streamQuery := map[string]string{"types": icu.StringFlag(flags, "stream-types", "watts,heartrate,cadence")}
+	var rawStreams []icu.ActivityStream
+	if err := client.Get("activity", []string{activityID, "streams"}, streamQuery, &rawStreams); err != nil {
+		return inputs, options, wrapCommandError(err)
+	}
+	streams, err := icu.NormalizeStreams(rawStreams)
+	if err != nil {
+		return inputs, options, fmt.Errorf("normalize streams: %w", err)
+	}
+	inputs.Streams = streams
+
+	events, err := readWorkoutExecutionEvents(client, flags, &activity, options.ExplicitEventID)
+	if err != nil {
+		return inputs, options, err
+	}
+	inputs.Events = events
+
+	sportType := icu.StringFlag(flags, "sport-type", activity.Type)
+	if sportType == "" {
+		sportType = "Ride"
+	}
+	var sportSettings icu.SportSettings
+	if err := client.Get("sport-settings", []string{sportType}, nil, &sportSettings); err != nil {
+		if !isHTTPStatus(err, httpStatusNotFound) {
+			return inputs, options, wrapCommandError(err)
+		}
+	}
+	inputs.SportSettings = &sportSettings
+
+	return inputs, options, nil
+}
+
+func readWorkoutExecutionEvents(
+	client *icu.Client,
+	flags map[string]string,
+	activity *icu.Activity,
+	explicitEventID int,
+) ([]icu.Event, error) {
+	if explicitEventID > 0 {
+		var event icu.Event
+		if err := client.Get("events", []string{strconv.Itoa(explicitEventID)}, nil, &event); err != nil {
+			return nil, wrapCommandError(err)
+		}
+
+		return []icu.Event{event}, nil
+	}
+
+	activityDate := workoutActivityDate(activity)
+	if activityDate == "" {
+		return nil, nil
+	}
+	oldest, err := addDays(activityDate, -1)
+	if err != nil {
+		return nil, err
+	}
+	newest, err := addDays(activityDate, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	eventQuery := queryFromFlags(flags, "calendar-id")
+	eventQuery["oldest"] = oldest
+	eventQuery["newest"] = newest
+	eventQuery["resolve"] = strTrue
+
+	var events []icu.Event
+	if err := client.Get("events", nil, eventQuery, &events); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	return events, nil
+}
+
+func workoutActivityDate(activity *icu.Activity) string {
+	if activity == nil || len(activity.StartDateLocal) < len("2006-01-02") {
+		return ""
+	}
+
+	return activity.StartDateLocal[:len("2006-01-02")]
 }
 
 func analysisAdaptationCommand() *Command {

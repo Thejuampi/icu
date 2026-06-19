@@ -46,6 +46,9 @@ If the investigation exposes a CLI bug, parser mismatch, auth ambiguity, or data
 
 - Treat existing planned workouts as the baseline plan. For planning requests, first evaluate whether the existing calendar is coherent before proposing replacement workouts.
 - Review existing NOTE events on the calendar before rendering analysis. Notes carry coaching context, block structure, decision rules, and athlete-facing communication. Skimming only WORKOUT events misses the full picture. Collect them explicitly alongside planned sessions.
+- **Do not analyze a planned session in isolation.** If the user asks about a workout that sits inside a training block, first retrieve the planned event and the relevant NOTE events for that day/week/block, then compare planned intent vs executed data. If that context is missing, say the analysis is incomplete and fetch it before giving conclusions.
+- For single completed workouts inside an active plan, run `icu analysis workout ACTIVITY_ID --athlete-id ATHLETE_ID` as the primary data contract. Use its `match`, `plan`, `execution`, `comparison`, and `warnings` sections before writing coaching prose.
+- **Do not give generic recommendations that bypass the plan.** Recommendations must be framed as `plan-preserving` first: confirm whether the executed session matched the intended role, then adjust execution rules or fallback options before suggesting a different workout or extra recovery.
 - After producing a plan review, write key findings back as NOTE events on the calendar so future analyses and the athlete can reference them. If the plan is approved, create: (a) one block-overview note with week roles, load targets, decision thresholds, FTP, and zone-specific baselines; (b) weekly focus notes with session classification and conditional rules.
 - **Update notes iteratively as the analysis deepens.** A first-pass note may have approximate thresholds; refine it when computed baselines replace athlete self-report. The block overview note should be the single source of truth that subsequent analyses can trust.
 - The `--desc` text parser in Intervals.icu requires a specific format. **Never use inline `- NxMm XX%` syntax** — the API will not expand it into a repeat block. Instead use the **multi-line repeat block format**:
@@ -77,6 +80,7 @@ icu analysis cycling --oldest START --newest END --athlete-id ATHLETE_ID
 icu analysis wellness --oldest WELLNESS_START --newest END --athlete-id ATHLETE_ID
 icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END --athlete-id ATHLETE_ID
 icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --athlete-id ATHLETE_ID
+icu analysis workout ACTIVITY_ID --athlete-id ATHLETE_ID
 ```
 
 3. Collect supporting Intervals.icu context as needed.
@@ -107,6 +111,8 @@ icu events list --oldest PLAN_START --newest PLAN_END --athlete-id ATHLETE_ID
 Filter the response for `category: "NOTE"` events. Read their `name` and `description` fields. These contain block intentions, decision rules, physiological thresholds, and athlete communication. Missing them means the analysis is working with incomplete context.
 
 If notes exist, incorporate their content into the review. If notes are absent or outdated, flag it and offer to write them after the analysis.
+
+For any single-workout review inside an active plan, first run `icu analysis workout ACTIVITY_ID --athlete-id ATHLETE_ID`. Also retrieve surrounding week/block `NOTE` events when they are not already present in the workout-analysis context. The minimum valid frame is: `analysis workout` output, relevant notes, and current block state. Do not skip straight from activity metrics to coaching advice.
 
 For planning questions, use a 12-week lookback and the next 4 weeks of events unless the user requests a different horizon.
 
@@ -146,7 +152,9 @@ icu activities list --oldest HISTORY_START --newest END --athlete-id ATHLETE_ID 
    - Start with the headline state: e.g. `Load Pressure / recovery_priority`.
    - Separate raw metrics from interpretation.
    - Make confidence clear when data is sparse.
-   - End with a concrete coaching directive and one useful reflection question.
+   - For planned-session reviews, present `plan vs execution vs implication` from `analysis workout` before any directive.
+   - End with a concrete coaching directive only when it is supported by the current plan context; otherwise say what context is missing.
+   - Add one useful reflection question only after the plan-context analysis is complete.
 
 ## Report Sections
 
@@ -297,4 +305,3 @@ When adding support to `icu` for a missing metric:
 5. Run `go test ./... -count=1`, `go vet ./...`, and `golangci-lint run ./...`.
 
 Current known gap: the repository-wide coverage gate is below 90% because the existing CLI command surface is broadly untested. Do not treat that as caused by a single analysis change.
-
