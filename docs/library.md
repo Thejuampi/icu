@@ -19,6 +19,7 @@ go get github.com/Thejuampi/icu@latest
 - Config and auth helpers: API key, athlete ID, config file storage, and diagnostics
 - Output helpers: pretty JSON, compact JSON, CSV, and table writers
 - Analysis functions: cycling, wellness, adaptation, training-plan, microcycle, and workout-execution analysis
+- Planned workout helpers: parse line-oriented workout descriptions and estimate cycling load from FTP-based power targets
 
 For field-level DTO reference, use `go doc github.com/Thejuampi/icu` or inspect [types.go](../types.go).
 
@@ -176,6 +177,22 @@ if err := icu.WriteJSON(os.Stdout, athlete); err != nil {
 ## Analysis Entry Points
 
 The analysis functions operate on already-fetched DTOs and do not perform network I/O themselves.
+
+## Planned Workout Load
+
+Use `ParseWorkoutDescription` and `EstimatePlannedLoad` to calculate planned cycling duration, average power, normalized power, IF, and TSS without contacting Intervals.icu.
+
+```go
+doc, err := icu.ParseWorkoutDescription("- 60m 70%")
+if err != nil {
+	panic(err)
+}
+
+estimate := icu.EstimatePlannedLoad(doc, 300)
+fmt.Println(estimate.TrainingLoad)
+```
+
+The parser intentionally supports the explicit line-oriented grammar used by the CLI planning workflow: single steps like `- 10m 55-75%`, steady targets like `- 5m 90%`, and repeat blocks like `3x` with indented child steps. Unsupported text returns `ErrWorkoutDescriptionUnsupported` instead of guessing.
 
 ### Cycling analysis
 

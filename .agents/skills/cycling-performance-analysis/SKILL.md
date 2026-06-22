@@ -54,37 +54,47 @@ If the investigation exposes a CLI bug, parser mismatch, auth ambiguity, or data
 
 Each `-` step line is `duration zone%` (e.g., `15m 55-72%`). A bare `Nx` on its own line starts a repeating block; the indented `-` lines beneath it define the steps to repeat. Do not include rest duration text like `with 5m rest` in the step line — rest is its own indented step.
 - The `workout_doc` and `workout` fields in the EventEx schema are **read-only** in practice. The API ignores them in POST/PUT requests and only generates `workoutDoc` from the `--desc` text description. Workout structure (including step-level `text` cues) can only be set via the description text parser. The text parser strips arbitrary text annotations — only power/HR zones and keywords (warmup, cooldown, etc.) are preserved as step text. Step-level coaching cues must be added manually in the Intervals.icu UI after creation.
+- Before creating or updating planned workouts for load-sensitive blocks, calculate local load with `icu workouts calculate --ftp FTP --desc DESC`. This is mandatory for deload weeks, ramp correction, and any plan option where weekly TSS/CTL ramp is part of the decision.
+- Use `events create/update --calculate-load --ftp FTP --desc DESC` when writing workouts that should carry locally calculated `moving_time` and `icu_training_load`. The flag is explicit by design: if `--calculate-load` is absent, the CLI must not assume or overwrite load values.
+- Treat local planned-load calculation as the pre-write precision check and Intervals.icu's returned event as the post-write calibration check. If the response contains `{event, estimate, warnings}`, inspect warnings before trusting the event for plan math.
+- The local parser supports the same strict line-oriented workout format used above: `- 10m 55-75%`, `- 5m 90%`, and repeat blocks like `3x` with indented child steps. Do not use free prose when exact TSS is required.
 
 ## Primary Workflow
 
 1. Resolve athlete and range.
+   - **Check the configured default athlete first.** Run `icu config show`. If `athlete_id` is set to a non-zero value, use that athlete for every command below unless the user explicitly asks for a different one. Do **not** ask for an athlete ID when a valid default is already configured.
+   - If `athlete_id` is `0` or missing, ask the user for their Intervals.icu athlete ID before proceeding.
+   - If the user says "my", "I", or similar without naming an athlete, use the configured default when it exists; otherwise ask.
+   - If multiple coached athletes are possible and no default is configured, ask for athlete selection.
    - Default weekly report: 7 days ending today. Note: default ranges are calculated in UTC, so use absolute `YYYY-MM-DD` dates in the athlete's local timezone for precise daily boundaries.
    - If the user gives dates, use absolute `YYYY-MM-DD` dates.
-   - If multiple coached athletes are possible, ask for athlete selection.
 
 2. Collect the current numeric cycling summary.
 
+**Note:** The `--athlete-id` flag in every command below is optional when `icu config show` reports a configured default athlete (anything other than `0`). Omit the flag to use the default; include it only to override.
+
 ```bash
-icu analysis cycling --oldest START --newest END --athlete-id ATHLETE_ID
-icu analysis wellness --oldest WELLNESS_START --newest END --athlete-id ATHLETE_ID
-icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END --athlete-id ATHLETE_ID
-icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --athlete-id ATHLETE_ID
-icu analysis workout ACTIVITY_ID --athlete-id ATHLETE_ID
+icu analysis cycling --oldest START --newest END [--athlete-id ATHLETE_ID]
+icu analysis wellness --oldest WELLNESS_START --newest END [--athlete-id ATHLETE_ID]
+icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END [--athlete-id ATHLETE_ID]
+  # NOTE: explicit plan dates are automatically aligned to ISO week boundaries (Mon-Sun) by the CLI.
+icu analysis adaptation --oldest HISTORY_START --newest END --type Ride [--athlete-id ATHLETE_ID]
+icu analysis workout ACTIVITY_ID [--athlete-id ATHLETE_ID]
 ```
 
 3. Collect supporting Intervals.icu context as needed.
 
 ```bash
-icu athlete show --athlete-id ATHLETE_ID
-icu sports get Ride --athlete-id ATHLETE_ID
-icu events list --oldest NEXT_START --newest NEXT_END --athlete-id ATHLETE_ID
-icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d --athlete-id ATHLETE_ID
+icu athlete show [--athlete-id ATHLETE_ID]
+icu sports get Ride [--athlete-id ATHLETE_ID]
+icu events list --oldest NEXT_START --newest NEXT_END [--athlete-id ATHLETE_ID]
+icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d [--athlete-id ATHLETE_ID]
 ```
 
 4. Review existing calendar notes (NOTE events) for coaching context.
 
 ```bash
-icu events list --oldest PLAN_START --newest PLAN_END --athlete-id ATHLETE_ID
+icu events list --oldest PLAN_START --newest PLAN_END [--athlete-id ATHLETE_ID]
 ```
 
 Filter the response for `category: "NOTE"` events. Read their `name` and `description` fields. These contain block intentions, decision rules, physiological thresholds, and athlete communication. Missing them means the analysis is working with incomplete context.
@@ -96,10 +106,11 @@ For any single-workout review inside an active plan, first run `icu analysis wor
 For planning questions, use a 12-week lookback and the next 4 weeks of events unless the user requests a different horizon.
 
 ```bash
-icu analysis cycling --oldest HISTORY_START --newest END --athlete-id ATHLETE_ID
-icu analysis wellness --oldest WELLNESS_START --newest END --athlete-id ATHLETE_ID
-icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END --athlete-id ATHLETE_ID
-icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d --athlete-id ATHLETE_ID
+icu analysis cycling --oldest HISTORY_START --newest END [--athlete-id ATHLETE_ID]
+icu analysis wellness --oldest WELLNESS_START --newest END [--athlete-id ATHLETE_ID]
+icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END [--athlete-id ATHLETE_ID]
+  # NOTE: explicit plan dates are automatically aligned to ISO week boundaries (Mon-Sun) by the CLI.
+icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d [--athlete-id ATHLETE_ID]
 ```
 
 Planning dry-run checklist:
@@ -107,6 +118,7 @@ Planning dry-run checklist:
 - Summarize the last 12 weeks by weekly TSS, hours, session count, high-intensity days, long endurance sessions, mean IF, and decoupling.
 - Classify the current state from CTL/ATL/TSB plus wellness: e.g. `load_accepting`, `load_pressure`, or `recovery_priority`.
 - Group the next 4 weeks of planned events by ISO week and compare planned TSS/hours against recent tolerance with `analysis plan`.
+- For any new or edited workout that changes weekly load, run `icu workouts calculate --ftp FTP --desc DESC` first and use the returned `trainingLoad`, `durationSeconds`, and `intensityFactor` in the plan math. Never insert estimated deload values by feel.
 - Review week roles and session classifications, not just TSS: `reentry`, `build`, `overload`, `deload`, `high_intensity`, `tempo_threshold`, `long_endurance`, `recovery`, `aerobic`, `opener`, `rest`.
 - Review `execution.recommendedTitle` and `execution.cues` for each workout. Use short representative titles such as `4x5 VO2Max`, `2x20 SS`, `3h Z2`, or `3x15 Tempo` when the session structure supports them.
 - Use encouragement cues for high-intensity, tempo/threshold, and selected endurance work. Use restraint/recovery cues for easy or recovery rides; do not add hype to Z1 recovery sessions.
@@ -117,7 +129,7 @@ Planning dry-run checklist:
 Use wider ranges for trend questions:
 
 ```bash
-icu activities list --oldest HISTORY_START --newest END --athlete-id ATHLETE_ID --fields id,name,start_date_local,type,moving_time,distance,icu_training_load,icu_intensity,decoupling,icu_efficiency_factor,icu_variability_index,icu_joules_above_ftp,icu_max_wbal_depletion,icu_ctl,icu_atl
+icu activities list --oldest HISTORY_START --newest END [--athlete-id ATHLETE_ID] --fields id,name,start_date_local,type,moving_time,distance,icu_training_load,icu_intensity,decoupling,icu_efficiency_factor,icu_variability_index,icu_joules_above_ftp,icu_max_wbal_depletion,icu_ctl,icu_atl
 ```
 
 5. Check the data contract before writing prose.

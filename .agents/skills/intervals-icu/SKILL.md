@@ -17,7 +17,7 @@ Use this skill when the task is about reading, changing, importing, exporting, o
 - Treat `icu` as the source of truth for authentication, base URL, athlete ID shorthand, request formatting, response parsing, and REST errors.
 - Discover exact flags from the installed build with `icu help` and `icu <resource> --help` before assuming a command shape.
 - Prefer hyphen-case CLI flags in examples and command entry, such as `--calendar-id`, `--external-id`, and `--route-id`. Treat snake_case as the API naming layer; raw responses and `--fields` values may still use snake_case.
-- Use athlete ID `0` unless the user specifies another athlete.
+- Use the configured default athlete ID. If none is configured, the CLI falls back to athlete ID `0`; override with `--athlete-id` when needed.
 - Prefer narrow reads with date ranges, `--fields`, and resource-specific filters.
 - Never print, store, or invent API keys. Use `icu config diagnose` for safe credential checks.
 - For destructive or broad writes, confirm intent unless the user already gave explicit instructions.
@@ -30,6 +30,7 @@ go install github.com/Thejuampi/icu@latest
 
 # One-time local setup
 icu config set --api-key YOUR_API_KEY
+icu config set --athlete-id YOUR_ATHLETE_ID
 
 # Verify configuration without exposing secrets
 icu config diagnose
@@ -40,6 +41,13 @@ icu config show
 ```
 
 API key resolution order: `--api-key` flag, then `INTERVALS_ICU_API_KEY`, then `~/.icu/config.json`.
+
+## Athlete ID Resolution
+
+- Run `icu config show` to see the configured default `athlete_id`.
+- If `athlete_id` is a non-zero value, use it for every command. Only pass `--athlete-id` when you need a different athlete.
+- If `athlete_id` is `0` or absent, ask the user for their athlete ID before running commands that require one.
+- Do not ask for an athlete ID when a valid default is already configured.
 
 ## Help And Discovery
 

@@ -44,6 +44,9 @@ icu analysis adaptation --days 42 --type Ride
 icu analysis microcycle --json
 icu analysis workout i123
 
+# Calculate planned workout load locally before writing events
+icu workouts calculate --ftp 300 --desc "- 60m 70%"
+
 # Diagnose auth/config resolution without exposing the secret
 icu config diagnose
 icu config diagnose --verbose
@@ -186,7 +189,7 @@ Current top-level resources:
 | `tags` | `activities`, `events`, `workouts` |
 | `weather` | `config`, `forecast` |
 | `wellness` | `bulk`, `get`, `list`, `update`, `upload` |
-| `workouts` | `create`, `delete`, `get`, `list`, `tags`, `update` |
+| `workouts` | `calculate`, `create`, `delete`, `get`, `list`, `tags`, `update` |
 | `zepp` | `blood-pressure`, `body-battery`, `events`, `health-summary`, `heart-rate`, `hrv`, `login`, `logout`, `manual-data`, `mood`, `pai`, `profile`, `readiness`, `respiratory-rate`, `second-heart-rate`, `skin-temp`, `sleep`, `spo2`, `spo2-windows`, `sport-load`, `status`, `stress`, `stress-minute`, `summary`, `token`, `vo2`, `weight`, `workout`, `workouts` |
 
 ## Analysis Overview

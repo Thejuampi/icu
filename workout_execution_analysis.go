@@ -38,6 +38,7 @@ type WorkoutExecutionInputs struct {
 	Intervals     *IntervalsDTO  `json:"intervals,omitempty"`
 	Events        []Event        `json:"events,omitempty"`
 	SportSettings *SportSettings `json:"sportSettings,omitempty"`
+	PowerModel    *PowerModel    `json:"powerModel,omitempty"`
 }
 
 type WorkoutExecutionOptions struct {
@@ -52,7 +53,20 @@ type WorkoutExecutionAnalysis struct {
 	Plan       WorkoutPlanSummary         `json:"plan"`
 	Execution  WorkoutExecutionSummary    `json:"execution"`
 	Comparison WorkoutExecutionComparison `json:"comparison"`
+	WBal       *WorkoutWBalAnalysis       `json:"wbal,omitempty"`
 	Warnings   []string                   `json:"warnings,omitempty"`
+}
+
+type WorkoutWBalAnalysis struct {
+	ModelSource               string             `json:"modelSource"`
+	CriticalPower             int                `json:"criticalPower"`
+	WPrime                    int                `json:"wPrime"`
+	OriginalDepletionJoules   int                `json:"originalDepletionJoules"`
+	OriginalDepletionPct      float64            `json:"originalDepletionPct"`
+	RecomputedDepletionJoules int                `json:"recomputedDepletionJoules"`
+	RecomputedDepletionPct    float64            `json:"recomputedDepletionPct"`
+	Artifacts                 []FlywheelArtifact `json:"artifacts,omitempty"`
+	DataQualityWarnings       []string           `json:"dataQualityWarnings,omitempty"`
 }
 
 type WorkoutExecutionScope struct {
@@ -184,6 +198,8 @@ func AnalyzeWorkoutExecution(inputs WorkoutExecutionInputs, options WorkoutExecu
 	result.Plan = workoutPlanSummary(event)
 	result.Comparison = workoutComparison(inputs.Activity, event, &result.Plan, inputs.Intervals, &result.Execution.Micro, ftp)
 
+	result.WBal = computeWorkoutWBal(inputs, &result.Activity)
+
 	if result.Match.Confidence == workoutMatchConfidenceNone {
 		result.Warnings = append(result.Warnings, "no planned workout event matched")
 	}
@@ -192,6 +208,52 @@ func AnalyzeWorkoutExecution(inputs WorkoutExecutionInputs, options WorkoutExecu
 	}
 
 	return result
+}
+
+func computeWorkoutWBal(inputs WorkoutExecutionInputs, session *CyclingSession) *WorkoutWBalAnalysis {
+	watts := streamValue(inputs.Streams, "watts")
+	if len(watts) == 0 && inputs.PowerModel == nil {
+		return nil
+	}
+
+	var globalModel PowerModel
+	if inputs.PowerModel != nil {
+		globalModel = *inputs.PowerModel
+	}
+
+	recomputedJoules, recomputedPct, detection, warnings := RecomputeWBalDepletion(
+		watts,
+		streamValue(inputs.Streams, "cadence"),
+		streamValue(inputs.Streams, "heartrate"),
+		globalModel,
+		inputs.Activity,
+	)
+
+	cp := globalModel.CriticalPower
+	wprime := globalModel.WPrime
+	if cp == 0 && inputs.Activity != nil {
+		cp = inputs.Activity.CriticalPower
+	}
+	if wprime == 0 && inputs.Activity != nil {
+		wprime = inputs.Activity.WPrime
+	}
+
+	modelSource := "global"
+	if globalModel.CriticalPower == 0 {
+		modelSource = "activity"
+	}
+
+	return &WorkoutWBalAnalysis{
+		ModelSource:               modelSource,
+		CriticalPower:             cp,
+		WPrime:                    wprime,
+		OriginalDepletionJoules:   session.MaxWBalDepletion,
+		OriginalDepletionPct:      session.WBalDepletionPct,
+		RecomputedDepletionJoules: recomputedJoules,
+		RecomputedDepletionPct:    recomputedPct,
+		Artifacts:                 detection.Artifacts,
+		DataQualityWarnings:       warnings,
+	}
 }
 
 func MatchWorkoutEvent(activity *Activity, events []Event, options WorkoutEventMatchOptions) WorkoutEventMatch {

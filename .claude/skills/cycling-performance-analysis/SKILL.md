@@ -65,6 +65,21 @@ If the investigation exposes a CLI bug, parser mismatch, auth ambiguity, or data
 
 Each `-` step line is `duration zone%` (e.g., `15m 55-72%`). A bare `Nx` on its own line starts a repeating block; the indented `-` lines beneath it define the steps to repeat. Do not include rest duration text like `with 5m rest` in the step line — rest is its own indented step.
 - The `workout_doc` and `workout` fields in the EventEx schema are **read-only** in practice. The API ignores them in POST/PUT requests and only generates `workoutDoc` from the `--desc` text description. Workout structure (including step-level `text` cues) can only be set via the description text parser. The text parser strips arbitrary text annotations — only power/HR zones and keywords (warmup, cooldown, etc.) are preserved as step text. Step-level coaching cues must be added manually in the Intervals.icu UI after creation.
+- **Validate plan changes numerically.** After editing events, re-run `icu analysis plan` or sum `icuTrainingLoad` by ISO week to confirm weekly TSS and ramp match intent. Do not rely on mental arithmetic or manual TSS estimates.
+- **When editing calendar events, confirm ISO week and event IDs first.** "Next weekend" can belong to the current week or the next block week. Update the wrong event and the ramp analysis becomes meaningless.
+
+## Retrospective Lessons
+
+Lessons from live plan-editing sessions that should be checked on every planning request:
+
+- **Run micro analysis first** even when the user asks for "just the conclusion." The skill requires it; skipping it produces incomplete coaching advice.
+- **Use `icu analysis plan` before proposing plan changes.** It surfaces weekly load, ramp, and week roles that are not visible in isolated event inspection.
+- **Confirm exact numbers with the CLI before presenting options.** Manual TSS estimates diverge from Intervals.icu's `icuTrainingLoad`/`workoutDoc` calculations. If an option is estimated, label it as such.
+- **After `icu events update`, read the event back** and confirm `workoutDoc.steps`, `duration`, and `icuTrainingLoad` were regenerated correctly.
+- **PowerShell passes `\n` literally to the CLI.** Use `` `n `` or a here-string for multi-line `--desc` values; otherwise `workoutDoc` ends up empty and the event keeps its old load.
+- **Keep NOTE events consistent with WORKOUT events.** If a plan option is selected, update or remove stale ALT notes so future analyses do not work from outdated context.
+- **Deload sessions are precision instruments, not guesswork.** A deload means -30% high-intensity TSS versus the prior build week, preserved total TSS via Z2, and a CTL ramp inside ±0.5. If the numbers do not land there, the deload is wrong.
+- **We are a Swiss-precision machine, not a feel-based coach.** Every load, duration, and intensity target must trace back to a data point. If a value cannot be justified with a number, it is not used.
 
 ## Primary Workflow
 
@@ -287,6 +302,7 @@ Four out of five sessions with high decoupling at Z2 intensity is a stronger aut
 - Use recent completed weeks to define tolerance, not a generic progression template.
 - When current state is `Load Pressure` or wellness is `WATCH`, keep build structure conservative: dose VO2/threshold minimally, protect endurance durability, and preserve recovery spacing.
 - For a 4-week block, prefer a simple rhythm such as re-entry, build, overload, deload when it matches the athlete's recent load tolerance.
+- **Deload weeks are engineered, not eyeballed.** Reduce high-intensity TSS by ~30% versus the prior build week, backfill the gap with Z2 volume, and verify the resulting CTL ramp stays inside ±0.5. Every deload value must be justified by a number from the CLI or analysis output; never set deload load by feel, RPE, or perceived freshness.
 - Add day-level decision rules for HRV, sleep, resting HR, TSB, decoupling, and heat rather than pretending the plan is fixed regardless of recovery state.
 - **Compute decision thresholds from baseline data, not generic rules.** HR ranges for decision gates (e.g., "FC > 155 → ALT B") should be derived from the athlete's computed baseline + delta, not from a fixed %LTHR or population norm. Include both the HR gate and the baseline it was computed from in the calendar note so future reviews can verify.
 - **Track EF recovery as a block objective.** If the block goal is autonomic restoration, set an EF target (e.g., "Z2 EF > 1.38 by W27") derived from the pre-event baseline. This gives the athlete a metric to watch beyond HRV.

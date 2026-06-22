@@ -124,6 +124,26 @@ func TestTrainingPlanDateRangesUseExplicitDates(t *testing.T) {
 	}
 }
 
+func TestTrainingPlanDateRangesAlignExplicitPlanDatesToISOWeek(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.May, 30, 12, 0, 0, 0, time.UTC)
+	got, explicit, err := trainingPlanDateRanges(map[string]string{
+		"history-oldest": "2026-03-01",
+		"history-newest": "2026-05-30",
+		"plan-oldest":    "2026-06-20",
+		"plan-newest":    "2026-07-17",
+	}, now)
+	want := trainingPlanRanges{
+		History: analysisRange{Oldest: "2026-03-01", Newest: "2026-05-30"},
+		Plan:    analysisRange{Oldest: "2026-06-15", Newest: "2026-07-19"},
+	}
+
+	if err != nil || got != want || !explicit {
+		t.Fatalf("trainingPlanDateRanges aligned = %+v explicit=%v %v, want %+v true nil", got, explicit, err, want)
+	}
+}
+
 func TestTrainingPlanDateRangesRejectInvalidInputs(t *testing.T) {
 	t.Parallel()
 
@@ -272,6 +292,21 @@ func TestAnalysisWorkoutCommandRegistered(t *testing.T) {
 	}
 }
 
+func TestAnalysisAdaptationCommandRegistered(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAnalysisCommands(registry)
+
+	cmd, ok := registry.Lookup("analysis", "adaptation")
+	if !ok {
+		t.Fatal("analysis adaptation not found")
+	}
+	if cmd == nil {
+		t.Fatal("analysis adaptation command is nil")
+	}
+}
+
 //nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAnalysisWorkoutCommandWritesJSON(t *testing.T) {
 	streamWatts := "[" + strings.TrimRight(strings.Repeat("250,", 120), ",") + "]"
@@ -321,6 +356,94 @@ func TestAnalysisWorkoutCommandWritesJSON(t *testing.T) {
 	var got icu.WorkoutExecutionAnalysis
 	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Match.EventID != 2 {
 		t.Fatalf("json = %q err=%v match=%+v", out, err, got.Match)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisWorkoutCommandRecalculatesWBalWithGlobalModel(t *testing.T) {
+	streamWatts := "[" + strings.TrimRight(strings.Repeat("195,", 3600), ",") + "]"
+	streamHR := "[" + strings.TrimRight(strings.Repeat("135,", 3600), ",") + "]"
+	streamCad := "[" + strings.TrimRight(strings.Repeat("85,", 3600), ",") + "]"
+	activityBody := `{"id":"a2","name":"2h Z2","type":"Ride",` +
+		`"startDateLocal":"2026-06-21T08:00:00","movingTime":7200,` +
+		`"icuTrainingLoad":92,"icuIntensity":0.625,` +
+		`"icuWeightedAvgWatts":178,"averageHeartrate":133,` +
+		`"icuFtp":285,"icuPmCp":172,"icuPmWPrime":14577,` +
+		`"icuMaxWbalDepletion":5728}`
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/activity/a2/intervals"):
+			_, _ = response.Write([]byte(`{}`))
+		case strings.Contains(request.URL.Path, "/activity/a2/streams"):
+			_, _ = response.Write([]byte(`[{"type":"watts","data":` + streamWatts + `},{"type":"heartrate","data":` + streamHR + `},{"type":"cadence","data":` + streamCad + `}]`))
+		case strings.Contains(request.URL.Path, "/activity/a2"):
+			_, _ = response.Write([]byte(activityBody))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		case strings.Contains(request.URL.Path, "/mmp-model"):
+			_, _ = response.Write([]byte(`{"type":"Ride","criticalPower":287,"wPrime":21000,"pMax":1315,"ftp":293}`))
+		default:
+			_, _ = response.Write([]byte(okJSON))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient(
+		"test-key",
+		"0",
+		icu.WithHTTPClient(server.Client()),
+		icu.WithBaseURL(server.URL),
+	)
+	cmd := analysisWorkoutCommand()
+	out, err := captureStdout(t, func() error {
+		return cmd.Run([]string{"a2"}, map[string]string{"json": "true"}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.WorkoutExecutionAnalysis
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json unmarshal error: %v\noutput: %s", err, out)
+	}
+
+	assertWBalRecalculatedWithGlobalModel(t, &got)
+}
+
+func assertWBalRecalculatedWithGlobalModel(t *testing.T, got *icu.WorkoutExecutionAnalysis) {
+	t.Helper()
+
+	if got.WBal == nil {
+		t.Fatal("expected WBal section in output, got nil")
+	}
+	if got.WBal.ModelSource != "global" {
+		t.Fatalf("modelSource = %s, want global", got.WBal.ModelSource)
+	}
+	if got.WBal.CriticalPower != 287 {
+		t.Fatalf("criticalPower = %d, want 287", got.WBal.CriticalPower)
+	}
+	if got.WBal.OriginalDepletionPct < 30 {
+		t.Fatalf("original depletion pct = %f, should be high from unreliable activity model", got.WBal.OriginalDepletionPct)
+	}
+	if got.WBal.RecomputedDepletionPct > 5 {
+		t.Fatalf("recomputed depletion pct = %f, want <= 5 for Z2 with global model (CP=287)", got.WBal.RecomputedDepletionPct)
+	}
+	if got.WBal.RecomputedDepletionPct >= got.WBal.OriginalDepletionPct {
+		t.Fatalf("recomputed (%f) should be < original (%f) when activity model is unreliable",
+			got.WBal.RecomputedDepletionPct, got.WBal.OriginalDepletionPct)
+	}
+
+	foundUnreliableWarning := false
+	for _, w := range got.WBal.DataQualityWarnings {
+		if strings.Contains(w, "unreliable") {
+			foundUnreliableWarning = true
+		}
+	}
+	if !foundUnreliableWarning {
+		t.Fatalf("expected unreliable model warning, got %v", got.WBal.DataQualityWarnings)
 	}
 }
 

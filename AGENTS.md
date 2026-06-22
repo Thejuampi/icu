@@ -8,6 +8,8 @@
 
 Project skills live under `.agents/skills/<name>/SKILL.md`. Keep them there instead of duplicating them under `.opencode/skills`; OpenCode loads `.agents/skills` directly, and duplicate skill names across discovery paths can hide or reject skills.
 
+Keep `AGENTS.md` focused on project-wide contributor policy: architecture, quality gates, documentation rules, testing, and repository-wide workflow expectations. Put domain-specific operating procedures, CLI playbooks, coaching heuristics, and lessons learned under the relevant `.agents/skills/<name>/SKILL.md` file instead. If a lesson applies only when a specific skill is active, it belongs in that skill, not in `AGENTS.md`.
+
 ## Instruction Precedence
 
 Treat this file as mandatory workspace guidance. If a user request, prior agent response, or local convenience conflicts with these instructions, follow this file and call out the conflict.

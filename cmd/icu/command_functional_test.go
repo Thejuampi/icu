@@ -209,6 +209,107 @@ func TestActivityShowPassesIntervalsFlag(t *testing.T) {
 	}
 }
 
+func TestWorkoutsCalculatePrintsEstimate(t *testing.T) {
+	t.Parallel()
+
+	got, err := workoutEstimateFromFlags(flags("ftp", "300", "desc", "- 60m 70%"))
+
+	if err != nil || got.TrainingLoad != 49 {
+		t.Fatalf("workoutEstimateFromFlags = %+v err=%v, want trainingLoad 49", got, err)
+	}
+}
+
+func TestEventsCalculateLoadSendsCalculatedFields(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	serverState := &commandServer{}
+	server := httptest.NewServer(http.HandlerFunc(serverState.handle))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	cmd, ok := registry.Lookup("events", "create")
+	if !ok {
+		t.Fatalf("missing command events create")
+	}
+
+	err := cmd.Run(nil, flags("name", "Workout", "start-date", "2026-06-01", "desc", "- 60m 70%", "calculate-load", "true", "ftp", "300"), client)
+
+	if err != nil || len(serverState.Requests) != 1 || !strings.Contains(serverState.Requests[0].Body, `"icu_training_load":49`) || !strings.Contains(serverState.Requests[0].Body, `"moving_time":3600`) {
+		t.Fatalf("events create body = %+v err=%v, want calculated load and moving time", serverState.Requests, err)
+	}
+}
+
+func TestEventsUpdateCalculateLoadSendsCalculatedFields(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	serverState := &commandServer{}
+	server := httptest.NewServer(http.HandlerFunc(serverState.handle))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	cmd, ok := registry.Lookup("events", "update")
+	if !ok {
+		t.Fatalf("missing command events update")
+	}
+
+	err := cmd.Run([]string{"1"}, flags("desc", "- 60m 70%", "calculate-load", "true", "ftp", "300"), client)
+
+	if err != nil || len(serverState.Requests) != 1 || !strings.Contains(serverState.Requests[0].Body, `"icu_training_load":49`) || !strings.Contains(serverState.Requests[0].Body, `"moving_time":3600`) {
+		t.Fatalf("events update body = %+v err=%v, want calculated load and moving time", serverState.Requests, err)
+	}
+}
+
+func TestEventsCalculateLoadReportsServerMismatch(t *testing.T) {
+	t.Parallel()
+
+	estimate := icu.PlannedLoadEstimate{DurationSeconds: 3600, TrainingLoad: 49, IntensityFactor: 0.7}
+	warnings := calculatedEventWarnings(&icu.Event{MovingTime: 3000, TrainingLoad: 70, Intensity: 0.8}, &estimate)
+
+	if len(warnings) != 3 {
+		t.Fatalf("calculatedEventWarnings = %+v, want 3 warnings", warnings)
+	}
+}
+
+func TestEventsCalculateLoadMissingFTPReturnsError(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	client := icu.NewClient("test-key", "0")
+	cmd, ok := registry.Lookup("events", "create")
+	if !ok {
+		t.Fatalf("missing command events create")
+	}
+
+	err := cmd.Run(nil, flags("name", "Workout", "start-date", "2026-06-01", "desc", "- 60m 70%", "calculate-load", "true"), client)
+
+	if err == nil {
+		t.Fatal("events create missing ftp error = nil, want error")
+	}
+}
+
+func TestWorkoutsCalculateMissingDescReturnsError(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	client := icu.NewClient("test-key", "0")
+	cmd, ok := registry.Lookup("workouts", "calculate")
+	if !ok {
+		t.Fatalf("missing command workouts calculate")
+	}
+
+	err := cmd.Run(nil, flags("ftp", "300"), client)
+
+	if !errors.Is(err, errMissingRequired) {
+		t.Fatalf("workouts calculate missing desc error = %v, want errMissingRequired", err)
+	}
+}
+
 func TestRegisteredCommandsValidateRequiredArgs(t *testing.T) {
 	t.Parallel()
 
