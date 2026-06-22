@@ -24,6 +24,22 @@ func TestAnalyzeTrainingPlanExecutionHasCues(t *testing.T) {
 	}
 }
 
+func TestAnalyzeTrainingPlanDerivesLoadFromWorkoutDoc(t *testing.T) {
+	t.Parallel()
+
+	event := plannedWorkout("2026-06-02T08:00:00", "Calculated Endurance", 0, 0, 0)
+	event.WorkoutDoc = icu.WorkoutDoc{Duration: 3600, Steps: []icu.WorkoutStep{{Duration: 3600, Power: &icu.WorkoutTarget{Value: 70, Units: "%ftp"}}}}
+
+	got := icu.AnalyzeTrainingPlanWithContext(nil, []icu.Event{event}, icu.TrainingPlanOptions{
+		PlanStartDate: "2026-06-01",
+		PlanEndDate:   "2026-06-07",
+	}, icu.TrainingPlanContext{SportSettings: &icu.SportSettings{FTP: 300}})
+
+	if got.PlannedSessions[0].TrainingLoad != 49 || got.PlannedSessions[0].MovingTimeSecs != 3600 {
+		t.Fatalf("derived planned session = %+v, want load 49 and 3600s", got.PlannedSessions[0])
+	}
+}
+
 func TestAnalyzeTrainingPlanAerobicCuesAreTriggered(t *testing.T) {
 	t.Parallel()
 

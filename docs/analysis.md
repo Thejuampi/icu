@@ -132,6 +132,7 @@ Defaults:
 - `--sport-type Ride`
 - history window ends on the current UTC date
 - plan window starts on the next ISO block boundary used by the CLI
+- explicit `--plan-oldest` and `--plan-newest` dates are aligned to the enclosing ISO week boundaries (Monday/Sunday)
 
 ### Upstream Data
 
@@ -168,11 +169,12 @@ The CLI currently passes `Adaptation: nil`, even though the library supports ada
 - Planned session titles use simple name heuristics for common structures such as `40/20`, `30/15`, and `over/under` workouts when those patterns are present in the event name.
 - `forecast` is the fast planning view for expected CTL/ATL/TSB trajectory, not a guarantee of adaptation outcome.
 - `decision` is the main top-level recommendation surface for downstream agents.
+- When planned events are resolved and include `workoutDoc`, `analysis plan` can derive cycling load locally from `%ftp` power steps if the event is missing `icuTrainingLoad`. Server-provided event load remains authoritative when present.
 
 ### Current Limitations
 
 - The CLI does not currently add adaptation context, even though the library supports it.
-- Event classification depends on available event category, timing, and load hints; sparse events reduce forecast quality.
+- Event classification depends on available event category, timing, and load hints; sparse events reduce forecast quality. Local planned-load fallback requires resolved `workoutDoc` data and FTP from sport settings.
 - Explicit date overrides must be supplied in complete pairs for history and plan windows.
 
 ## analysis adaptation

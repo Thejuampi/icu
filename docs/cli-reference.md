@@ -174,7 +174,7 @@ Invoke these commands as `icu activity <id> <action>`.
 - `plan`
   Invocation: `icu analysis plan [--history-oldest DATE --history-newest DATE] [--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve] [--activity-fields CSV]`
   Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`
-  Notes: explicit history and plan ranges must be provided in pairs. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
+  Notes: explicit history and plan ranges must be provided in pairs. `--plan-oldest` and `--plan-newest` are aligned to ISO week boundaries (Monday/Sunday) so weekly planned loads are complete. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
   Example: `icu analysis plan --history-days 84 --plan-days 28 --resolve`
 
 - `adaptation`
@@ -328,14 +328,17 @@ Invoke these commands as `icu activity <id> <action>`.
   Example: `icu events get 123`
 
 - `create`
-  Invocation: `icu events create [--category WORKOUT] [--type Ride] --name NAME --start-date DATE [--moving-time SECS] [--training-load N] [--desc DESC] [--color VALUE] [--indoor] [--external-id ID] [--upsert]`
+  Invocation: `icu events create [--category WORKOUT] [--type Ride] --name NAME --start-date DATE [--moving-time SECS] [--training-load N] [--desc DESC] [--calculate-load --ftp N] [--color VALUE] [--indoor] [--external-id ID] [--upsert]`
   Defaults: `--category WORKOUT`, `--type Ride`
-  Notes: `NOTE` events behave like all-day calendar notes in Intervals.icu; the date is preserved, but the time-of-day portion of `--start-date` may be normalized away. Long `NOTE` descriptions can also fail upstream with HTTP 500, so prefer shorter notes or split large guidance across multiple notes.
+  Notes: `NOTE` events behave like all-day calendar notes in Intervals.icu; the date is preserved, but the time-of-day portion of `--start-date` may be normalized away. Long `NOTE` descriptions can also fail upstream with HTTP 500, so prefer shorter notes or split large guidance across multiple notes. With `--calculate-load`, the CLI parses `--desc`, calculates `moving_time` and `icu_training_load` locally from power targets, sends those fields, and returns `{event, estimate, warnings}` so server values can be compared against the local estimate.
   Example: `icu events create --name "Threshold" --start-date 2026-06-03 --training-load 90 --indoor`
+  Example: `icu events create --name "Endurance" --start-date 2026-06-03 --desc "- 60m 70%" --calculate-load --ftp 300`
 
 - `update`
-  Invocation: `icu events update <id> [--name NAME] [--desc DESC] [--training-load N]`
+  Invocation: `icu events update <id> [--name NAME] [--desc DESC] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N]`
+  Notes: `--calculate-load` is explicit only; descriptions are not parsed unless the flag is present. When enabled, calculated `moving_time` and `icu_training_load` override manual values for the request body.
   Example: `icu events update 123 --name "Threshold 4x8" --training-load 92`
+  Example: `icu events update 123 --desc "- 60m 70%" --calculate-load --ftp 300`
 
 - `delete`
   Invocation: `icu events delete <id>`
@@ -694,6 +697,11 @@ the score is derived from. Compute BioCharge in your analysis agent.
 - `get`
   Invocation: `icu workouts get <id>`
   Example: `icu workouts get 88`
+
+- `calculate`
+  Invocation: `icu workouts calculate --ftp N --desc DESC`
+  Notes: Calculates planned cycling duration, average power, normalized power, IF, and TSS locally without writing to Intervals.icu. Supported description grammar is line-oriented: `- 10m 55-75%`, `- 5m 90%`, and repeat blocks such as `3x` with indented child steps. Power targets are interpreted as `%ftp`.
+  Example: `icu workouts calculate --ftp 300 --desc "- 60m 70%"`
 
 - `create`
   Invocation: `icu workouts create --name NAME [--type Ride] [--folder-id ID] [--desc DESC] [--training-load N] [--moving-time SECS]`

@@ -1,10 +1,15 @@
 package main
 
-import icu "github.com/Thejuampi/icu"
+import (
+	"fmt"
+
+	icu "github.com/Thejuampi/icu"
+)
 
 func registerWorkoutsCommands(registry *CommandRegistry) {
 	registry.Register("workouts", "list", listAllCommand[[]icu.Workout]("workouts", "workouts list", "List all workouts in library."))
 	registry.Register("workouts", "get", getByIDCommand[icu.Workout]("workouts", "workouts get <id>", "Get a workout.", "icu.Workout id", nil))
+	registry.Register("workouts", "calculate", workoutsCalculateCommand())
 
 	registry.Register("workouts", "create", createCommand[icu.WorkoutEx, icu.Workout](
 		"workouts",
@@ -45,4 +50,37 @@ func registerWorkoutsCommands(registry *CommandRegistry) {
 
 	registry.Register("workouts", "delete", deleteByIDCommand("workouts", "workouts delete <id>", "Delete a workout.", "icu.Workout id"))
 	registry.Register("workouts", "tags", listAllCommand[[]string]("workouts", "workouts tags", "List workout tags.", "tags"))
+}
+
+func workoutsCalculateCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "workouts calculate --ftp N --desc DESC",
+		Description: "Calculate planned workout duration, IF, NP, and TSS locally.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+			estimate, err := workoutEstimateFromFlags(flags)
+			if err != nil {
+				return wrapCommandError(err)
+			}
+
+			return writeJSON(estimate)
+		},
+	}
+}
+
+func workoutEstimateFromFlags(flags map[string]string) (icu.PlannedLoadEstimate, error) {
+	desc := icu.StringFlag(flags, "desc", "")
+	if desc == "" {
+		desc = icu.StringFlag(flags, "description", "")
+	}
+	if desc == "" {
+		return icu.PlannedLoadEstimate{}, errMissing("desc")
+	}
+
+	doc, err := icu.ParseWorkoutDescription(desc)
+	if err != nil {
+		return icu.PlannedLoadEstimate{}, fmt.Errorf("parse workout description: %w", err)
+	}
+
+	return icu.EstimatePlannedLoad(doc, IntFlag(flags, "ftp", 0)), nil
 }

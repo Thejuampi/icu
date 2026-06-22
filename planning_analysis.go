@@ -331,6 +331,7 @@ type TrainingPlanWorkoutBlock struct {
 type trainingPlanAccumulator struct {
 	analysis TrainingPlanAnalysis
 	weeks    map[string]*TrainingPlanWeek
+	ftp      int
 }
 
 type trainingPlanHistoryWeek struct {
@@ -359,7 +360,7 @@ func AnalyzeTrainingPlanWithContext(
 	options TrainingPlanOptions,
 	context TrainingPlanContext,
 ) TrainingPlanAnalysis {
-	accumulator := newTrainingPlanAccumulator(events, options)
+	accumulator := newTrainingPlanAccumulator(events, options, context)
 
 	for index := range events {
 		accumulator.addEvent(&events[index], options)
@@ -378,13 +379,16 @@ func AnalyzeTrainingPlanWithContext(
 	return analysis
 }
 
-func newTrainingPlanAccumulator(events []Event, options TrainingPlanOptions) trainingPlanAccumulator {
+func newTrainingPlanAccumulator(events []Event, options TrainingPlanOptions, context TrainingPlanContext) trainingPlanAccumulator {
 	var (
 		accumulator trainingPlanAccumulator
 		scope       TrainingPlanScope
 	)
 
 	accumulator.weeks = map[string]*TrainingPlanWeek{}
+	if context.SportSettings != nil {
+		accumulator.ftp = context.SportSettings.FTP
+	}
 	scope.HistoryStartDate = options.HistoryStartDate
 	scope.HistoryEndDate = options.HistoryEndDate
 	scope.PlanStartDate = options.PlanStartDate
@@ -438,7 +442,7 @@ func (accumulator *trainingPlanAccumulator) addEvent(event *Event, options Train
 	key := isoWeekKey(parsed)
 
 	week := accumulator.ensureWeek(key, weekStart.Format(analysisDateLayout), weekEnd.Format(analysisDateLayout))
-	session := trainingPlanSessionFromEvent(event, parsed)
+	session := trainingPlanSessionFromEvent(event, parsed, accumulator.ftp)
 
 	accumulator.analysis.PlannedSessions = append(accumulator.analysis.PlannedSessions, session)
 	accumulator.addSessionToSummary(&session)
@@ -496,24 +500,50 @@ func (accumulator *trainingPlanAccumulator) finish(options TrainingPlanOptions) 
 	return accumulator.analysis
 }
 
-func trainingPlanSessionFromEvent(event *Event, parsed time.Time) TrainingPlanSession {
-	classification := classifyPlannedEvent(event)
+func trainingPlanSessionFromEvent(event *Event, parsed time.Time, ftp int) TrainingPlanSession {
+	plannedEvent := trainingPlanEventWithDerivedLoad(event, ftp)
+	classification := classifyPlannedEvent(&plannedEvent)
 
 	var session TrainingPlanSession
 	session.Date = parsed.Format(analysisDateLayout)
 	session.Day = parsed.Weekday().String()
-	session.Name = event.Name
-	session.Category = event.Category
-	session.Type = event.Type
-	session.MovingTimeSecs = event.MovingTime
-	session.MovingTimeMinutes = round2(float64(event.MovingTime) / secondsPerMinute)
-	session.TrainingLoad = event.TrainingLoad
-	session.Intensity = event.Intensity
+	session.Name = plannedEvent.Name
+	session.Category = plannedEvent.Category
+	session.Type = plannedEvent.Type
+	session.MovingTimeSecs = plannedEvent.MovingTime
+	session.MovingTimeMinutes = round2(float64(plannedEvent.MovingTime) / secondsPerMinute)
+	session.TrainingLoad = plannedEvent.TrainingLoad
+	session.Intensity = plannedEvent.Intensity
 	session.Classification = classification
 	session.KeySession = isKeyTrainingPlanSession(classification)
-	session.Execution = trainingPlanExecutionForEvent(event, classification)
+	session.Execution = trainingPlanExecutionForEvent(&plannedEvent, classification)
 
 	return session
+}
+
+func trainingPlanEventWithDerivedLoad(event *Event, ftp int) Event {
+	if event == nil {
+		return Event{}
+	}
+	plannedEvent := *event
+	if plannedEvent.TrainingLoad > 0 || plannedEvent.WorkoutDoc == nil || ftp <= 0 {
+		return plannedEvent
+	}
+
+	doc, err := DecodeWorkoutDoc(plannedEvent.WorkoutDoc)
+	if err != nil {
+		return plannedEvent
+	}
+	estimate := EstimatePlannedLoad(doc, ftp)
+	if estimate.TrainingLoad <= 0 || len(estimate.Warnings) > 0 {
+		return plannedEvent
+	}
+
+	plannedEvent.TrainingLoad = estimate.TrainingLoad
+	plannedEvent.MovingTime = estimate.DurationSeconds
+	plannedEvent.Intensity = estimate.IntensityFactor
+
+	return plannedEvent
 }
 
 func trainingPlanExecutionForEvent(event *Event, classification string) TrainingPlanExecution {
