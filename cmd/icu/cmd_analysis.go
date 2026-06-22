@@ -287,6 +287,16 @@ func readWorkoutExecutionInputs(
 	}
 	inputs.SportSettings = &sportSettings
 
+	var powerModel icu.PowerModel
+	if err := client.Get("mmp-model", nil, map[string]string{"type": sportType}, &powerModel); err != nil {
+		if !isHTTPStatus(err, httpStatusNotFound) {
+			return inputs, options, wrapCommandError(err)
+		}
+	}
+	if powerModel.CriticalPower > 0 || powerModel.WPrime > 0 {
+		inputs.PowerModel = &powerModel
+	}
+
 	return inputs, options, nil
 }
 
@@ -363,9 +373,10 @@ func analysisAdaptationCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			curveQuery := queryFromFlags(flags, "newest", "filters")
-			curveQuery["type"] = sportType
-			curveQuery["curves"] = icu.StringFlag(flags, "curves", "42d,365d")
+			curveQuery := map[string]string{
+				"type":   sportType,
+				"curves": icu.StringFlag(flags, "curves", "42d,365d"),
+			}
 
 			var curveResponse struct {
 				List []icu.DataCurve `json:"list"`
@@ -469,7 +480,10 @@ func trainingPlanFutureRange(flags map[string]string, now time.Time) (analysisRa
 			return analysisRange{}, false, errMissing("--plan-oldest and --plan-newest")
 		}
 
-		return analysisRange{Oldest: oldest, Newest: newest}, true, nil
+		return analysisRange{
+			Oldest: alignToISOWeekStart(oldest),
+			Newest: alignToISOWeekEnd(newest),
+		}, true, nil
 	}
 
 	days := IntFlag(flags, "plan-days", defaultPlanDays)
@@ -494,6 +508,34 @@ func nextISOBlockStart(now time.Time) time.Time {
 	daysUntilMonday := (nextWeekdayModuloBase - weekday) % calendarWeekDays
 
 	return now.AddDate(0, 0, daysUntilMonday)
+}
+
+func alignToISOWeekStart(date string) string {
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return date
+	}
+
+	weekday := int(parsed.Weekday())
+	if weekday == 0 {
+		weekday = calendarWeekDays
+	}
+
+	return parsed.AddDate(0, 0, -(weekday - 1)).Format("2006-01-02")
+}
+
+func alignToISOWeekEnd(date string) string {
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return date
+	}
+
+	weekday := int(parsed.Weekday())
+	if weekday == 0 {
+		return date
+	}
+
+	return parsed.AddDate(0, 0, calendarWeekDays-weekday).Format("2006-01-02")
 }
 
 func analysisDateRange(flags map[string]string, now time.Time) (analysisRange, bool, error) {
