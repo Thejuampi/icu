@@ -212,6 +212,8 @@ wellnessAnalysis := icu.AnalyzeWellness(records, icu.AnalysisOptions{
 })
 ```
 
+`WellnessAnalysis.HRV` includes the raw latest/mean ratio plus dynamic fields (`RecentMean`, `BaselineMean`, `BaselineMAD`, `ZScore`, and `ZScoreSource`) when enough records exist. The physiology state uses the dynamic recent-vs-baseline HRV signal instead of hard-coded absolute HRV values.
+
 ### Adaptation analysis
 
 ```go

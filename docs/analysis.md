@@ -87,7 +87,7 @@ The CLI fetches `wellness` records for the requested range and passes them to `A
 
 - `scope`: record count, total day span, date range, and `timezone`/`timezoneSource` metadata
 - `coverage`: percentage coverage for HRV, resting HR, sleep, and subjective wellness
-- `hrv`: mean, latest, ratio, delta, and 7-day trend
+- `hrv`: mean, latest, ratio, delta, 7-day trend, recent moving mean, baseline mean, baseline MAD, and robust z-score when enough samples exist
 - `restingHr`: mean, latest, delta, and trend
 - `sleep`: mean, latest, delta, and trend
 - `lactate`: mean, latest, trend, coverage, and local state
@@ -100,6 +100,7 @@ The CLI fetches `wellness` records for the requested range and passes them to `A
 
 - The command is primarily a coverage-aware readiness summary.
 - `state` is intentionally conservative and depends on both signal direction and data completeness.
+- HRV state uses a dynamic personal baseline: the recent 7-day mean is compared with the prior samples in the requested range using MAD-based robust z-score when possible. The latest/mean ratio remains in the output as context, but it does not by itself trigger HRV `WATCH`.
 - Subjective metrics are only summarized when the underlying records include them.
 
 ### Current Limitations

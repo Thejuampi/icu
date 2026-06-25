@@ -168,7 +168,7 @@ Invoke these commands as `icu activity <id> <action>`.
 - `wellness`
   Invocation: `icu analysis wellness [--oldest DATE --newest DATE | --days N] [--fields CSV]`
   Defaults: `--days 28`
-  Notes: Default date ranges are calculated in UTC; use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
+  Notes: Default date ranges are calculated in UTC; use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`. HRV readiness uses a dynamic recent-vs-baseline comparison with robust z-score when enough samples exist; the raw latest/mean ratio is contextual only.
   Example: `icu analysis wellness --oldest 2026-04-20 --newest 2026-05-31`
 
 - `plan`

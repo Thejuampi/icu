@@ -1,6 +1,7 @@
 package icu
 
 import (
+	"math"
 	"sort"
 	"time"
 )
@@ -9,8 +10,10 @@ const (
 	recentWellnessDays         = 7
 	minimumTrendSamples        = 14
 	hoursPerDay                = 24
-	hrvWatchRatioThreshold     = 0.97
-	hrvRedRatioThreshold       = 0.9
+	hrvWatchZScoreThreshold    = -1.5
+	hrvRedZScoreThreshold      = -2.5
+	hrvWatchMovingRatio        = 0.9
+	hrvRedMovingRatio          = 0.8
 	restingHRWatchDelta        = 5
 	restingHRRedDelta          = 8
 	sleepWatchScore            = 75
@@ -66,6 +69,11 @@ type WellnessSignal struct {
 	Ratio           float64 `json:"ratio,omitempty"`
 	Delta           float64 `json:"delta,omitempty"`
 	Trend7Day       float64 `json:"trend7d,omitempty"`
+	RecentMean      float64 `json:"recentMean,omitempty"`
+	BaselineMean    float64 `json:"baselineMean,omitempty"`
+	BaselineMAD     float64 `json:"baselineMad,omitempty"`
+	ZScore          float64 `json:"zScore,omitempty"`
+	ZScoreSource    string  `json:"zScoreSource,omitempty"`
 	Samples         int     `json:"samples"`
 	CoveragePercent float64 `json:"coveragePercent"`
 }
@@ -190,7 +198,7 @@ func (accumulator *wellnessAccumulator) addLoad(record *Wellness) {
 }
 
 func (accumulator *wellnessAccumulator) finish() WellnessAnalysis {
-	accumulator.analysis.HRV = wellnessSignal(accumulator.hrv, accumulator.analysis.Scope.TotalDays)
+	accumulator.analysis.HRV = hrvWellnessSignal(accumulator.hrv, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.RestingHR = wellnessSignal(accumulator.restingHR, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.Sleep = wellnessSignal(accumulator.sleep, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.Lactate = lactateCalibration(accumulator.lactate, accumulator.analysis.Scope.TotalDays)
@@ -279,6 +287,51 @@ func wellnessSignal(samples []wellnessSample, totalDays int) WellnessSignal {
 	}
 }
 
+func hrvWellnessSignal(samples []wellnessSample, totalDays int) WellnessSignal {
+	signal := wellnessSignal(samples, totalDays)
+	addHRVMovingBaseline(&signal, samples)
+
+	return signal
+}
+
+func addHRVMovingBaseline(signal *WellnessSignal, samples []wellnessSample) {
+	if len(samples) < minimumTrendSamples {
+		return
+	}
+
+	sortWellnessSamples(samples)
+
+	recentStart := len(samples) - recentWellnessDays
+	if recentStart <= 0 {
+		return
+	}
+
+	baseline := samples[:recentStart]
+	recent := samples[recentStart:]
+	if len(baseline) < recentWellnessDays {
+		return
+	}
+
+	signal.RecentMean = round2(sampleMean(recent))
+	signal.BaselineMean = round2(sampleMean(baseline))
+
+	baselineMedian := sampleMedian(baseline)
+	baselineMAD := sampleMAD(baseline, baselineMedian)
+	if baselineMAD > 0 {
+		signal.BaselineMAD = round2(baselineMAD)
+		signal.ZScore = round2(0.6745 * (signal.RecentMean - baselineMedian) / baselineMAD)
+		signal.ZScoreSource = "mad"
+
+		return
+	}
+
+	standardDeviation := sampleStandardDeviation(baseline, signal.BaselineMean)
+	if standardDeviation > 0 {
+		signal.ZScore = round2((signal.RecentMean - signal.BaselineMean) / standardDeviation)
+		signal.ZScoreSource = "stddev"
+	}
+}
+
 func sortWellnessSamples(samples []wellnessSample) {
 	sort.Slice(samples, func(leftIndex, rightIndex int) bool {
 		return samples[leftIndex].date < samples[rightIndex].date
@@ -316,6 +369,52 @@ func sampleMean(samples []wellnessSample) float64 {
 	return sum / float64(len(samples))
 }
 
+func sampleMedian(samples []wellnessSample) float64 {
+	values := make([]float64, 0, len(samples))
+	for _, sample := range samples {
+		values = append(values, sample.value)
+	}
+
+	sort.Float64s(values)
+
+	midpoint := len(values) / 2
+	if len(values)%2 == 1 {
+		return values[midpoint]
+	}
+
+	return (values[midpoint-1] + values[midpoint]) / 2
+}
+
+func sampleMAD(samples []wellnessSample, median float64) float64 {
+	deviations := make([]float64, 0, len(samples))
+	for _, sample := range samples {
+		deviations = append(deviations, math.Abs(sample.value-median))
+	}
+
+	sort.Float64s(deviations)
+
+	midpoint := len(deviations) / 2
+	if len(deviations)%2 == 1 {
+		return deviations[midpoint]
+	}
+
+	return (deviations[midpoint-1] + deviations[midpoint]) / 2
+}
+
+func sampleStandardDeviation(samples []wellnessSample, mean float64) float64 {
+	if len(samples) == 0 {
+		return 0
+	}
+
+	var sumSquares float64
+	for _, sample := range samples {
+		delta := sample.value - mean
+		sumSquares += delta * delta
+	}
+
+	return math.Sqrt(sumSquares / float64(len(samples)))
+}
+
 func coveragePercent(samples, totalDays int) float64 {
 	if totalDays == 0 {
 		return 0
@@ -338,7 +437,7 @@ func physiologyState(analysis *WellnessAnalysis) PhysiologyState {
 		state   = "OK"
 	)
 
-	updatePhysiologyState(&state, &reasons, hrvPhysiologyState(analysis.HRV.Ratio))
+	updatePhysiologyState(&state, &reasons, hrvPhysiologyState(&analysis.HRV))
 	updatePhysiologyState(&state, &reasons, restingHRPhysiologyState(analysis.RestingHR.Delta))
 	updatePhysiologyState(&state, &reasons, sleepPhysiologyState(analysis.Sleep.Latest))
 	updatePhysiologyState(&state, &reasons, loadPhysiologyState(analysis.Load.TSB))
@@ -363,17 +462,30 @@ func updatePhysiologyState(current *string, reasons *[]string, next PhysiologySt
 	}
 }
 
-func hrvPhysiologyState(hrvRatio float64) PhysiologyState {
-	if hrvRatio == 0 {
+func hrvPhysiologyState(hrv *WellnessSignal) PhysiologyState {
+	if hrv.Samples == 0 || hrv.RecentMean == 0 || hrv.BaselineMean == 0 {
 		return newPhysiologyState("")
 	}
 
-	if hrvRatio < hrvRedRatioThreshold {
-		return newPhysiologyState("RED", "hrv_ratio_red")
+	if hrv.ZScoreSource != "" {
+		if hrv.ZScore <= hrvRedZScoreThreshold {
+			return newPhysiologyState("RED", "hrv_zscore_red")
+		}
+
+		if hrv.ZScore <= hrvWatchZScoreThreshold {
+			return newPhysiologyState("WATCH", "hrv_zscore_watch")
+		}
+
+		return newPhysiologyState("OK")
 	}
 
-	if hrvRatio < hrvWatchRatioThreshold {
-		return newPhysiologyState("WATCH", "hrv_ratio_watch")
+	movingRatio := hrv.RecentMean / hrv.BaselineMean
+	if movingRatio < hrvRedMovingRatio {
+		return newPhysiologyState("RED", "hrv_moving_ratio_red")
+	}
+
+	if movingRatio < hrvWatchMovingRatio {
+		return newPhysiologyState("WATCH", "hrv_moving_ratio_watch")
 	}
 
 	return newPhysiologyState("OK")
