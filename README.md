@@ -47,6 +47,10 @@ icu analysis workout i123
 # Calculate planned workout load locally before writing events
 icu workouts calculate --ftp 300 --desc "- 60m 70%"
 
+# Dry-run an editable calendar rebalance proposal, then apply it
+icu rebalance --dry-run --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28
+icu rebalance accept --file rebalance.json
+
 # Diagnose auth/config resolution without exposing the secret
 icu config diagnose
 icu config diagnose --verbose
@@ -160,6 +164,7 @@ Treat JSON as the effective default output format unless a command explicitly do
 
 - [docs/cli-reference.md](docs/cli-reference.md): exhaustive command reference for the current CLI surface, including the `zepp` resource
 - [docs/analysis.md](docs/analysis.md): detailed behavior of `analysis cycling`, `analysis wellness`, `analysis plan`, `analysis adaptation`, and `analysis microcycle`
+- [docs/rebalance.md](docs/rebalance.md): dry-run and accept workflow for editable calendar load redistribution proposals
 - [docs/library.md](docs/library.md): usage-oriented guide for `github.com/Thejuampi/icu`, including the `ZeppClient`
 - [docs/api/README.md](docs/api/README.md): OpenAPI snapshot provenance and usage notes
 - [AGENTS.md](AGENTS.md): contributor rules, quality gates, and the documentation gate
@@ -183,6 +188,7 @@ Current top-level resources:
 | `folders` | `create`, `delete`, `list`, `update` |
 | `ftp` | `show`, `update` |
 | `gear` | `create`, `delete`, `list`, `update` |
+| `rebalance` | `accept`, `show` |
 | `routes` | `get`, `list` |
 | `shared-event` | `get` |
 | `sports` | `delete`, `get`, `list`, `update` |

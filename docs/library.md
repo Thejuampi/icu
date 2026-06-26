@@ -247,6 +247,24 @@ plan := icu.AnalyzeTrainingPlanWithContext(
 )
 ```
 
+### Rebalance proposals
+
+```go
+proposal := icu.BuildRebalanceProposal(&icu.RebalanceInput{
+	Activities:    activities,
+	Events:        events,
+	SportSettings: &sportSettings,
+	Wellness:      &wellnessAnalysis,
+	Scope: icu.RebalanceScope{
+		StartDate: "2026-06-22",
+		EndDate:   "2026-06-28",
+	},
+	Constraints: icu.RebalanceConstraints{TargetLoad: 354},
+})
+```
+
+`BuildRebalanceProposal` is pure and returns an editable JSON-friendly proposal. `DynamicRebalanceTargets` derives Z1/Z2 and capacity context from sport settings or recent cycling history with robust outlier filtering. Use `MarshalRebalanceProposal` to write pretty JSON for review before applying operations through the CLI.
+
 ### Workout execution analysis
 
 ```go

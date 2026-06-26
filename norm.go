@@ -72,6 +72,9 @@ func coerceToFloat64Slice(data any) ([]float64, error) {
 	case []any:
 		result := make([]float64, len(values))
 		for i, val := range values {
+			if val == nil {
+				return nil, nil
+			}
 			f, ok := toFloat64(val)
 			if !ok {
 				return nil, fmt.Errorf("element %d is not numeric: %T", i, val)

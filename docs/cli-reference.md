@@ -200,6 +200,18 @@ Invoke these commands as `icu activity <id> <action>`.
   Notes: Read-only JSON contract for planned-workout execution review. The command fetches the activity, detected intervals, raw streams, sport settings, and either the explicit `--event-id` or nearby resolved calendar events. It emits match confidence, planned workout steps, execution micro metrics, session/rep/step comparison, and warnings when plan, stream, interval, FTP, or LTHR data is missing.
   Example: `icu analysis workout i123 --calendar-id 1`
 
+## rebalance
+
+- `show`
+  Invocation: `icu rebalance --dry-run --file PATH --oldest DATE --newest DATE [--target-load N] [--now-date DATE] [--type Ride] [--max-intensity IF] [--max-watts WATTS]`
+  Notes: Top-level dry-run command. It fetches completed activities, calendar events, Ride sport settings, and wellness context, then writes a pretty JSON proposal to `--file`. It does not mutate Intervals.icu. The proposal includes baseline load, dynamic targets, selected operations, validation, and source hashes for update/cancel operations. `--max-intensity` and `--max-watts` cap generated POWER workout intensity; `--max-hr` is rejected because rebalance does not generate HR-target sessions.
+  Example: `icu rebalance --dry-run --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --target-load 354`
+
+- `accept`
+  Invocation: `icu rebalance accept --file PATH`
+  Notes: Reads the edited proposal, validates schema and operations, verifies source hashes for update/cancel operations, applies pending `create`, `update`, and `cancel` operations, writes apply results back to the same file, and prints the apply summary.
+  Example: `icu rebalance accept --file rebalance.json`
+
 ## athlete
 
 - `show`

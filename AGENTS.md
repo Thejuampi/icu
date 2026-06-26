@@ -46,6 +46,7 @@ Public changes are not done until the matching documentation is updated in the s
 - `README.md`: project entry point, install, quick start, auth precedence, top-level CLI surface, and doc links
 - `docs/cli-reference.md`: exhaustive CLI contract for resources, actions, flags, defaults, and command examples
 - `docs/analysis.md`: analysis command defaults, upstream inputs, output sections, interpretation, and limitations
+- `docs/rebalance.md`: dry-run/accept workflow for editable calendar load redistribution proposals
 - `docs/library.md`: usage-oriented guide for the reusable Go package
 - `docs/api/README.md`: OpenAPI snapshot role, provenance, and when to use it
 - `AGENTS.md`: contributor policy, quality gates, and documentation expectations
