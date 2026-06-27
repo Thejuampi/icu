@@ -259,9 +259,11 @@ proposal := icu.BuildRebalanceProposal(&icu.RebalanceInput{
 		StartDate: "2026-06-22",
 		EndDate:   "2026-06-28",
 	},
-	Constraints: icu.RebalanceConstraints{TargetLoad: 354},
+	Constraints: icu.RebalanceConstraints{TargetLoad: 354, TargetTolerance: 10, SportType: "Ride", WorkoutTarget: "POWER", StartTime: "07:00", MinSessionMinutes: 20, DurationStepMinutes: 5, AllocationBasis: "explicit_equal"},
 })
 ```
+
+Generated sessions in the proposal expose decision-source fields so consumers can audit where sport type, target type, intensity, duration, start time, allocation, and classification came from.
 
 `BuildRebalanceProposal` is pure and returns an editable JSON-friendly proposal. `DynamicRebalanceTargets` derives Z1/Z2 and capacity context from sport settings or recent cycling history with robust outlier filtering. Use `MarshalRebalanceProposal` to write pretty JSON for review before applying operations through the CLI.
 

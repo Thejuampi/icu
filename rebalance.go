@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	RebalanceSchemaVersion = "icu.rebalance.v1"
+	RebalanceSchemaVersion = "icu.rebalance.v2"
 
 	RebalanceActionCreate = "create"
 	RebalanceActionUpdate = "update"
@@ -24,28 +24,20 @@ const (
 	RebalanceStatusApplied = "applied"
 	RebalanceStatusFailed  = "failed"
 
-	rebalanceDefaultTolerance       = 5
-	rebalanceToleranceFraction      = 0.03
-	rebalanceDefaultSessionGapHours = 6
 	rebalanceHashPrefixLength       = 12
 	rebalanceMinutesPerHour         = 60
 	rebalanceSecondsPerMinute       = 60
 	rebalanceSecondsPerHour         = 3600
 	rebalanceDescriptionStepMinutes = 5
-	rebalanceMinSessionMinutes      = 20
 	rebalanceRobustZLimit           = 3.5
 	rebalanceMadScale               = 0.6745
-	rebalanceHistoricalZ1Multiplier = 0.9
-	rebalanceFallbackZ1IF           = 0.55
-	rebalanceFallbackZ2IF           = 0.65
 	rebalanceSportZoneDivisor       = 100.0
 	rebalanceWattsLowOffset         = 0.03
 	rebalanceWattsLowFloor          = 0.5
-	rebalanceScoreStart             = 100
-	rebalanceScoreDeltaPenalty      = 2
-	rebalanceScoreWarningPenalty    = 10
-	rebalanceScoreInfeasiblePenalty = 50
 	rebalanceJSONIndent             = "  "
+	rebalanceStrategyTargetZ2       = "target-preserving-z2"
+	rebalanceWorkoutTargetPower     = "POWER"
+	rebalanceAllocationExplicit     = "explicit_equal"
 )
 
 type RebalanceInput struct {
@@ -63,21 +55,26 @@ type RebalanceInput struct {
 }
 
 type RebalanceProposalFile struct {
-	SchemaVersion    string                 `json:"schemaVersion"`
-	ProposalID       string                 `json:"proposalId"`
-	GeneratedAt      string                 `json:"generatedAt,omitempty"`
-	AthleteID        string                 `json:"athleteId,omitempty"`
-	Scope            RebalanceScope         `json:"scope"`
-	Request          RebalanceRequest       `json:"request"`
-	Constraints      RebalanceConstraints   `json:"constraints"`
-	Context          RebalanceContext       `json:"context"`
-	Baseline         RebalanceEvaluation    `json:"baseline"`
-	Options          []RebalanceOption      `json:"options"`
-	SelectedOptionID string                 `json:"selectedOptionId"`
-	Operations       []RebalanceOperation   `json:"operations"`
-	Validation       RebalanceValidation    `json:"validation"`
-	Apply            *RebalanceApplySummary `json:"apply,omitempty"`
-	Notes            []string               `json:"notes,omitempty"`
+	SchemaVersion    string                     `json:"schemaVersion"`
+	ProposalID       string                     `json:"proposalId"`
+	GeneratedAt      string                     `json:"generatedAt,omitempty"`
+	AthleteID        string                     `json:"athleteId,omitempty"`
+	Scope            RebalanceScope             `json:"scope"`
+	Request          RebalanceRequest           `json:"request"`
+	Constraints      RebalanceConstraints       `json:"constraints"`
+	Context          RebalanceContext           `json:"context"`
+	Baseline         RebalanceEvaluation        `json:"baseline"`
+	Options          []RebalanceOption          `json:"options"`
+	SelectedOptionID string                     `json:"selectedOptionId"`
+	Operations       []RebalanceOperation       `json:"operations"`
+	Validation       RebalanceValidation        `json:"validation"`
+	Apply            *RebalanceApplySummary     `json:"apply,omitempty"`
+	Policy           *RebalancePolicy           `json:"policy,omitempty"`
+	History          *RebalanceHistoryReport    `json:"history,omitempty"`
+	Envelope         *RebalanceEnvelopeReport   `json:"envelope,omitempty"`
+	Projection       *RebalanceProjectionReport `json:"projection,omitempty"`
+	Approve          *RebalanceApprove          `json:"approve,omitempty"`
+	Notes            []string                   `json:"notes,omitempty"`
 }
 
 type RebalanceScope struct {
@@ -97,32 +94,32 @@ type RebalanceRequest struct {
 }
 
 type RebalanceConstraints struct {
-	KeepCompleted            bool     `json:"keepCompleted"`
-	AllowToday               bool     `json:"allowToday"`
-	AllowedDays              []string `json:"allowedDays,omitempty"`
-	OffDays                  []string `json:"offDays,omitempty"`
-	OptionalDays             []string `json:"optionalDays,omitempty"`
-	AllowCreate              bool     `json:"allowCreate"`
-	AllowUpdate              bool     `json:"allowUpdate"`
-	AllowCancel              bool     `json:"allowCancel"`
-	AllowDouble              bool     `json:"allowDouble"`
-	MaxSessionsPerDay        int      `json:"maxSessionsPerDay,omitempty"`
-	DoubleSessionMinGapHours int      `json:"doubleSessionMinGapHours,omitempty"`
-	MaxSessionMinutes        int      `json:"maxSessionMinutes,omitempty"`
-	MaxLongRideMinutes       int      `json:"maxLongRideMinutes,omitempty"`
-	LongRideDays             []string `json:"longRideDays,omitempty"`
-	LongLoadMin              int      `json:"longLoadMin,omitempty"`
-	LongLoadMax              int      `json:"longLoadMax,omitempty"`
-	TargetLoad               int      `json:"targetLoad"`
-	TargetTolerance          int      `json:"targetTolerance"`
-	MaxIntensity             float64  `json:"maxIntensity,omitempty"`
-	MaxWatts                 int      `json:"maxWatts,omitempty"`
-	MaxHR                    int      `json:"maxHr,omitempty"`
-	Z1IF                     float64  `json:"z1If,omitempty"`
-	Z2IF                     float64  `json:"z2If,omitempty"`
-	GateMode                 string   `json:"gateMode,omitempty"`
-	Tag                      string   `json:"tag,omitempty"`
-	Note                     string   `json:"note,omitempty"`
+	KeepCompleted       bool     `json:"keepCompleted"`
+	AllowToday          bool     `json:"allowToday"`
+	AllowPast           bool     `json:"allowPast"`
+	AllowedDays         []string `json:"allowedDays,omitempty"`
+	OffDays             []string `json:"offDays,omitempty"`
+	AllowCreate         bool     `json:"allowCreate"`
+	AllowUpdate         bool     `json:"allowUpdate"`
+	AllowCancel         bool     `json:"allowCancel"`
+	SportType           string   `json:"sportType,omitempty"`
+	WorkoutTarget       string   `json:"workoutTarget,omitempty"`
+	StartTime           string   `json:"startTime,omitempty"`
+	MinSessionMinutes   int      `json:"minSessionMinutes,omitempty"`
+	DurationStepMinutes int      `json:"durationStepMinutes,omitempty"`
+	AllocationBasis     string   `json:"allocationBasis,omitempty"`
+	MaxSessionMinutes   int      `json:"maxSessionMinutes,omitempty"`
+	TargetLoad          int      `json:"targetLoad"`
+	TargetTolerance     int      `json:"targetTolerance"`
+	MaxIntensity        float64  `json:"maxIntensity,omitempty"`
+	MaxWatts            int      `json:"maxWatts,omitempty"`
+	MaxHR               int      `json:"maxHr,omitempty"`
+	Z1IF                float64  `json:"z1If,omitempty"`
+	Z2IF                float64  `json:"z2If,omitempty"`
+	GateMode            string   `json:"gateMode,omitempty"`
+	Note                string   `json:"note,omitempty"`
+	Level               string   `json:"level,omitempty"`
+	Mode                string   `json:"mode,omitempty"`
 }
 
 type RebalanceContext struct {
@@ -138,12 +135,14 @@ type RebalanceContext struct {
 }
 
 type RebalanceTargets struct {
-	Z1IF            float64 `json:"z1If,omitempty"`
-	Z2IF            float64 `json:"z2If,omitempty"`
-	MaxIntensity    float64 `json:"maxIntensity,omitempty"`
-	LongRideMinutes int     `json:"longRideMinutes,omitempty"`
-	DailyLoadLimit  int     `json:"dailyLoadLimit,omitempty"`
-	Source          string  `json:"source,omitempty"`
+	Z1IF                  float64 `json:"z1If,omitempty"`
+	Z2IF                  float64 `json:"z2If,omitempty"`
+	MaxIntensity          float64 `json:"maxIntensity,omitempty"`
+	LongRideMinutes       int     `json:"longRideMinutes,omitempty"`
+	DailyLoadLimit        int     `json:"dailyLoadLimit,omitempty"`
+	TargetTolerance       int     `json:"targetTolerance,omitempty"`
+	TargetToleranceSource string  `json:"targetToleranceSource,omitempty"`
+	Source                string  `json:"source,omitempty"`
 }
 
 type RebalanceEvaluation struct {
@@ -176,21 +175,31 @@ type RebalanceOption struct {
 }
 
 type RebalanceSession struct {
-	ID              string  `json:"id,omitempty"`
-	Date            string  `json:"date,omitempty"`
-	Day             string  `json:"day,omitempty"`
-	EventID         int     `json:"eventId,omitempty"`
-	Action          string  `json:"action"`
-	Name            string  `json:"name,omitempty"`
-	Classification  string  `json:"classification,omitempty"`
-	TargetLoad      int     `json:"targetLoad"`
-	DurationSeconds int     `json:"durationSeconds"`
-	DurationMinutes float64 `json:"durationMinutes,omitempty"`
-	IntensityFactor float64 `json:"intensityFactor,omitempty"`
-	WattsRange      string  `json:"wattsRange,omitempty"`
-	Description     string  `json:"description,omitempty"`
-	SourceHash      string  `json:"sourceHash,omitempty"`
-	Reason          string  `json:"reason,omitempty"`
+	ID                   string  `json:"id,omitempty"`
+	Date                 string  `json:"date,omitempty"`
+	Day                  string  `json:"day,omitempty"`
+	StartTime            string  `json:"startTime,omitempty"`
+	StartTimeSource      string  `json:"startTimeSource,omitempty"`
+	EventID              int     `json:"eventId,omitempty"`
+	Action               string  `json:"action"`
+	SportType            string  `json:"sportType,omitempty"`
+	SportTypeSource      string  `json:"sportTypeSource,omitempty"`
+	WorkoutTarget        string  `json:"workoutTarget,omitempty"`
+	WorkoutTargetSource  string  `json:"workoutTargetSource,omitempty"`
+	Name                 string  `json:"name,omitempty"`
+	Classification       string  `json:"classification,omitempty"`
+	ClassificationSource string  `json:"classificationSource,omitempty"`
+	AllocationSource     string  `json:"allocationSource,omitempty"`
+	TargetLoad           int     `json:"targetLoad"`
+	DurationSeconds      int     `json:"durationSeconds"`
+	DurationMinutes      float64 `json:"durationMinutes,omitempty"`
+	DurationSource       string  `json:"durationSource,omitempty"`
+	IntensityFactor      float64 `json:"intensityFactor,omitempty"`
+	IntensitySource      string  `json:"intensitySource,omitempty"`
+	WattsRange           string  `json:"wattsRange,omitempty"`
+	Description          string  `json:"description,omitempty"`
+	SourceHash           string  `json:"sourceHash,omitempty"`
+	Reason               string  `json:"reason,omitempty"`
 }
 
 type RebalanceOperation struct {
@@ -266,13 +275,11 @@ type rebalanceEventSplit struct {
 
 func DefaultRebalanceConstraints() RebalanceConstraints {
 	return RebalanceConstraints{
-		KeepCompleted:            true,
-		AllowCreate:              true,
-		AllowUpdate:              true,
-		AllowCancel:              true,
-		MaxSessionsPerDay:        1,
-		DoubleSessionMinGapHours: rebalanceDefaultSessionGapHours,
-		GateMode:                 "warn",
+		KeepCompleted: true,
+		AllowCreate:   true,
+		AllowUpdate:   true,
+		AllowCancel:   true,
+		GateMode:      "warn",
 	}
 }
 
@@ -281,6 +288,9 @@ func BuildRebalanceProposal(input *RebalanceInput) RebalanceProposalFile {
 		input = &RebalanceInput{}
 	}
 	working := normalizeRebalanceInput(input)
+	if working.Request.Strategy == RebalanceStrategyAdaptiveBidirectional {
+		return buildRebalanceProposalV2(&working)
+	}
 	plan := buildRebalancePlan(&working)
 	option := rebalanceOption(&working, &plan)
 	proposal := RebalanceProposalFile{
@@ -291,7 +301,7 @@ func BuildRebalanceProposal(input *RebalanceInput) RebalanceProposalFile {
 		Scope:            working.Scope,
 		Request:          working.Request,
 		Constraints:      working.Constraints,
-		Context:          rebalanceContext(&working, plan.targets, plan.warnings),
+		Context:          rebalanceContext(&working, &plan.targets, plan.warnings),
 		Baseline:         plan.baseline,
 		Options:          []RebalanceOption{option},
 		SelectedOptionID: option.ID,
@@ -309,6 +319,7 @@ func ValidateRebalanceProposal(proposal *RebalanceProposalFile) RebalanceValidat
 		return RebalanceValidation{Blocking: true, Errors: []string{"proposal is required"}}
 	}
 	validateRebalanceHeader(proposal, &validation)
+	validateRebalanceDecisionSources(proposal, &validation)
 	for index := range proposal.Operations {
 		validateRebalanceOperation(&proposal.Operations[index], &validation)
 	}
@@ -357,12 +368,14 @@ func MarshalRebalanceProposal(proposal *RebalanceProposalFile) ([]byte, error) {
 
 func DynamicRebalanceTargets(input *RebalanceInput) RebalanceTargets {
 	if input == nil {
-		return fallbackRebalanceTargets()
+		return missingRebalanceTargets()
 	}
 	if targets, ok := sportSettingsRebalanceTargets(input.SportSettings); ok {
 		targets.MaxIntensity = explicitOrDynamicMax(input, targets.Z2IF)
 		targets.LongRideMinutes = dynamicLongRideMinutes(input.Activities)
 		targets.DailyLoadLimit = dynamicDailyLoadLimit(input.Activities)
+		targets.TargetTolerance = input.Constraints.TargetTolerance
+		targets.TargetToleranceSource = rebalanceTargetToleranceSource(input)
 
 		return targets
 	}
@@ -370,14 +383,17 @@ func DynamicRebalanceTargets(input *RebalanceInput) RebalanceTargets {
 		targets.MaxIntensity = explicitOrDynamicMax(input, targets.Z2IF)
 		targets.LongRideMinutes = dynamicLongRideMinutes(input.Activities)
 		targets.DailyLoadLimit = dynamicDailyLoadLimit(input.Activities)
+		targets.TargetTolerance = input.Constraints.TargetTolerance
+		targets.TargetToleranceSource = rebalanceTargetToleranceSource(input)
 
 		return targets
 	}
 
-	targets := fallbackRebalanceTargets()
-	targets.MaxIntensity = explicitOrDynamicMax(input, targets.Z2IF)
+	targets := missingRebalanceTargets()
 	targets.LongRideMinutes = dynamicLongRideMinutes(input.Activities)
 	targets.DailyLoadLimit = dynamicDailyLoadLimit(input.Activities)
+	targets.TargetTolerance = input.Constraints.TargetTolerance
+	targets.TargetToleranceSource = rebalanceTargetToleranceSource(input)
 
 	return targets
 }
@@ -387,25 +403,28 @@ func normalizeRebalanceInput(input *RebalanceInput) RebalanceInput {
 	defaults := DefaultRebalanceConstraints()
 	mergeRebalanceDefaults(&working.Constraints, &defaults)
 	if working.Request.Strategy == "" {
-		working.Request.Strategy = "target-preserving"
-	}
-	if len(working.Request.ReplaceIntensity) == 0 {
-		working.Request.ReplaceIntensity = []string{"tempo", "threshold", "vo2", "high_intensity"}
+		working.Request.Strategy = rebalanceStrategyTargetZ2
 	}
 	targets := DynamicRebalanceTargets(&working)
-	if working.Constraints.Z1IF == 0 {
+	if working.Constraints.Z1IF == 0 && targets.Z1IF > 0 {
 		working.Constraints.Z1IF = targets.Z1IF
 	}
-	if working.Constraints.Z2IF == 0 {
+	if working.Constraints.Z2IF == 0 && targets.Z2IF > 0 {
 		working.Constraints.Z2IF = targets.Z2IF
 	}
 	if working.Constraints.TargetTolerance == 0 {
-		working.Constraints.TargetTolerance = maxInt(
-			rebalanceDefaultTolerance,
-			int(math.Round(float64(working.Constraints.TargetLoad)*rebalanceToleranceFraction)),
-		)
+		working.Constraints.TargetTolerance = dynamicTargetTolerance(working.Activities)
 	}
-	if working.Constraints.TargetLoad == 0 {
+	if working.Constraints.MinSessionMinutes == 0 {
+		working.Constraints.MinSessionMinutes = dynamicMinSessionMinutes(working.Activities, working.Events)
+	}
+	if working.Constraints.DurationStepMinutes == 0 {
+		working.Constraints.DurationStepMinutes = dynamicDurationStepMinutes(working.Activities, working.Events)
+	}
+	if working.Constraints.StartTime == "" {
+		working.Constraints.StartTime = historicalStartTime(working.Activities, "")
+	}
+	if working.Constraints.TargetLoad == 0 && working.Request.Strategy != RebalanceStrategyAdaptiveBidirectional {
 		baseline := rebalanceBaseline(&working)
 		working.Constraints.TargetLoad = baseline.WeeklyLoad
 	}
@@ -422,12 +441,6 @@ func mergeRebalanceDefaults(constraints, defaults *RebalanceConstraints) {
 		constraints.AllowUpdate = defaults.AllowUpdate
 		constraints.AllowCancel = defaults.AllowCancel
 	}
-	if constraints.MaxSessionsPerDay == 0 {
-		constraints.MaxSessionsPerDay = defaults.MaxSessionsPerDay
-	}
-	if constraints.DoubleSessionMinGapHours == 0 {
-		constraints.DoubleSessionMinGapHours = defaults.DoubleSessionMinGapHours
-	}
 	if constraints.GateMode == "" {
 		constraints.GateMode = defaults.GateMode
 	}
@@ -435,6 +448,9 @@ func mergeRebalanceDefaults(constraints, defaults *RebalanceConstraints) {
 
 func buildRebalancePlan(input *RebalanceInput) rebalancePlan {
 	baseline := rebalanceBaseline(input)
+	if reasons := rebalanceBlockingReasons(input); len(reasons) > 0 {
+		return rebalancePlan{baseline: baseline, targets: DynamicRebalanceTargets(input), warnings: reasons, targetLoad: input.Constraints.TargetLoad, plannedLoad: baseline.WeeklyLoad}
+	}
 	target := input.Constraints.TargetLoad
 	events := splitRebalanceEvents(input)
 	preserved := preservedMutableLoad(input, events.mutable)
@@ -443,7 +459,7 @@ func buildRebalancePlan(input *RebalanceInput) rebalancePlan {
 	if remaining > 0 {
 		slots = rebalanceSlots(input, events.mutable)
 	}
-	loads := distributeRebalanceLoad(remaining, len(slots))
+	loads := distributeRebalanceLoad(input, remaining, slots)
 	plan := rebalancePlan{
 		baseline:    baseline,
 		targets:     DynamicRebalanceTargets(input),
@@ -454,6 +470,9 @@ func buildRebalancePlan(input *RebalanceInput) rebalancePlan {
 	}
 	if remaining > 0 && len(slots) == 0 {
 		plan.warnings = append(plan.warnings, "no mutable or creatable slots available")
+	}
+	if remaining > 0 && len(slots) > 0 && len(loads) == 0 {
+		plan.warnings = append(plan.warnings, "no historical or explicit allocation basis available")
 	}
 	updated := map[int]bool{}
 	for index := range loads {
@@ -534,8 +553,6 @@ func (plan *rebalancePlan) addCancelOperations(input *RebalanceInput, slots []re
 
 func rebalanceOption(input *RebalanceInput, plan *rebalancePlan) RebalanceOption {
 	evaluation := evaluateRebalancePlan(input, plan)
-	warningCount := len(plan.warnings)
-	evaluation.Score = rebalanceScore(&evaluation, warningCount)
 
 	return RebalanceOption{
 		ID:         "target_preserving_z2",
@@ -567,12 +584,12 @@ func buildRebalanceOperation(session *RebalanceSession) RebalanceOperation {
 	operation.Body = EventEx{
 		StartDateLocal: session.dateTimeLocal(),
 		Category:       "WORKOUT",
-		Type:           "Ride",
+		Type:           sessionType(session),
 		Name:           session.Name,
 		Description:    session.Description,
 		TrainingLoad:   session.TargetLoad,
 		MovingTime:     session.DurationSeconds,
-		Target:         "POWER",
+		Target:         sessionTarget(session),
 	}
 
 	return operation
@@ -580,7 +597,7 @@ func buildRebalanceOperation(session *RebalanceSession) RebalanceOperation {
 
 func buildRebalanceSession(input *RebalanceInput, slot *rebalanceSlot, load int) RebalanceSession {
 	intensity := effectiveRebalanceIF(input)
-	duration := durationForLoad(load, intensity)
+	duration := durationForLoad(input, load, intensity)
 	if input.Constraints.MaxSessionMinutes > 0 {
 		duration = minInt(duration, input.Constraints.MaxSessionMinutes*rebalanceSecondsPerMinute)
 	}
@@ -593,25 +610,40 @@ func buildRebalanceSession(input *RebalanceInput, slot *rebalanceSlot, load int)
 		eventID = slot.event.ID
 		sourceHash = RebalanceEventHash(slot.event)
 	}
+	startTime := rebalanceSessionStartTime(input, slot)
+	startTimeSource := rebalanceSessionStartTimeSource(input, slot)
+	sportType := rebalanceSessionSportType(input, slot)
+	workoutTarget := rebalanceSessionWorkoutTarget(input, slot)
+	classification := classifyGeneratedRebalanceSession(input, duration, intensity)
 	minutes := int(math.Round(float64(duration) / rebalanceSecondsPerMinute))
 	name := fmt.Sprintf("Rebalance %s Z2 %d", slot.date, load)
 
 	return RebalanceSession{
-		ID:              action + "-" + slot.date,
-		Date:            slot.date,
-		Day:             rebalanceWeekday(slot.date),
-		EventID:         eventID,
-		Action:          action,
-		Name:            name,
-		Classification:  "aerobic",
-		TargetLoad:      load,
-		DurationSeconds: duration,
-		DurationMinutes: round2(float64(duration) / rebalanceSecondsPerMinute),
-		IntensityFactor: intensity,
-		WattsRange:      wattsRange(input, intensity),
-		Description:     rebalanceWorkoutDescription(minutes, intensity),
-		SourceHash:      sourceHash,
-		Reason:          "target-preserving Z1/Z2 redistribution",
+		ID:                   action + "-" + slot.date,
+		Date:                 slot.date,
+		Day:                  rebalanceWeekday(slot.date),
+		StartTime:            startTime,
+		StartTimeSource:      startTimeSource,
+		EventID:              eventID,
+		Action:               action,
+		SportType:            sportType,
+		SportTypeSource:      rebalanceSessionSportTypeSource(input, slot),
+		WorkoutTarget:        workoutTarget,
+		WorkoutTargetSource:  rebalanceSessionWorkoutTargetSource(input, slot),
+		Name:                 name,
+		Classification:       classification.label,
+		ClassificationSource: classification.source,
+		AllocationSource:     rebalanceAllocationSource(input, slot),
+		TargetLoad:           load,
+		DurationSeconds:      duration,
+		DurationMinutes:      round2(float64(duration) / rebalanceSecondsPerMinute),
+		DurationSource:       rebalanceSessionDurationSource(input),
+		IntensityFactor:      intensity,
+		IntensitySource:      rebalanceSessionIntensitySource(input),
+		WattsRange:           wattsRange(input, intensity),
+		Description:          rebalanceWorkoutDescription(minutes, intensity),
+		SourceHash:           sourceHash,
+		Reason:               "target-preserving Z1/Z2 redistribution",
 	}
 }
 
@@ -645,12 +677,12 @@ func rebalanceBaseline(input *RebalanceInput) RebalanceEvaluation {
 		if isWeekendDate(eventDateOnly(event.StartDateLocal)) {
 			weekend += load
 		}
-		classification := classifyRebalanceEvent(event)
+		classification := unknownState
 		high += boolInt(classification == "high_intensity")
 		tempo += boolInt(classification == "tempo_threshold")
 		long += boolInt(classification == "long_endurance")
-		aerobic += boolInt(classification == "aerobic")
-		recovery += boolInt(classification == "recovery")
+		aerobic += boolInt(classification == plannedClassificationZ2)
+		recovery += boolInt(classification == plannedStepKindRecovery)
 	}
 	weekly := completed + locked + mutable
 	target := input.Constraints.TargetLoad
@@ -708,7 +740,7 @@ func evaluateRebalancePlan(input *RebalanceInput, plan *rebalancePlan) Rebalance
 			weekend += session.TargetLoad
 		}
 		aerobic++
-		if session.DurationSeconds >= longRideSeconds(plan.targets) {
+		if session.DurationSeconds >= longRideSeconds(&plan.targets) {
 			long++
 		}
 		if session.IntensityFactor <= input.Constraints.Z1IF {
@@ -795,21 +827,104 @@ func occupiedRebalanceDates(events []Event) map[string]bool {
 	return occupied
 }
 
-func distributeRebalanceLoad(total, slots int) []int {
-	if total <= 0 || slots <= 0 {
+func distributeRebalanceLoad(input *RebalanceInput, total int, slots []rebalanceSlot) []int {
+	if total <= 0 || len(slots) == 0 {
 		return nil
 	}
-	loads := make([]int, slots)
-	base := total / slots
-	remainder := total % slots
+	weights := rebalanceSlotWeights(input, slots)
+	if len(weights) == 0 {
+		return nil
+	}
+	loads := make([]int, len(slots))
+	var assigned int
 	for index := range loads {
-		loads[index] = base
-		if index < remainder {
-			loads[index]++
+		if index == len(loads)-1 {
+			loads[index] = total - assigned
+			break
 		}
+		loads[index] = int(math.Round(float64(total) * weights[index]))
+		assigned += loads[index]
 	}
 
 	return loads
+}
+
+func rebalanceSlotWeights(input *RebalanceInput, slots []rebalanceSlot) []float64 {
+	if input.Constraints.AllocationBasis == rebalanceAllocationExplicit {
+		return equalRebalanceWeights(len(slots))
+	}
+	if weights, ok := mutableEventWeights(input, slots); ok {
+		return weights
+	}
+	return historicalDayWeights(input.Activities, slots)
+}
+
+func equalRebalanceWeights(count int) []float64 {
+	if count <= 0 {
+		return nil
+	}
+	weights := make([]float64, count)
+	for index := range weights {
+		weights[index] = 1 / float64(count)
+	}
+
+	return weights
+}
+
+func mutableEventWeights(input *RebalanceInput, slots []rebalanceSlot) ([]float64, bool) {
+	weights := make([]float64, len(slots))
+	var total int
+	for index := range slots {
+		if slots[index].event == nil {
+			continue
+		}
+		load := rebalanceEventLoad(slots[index].event, input)
+		if load <= 0 {
+			return nil, false
+		}
+		weights[index] = float64(load)
+		total += load
+	}
+	if total == 0 {
+		return nil, false
+	}
+	for index := range weights {
+		weights[index] /= float64(total)
+	}
+
+	return weights, true
+}
+
+func historicalDayWeights(activities []Activity, slots []rebalanceSlot) []float64 {
+	loadByDay := map[string]int{}
+	for index := range activities {
+		date := activityDate(&activities[index])
+		day := rebalanceWeekday(date)
+		if day != "" && activities[index].TrainingLoad > 0 {
+			loadByDay[day] += activities[index].TrainingLoad
+		}
+	}
+	if len(loadByDay) < 3 {
+		return nil
+	}
+	weights := make([]float64, len(slots))
+	var total int
+	for index := range slots {
+		load := loadByDay[rebalanceWeekday(slots[index].date)]
+		if load <= 0 {
+			return nil
+		}
+		weights[index] = float64(load)
+		total += load
+	}
+	if total == 0 {
+		return nil
+	}
+	for index := range weights {
+		weights[index] /= float64(total)
+	}
+
+	return weights
 }
 
 func validateRebalanceHeader(proposal *RebalanceProposalFile, validation *RebalanceValidation) {
@@ -818,6 +933,57 @@ func validateRebalanceHeader(proposal *RebalanceProposalFile, validation *Rebala
 	}
 	if proposal.SelectedOptionID == "" {
 		validation.Warnings = append(validation.Warnings, "selectedOptionId is empty")
+	}
+}
+
+func validateRebalanceDecisionSources(proposal *RebalanceProposalFile, validation *RebalanceValidation) {
+	if len(proposal.Options) == 0 && proposal.Baseline.Source == "" {
+		return
+	}
+	validateRebalanceRequestSources(proposal, validation)
+	validateRebalanceConstraintSources(proposal, validation)
+	validateRebalanceOperationSources(proposal, validation)
+}
+
+func validateRebalanceRequestSources(proposal *RebalanceProposalFile, validation *RebalanceValidation) {
+	if proposal.Request.Strategy != "" && proposal.Request.Strategy != rebalanceStrategyTargetZ2 && proposal.Request.Strategy != RebalanceStrategyAdaptiveBidirectional {
+		validation.Errors = append(validation.Errors, "unsupported rebalance strategy: "+proposal.Request.Strategy)
+	}
+}
+
+func validateRebalanceConstraintSources(proposal *RebalanceProposalFile, validation *RebalanceValidation) {
+	if proposal.Constraints.TargetTolerance == 0 {
+		validation.Errors = append(validation.Errors, "targetTolerance requires historical load variability or explicit input")
+	}
+	if proposal.Constraints.Z2IF == 0 {
+		validation.Errors = append(validation.Errors, "z2If requires sport power zones, historical intensity, or explicit input")
+	}
+	if proposal.Constraints.MinSessionMinutes == 0 || proposal.Constraints.DurationStepMinutes == 0 {
+		validation.Errors = append(validation.Errors, "duration constraints require history or explicit input")
+	}
+	if proposal.Constraints.AllowCreate && proposal.Constraints.SportType == "" && !proposalHasNonCancelType(proposal) {
+		validation.Errors = append(validation.Errors, "sport type requires event context or explicit input")
+	}
+	if proposal.Constraints.AllowCreate && proposal.Constraints.WorkoutTarget == "" && !proposalHasNonCancelTarget(proposal) {
+		validation.Errors = append(validation.Errors, "workout target requires event context or explicit input")
+	}
+}
+
+func validateRebalanceOperationSources(proposal *RebalanceProposalFile, validation *RebalanceValidation) {
+	for index := range proposal.Operations {
+		validateRebalanceOperationSource(&proposal.Operations[index], validation)
+	}
+}
+
+func validateRebalanceOperationSource(operation *RebalanceOperation, validation *RebalanceValidation) {
+	if operation.Action == RebalanceActionCreate && operation.Body.StartDateLocal == eventDateOnly(operation.Body.StartDateLocal) {
+		validation.Errors = append(validation.Errors, "create operation requires historical or explicit start time: "+operation.ID)
+	}
+	if operation.Action != RebalanceActionCancel && operation.Body.Type == "" {
+		validation.Errors = append(validation.Errors, "operation body.type requires event context or explicit sport type: "+operation.ID)
+	}
+	if operation.Action != RebalanceActionCancel && operation.Body.Target == "" {
+		validation.Errors = append(validation.Errors, "operation body.target requires event context or explicit workout target: "+operation.ID)
 	}
 }
 
@@ -857,8 +1023,54 @@ func validRebalanceStatus(status string) bool {
 	}
 }
 
-func rebalanceContext(input *RebalanceInput, targets RebalanceTargets, warnings []string) RebalanceContext {
-	context := RebalanceContext{FTP: rebalanceFTP(input), DynamicTargets: targets, Warnings: warnings}
+func rebalanceBlockingReasons(input *RebalanceInput) []string {
+	var reasons []string
+	reasons = append(reasons, rebalanceRequestBlockingReasons(input)...)
+	reasons = append(reasons, rebalanceConstraintBlockingReasons(input)...)
+	if input.Constraints.AllowCreate && input.Constraints.StartTime == "" && historicalStartTime(input.Activities, "") == "" {
+		reasons = append(reasons, "created workouts require historical or explicit start time")
+	}
+	if input.Constraints.AllowCreate && input.Constraints.AllocationBasis == "" && len(input.Activities) == 0 {
+		reasons = append(reasons, "created workout allocation requires history or explicit allocation basis")
+	}
+	if input.Constraints.SportType == "" && !hasMutableEventType(input.Events) {
+		reasons = append(reasons, "sport type requires event context or explicit input")
+	}
+	if input.Constraints.WorkoutTarget == "" && !hasMutableEventTarget(input.Events) {
+		reasons = append(reasons, "workout target requires event context or explicit input")
+	}
+
+	return reasons
+}
+
+func rebalanceRequestBlockingReasons(input *RebalanceInput) []string {
+	if input.Request.Strategy != "" && input.Request.Strategy != rebalanceStrategyTargetZ2 && input.Request.Strategy != RebalanceStrategyAdaptiveBidirectional {
+		return []string{"unsupported rebalance strategy: " + input.Request.Strategy}
+	}
+
+	return nil
+}
+
+func rebalanceConstraintBlockingReasons(input *RebalanceInput) []string {
+	var reasons []string
+	if input.Constraints.TargetTolerance == 0 {
+		reasons = append(reasons, "target tolerance requires historical load variability or explicit input")
+	}
+	if input.Constraints.Z2IF == 0 {
+		reasons = append(reasons, "intensity target requires sport power zones, historical intensity, or explicit input")
+	}
+	if input.Constraints.MinSessionMinutes == 0 || input.Constraints.DurationStepMinutes == 0 {
+		reasons = append(reasons, "duration constraints require history or explicit input")
+	}
+
+	return reasons
+}
+
+func rebalanceContext(input *RebalanceInput, targets *RebalanceTargets, warnings []string) RebalanceContext {
+	context := RebalanceContext{FTP: rebalanceFTP(input), Warnings: warnings}
+	if targets != nil {
+		context.DynamicTargets = *targets
+	}
 	if input.SportSettings != nil {
 		context.LTHR = input.SportSettings.LTHR
 		context.MaxHR = input.SportSettings.MaxHR
@@ -909,7 +1121,10 @@ func isImmutableEvent(event *Event, input *RebalanceInput) bool {
 	if date == "" {
 		return true
 	}
-	if input.Constraints.KeepCompleted && input.NowDate != "" && date <= input.NowDate && !input.Constraints.AllowToday {
+	if completedRebalanceDates(input)[date] {
+		return true
+	}
+	if rebalanceDateLockedByTime(input, date) {
 		return true
 	}
 	return strings.EqualFold(event.Category, planTargetCategory) || isRaceEventCategory(event.Category)
@@ -938,20 +1153,6 @@ func rebalanceEventLoad(event *Event, input *RebalanceInput) int {
 	return EstimatePlannedLoad(&doc, rebalanceFTP(input)).TrainingLoad
 }
 
-func classifyRebalanceEvent(event *Event) string {
-	if event.Intensity >= planTempoIntensity {
-		return "tempo_threshold"
-	}
-	if event.MovingTime >= longRideSeconds(RebalanceTargets{}) {
-		return "long_endurance"
-	}
-	if event.Intensity > 0 && event.Intensity <= planRecoveryIntensity {
-		return "recovery"
-	}
-
-	return "aerobic"
-}
-
 func dateAllowed(input *RebalanceInput, date string) bool {
 	day := rebalanceWeekday(date)
 	allowed := daySet(input.Constraints.AllowedDays)
@@ -964,7 +1165,11 @@ func dateAllowed(input *RebalanceInput, date string) bool {
 }
 
 func dateLocked(input *RebalanceInput, date string) bool {
-	return input.Constraints.KeepCompleted && input.NowDate != "" && date <= input.NowDate && !input.Constraints.AllowToday
+	if completedRebalanceDates(input)[date] {
+		return true
+	}
+
+	return rebalanceDateLockedByTime(input, date)
 }
 
 func effectiveRebalanceIF(input *RebalanceInput) float64 {
@@ -989,13 +1194,18 @@ func constrainedRebalanceIF(input *RebalanceInput, base float64) float64 {
 	return round3(intensity)
 }
 
-func durationForLoad(load int, intensity float64) int {
+func durationForLoad(input *RebalanceInput, load int, intensity float64) int {
 	if load <= 0 || intensity <= 0 {
 		return 0
 	}
 	hours := float64(load) / (rebalanceSportZoneDivisor * intensity * intensity)
 	minutes := int(math.Round(hours * rebalanceMinutesPerHour))
-	minutes = roundMinutesToStep(maxInt(minutes, rebalanceMinSessionMinutes), rebalanceDescriptionStepMinutes)
+	minMinutes := input.Constraints.MinSessionMinutes
+	stepMinutes := input.Constraints.DurationStepMinutes
+	if minMinutes == 0 || stepMinutes == 0 {
+		return 0
+	}
+	minutes = roundMinutesToStep(maxInt(minutes, minMinutes), stepMinutes)
 
 	return minutes * rebalanceSecondsPerMinute
 }
@@ -1023,8 +1233,138 @@ func (session *RebalanceSession) dateTimeLocal() string {
 	if session.Date == "" {
 		return ""
 	}
+	if session.StartTime != "" {
+		return session.Date + "T" + session.StartTime + ":00"
+	}
 
-	return session.Date + "T00:00:00"
+	return session.Date
+}
+
+func sessionType(session *RebalanceSession) string {
+	return session.SportType
+}
+
+func sessionTarget(session *RebalanceSession) string {
+	return session.WorkoutTarget
+}
+
+func rebalanceSessionStartTime(input *RebalanceInput, slot *rebalanceSlot) string {
+	if slot.event != nil {
+		return eventTimeOnly(slot.event.StartDateLocal)
+	}
+	if input.Constraints.StartTime != "" {
+		return input.Constraints.StartTime
+	}
+
+	return historicalStartTime(input.Activities, rebalanceWeekday(slot.date))
+}
+
+func rebalanceSessionStartTimeSource(input *RebalanceInput, slot *rebalanceSlot) string {
+	if slot.event != nil {
+		return "existing_event_local_time"
+	}
+	if input.Constraints.StartTime != "" {
+		return "explicit_start_time"
+	}
+	if historicalStartTime(input.Activities, rebalanceWeekday(slot.date)) != "" {
+		return "historical_same_weekday_median_start_time_mad_filtered"
+	}
+
+	return ""
+}
+
+func rebalanceSessionSportType(input *RebalanceInput, slot *rebalanceSlot) string {
+	if slot.event != nil && slot.event.Type != "" {
+		return slot.event.Type
+	}
+
+	return input.Constraints.SportType
+}
+
+func rebalanceSessionSportTypeSource(input *RebalanceInput, slot *rebalanceSlot) string {
+	if slot.event != nil && slot.event.Type != "" {
+		return "existing_event_type"
+	}
+	if input.Constraints.SportType != "" {
+		return "explicit_sport_type"
+	}
+
+	return ""
+}
+
+func rebalanceSessionWorkoutTarget(input *RebalanceInput, slot *rebalanceSlot) string {
+	if slot.event != nil && slot.event.Target != "" {
+		return slot.event.Target
+	}
+	if input.Constraints.WorkoutTarget != "" {
+		return input.Constraints.WorkoutTarget
+	}
+
+	return ""
+}
+
+func rebalanceSessionWorkoutTargetSource(input *RebalanceInput, slot *rebalanceSlot) string {
+	if slot.event != nil && slot.event.Target != "" {
+		return "existing_event_target"
+	}
+	if input.Constraints.WorkoutTarget != "" {
+		return "explicit_workout_target"
+	}
+
+	return ""
+}
+
+func rebalanceSessionIntensitySource(input *RebalanceInput) string {
+	if input.Constraints.Z2IF > 0 {
+		return "explicit_or_normalized_z2_if"
+	}
+
+	return DynamicRebalanceTargets(input).Source
+}
+
+func rebalanceSessionDurationSource(input *RebalanceInput) string {
+	if input.Constraints.MinSessionMinutes > 0 && input.Constraints.DurationStepMinutes > 0 {
+		return "target_load_from_if_with_explicit_or_derived_duration_constraints"
+	}
+
+	return ""
+}
+
+func rebalanceAllocationSource(input *RebalanceInput, slot *rebalanceSlot) string {
+	if input.Constraints.AllocationBasis == rebalanceAllocationExplicit {
+		return "explicit_equal"
+	}
+	if slot.event != nil {
+		return "existing_mutable_event_load_shape"
+	}
+	if len(input.Activities) > 0 {
+		return "historical_weekday_load_distribution"
+	}
+
+	return ""
+}
+
+type rebalanceClassificationDecision struct {
+	label  string
+	source string
+}
+
+func classifyGeneratedRebalanceSession(input *RebalanceInput, durationSeconds int, intensity float64) rebalanceClassificationDecision {
+	targets := DynamicRebalanceTargets(input)
+	if input.Constraints.Z1IF > 0 && intensity <= input.Constraints.Z1IF {
+		return rebalanceClassificationDecision{label: plannedStepKindRecovery, source: "dynamic_z1_if_threshold"}
+	}
+	if targets.LongRideMinutes > 0 && durationSeconds >= targets.LongRideMinutes*rebalanceSecondsPerMinute {
+		return rebalanceClassificationDecision{label: "long_endurance", source: "historical_duration_distribution"}
+	}
+	if input.Constraints.Z2IF > 0 && intensity > input.Constraints.Z2IF {
+		return rebalanceClassificationDecision{label: "tempo_threshold", source: "dynamic_z2_if_threshold"}
+	}
+	if intensity > 0 {
+		return rebalanceClassificationDecision{label: plannedClassificationZ2, source: "dynamic_endurance_if_band"}
+	}
+
+	return rebalanceClassificationDecision{label: unknownState, source: "missing_classification_basis"}
 }
 
 func wattsRange(input *RebalanceInput, intensity float64) string {
@@ -1067,20 +1407,29 @@ func historicalRebalanceTargets(activities []Activity) (RebalanceTargets, bool) 
 		}
 	}
 	filtered := robustFilteredFloats(intensities)
-	if len(filtered) == 0 {
+	if len(filtered) < 3 {
 		return RebalanceTargets{}, false
 	}
 	z2 := medianFloat64(filtered)
+	z1Candidates := make([]float64, 0, len(filtered))
+	for _, intensity := range filtered {
+		if intensity <= z2 {
+			z1Candidates = append(z1Candidates, intensity)
+		}
+	}
+	if len(z1Candidates) == 0 {
+		return RebalanceTargets{}, false
+	}
 
 	return RebalanceTargets{
-		Z1IF:   round3(z2 * rebalanceHistoricalZ1Multiplier),
+		Z1IF:   round3(medianFloat64(z1Candidates)),
 		Z2IF:   round3(z2),
 		Source: "recent_activity_intensity_median_mad_filtered",
 	}, true
 }
 
-func fallbackRebalanceTargets() RebalanceTargets {
-	return RebalanceTargets{Z1IF: rebalanceFallbackZ1IF, Z2IF: rebalanceFallbackZ2IF, Source: "fallback_no_sport_zones_or_history"}
+func missingRebalanceTargets() RebalanceTargets {
+	return RebalanceTargets{Source: "missing_intensity_basis"}
 }
 
 func explicitOrDynamicMax(input *RebalanceInput, z2 float64) float64 {
@@ -1143,6 +1492,152 @@ func dynamicDailyLoadLimit(activities []Activity) int {
 	return int(math.Round(median + madFloat64(filtered, median)))
 }
 
+func dynamicTargetTolerance(activities []Activity) int {
+	loadsByWeek := map[string]int{}
+	for index := range activities {
+		date := activityDate(&activities[index])
+		if date == "" || activities[index].TrainingLoad <= 0 {
+			continue
+		}
+		week := isoWeekKeyFromDate(date)
+		if week != "" {
+			loadsByWeek[week] += activities[index].TrainingLoad
+		}
+	}
+	loads := make([]float64, 0, len(loadsByWeek))
+	for _, load := range loadsByWeek {
+		if load > 0 {
+			loads = append(loads, float64(load))
+		}
+	}
+	filtered := robustFilteredFloats(loads)
+	if len(filtered) < 3 {
+		return 0
+	}
+	median := medianFloat64(filtered)
+
+	return int(math.Round(madFloat64(filtered, median)))
+}
+
+func rebalanceTargetToleranceSource(input *RebalanceInput) string {
+	if input == nil {
+		return ""
+	}
+	if derived := dynamicTargetTolerance(input.Activities); derived > 0 && derived == input.Constraints.TargetTolerance {
+		return "historical_weekly_load_mad"
+	}
+	if input.Constraints.TargetTolerance > 0 {
+		return "explicit_target_tolerance"
+	}
+
+	return ""
+}
+
+func dynamicMinSessionMinutes(activities []Activity, events []Event) int {
+	durations := rebalanceDurationsMinutes(activities, events)
+	filtered := robustFilteredFloats(durations)
+	if len(filtered) < 3 {
+		return 0
+	}
+	minimum := int(math.Round(filtered[0]))
+	for _, duration := range filtered[1:] {
+		minimum = minInt(minimum, int(math.Round(duration)))
+	}
+
+	return minimum
+}
+
+func dynamicDurationStepMinutes(activities []Activity, events []Event) int {
+	durations := rebalanceDurationsMinutes(activities, events)
+	filtered := robustFilteredFloats(durations)
+	if len(filtered) < 3 {
+		return 0
+	}
+	step := 0
+	for _, duration := range filtered {
+		minutes := int(math.Round(duration))
+		if minutes <= 0 {
+			continue
+		}
+		if step == 0 {
+			step = minutes
+			continue
+		}
+		step = gcdInt(step, minutes)
+	}
+
+	return step
+}
+
+func rebalanceDurationsMinutes(activities []Activity, events []Event) []float64 {
+	durations := make([]float64, 0, len(activities)+len(events))
+	for index := range activities {
+		if activities[index].MovingTime > 0 {
+			durations = append(durations, float64(activities[index].MovingTime/rebalanceSecondsPerMinute))
+		}
+	}
+	for index := range events {
+		if events[index].MovingTime > 0 && isWorkoutEvent(&events[index]) {
+			durations = append(durations, float64(events[index].MovingTime/rebalanceSecondsPerMinute))
+		}
+	}
+
+	return durations
+}
+
+func historicalStartTime(activities []Activity, weekday string) string {
+	var minutes []float64
+	for index := range activities {
+		date := activityDate(&activities[index])
+		if date == "" || len(activities[index].StartDateLocal) < len("2006-01-02T15:04") {
+			continue
+		}
+		if weekday != "" && rebalanceWeekday(date) != weekday {
+			continue
+		}
+		minute := localTimeMinutes(activities[index].StartDateLocal)
+		if minute >= 0 {
+			minutes = append(minutes, float64(minute))
+		}
+	}
+	filtered := robustFilteredFloats(minutes)
+	if len(filtered) < 3 {
+		return ""
+	}
+
+	return minutesToLocalTime(int(math.Round(medianFloat64(filtered))))
+}
+
+func localTimeMinutes(value string) int {
+	if len(value) < len("2006-01-02T15:04") {
+		return -1
+	}
+	hour, hourErr := strconv.Atoi(value[11:13])
+	minute, minuteErr := strconv.Atoi(value[14:16])
+	if hourErr != nil || minuteErr != nil {
+		return -1
+	}
+
+	return hour*rebalanceMinutesPerHour + minute
+}
+
+func minutesToLocalTime(minutes int) string {
+	hour := minutes / rebalanceMinutesPerHour
+	minute := minutes % rebalanceMinutesPerHour
+
+	return fmt.Sprintf("%02d:%02d", hour, minute)
+}
+
+func isoWeekKeyFromDate(value string) string {
+	date, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return ""
+	}
+	year, week := date.ISOWeek()
+
+	return fmt.Sprintf("%04d-W%02d", year, week)
+}
+
 func robustFilteredFloats(values []float64) []float64 {
 	if len(values) < rebalanceDescriptionStepMinutes {
 		return append([]float64(nil), values...)
@@ -1189,17 +1684,10 @@ func madFloat64(values []float64, median float64) float64 {
 	return medianFloat64(deviations)
 }
 
-func rebalanceScore(evaluation *RebalanceEvaluation, warningCount int) int {
-	score := rebalanceScoreStart - absInt(evaluation.TargetDelta)*rebalanceScoreDeltaPenalty
-	score -= warningCount * rebalanceScoreWarningPenalty
-	if !evaluation.Feasible {
-		score -= rebalanceScoreInfeasiblePenalty
+func longRideSeconds(targets *RebalanceTargets) int {
+	if targets == nil {
+		return 0
 	}
-
-	return score
-}
-
-func longRideSeconds(targets RebalanceTargets) int {
 	if targets.LongRideMinutes > 0 {
 		return targets.LongRideMinutes * rebalanceSecondsPerMinute
 	}
@@ -1213,6 +1701,14 @@ func eventDateOnly(value string) string {
 	}
 
 	return value
+}
+
+func eventTimeOnly(value string) string {
+	if len(value) >= len("2006-01-02T15:04") {
+		return value[11:16]
+	}
+
+	return ""
 }
 
 func rebalanceWeekday(date string) string {
@@ -1297,4 +1793,69 @@ func minInt(left, right int) int {
 	}
 
 	return right
+}
+
+func gcdInt(left, right int) int {
+	for right != 0 {
+		left, right = right, left%right
+	}
+	if left < 0 {
+		return -left
+	}
+
+	return left
+}
+
+func hasMutableEventType(events []Event) bool {
+	for index := range events {
+		if isWorkoutEvent(&events[index]) && events[index].Type != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasMutableEventTarget(events []Event) bool {
+	for index := range events {
+		if isWorkoutEvent(&events[index]) && events[index].Target != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func proposalHasNonCancelType(proposal *RebalanceProposalFile) bool {
+	for index := range proposal.Operations {
+		if proposal.Operations[index].Action != RebalanceActionCancel && proposal.Operations[index].Body.Type != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func proposalHasNonCancelTarget(proposal *RebalanceProposalFile) bool {
+	for index := range proposal.Operations {
+		if proposal.Operations[index].Action != RebalanceActionCancel && proposal.Operations[index].Body.Target != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func rebalanceDateLockedByTime(input *RebalanceInput, date string) bool {
+	if !input.Constraints.KeepCompleted || input.NowDate == "" {
+		return false
+	}
+	if date < input.NowDate {
+		return !input.Constraints.AllowPast
+	}
+	if date == input.NowDate {
+		return !input.Constraints.AllowToday
+	}
+
+	return false
 }

@@ -48,7 +48,8 @@ icu analysis workout i123
 icu workouts calculate --ftp 300 --desc "- 60m 70%"
 
 # Dry-run an editable calendar rebalance proposal, then apply it
-icu rebalance --dry-run --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28
+icu rebalance --dry-run --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal
+icu rebalance approve --file rebalance.json --reason "coach override" --target-load 380 --level 0.7
 icu rebalance accept --file rebalance.json
 
 # Diagnose auth/config resolution without exposing the secret
