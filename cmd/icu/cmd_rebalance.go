@@ -22,13 +22,14 @@ func registerRebalanceCommands(registry *CommandRegistry) {
 func rebalanceDryRunCommand() *Command {
 	return &Command{
 		Name: "",
-		Usage: "rebalance --dry-run --file PATH --oldest DATE --newest DATE " +
+		Usage: "rebalance show --file PATH --oldest DATE --newest DATE " +
 			"[--target-load N] [--target-tolerance N] [--type SPORT] [--target TARGET] " +
 			"[--start-time HH:MM] [--min-session-minutes N] [--duration-step-minutes N] " +
 			"[--allocation-basis explicit_equal] [--allow-today] [--allow-past] " +
 			"[--wellness-lookback-days N] [--now-date DATE]",
 		Description: "Write an editable weekly load rebalance proposal without mutating Intervals.icu.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			flags["dry-run"] = "true"
 			input, err := readRebalanceInput(flags, client)
 			if err != nil {
 				return err
@@ -58,9 +59,14 @@ func rebalanceAcceptCommand() *Command {
 				return errors.New("outside-envelope proposal requires `icu rebalance approve --file --reason --target-load --level` before accept")
 			}
 			if proposal.Approve != nil {
-				check := icu.ComputeRebalanceApprove(&proposal, proposal.Approve.Reason, proposal.Approve.ProvidedLimits)
+				checkProposal := proposal
+				applyApprovedLimits(&checkProposal)
+				check := icu.ComputeRebalanceApprove(&checkProposal, proposal.Approve.Reason, proposal.Approve.ProvidedLimits)
 				if check.RecalcHash != "" && check.RecalcHash != proposal.Approve.RecalcHash {
 					return errors.New("rebalance approval hash mismatch: proposal changed after approve")
+				}
+				if check.LimitsHash != "" && check.LimitsHash != proposal.Approve.LimitsHash {
+					return errors.New("rebalance approval limits mismatch: approved limits changed after approve")
 				}
 			}
 			proposal.Apply = applyRebalanceProposal(client, &proposal)
@@ -74,9 +80,6 @@ func rebalanceAcceptCommand() *Command {
 }
 
 func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.RebalanceInput, error) {
-	if !BoolFlag(flags, "dry-run") {
-		return icu.RebalanceInput{}, errMissing("dry-run")
-	}
 	oldest := icu.StringFlag(flags, "oldest", "")
 	newest := icu.StringFlag(flags, "newest", "")
 	if oldest == "" {
@@ -87,6 +90,9 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 	}
 	if _, ok := flags["max-hr"]; ok {
 		return icu.RebalanceInput{}, errors.New("max-hr is not supported for power rebalance sessions")
+	}
+	if target := icu.StringFlag(flags, "target", ""); target != "" && target != "POWER" {
+		return icu.RebalanceInput{}, fmt.Errorf("target %q is not supported for rebalance sessions; use POWER", target)
 	}
 	activities, err := readRebalanceActivities(client, oldest, newest, flags)
 	if err != nil {
@@ -142,22 +148,34 @@ func rebalanceApproveCommand() *Command {
 			if reason == "" {
 				return errMissing("reason")
 			}
-			if flags["target-load"] != "" {
-				if load, err := strconv.Atoi(flags["target-load"]); err == nil {
-					proposal.Constraints.TargetLoad = load
-				}
-			}
-			if flags["level"] != "" {
-				proposal.Constraints.Level = flags["level"]
-			}
-			if flags["mode"] != "" {
-				proposal.Constraints.Mode = flags["mode"]
-			}
 			providedLimits := flags["target-load"] != "" && flags["level"] != ""
 			if proposal.Envelope != nil && proposal.Envelope.OutsideEnvelope && !providedLimits {
 				return errors.New("baseline outside envelope: approve requires explicit --target-load and --level limits")
 			}
+			approvedTargetLoad := proposal.Constraints.TargetLoad
+			if flags["target-load"] != "" {
+				if load, err := strconv.Atoi(flags["target-load"]); err == nil {
+					approvedTargetLoad = load
+				}
+			}
+			approvedLevel := proposal.Constraints.Level
+			if flags["level"] != "" {
+				approvedLevel = flags["level"]
+			}
+			approvedMode := proposal.Constraints.Mode
+			if flags["mode"] != "" {
+				approvedMode = flags["mode"]
+			}
+			checkProposal := proposal
+			checkProposal.Constraints.TargetLoad = approvedTargetLoad
+			checkProposal.Constraints.Level = approvedLevel
+			checkProposal.Constraints.Mode = approvedMode
 			approve := icu.ComputeRebalanceApprove(&proposal, reason, providedLimits)
+			approve.TargetLoad = approvedTargetLoad
+			approve.Level = approvedLevel
+			approve.Mode = approvedMode
+			approve.RecalcHash = icu.ComputeRebalanceApprove(&checkProposal, reason, providedLimits).RecalcHash
+			approve.LimitsHash = icu.ComputeRebalanceApprove(&checkProposal, reason, providedLimits).LimitsHash
 			proposal.Approve = &approve
 			if err := writeRebalanceProposal(flags, &proposal); err != nil {
 				return err
@@ -375,6 +393,21 @@ func countRebalanceApplyResult(summary *icu.RebalanceApplySummary, result icu.Re
 		summary.Skipped++
 	default:
 		summary.Failed++
+	}
+}
+
+func applyApprovedLimits(proposal *icu.RebalanceProposalFile) {
+	if proposal == nil || proposal.Approve == nil {
+		return
+	}
+	if proposal.Approve.TargetLoad > 0 {
+		proposal.Constraints.TargetLoad = proposal.Approve.TargetLoad
+	}
+	if proposal.Approve.Level != "" {
+		proposal.Constraints.Level = proposal.Approve.Level
+	}
+	if proposal.Approve.Mode != "" {
+		proposal.Constraints.Mode = proposal.Approve.Mode
 	}
 }
 

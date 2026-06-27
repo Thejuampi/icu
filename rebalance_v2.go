@@ -113,6 +113,9 @@ func (p *RebalanceProjectionReport) HasErrors() bool {
 type RebalanceApprove struct {
 	Reason         string `json:"reason,omitempty"`
 	ProvidedLimits bool   `json:"providedLimits"`
+	TargetLoad     int    `json:"targetLoad,omitempty"`
+	Level          string `json:"level,omitempty"`
+	Mode           string `json:"mode,omitempty"`
 	RecalcHash     string `json:"recalcHash,omitempty"`
 	LimitsHash     string `json:"limitsHash,omitempty"`
 	Verified       bool   `json:"verified"`
@@ -821,11 +824,17 @@ const rebalanceApproveHashLength = 12
 // when the user supplied explicit target-load and level limits alongside the
 // reason. The returned hashes are short SHA-256 prefixes.
 func ComputeRebalanceApprove(proposal *RebalanceProposalFile, reason string, providedLimits bool) RebalanceApprove {
-	approve := RebalanceApprove{Reason: reason, ProvidedLimits: providedLimits}
+	approve := RebalanceApprove{
+		Reason:         reason,
+		ProvidedLimits: providedLimits,
+		TargetLoad:     proposal.Constraints.TargetLoad,
+		Level:          proposal.Constraints.Level,
+		Mode:           proposal.Constraints.Mode,
+	}
 	outside := proposal.Envelope != nil && proposal.Envelope.OutsideEnvelope
 	approve.Verified = (reason != "" && (!outside || providedLimits))
 	approve.RecalcHash = rebalanceApproveFingerprint(rebalanceApprovePolicyFingerprint(proposal), rebalanceApproveEnvelopeFingerprint(proposal))
-	approve.LimitsHash = rebalanceApproveFingerprint(proposal.Constraints.Level + "|" + strconv.Itoa(proposal.Constraints.TargetLoad) + "|" + proposal.Constraints.Mode)
+	approve.LimitsHash = rebalanceApproveFingerprint(approve.Level + "|" + strconv.Itoa(approve.TargetLoad) + "|" + approve.Mode)
 	return approve
 }
 

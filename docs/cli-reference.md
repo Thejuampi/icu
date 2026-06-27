@@ -203,9 +203,9 @@ Invoke these commands as `icu activity <id> <action>`.
 ## rebalance
 
 - `show`
-  Invocation: `icu rebalance --dry-run --file PATH --oldest DATE --newest DATE [--target-load N] [--target-tolerance N] [--now-date DATE] [--type SPORT] [--target TARGET] [--start-time HH:MM] [--min-session-minutes N] [--duration-step-minutes N] [--allocation-basis explicit_equal] [--allow-today] [--allow-past] [--wellness-lookback-days N] [--max-intensity IF] [--max-watts WATTS]`
-  Notes: Top-level dry-run command. It fetches completed activities, calendar events, sport settings only when `--type` is explicitly provided, and wellness context, then writes a pretty JSON proposal to `--file`. It does not mutate Intervals.icu. The proposal includes baseline load, dynamic targets, selected operations, validation, source hashes for update/cancel operations, and per-session decision sources for sport type, target type, time, allocation, intensity, duration, and classification. `--max-intensity` and `--max-watts` cap generated POWER workout intensity; `--max-hr` is rejected because rebalance does not generate HR-target sessions. Rebalance does not use hidden fallback IF, sport type, target type, tolerance, duration, time, or allocation defaults; missing sport settings/history must be supplied through explicit flags or the proposal is blocking. `--wellness-lookback-days` defaults to `42` as the analysis window used to fetch wellness context.
-  Example: `icu rebalance --dry-run --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal`
+  Invocation: `icu rebalance show --file PATH --oldest DATE --newest DATE [--target-load N] [--target-tolerance N] [--now-date DATE] [--type SPORT] [--target POWER] [--start-time HH:MM] [--min-session-minutes N] [--duration-step-minutes N] [--allocation-basis explicit_equal] [--allow-today] [--allow-past] [--wellness-lookback-days N] [--max-intensity IF] [--max-watts WATTS]`
+  Notes: Dry-run command. It fetches completed activities, calendar events, sport settings only when `--type` is explicitly provided, and wellness context, then writes a pretty JSON proposal to `--file`. It does not mutate Intervals.icu. The proposal includes baseline load, dynamic targets, selected operations, validation, source hashes for update/cancel operations, and per-session decision sources for sport type, target type, time, allocation, intensity, duration, and classification. `--max-intensity` and `--max-watts` cap generated POWER workout intensity; `--max-hr` is rejected because rebalance does not generate HR-target sessions, and `--target` must be `POWER` when provided. Rebalance does not use hidden fallback IF, sport type, target type, tolerance, duration, time, or allocation defaults; missing sport settings/history must be supplied through explicit flags or the proposal is blocking. `--wellness-lookback-days` defaults to `42` as the analysis window used to fetch wellness context.
+  Example: `icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal`
 
 - `accept`
   Invocation: `icu rebalance accept --file PATH`
@@ -214,7 +214,7 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `approve`
   Invocation: `icu rebalance approve --file PATH --reason TEXT [--target-load N] [--level X] [--mode MODE]`
-  Notes: Binds an outside-envelope proposal to an explicit rationale and explicit limits. `accept` recomputes the approval fingerprint and rejects drifted proposals.
+  Notes: Binds an outside-envelope proposal to an explicit rationale and explicit limits. Explicit approval limits are stored under `approve` so the original proposal constraints and evaluations remain unchanged; `accept` recomputes the approval fingerprint and rejects drifted proposals.
   Example: `icu rebalance approve --file rebalance.json --reason "coach override" --target-load 380 --level 0.7`
 
 ## athlete

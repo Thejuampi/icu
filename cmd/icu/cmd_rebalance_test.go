@@ -243,12 +243,16 @@ func TestRebalanceConstraintsFromFlagsLeavesTypeAndTargetEmptyWithoutFlags(t *te
 func TestRebalanceDryRunRequiresDryRunFlag(t *testing.T) {
 	t.Parallel()
 
-	_, client := rebalanceTestRegistryClient(t)
+	registry, client := rebalanceTestRegistryClient(t)
+	cmd, ok := registry.Lookup("rebalance", "show")
+	if !ok {
+		t.Fatalf("missing rebalance show command")
+	}
 
-	_, err := readRebalanceInput(map[string]string{}, client)
+	err := cmd.Run(nil, map[string]string{}, client)
 
 	if err == nil {
-		t.Fatalf("err = nil, want missing dry-run")
+		t.Fatalf("err = nil, want missing oldest")
 	}
 }
 
@@ -257,10 +261,23 @@ func TestRebalanceDryRunRequiresOldestFlag(t *testing.T) {
 
 	_, client := rebalanceTestRegistryClient(t)
 
-	_, err := readRebalanceInput(map[string]string{"dry-run": "true"}, client)
+	_, err := readRebalanceInput(map[string]string{}, client)
 
 	if err == nil {
 		t.Fatalf("err = nil, want missing oldest")
+	}
+}
+
+func TestRebalanceDryRunRejectsUnsupportedTarget(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["target"] = "HR"
+
+	_, err := readRebalanceInput(flags, client)
+	if err == nil {
+		t.Fatalf("err = nil, want unsupported target")
 	}
 }
 
@@ -440,6 +457,36 @@ func TestRebalanceApproveBindsHashAndVerifies(t *testing.T) {
 	if proposal.Approve.RecalcHash == "" {
 		t.Fatalf("missing recalcHash")
 	}
+	if proposal.Approve.TargetLoad != 0 || proposal.Approve.Level != "" || proposal.Approve.Mode != "" {
+		t.Fatalf("approve limits = %+v, want inherited proposal values only when provided", proposal.Approve)
+	}
+}
+
+func TestRebalanceApproveStoresExplicitLimitsWithoutMutatingConstraints(t *testing.T) {
+	t.Parallel()
+
+	registry, _ := rebalanceTestRegistryClient(t)
+	approve, _ := registry.Lookup("rebalance", "approve")
+	file := writeRebalanceTestProposal(t, &icu.RebalanceProposalFile{
+		SchemaVersion: icu.RebalanceSchemaVersion,
+		Constraints:   icu.RebalanceConstraints{TargetLoad: 354, Level: "0.5", Mode: icu.RebalanceModePreserveStructure},
+		Policy:        &icu.RebalancePolicy{Strategy: icu.RebalanceStrategyAdaptiveBidirectional, Level: "0.5", Mode: icu.RebalanceModePreserveStructure, CurveMethod: icu.RebalanceCurveMethodPCHIP},
+		Envelope:      &icu.RebalanceEnvelopeReport{Envelope: icu.RebalanceEnvelope{Low: fRat(200), Current: fRat(300), High: fRat(400)}, LowSource: "data_robust_fence", HighSource: "data_robust_fence"},
+		Baseline:      icu.RebalanceEvaluation{TargetLoad: 354},
+		Options:       []icu.RebalanceOption{{Evaluation: icu.RebalanceEvaluation{TargetLoad: 354}}},
+	})
+
+	err := approve.Run(nil, map[string]string{"file": file, "reason": "override", "target-load": "380", "level": "0.7"}, nil)
+	if err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	proposal := readRebalanceTestProposal(t, file)
+	if proposal.Constraints.TargetLoad != 354 {
+		t.Fatalf("constraints target load = %d, want unchanged 354", proposal.Constraints.TargetLoad)
+	}
+	if proposal.Approve == nil || proposal.Approve.TargetLoad != 380 || proposal.Approve.Level != "0.7" {
+		t.Fatalf("approve = %+v, want explicit stored limits", proposal.Approve)
+	}
 }
 
 func TestRebalanceApproveOutsideEnvelopeRequiresLimits(t *testing.T) {
@@ -510,6 +557,46 @@ func TestRebalanceAcceptRejectsApprovalHashMismatch(t *testing.T) {
 	err := accept.Run(nil, map[string]string{"file": file}, nil)
 	if err == nil {
 		t.Fatalf("err = nil, want approval hash mismatch")
+	}
+}
+
+func TestRebalanceAcceptRejectsApprovalLimitsMismatch(t *testing.T) {
+	t.Parallel()
+
+	registry, _ := rebalanceTestRegistryClient(t)
+	accept, _ := registry.Lookup("rebalance", "accept")
+	approvedProposal := icu.RebalanceProposalFile{
+		Constraints: icu.RebalanceConstraints{
+			TargetLoad: 380,
+			Level:      "0.7",
+			Mode:       icu.RebalanceModePreserveStructure,
+		},
+		Envelope: &icu.RebalanceEnvelopeReport{
+			Envelope: icu.RebalanceEnvelope{Low: fRat(200), Current: fRat(300), High: fRat(320)},
+		},
+	}
+	approvedHash := icu.ComputeRebalanceApprove(&approvedProposal, "override", true).RecalcHash
+	file := writeRebalanceTestProposal(t, &icu.RebalanceProposalFile{
+		SchemaVersion: icu.RebalanceSchemaVersion,
+		Constraints:   icu.RebalanceConstraints{TargetLoad: 354, Level: "0.5", Mode: icu.RebalanceModePreserveStructure},
+		Envelope: &icu.RebalanceEnvelopeReport{
+			Envelope: icu.RebalanceEnvelope{Low: fRat(200), Current: fRat(300), High: fRat(320)},
+		},
+		Approve: &icu.RebalanceApprove{
+			Reason:         "override",
+			ProvidedLimits: true,
+			Verified:       true,
+			TargetLoad:     380,
+			Level:          "0.7",
+			Mode:           icu.RebalanceModePreserveStructure,
+			RecalcHash:     approvedHash,
+			LimitsHash:     "stale",
+		},
+	})
+
+	err := accept.Run(nil, map[string]string{"file": file}, nil)
+	if err == nil {
+		t.Fatalf("err = nil, want approval limits mismatch")
 	}
 }
 

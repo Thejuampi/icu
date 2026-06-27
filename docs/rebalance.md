@@ -5,7 +5,7 @@
 ## Dry Run
 
 ```bash
-icu rebalance --dry-run --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal
+icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal
 ```
 
 The dry run fetches activities, events, optional sport settings for the explicit `--type`, and wellness records. It writes pretty JSON to `--file` and does not mutate Intervals.icu.
@@ -47,6 +47,7 @@ icu rebalance approve --file rebalance.json --reason "coach override" --target-l
 ```
 
 `approve` binds an outside-envelope proposal to an explicit reason and explicit limits so `accept` can detect drift before mutating calendar events.
+The explicit override limits are stored under `approve` and do not rewrite the proposal's existing `constraints`, `baseline`, or `options`.
 
 Supported operation actions:
 
