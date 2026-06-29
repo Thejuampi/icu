@@ -168,7 +168,7 @@ Invoke these commands as `icu activity <id> <action>`.
 - `wellness`
   Invocation: `icu analysis wellness [--oldest DATE --newest DATE | --days N] [--fields CSV]`
   Defaults: `--days 28`
-  Notes: Default date ranges are calculated in UTC; use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
+  Notes: Default date ranges are calculated in UTC; use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`. HRV readiness uses a dynamic recent-vs-baseline comparison with robust z-score when enough samples exist; the raw latest/mean ratio is contextual only.
   Example: `icu analysis wellness --oldest 2026-04-20 --newest 2026-05-31`
 
 - `plan`
@@ -199,6 +199,23 @@ Invoke these commands as `icu activity <id> <action>`.
   Defaults: `--match-window-hours 24`, `--stream-types watts,heartrate,cadence`, `--sport-type` inferred from the activity type and falling back to `Ride`.
   Notes: Read-only JSON contract for planned-workout execution review. The command fetches the activity, detected intervals, raw streams, sport settings, and either the explicit `--event-id` or nearby resolved calendar events. It emits match confidence, planned workout steps, execution micro metrics, session/rep/step comparison, and warnings when plan, stream, interval, FTP, or LTHR data is missing.
   Example: `icu analysis workout i123 --calendar-id 1`
+
+## rebalance
+
+- `show`
+  Invocation: `icu rebalance show --file PATH --oldest DATE --newest DATE [--target-load N] [--target-tolerance N] [--now-date DATE] [--type SPORT] [--target POWER] [--start-time HH:MM] [--min-session-minutes N] [--duration-step-minutes N] [--allocation-basis explicit_equal] [--allow-today] [--allow-past] [--wellness-lookback-days N] [--max-intensity IF] [--max-watts WATTS]`
+  Notes: Dry-run command. It fetches completed activities, calendar events, sport settings only when `--type` is explicitly provided, and wellness context, then writes a pretty JSON proposal to `--file`. It does not mutate Intervals.icu. The proposal includes baseline load, dynamic targets, selected operations, validation, source hashes for update/cancel operations, and per-session decision sources for sport type, target type, time, allocation, intensity, duration, and classification. `--max-intensity` and `--max-watts` cap generated POWER workout intensity; `--max-hr` is rejected because rebalance does not generate HR-target sessions, and `--target` must be `POWER` when provided. Rebalance does not use hidden fallback IF, sport type, target type, tolerance, duration, time, or allocation defaults; missing sport settings/history must be supplied through explicit flags or the proposal is blocking. `--wellness-lookback-days` defaults to `42` as the analysis window used to fetch wellness context.
+  Example: `icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal`
+
+- `accept`
+  Invocation: `icu rebalance accept --file PATH`
+  Notes: Reads the edited proposal, validates schema and operations, verifies source hashes for update/cancel operations, applies pending `create`, `update`, and `cancel` operations, writes apply results back to the same file, and prints the apply summary.
+  Example: `icu rebalance accept --file rebalance.json`
+
+- `approve`
+  Invocation: `icu rebalance approve --file PATH --reason TEXT [--target-load N] [--level X] [--mode MODE]`
+  Notes: Binds an outside-envelope proposal to an explicit rationale and explicit limits. Explicit approval limits are stored under `approve` so the original proposal constraints and evaluations remain unchanged; `accept` recomputes the approval fingerprint and rejects drifted proposals.
+  Example: `icu rebalance approve --file rebalance.json --reason "coach override" --target-load 380 --level 0.7`
 
 ## athlete
 

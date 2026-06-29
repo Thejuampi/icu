@@ -46,6 +46,7 @@ Public changes are not done until the matching documentation is updated in the s
 - `README.md`: project entry point, install, quick start, auth precedence, top-level CLI surface, and doc links
 - `docs/cli-reference.md`: exhaustive CLI contract for resources, actions, flags, defaults, and command examples
 - `docs/analysis.md`: analysis command defaults, upstream inputs, output sections, interpretation, and limitations
+- `docs/rebalance.md`: dry-run/accept workflow for editable calendar load redistribution proposals
 - `docs/library.md`: usage-oriented guide for the reusable Go package
 - `docs/api/README.md`: OpenAPI snapshot role, provenance, and when to use it
 - `AGENTS.md`: contributor policy, quality gates, and documentation expectations
@@ -87,6 +88,22 @@ If the same URL pattern, flag parsing, or error handling appears twice, extract 
 - Every flag and command must map to an actual intervals.icu API endpoint.
 - No speculative features.
 
+### Dynamic Decision Rules
+
+Hardcoded physiological, readiness, training-load, workout-intensity, ramp-rate, durability, or planning thresholds are not allowed as decision rules. Fixed numbers are only acceptable when they are protocol constants, unit conversions, documented external API contracts, or explicit user-provided constraints for a single run.
+
+Decision rules must:
+- Derive thresholds from athlete-specific data, sport settings, recent history, event context, or explicit command inputs
+- Prefer moving baselines, rolling windows, robust statistics, and z-score/MAD-style outlier filtering over static cutoffs
+- Keep raw metrics and derived decision state separate in output so coaching layers can audit the decision
+- Label derived values with source fields and calculation methods
+- Treat missing or sparse data as lower confidence, not as permission to invent constants
+- Include edge-case handling for sparse history, stale data, outliers, abrupt baseline shifts, travel/illness, unusually high or low recent load, and already-completed sessions
+- Include tests that prove the rule responds correctly to representative historical scenarios and outliers
+- Include backtesting or replay-style tests against realistic sequences before the rule is trusted for planning decisions
+
+If a rule cannot be made dynamic with available data, expose it as an explicit user-configurable constraint and document that it is user-provided, not a model default. Do not silently bake it into the code.
+
 ## Testing Policy
 
 ### TDD Mandatory
@@ -100,6 +117,7 @@ RED → GREEN → REFACTOR. Write the failing test first, then implement.
 - HTTP tests use `httptest.NewServer` for the client.
 - Output tests use `bytes.Buffer` via `io.Writer` interface.
 - 1 assert per test (preferred). Use table-driven tests for multiple cases.
+- Dynamic decision rules must include edge-case and replay/backtesting coverage that demonstrates stable behavior across normal data, sparse data, outliers, and baseline shifts.
 
 ### Mutation Testing
 
@@ -132,6 +150,7 @@ All of the following must be true:
 - [ ] `gofumpt -w .` applied
 - [ ] Relevant docs updated in the same change
 - [ ] Documented examples verified against current CLI behavior
+- [ ] Dynamic decision rules avoid hidden hardcoded thresholds and include backtesting/edge-case coverage
 - [ ] Explicit note added when a change truly has no documentation impact
 - [ ] No API keys, tokens, or secrets in commits
 - [ ] No hacks, workarounds, or undocumented TODOs

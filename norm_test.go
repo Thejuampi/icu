@@ -223,3 +223,20 @@ func TestNormalizeStreamsNilData(t *testing.T) {
 		t.Fatalf("expected 1 stream (nil data skipped), got %d", len(got))
 	}
 }
+
+func TestNormalizeStreamsSkipsStreamWithNilElement(t *testing.T) {
+	t.Parallel()
+
+	raw := []icu.ActivityStream{
+		{Type: "cadence", Data: []any{nil, float64(80)}},
+		{Type: "heartrate", Data: []float64{100, 101}},
+	}
+
+	got, err := icu.NormalizeStreams(raw)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if _, ok := got["cadence"]; ok {
+		t.Fatal("cadence stream with nil element should be skipped")
+	}
+}

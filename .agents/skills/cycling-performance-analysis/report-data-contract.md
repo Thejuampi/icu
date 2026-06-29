@@ -18,7 +18,7 @@ Support status meanings:
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
-| HRV ratio, mean, latest, trend, samples | 42-day wellness HRV series | `icu analysis wellness` | supported |
+| HRV ratio, mean, latest, trend, samples, recent mean, baseline mean, robust z-score | 42-day wellness HRV series | `icu analysis wellness` | supported |
 | Resting HR and delta | 42-day wellness resting HR series | `icu analysis wellness` | supported |
 | Sleep score and coverage | 42-day wellness sleep fields | `icu analysis wellness` | supported |
 | Subjective wellness coverage | fatigue, stress, soreness, mood, motivation | `icu analysis wellness` | supported |

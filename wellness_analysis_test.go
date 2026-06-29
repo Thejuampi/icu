@@ -3,6 +3,7 @@ package icu_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -11,6 +12,17 @@ const (
 	testWellnessStartDate  = "2026-05-01"
 	testWellnessSecondDate = "2026-05-02"
 )
+
+func wellnessRecordWithHRV(dayOffset int, hrv float64) icu.Wellness {
+	date := time.Date(2026, time.May, dayOffset, 0, 0, 0, 0, time.UTC)
+
+	return icu.Wellness{
+		ID:         date.Format("2006-01-02"),
+		HRV:        hrv,
+		RestingHR:  50,
+		SleepScore: 85,
+	}
+}
 
 func TestAnalyzeWellnessComputesHRV(t *testing.T) {
 	t.Parallel()
@@ -80,6 +92,55 @@ func TestAnalyzeWellnessComputesPhysiologyState(t *testing.T) {
 
 	if got.State.State != "WATCH" || got.State.Confidence != "high" || got.Load.TSB != -14 {
 		t.Fatalf("State = %+v Load = %+v, want WATCH high TSB -14", got.State, got.Load)
+	}
+}
+
+func TestAnalyzeWellnessKeepsHRVOKWhenLatestRatioDropsButRecentMeanIsNormal(t *testing.T) {
+	t.Parallel()
+
+	var records []icu.Wellness
+	var day int
+	for day = 1; day <= 35; day++ {
+		records = append(records, wellnessRecordWithHRV(day, 44))
+	}
+	for day = 36; day <= 41; day++ {
+		records = append(records, wellnessRecordWithHRV(day, 44))
+	}
+	records = append(records, wellnessRecordWithHRV(42, 42))
+
+	got := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: "2026-05-01",
+		EndDate:   "2026-06-11",
+	})
+
+	if got.State.State != "OK" {
+		t.Fatalf("State = %+v, want OK", got.State)
+	}
+}
+
+func TestAnalyzeWellnessUsesRobustHRVZScoreWithBaselineOutlier(t *testing.T) {
+	t.Parallel()
+
+	var records []icu.Wellness
+	var day int
+	for day = 1; day <= 17; day++ {
+		records = append(records, wellnessRecordWithHRV(day, 49))
+	}
+	records = append(records, wellnessRecordWithHRV(18, 10))
+	for day = 19; day <= 35; day++ {
+		records = append(records, wellnessRecordWithHRV(day, 51))
+	}
+	for day = 36; day <= 42; day++ {
+		records = append(records, wellnessRecordWithHRV(day, 45))
+	}
+
+	got := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: "2026-05-01",
+		EndDate:   "2026-06-11",
+	})
+
+	if got.HRV.ZScore >= -1 {
+		t.Fatalf("HRV z-score = %f, want robust negative deviation", got.HRV.ZScore)
 	}
 }
 

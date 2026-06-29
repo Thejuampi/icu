@@ -34,8 +34,13 @@ vet:
 	go vet ./...
 
 mutation:
-	@echo "Mutation testing requires go-mutesting: go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest"
-	@# go-mutesting --exec "$(go test -exec)" ./...
+	@echo "Running mutation testing on functional core (auth.go, urls.go, output.go)"
+ifeq ($(OS),Windows_NT)
+	@powershell -NoProfile -Command "$$git = Get-Command git -ErrorAction SilentlyContinue; if (-not $$git) { throw 'git is required for mutation testing on Windows' }; $$gitRoot = Split-Path (Split-Path $$git.Source -Parent) -Parent; $$diffPath = Join-Path $$gitRoot 'usr\\bin'; if (Test-Path $$diffPath) { $$env:PATH = \"$$diffPath;$$env:PATH\" }; go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest; go-mutesting auth.go urls.go output.go"
+else
+	@go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
+	@go-mutesting auth.go urls.go output.go
+endif
 
 ci: fmt lint vet test-cover test-race build
 
