@@ -120,6 +120,7 @@ type RebalanceConstraints struct {
 	Note                string   `json:"note,omitempty"`
 	Level               string   `json:"level,omitempty"`
 	Mode                string   `json:"mode,omitempty"`
+	Approved            bool     `json:"approved,omitempty"`
 }
 
 type RebalanceContext struct {
@@ -425,7 +426,7 @@ func normalizeRebalanceInput(input *RebalanceInput) RebalanceInput {
 		working.Constraints.StartTime = historicalStartTime(working.Activities, "")
 	}
 	if working.Constraints.TargetLoad == 0 && working.Request.Strategy != RebalanceStrategyAdaptiveBidirectional {
-		baseline := rebalanceBaseline(&working)
+		baseline := RebalanceBaseline(&working)
 		working.Constraints.TargetLoad = baseline.WeeklyLoad
 	}
 
@@ -447,7 +448,7 @@ func mergeRebalanceDefaults(constraints, defaults *RebalanceConstraints) {
 }
 
 func buildRebalancePlan(input *RebalanceInput) rebalancePlan {
-	baseline := rebalanceBaseline(input)
+	baseline := RebalanceBaseline(input)
 	if reasons := rebalanceBlockingReasons(input); len(reasons) > 0 {
 		return rebalancePlan{baseline: baseline, targets: DynamicRebalanceTargets(input), warnings: reasons, targetLoad: input.Constraints.TargetLoad, plannedLoad: baseline.WeeklyLoad}
 	}
@@ -647,7 +648,7 @@ func buildRebalanceSession(input *RebalanceInput, slot *rebalanceSlot, load int)
 	}
 }
 
-func rebalanceBaseline(input *RebalanceInput) RebalanceEvaluation {
+func RebalanceBaseline(input *RebalanceInput) RebalanceEvaluation {
 	completed := completedRebalanceLoad(input)
 	completedDates := completedRebalanceDates(input)
 	var locked int

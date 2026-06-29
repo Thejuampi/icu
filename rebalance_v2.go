@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
 	"strconv"
@@ -20,7 +21,6 @@ const (
 	RebalanceCurveMethodPCHIP = "pchip_monotone_c1"
 	RebalancePolicySource     = "adaptive_bidirectional_level_envelope"
 	rebalancePercentScale     = 100
-	rebalanceMetricsTotal     = 6
 )
 
 // RebalanceWeeklyLoadSeries aggregates cycling activities before the scope week
@@ -144,44 +144,6 @@ func validRebalanceMode(mode string) bool {
 	}
 }
 
-type rebalanceMetricsSummary struct {
-	available int
-	total     int
-}
-
-func rebalanceMetricsAvailable(input *RebalanceInput) rebalanceMetricsSummary {
-	summary := rebalanceMetricsSummary{total: rebalanceMetricsTotal}
-	if len(input.Activities) > 0 {
-		summary.available++ // weekly load
-	}
-	for index := range input.Activities {
-		if input.Activities[index].Intensity > 0 {
-			summary.available++ // intensity
-			break
-		}
-	}
-	for index := range input.Activities {
-		if input.Activities[index].MovingTime > 0 {
-			summary.available++ // duration
-			break
-		}
-	}
-	if input.Wellness != nil && input.Wellness.Scope.Records > 0 {
-		summary.available++ // wellness/HRV
-	}
-	if input.Plan != nil {
-		summary.available++ // adaptation/plan context
-	}
-	for index := range input.Activities {
-		if input.Activities[index].RPE > 0 {
-			summary.available++ // perceived effort
-			break
-		}
-	}
-
-	return summary
-}
-
 // rebalanceRatFromInt builds a RebalanceRat from a plain int load.
 func rebalanceRatFromInt(value int) RebalanceRat {
 	return NewRebalanceRatFromInt(value, 1)
@@ -235,7 +197,7 @@ func buildRebalanceProposalV2(input *RebalanceInput) RebalanceProposalFile {
 	effectiveMax := rebalanceV2EffectiveMax(input)
 	proposal.Constraints.MaxIntensity = round3(effectiveMax)
 
-	outside := envelope.OutsideEnvelope
+	outside := envelope.OutsideEnvelope && !input.Constraints.Approved
 	baseline := proposal.Baseline
 	inflight := rebalanceV2Plan(input, &baseline, &envelope, target, level, outside)
 	proposal.Operations = inflight.operations
@@ -358,7 +320,7 @@ func rebalanceV2HistoryContext(
 	regime, regimeOK := DetectRebalanceRegime(series)
 	history := rebalanceV2History(input, series, &regime)
 	proposal.History = &history
-	proposal.Baseline = rebalanceBaseline(input)
+	proposal.Baseline = RebalanceBaseline(input)
 	if !regimeOK {
 		validation.Errors = append(validation.Errors, "insufficient prior history to derive a vigent regime; onboarding/calibration is separate from rebalance")
 	}
@@ -374,8 +336,7 @@ func rebalanceV2EnvelopeContext(
 	validation *RebalanceValidation,
 	proposal *RebalanceProposalFile,
 ) (RebalanceEnvelopeReport, bool) {
-	metrics := rebalanceMetricsAvailable(input)
-	envelope, envOK := BuildRebalanceEnvelope(regime, float64(baseline.WeeklyLoad), 0, metrics.available, metrics.total)
+	envelope, envOK := BuildRebalanceEnvelope(regime, input, float64(baseline.WeeklyLoad))
 	proposal.Envelope = &envelope
 	if envOK {
 		return envelope, true
@@ -495,14 +456,18 @@ func rebalanceV2Projection(
 	for index := range slots {
 		slot := &slots[index]
 		share := shares[index]
-		session, step, blocked := rebalanceV2BuildSession(input, slot, share, level, mode)
+		// Compensated distribution: carry forward accumulated residue
+		compensatedShare := share.Add(residual)
+		session, step, blocked := rebalanceV2BuildSession(input, slot, compensatedShare, level, mode)
 		inflight.sessions = append(inflight.sessions, session)
 		if blocked {
 			projection.Steps = append(projection.Steps, step)
 			continue
 		}
-		residual = residual.Add(rebalanceRatFromInt(step.AppliedLoad).Sub(step.ExactLoadRat))
-		errStep := rebalanceRatFromInt(step.AppliedLoad).Sub(step.ExactLoadRat)
+		// Update residual: difference between compensated share and applied load
+		actualApplied := rebalanceRatFromInt(step.AppliedLoad)
+		residual = compensatedShare.Sub(actualApplied)
+		errStep := actualApplied.Sub(step.ExactLoadRat)
 		if errStep.Sign() < 0 {
 			errStep = errStep.Sub(ZeroRebalanceRat())
 		}
@@ -582,7 +547,16 @@ func rebalanceV2Transformable(event *Event) bool {
 	if event.TrainingLoad > 0 && event.MovingTime > 0 {
 		return true
 	}
-	return event.WorkoutDoc != nil
+	if event.WorkoutDoc != nil {
+		return true
+	}
+	if event.Description != "" {
+		doc, err := ParseWorkoutDescription(event.Description)
+		if err == nil && doc != nil && len(doc.Steps) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func rebalanceV2Distribute(input *RebalanceInput, slots []rebalanceV2Slot, target, current RebalanceRat, mode string) []RebalanceRat {
@@ -668,21 +642,69 @@ func rebalanceV2BuildSession(input *RebalanceInput, slot *rebalanceV2Slot, share
 		step.Reason = "session not transformable without loss: no power WorkoutDoc or magnitude basis"
 		return RebalanceSession{}, step, true
 	}
-	if level.Cmp(NewRebalanceRatFromInt(0, 1)) == 0 {
-		slot.originalIF = input.Constraints.Z1IF
+
+	z1IF := input.Constraints.Z1IF
+	if z1IF <= 0 {
+		z1IF = DynamicRebalanceTargets(input).Z1IF
 	}
-	if level.Cmp(NewRebalanceRatFromInt(1, 1)) == 0 && effectiveMax > 0 {
-		slot.originalIF = effectiveMax
+	origIF := slot.originalIF
+	if origIF <= 0 {
+		origIF = input.Constraints.Z2IF
 	}
-	if slot.originalIF <= 0 {
-		slot.originalIF = input.Constraints.Z2IF
+	if origIF <= 0 {
+		origIF = DynamicRebalanceTargets(input).Z2IF
 	}
-	if slot.originalIF <= 0 {
+
+	// Continuous piece-wise linear IF interpolation
+	half := NewRebalanceRatFromInt(1, 2)
+	var targetIF float64
+	if level.Cmp(half) < 0 {
+		levelFrac := level.Float64() * 2 // 0→0, 0.5→1
+		targetIF = z1IF + (origIF-z1IF)*levelFrac
+	} else {
+		levelFrac := (level.Float64() - 0.5) * 2 // 0.5→0, 1→1
+		targetIF = origIF + (effectiveMax-origIF)*levelFrac
+	}
+
+	// CP/W'/PMax duration-power limit at level=1
+	if level.Cmp(NewRebalanceRatFromInt(1, 1)) == 0 {
+		ftp := rebalanceFTP(input)
+		if ftp > 0 {
+			cp := float64(ftp)
+			wPrime := 0
+			pMax := 0
+			if input.SportSettings != nil {
+				if input.SportSettings.WPrime > 0 {
+					wPrime = input.SportSettings.WPrime
+				}
+				if input.SportSettings.PMax > 0 {
+					pMax = input.SportSettings.PMax
+				}
+			}
+			tSec := rebalanceV2SecondsEstimate(share, targetIF)
+			if tSec > 0 {
+				maxWatts := cp
+				if wPrime > 0 {
+					maxWatts = cp + float64(wPrime)/tSec
+				}
+				if pMax > 0 && float64(pMax) < maxWatts {
+					maxWatts = float64(pMax)
+				}
+				maxIF := maxWatts / float64(ftp)
+				if targetIF > maxIF {
+					targetIF = maxIF
+				}
+			}
+		}
+	}
+
+	if targetIF <= 0 {
 		step.Blocked = true
-		step.Reason = "no usable intensity target"
+		step.Reason = "no usable intensity target after interpolation"
 		return RebalanceSession{}, step, true
 	}
-	exactSeconds := rebalanceV2ExactSeconds(share, slot.originalIF)
+
+	exactSeconds := rebalanceV2ExactSeconds(share, targetIF)
 	appliedSeconds := rebalanceV2RoundSeconds(input, exactSeconds)
 	if input.Constraints.MaxSessionMinutes > 0 {
 		maxSeconds := input.Constraints.MaxSessionMinutes * rebalanceSecondsPerMinute
@@ -690,16 +712,38 @@ func rebalanceV2BuildSession(input *RebalanceInput, slot *rebalanceV2Slot, share
 			appliedSeconds = maxSeconds
 		}
 	}
-	appliedLoadFloat := estimateLoadFromDurationIF(appliedSeconds, slot.originalIF)
+	appliedLoadFloat := estimateLoadFromDurationIF(appliedSeconds, targetIF)
 	appliedLoad := maxInt(0, appliedLoadFloat)
 	step.AppliedLoad = appliedLoad
 	step.AppliedSeconds = appliedSeconds
 	step.ExactIF = rebalanceV2ExactIF(share, exactSeconds).DecimalString()
-	step.AppliedIF = strconv.FormatFloat(slot.originalIF, 'f', 3, 64)
+	step.AppliedIF = strconv.FormatFloat(targetIF, 'f', 3, 64)
 	step.Residual = rebalanceRatFromInt(appliedLoad).Sub(share).DecimalString()
+	step.ExactSeconds = exactSeconds.DecimalString()
 
-	session := buildRebalanceV2Session(input, slot, appliedLoad, appliedSeconds, slot.originalIF)
+	session := buildRebalanceV2Session(input, slot, appliedLoad, appliedSeconds, targetIF)
+
+	// preserve-structure: scale workout steps and generate description
+	if mode == RebalanceModePreserveStructure && slot.slot.event != nil && math.Abs(targetIF-origIF) > 0.0001 {
+		desc := RebalanceScaleWorkoutDescription(slot.slot.event, origIF, targetIF)
+		if desc != "" {
+			session.Description = desc
+		}
+	}
+
 	return session, step, false
+}
+
+// rebalanceV2SecondsEstimate estimates the duration in seconds for a given
+// load and intensity factor, using floating-point approximation.
+func rebalanceV2SecondsEstimate(load RebalanceRat, ifloat float64) float64 {
+	if ifloat <= 0 {
+		return 0
+	}
+	// load = hours * 100 * IF^2
+	// hours = load / (100 * IF^2)
+	hours := load.Float64() / (rebalanceSportZoneDivisor * ifloat * ifloat)
+	return hours * rebalanceSecondsPerHour
 }
 
 func rebalanceV2ExactSeconds(load RebalanceRat, ifloat float64) RebalanceRat {

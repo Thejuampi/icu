@@ -69,6 +69,33 @@ func rebalanceAcceptCommand() *Command {
 					return errors.New("rebalance approval limits mismatch: approved limits changed after approve")
 				}
 			}
+
+			// Drift detection: fetch current activities and events for the scope week
+			currentActivities, err := readRebalanceActivities(client, proposal.Scope.StartDate, proposal.Scope.EndDate, flags)
+			if err != nil {
+				return err
+			}
+			currentEvents, err := readRebalanceEvents(client, proposal.Scope.StartDate, proposal.Scope.EndDate)
+			if err != nil {
+				return err
+			}
+			driftInput := icu.RebalanceInput{
+				Activities:  currentActivities,
+				Events:      currentEvents,
+				Constraints: proposal.Constraints,
+				Scope:       proposal.Scope,
+				NowDate:     proposal.Scope.EndDate,
+			}
+			currentBaseline := icu.RebalanceBaseline(&driftInput)
+			if currentBaseline.CompletedLoad != proposal.Baseline.CompletedLoad ||
+				currentBaseline.LockedPlannedLoad != proposal.Baseline.LockedPlannedLoad {
+				return fmt.Errorf(
+					"calendar drift detected: completed %d→%d or locked %d→%d; re-run rebalance show and approve",
+					proposal.Baseline.CompletedLoad, currentBaseline.CompletedLoad,
+					proposal.Baseline.LockedPlannedLoad, currentBaseline.LockedPlannedLoad,
+				)
+			}
+
 			proposal.Apply = applyRebalanceProposal(client, &proposal)
 			if err := writeRebalanceProposal(flags, &proposal); err != nil {
 				return err
@@ -138,8 +165,8 @@ func rebalanceApproveCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "rebalance approve --file PATH --reason TEXT [--target-load N] [--level X] [--mode MODE]",
-		Description: "Bind a rebalance proposal to an approval reason and explicit limits, recording hashes for accept verification.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Description: "Recalculate the proposal under explicit limits and approved constraints, then bind approval hashes for accept verification.",
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			proposal, err := readRebalanceProposal(flags)
 			if err != nil {
 				return err
@@ -152,6 +179,7 @@ func rebalanceApproveCommand() *Command {
 			if proposal.Envelope != nil && proposal.Envelope.OutsideEnvelope && !providedLimits {
 				return errors.New("baseline outside envelope: approve requires explicit --target-load and --level limits")
 			}
+
 			approvedTargetLoad := proposal.Constraints.TargetLoad
 			if flags["target-load"] != "" {
 				if load, err := strconv.Atoi(flags["target-load"]); err == nil {
@@ -166,17 +194,40 @@ func rebalanceApproveCommand() *Command {
 			if flags["mode"] != "" {
 				approvedMode = flags["mode"]
 			}
-			checkProposal := proposal
-			checkProposal.Constraints.TargetLoad = approvedTargetLoad
-			checkProposal.Constraints.Level = approvedLevel
-			checkProposal.Constraints.Mode = approvedMode
+
+			// When a real client is available and the proposal needs recalculation
+			// (outside-envelope or explicit overrides), re-fetch data and regenerate.
+			if client != nil && (providedLimits || (proposal.Envelope != nil && proposal.Envelope.OutsideEnvelope)) {
+				regenInput, err := readRebalanceInputFromScope(client, proposal.Scope.StartDate, proposal.Scope.EndDate, approvedTargetLoad, approvedLevel, approvedMode)
+				if err != nil {
+					return err
+				}
+				regenInput.Request.Strategy = proposal.Request.Strategy
+				if regenInput.Request.Strategy == "" {
+					regenInput.Request.Strategy = icu.RebalanceStrategyAdaptiveBidirectional
+				}
+				regenInput.Request.DryRun = proposal.Request.DryRun
+				regenInput.Constraints.Approved = true
+
+				regen := icu.BuildRebalanceProposal(&regenInput)
+
+				proposal.Operations = regen.Operations
+				proposal.Options = regen.Options
+				proposal.Projection = regen.Projection
+				proposal.Envelope = regen.Envelope
+				proposal.Baseline = regen.Baseline
+				proposal.Context = regen.Context
+				proposal.Validation = regen.Validation
+				proposal.Notes = regen.Notes
+				proposal.Policy = regen.Policy
+			}
+
 			approve := icu.ComputeRebalanceApprove(&proposal, reason, providedLimits)
 			approve.TargetLoad = approvedTargetLoad
 			approve.Level = approvedLevel
 			approve.Mode = approvedMode
-			approve.RecalcHash = icu.ComputeRebalanceApprove(&checkProposal, reason, providedLimits).RecalcHash
-			approve.LimitsHash = icu.ComputeRebalanceApprove(&checkProposal, reason, providedLimits).LimitsHash
 			proposal.Approve = &approve
+
 			if err := writeRebalanceProposal(flags, &proposal); err != nil {
 				return err
 			}
@@ -409,6 +460,75 @@ func applyApprovedLimits(proposal *icu.RebalanceProposalFile) {
 	if proposal.Approve.Mode != "" {
 		proposal.Constraints.Mode = proposal.Approve.Mode
 	}
+}
+
+func readRebalanceInputFromScope(client *icu.Client, startDate, endDate string, targetLoad int, level, mode string) (icu.RebalanceInput, error) {
+	activities, err := readRebalanceActivities(client, startDate, endDate, map[string]string{"activity-fields": defaultAnalysisFields, "limit": "100"})
+	if err != nil {
+		return icu.RebalanceInput{}, err
+	}
+	events, err := readRebalanceEvents(client, startDate, endDate)
+	if err != nil {
+		return icu.RebalanceInput{}, err
+	}
+	// Derive sport type from events
+	sportType := ""
+	for index := range events {
+		if events[index].Category == "WORKOUT" && events[index].Type != "" {
+			sportType = events[index].Type
+			break
+		}
+	}
+	var sportSettings *icu.SportSettings
+	if sportType != "" {
+		var settings icu.SportSettings
+		if err := client.Get("sport-settings", []string{sportType}, nil, &settings); err == nil {
+			sportSettings = &settings
+		}
+	}
+	var wellnessAnalysis *icu.WellnessAnalysis
+	wellnessOldest := rebalanceWellnessStart(startDate, rebalanceWellnessLookbackDays)
+	var wellnessRecords []icu.Wellness
+	if err := client.Get("wellness", nil, map[string]string{"oldest": wellnessOldest, "newest": endDate}, &wellnessRecords); err == nil {
+		analysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+			StartDate:      wellnessOldest,
+			EndDate:        endDate,
+			Timezone:       icu.DefaultAnalysisTimezone,
+			TimezoneSource: "explicit",
+		})
+		wellnessAnalysis = &analysis
+	}
+
+	return icu.RebalanceInput{
+		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
+		NowDate:       endDate,
+		Activities:    activities,
+		Events:        events,
+		SportSettings: sportSettings,
+		Wellness:      wellnessAnalysis,
+		Scope: icu.RebalanceScope{
+			StartDate:      startDate,
+			EndDate:        endDate,
+			Week:           "",
+			Timezone:       icu.DefaultAnalysisTimezone,
+			TimezoneSource: "explicit",
+		},
+		Request: icu.RebalanceRequest{
+			Strategy: icu.RebalanceStrategyAdaptiveBidirectional,
+			DryRun:   true,
+		},
+		Constraints: icu.RebalanceConstraints{
+			TargetLoad:          targetLoad,
+			Level:               level,
+			Mode:                mode,
+			AllowCreate:         true,
+			AllowUpdate:         true,
+			AllowCancel:         true,
+			TargetTolerance:     0,
+			MinSessionMinutes:   0,
+			DurationStepMinutes: 0,
+		},
+	}, nil
 }
 
 func rebalanceWellnessStart(oldest string, lookbackDays int) string {

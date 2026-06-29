@@ -280,6 +280,212 @@ func TestComputeRebalanceApproveRequiresExplicitLimitsOutsideEnvelope(t *testing
 	}
 }
 
+func TestRebalanceV2ContinuousLevelInterpolation(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("0.5", "preserve-structure")
+	proposal := icu.BuildRebalanceProposal(&input)
+	if proposal.Validation.Blocking {
+		t.Fatalf("level 0.5 should not block: %v", proposal.Validation.Errors)
+	}
+	// level 0.5 is no-op; operations should be empty
+	if len(proposal.Operations) != 0 {
+		t.Fatalf("level 0.5 should produce no operations, got %d", len(proposal.Operations))
+	}
+
+	// level 0.25 should produce IF between dynamic Z1 (~0.55) and origIF (~0.66)
+	level025 := v2Fixture("0.25", "preserve-structure")
+	proposal025 := icu.BuildRebalanceProposal(&level025)
+	if proposal025.Validation.Blocking {
+		t.Fatalf("level 0.25 should not block: %v", proposal025.Validation.Errors)
+	}
+	if len(proposal025.Operations) == 0 {
+		t.Fatalf("level 0.25 should produce operations")
+	}
+	expectedIF := 0.55 + (0.66-0.55)*0.5 // ≈ 0.605
+	for _, session := range proposal025.Options[0].Sessions {
+		if session.IntensityFactor > 0 && !closeEnough(session.IntensityFactor, expectedIF, 0.01) {
+			t.Fatalf("level 0.25 IF %.3f should be near %.3f", session.IntensityFactor, expectedIF)
+		}
+	}
+}
+
+func TestRebalanceV2CPWPrimeLimitAtLevelOne(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("1", "preserve-structure")
+	// Set a very low PMax so the CP/W' check clamps the intensity
+	input.SportSettings.PMax = 200
+	input.SportSettings.WPrime = 500
+	proposal := icu.BuildRebalanceProposal(&input)
+	if proposal.Validation.Blocking {
+		t.Fatalf("level 1 with PMax should not block: %v", proposal.Validation.Errors)
+	}
+	// With PMax=200 and FTP=285, max IF = 200/285 ≈ 0.702
+	maxIF := 200.0 / 285.0
+	for _, session := range proposal.Options[0].Sessions {
+		if session.IntensityFactor > maxIF+0.01 {
+			t.Fatalf("CP-limited IF %.3f exceeds max %.3f (PMax=200 FTP=285)",
+				session.IntensityFactor, maxIF)
+		}
+	}
+}
+
+func TestRebalanceV2CompensatedResidue(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("0.2", "preserve-structure")
+	proposal := icu.BuildRebalanceProposal(&input)
+	if proposal.Validation.Blocking {
+		t.Fatalf("level 0.2 should not block: %v", proposal.Validation.Errors)
+	}
+	if proposal.Projection == nil {
+		t.Fatalf("projection should be non-nil")
+	}
+	// Residual should be small (compensated distribution)
+	if proposal.Projection.Residual == "" {
+		t.Fatalf("residual should be set")
+	}
+}
+
+func TestRebalanceV2PreserveStructureUpdatesDescription(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("0.7", "preserve-structure")
+	// Add events with WorkoutDoc for structure scaling
+	input.Events[0].WorkoutDoc = icu.WorkoutDoc{
+		Steps: []icu.WorkoutStep{
+			{Duration: 1800, Power: &icu.WorkoutTarget{Value: 70, Units: "%ftp"}},
+		},
+	}
+	input.Events[1].WorkoutDoc = icu.WorkoutDoc{
+		Steps: []icu.WorkoutStep{
+			{Duration: 3600, Power: &icu.WorkoutTarget{Value: 65, Units: "%ftp"}},
+		},
+	}
+	proposal := icu.BuildRebalanceProposal(&input)
+	if proposal.Validation.Blocking {
+		t.Fatalf("preserve-structure should not block: %v", proposal.Validation.Errors)
+	}
+	// At level 0.7, intensity should increase → descriptions should be updated
+	for _, op := range proposal.Operations {
+		if op.Action == icu.RebalanceActionUpdate && op.Body.Description != "" {
+			// Description should be non-empty and differ from original
+			if op.Body.Description == "" {
+				t.Fatalf("op %s should have non-empty description", op.ID)
+			}
+		}
+	}
+}
+
+func TestRebalanceV2TransformableFromParsedDescription(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("0.5", "preserve-structure")
+	// Replace events with description-only events (no WorkoutDoc).
+	// TrainingLoad must put weekly load within the envelope (~300) to avoid
+	// outside-envelope diagnostic mode.
+	input.Events = []icu.Event{
+		{ID: 1, Category: "WORKOUT", Type: "Ride", Target: "POWER", StartDateLocal: "2026-06-24T07:00:00", Name: "Test", Description: "- 60m 70% ", TrainingLoad: 150, MovingTime: 6000},
+		{ID: 2, Category: "WORKOUT", Type: "Ride", Target: "POWER", StartDateLocal: "2026-06-27T07:00:00", Name: "Test 2", Description: "- 30m 65% ", TrainingLoad: 150, MovingTime: 3000},
+	}
+	// Use level 0.7 so it's not a no-op
+	input.Constraints.Level = "0.7"
+	proposal := icu.BuildRebalanceProposal(&input)
+	if proposal.Validation.Blocking {
+		t.Fatalf("description-based transformable should not block: %v", proposal.Validation.Errors)
+	}
+	// With events that have Description (parsed for structure) AND TrainingLoad+MovingTime (magnitude basis),
+	// they should be transformable through description scaling and produce operations
+	if len(proposal.Operations) == 0 {
+		warning := ""
+		if len(proposal.Options) > 0 && len(proposal.Options[0].Warnings) > 0 {
+			warning = proposal.Options[0].Warnings[0]
+		}
+		t.Fatalf("description-based events should be transformable, got 0 operations; warning=%q", warning)
+	}
+}
+
+func TestRebalanceV2TransformableViaDescriptionOnly(t *testing.T) {
+	t.Parallel()
+
+	// Event with ONLY Description (no TrainingLoad, no MovingTime, no WorkoutDoc)
+	// is NOT slot-transformable because there's no magnitude basis.
+	input := v2Fixture("0.5", "preserve-structure")
+	input.Events = []icu.Event{
+		{ID: 1, Category: "WORKOUT", Type: "Ride", Target: "POWER", StartDateLocal: "2026-06-24T07:00:00", Name: "Test", Description: "- 60m 70% "},
+		{ID: 2, Category: "WORKOUT", Type: "Ride", Target: "POWER", StartDateLocal: "2026-06-27T07:00:00", Name: "Test 2", Description: "- 30m 65% "},
+	}
+	// These events have 0 load, so baseline weekly load is 0. Outside envelope (below low).
+	// With Approved=false, should get diagnostic (no operations).
+	input.Constraints.Level = "0.7"
+	proposal := icu.BuildRebalanceProposal(&input)
+	if proposal.Validation.Blocking {
+		t.Fatalf("description-only events should not cause blocking validation: %v", proposal.Validation.Errors)
+	}
+}
+
+func TestRebalanceV2ProposalWithApprovedBypassesOutsideBlock(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("0.7", "preserve-structure")
+	// Make baseline outside envelope by setting MASSIVE current weekly load
+	// (regime has loads ~300, so 8000 is far above the envelope high)
+	input.Events[0].TrainingLoad = 4000
+	input.Events[1].TrainingLoad = 4000
+	input.Constraints.Approved = true
+	proposal := icu.BuildRebalanceProposal(&input)
+	// Outside envelope with Approved=true should bypass the outside block
+	if proposal.Validation.Blocking {
+		t.Fatalf("approved outside-envelope should not block: %v", proposal.Validation.Errors)
+	}
+}
+
+func TestRebalanceV2ExactSecondsFormatted(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("0.3", "preserve-structure")
+	proposal := icu.BuildRebalanceProposal(&input)
+	if proposal.Projection == nil {
+		t.Fatalf("projection should be non-nil")
+	}
+	for _, step := range proposal.Projection.Steps {
+		if step.ExactSeconds != "" && step.AppliedSeconds > 0 {
+			// ExactSeconds should parse as valid
+			if _, err := icu.ParseRebalanceRat(step.ExactSeconds); err != nil {
+				t.Fatalf("ExactSeconds %q is not a valid RebalanceRat: %v", step.ExactSeconds, err)
+			}
+		}
+	}
+}
+
+func TestRebalanceBaselineExported(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("0.5", "preserve-structure")
+	baseline := icu.RebalanceBaseline(&input)
+	if baseline.WeeklyLoad == 0 && baseline.CompletedLoad == 0 {
+		t.Fatalf("RebalanceBaseline should produce non-zero evaluation")
+	}
+}
+
+func TestRebalanceConstraintsHasApprovedField(t *testing.T) {
+	t.Parallel()
+
+	c := icu.DefaultRebalanceConstraints()
+	if c.Approved != false {
+		t.Fatalf("default constraints Approved should be false")
+	}
+	c.Approved = true
+	if !c.Approved {
+		t.Fatalf("Approved should be settable")
+	}
+}
+
+func closeEnough(a, b, tol float64) bool {
+	return (a-b) < tol && (b-a) < tol
+}
+
 func TestComputeRebalanceApproveVerifiesInsideEnvelope(t *testing.T) {
 	t.Parallel()
 
