@@ -36,7 +36,8 @@ If the investigation exposes a CLI bug, parser mismatch, auth ambiguity, or data
 - Treat existing planned workouts as the baseline plan. For planning requests, first evaluate whether the existing calendar is coherent before proposing replacement workouts.
 - Review existing NOTE events on the calendar before rendering analysis. Notes carry coaching context, block structure, decision rules, and athlete-facing communication. Skimming only WORKOUT events misses the full picture. Collect them explicitly alongside planned sessions.
 - **Do not analyze a planned session in isolation.** If the user asks about a workout that sits inside a training block, first retrieve the planned event and the relevant NOTE events for that day/week/block, then compare planned intent vs executed data. If that context is missing, say the analysis is incomplete and fetch it before giving conclusions.
-- For single completed workouts inside an active plan, run `icu analysis workout ACTIVITY_ID --athlete-id ATHLETE_ID` as the primary data contract. Use its `match`, `plan`, `execution`, `comparison`, and `warnings` sections before writing coaching prose.
+- For weekly reports and planning reviews, prefer `icu analysis coaching` as the primary data contract. It bundles athlete, sport settings, cycling analysis, wellness analysis, plan analysis, events, NOTE context, and optional adaptation, reducing the workflow to one CLI call in most cases.
+- For single completed workouts inside an active plan, run `icu analysis workout ACTIVITY_ID --athlete-id ATHLETE_ID` as the second data contract. Use its `match`, `plan`, `execution`, `comparison`, and `warnings` sections before writing coaching prose.
 - **Do not give generic recommendations that bypass the plan.** Recommendations must be framed as `plan-preserving` first: confirm whether the executed session matched the intended role, then adjust execution rules or fallback options before suggesting a different workout or extra recovery.
 - After producing a plan review, write key findings back as NOTE events on the calendar so future analyses and the athlete can reference them. Keep notes compact: Intervals.icu NOTE events behave as all-day notes and long descriptions can fail upstream with HTTP 500. If the plan is approved, create: (a) one short block-overview note with week roles, load targets, decision thresholds, and FTP; (b) weekly focus notes with session classification and conditional rules; (c) separate short ALT notes when the decision tree is long.
 - `icu analysis` commands compute default date ranges in **UTC**. When the athlete is not in UTC, the implied "today" can shift by up to a day relative to the athlete's local date. Always use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate reports, and verify the `timezone`/`timezoneSource` fields in the output to confirm which timezone was used.
@@ -71,35 +72,35 @@ Each `-` step line is `duration zone%` (e.g., `15m 55-72%`). A bare `Nx` on its 
    - Default weekly report: 7 days ending today. Note: default ranges are calculated in UTC, so use absolute `YYYY-MM-DD` dates in the athlete's local timezone for precise daily boundaries.
    - If the user gives dates, use absolute `YYYY-MM-DD` dates.
 
-2. Collect the current numeric cycling summary.
+2. Collect the primary coaching context.
 
 **Note:** The `--athlete-id` flag in every command below is optional when `icu config show` reports a configured default athlete (anything other than `0`). Omit the flag to use the default; include it only to override.
 
 ```bash
-icu analysis cycling --oldest START --newest END [--athlete-id ATHLETE_ID]
-icu analysis wellness --oldest WELLNESS_START --newest END [--athlete-id ATHLETE_ID]
-icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END [--athlete-id ATHLETE_ID]
+icu analysis coaching --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END --resolve [--athlete-id ATHLETE_ID]
   # NOTE: explicit plan dates are automatically aligned to ISO week boundaries (Mon-Sun) by the CLI.
-icu analysis adaptation --oldest HISTORY_START --newest END --type Ride [--athlete-id ATHLETE_ID]
+icu analysis coaching --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END --resolve --include-adaptation [--athlete-id ATHLETE_ID]
+```
+
+Use the non-adaptation command for routine weekly reports. Add `--include-adaptation` when the user asks about fitness change, power-curve trends, training focus, or planning decisions that need adaptation context.
+
+Date ranges must be complete `YYYY-MM-DD` pairs. Do not combine explicit history dates with `--history-days`, or explicit plan dates with `--plan-days`. Use `--limit N` only when an explicit cap on fetched history activities is required; omit it for complete analysis.
+
+3. Collect supporting Intervals.icu context only when needed.
+
+```bash
 icu analysis workout ACTIVITY_ID [--athlete-id ATHLETE_ID]
 ```
 
-3. Collect supporting Intervals.icu context as needed.
-
-```bash
-icu athlete show [--athlete-id ATHLETE_ID]
-icu sports get Ride [--athlete-id ATHLETE_ID]
-icu events list --oldest NEXT_START --newest NEXT_END [--athlete-id ATHLETE_ID]
-icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d [--athlete-id ATHLETE_ID]
-```
+Run `analysis workout` for a specific completed workout review. Otherwise, `analysis coaching` already includes athlete, sport settings, plan events, NOTE events, cycling, wellness, and optional adaptation context.
 
 4. Review existing calendar notes (NOTE events) for coaching context.
 
 ```bash
-icu events list --oldest PLAN_START --newest PLAN_END [--athlete-id ATHLETE_ID]
+icu analysis coaching --history-oldest HISTORY_START --history-newest END --plan-oldest PLAN_START --plan-newest PLAN_END --resolve [--athlete-id ATHLETE_ID]
 ```
 
-Filter the response for `category: "NOTE"` events. Read their `name` and `description` fields. These contain block intentions, decision rules, physiological thresholds, and athlete communication. Missing them means the analysis is working with incomplete context.
+Check `dataQuality.missing` and `dataQuality.warnings` before interpreting any analyzer. Prefixed warnings identify their source (`cycling:`, `wellness:`, `plan:`, or `adaptation:`). Then read `calendar.notes` first and inspect `calendar.events` if more detail is needed. Both calendar fields are valid arrays; `[]` means no matching items, not malformed output. NOTE events contain block intentions, decision rules, physiological thresholds, and athlete communication. Missing them means the analysis is working with incomplete context.
 
 If notes exist, incorporate their content into the review. If notes are absent or outdated, flag it and offer to write them after the analysis.
 
@@ -108,11 +109,8 @@ For any single-workout review inside an active plan, first run `icu analysis wor
 For planning questions, use a 12-week lookback and the next 4 weeks of events unless the user requests a different horizon.
 
 ```bash
-icu analysis cycling --oldest HISTORY_START --newest END [--athlete-id ATHLETE_ID]
-icu analysis wellness --oldest WELLNESS_START --newest END [--athlete-id ATHLETE_ID]
-icu analysis plan --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END [--athlete-id ATHLETE_ID]
+icu analysis coaching --history-oldest HISTORY_START --history-newest END --plan-oldest NEXT_START --plan-newest NEXT_END --resolve --include-adaptation [--athlete-id ATHLETE_ID]
   # NOTE: explicit plan dates are automatically aligned to ISO week boundaries (Mon-Sun) by the CLI.
-icu analysis adaptation --oldest HISTORY_START --newest END --type Ride --curves 42d,365d [--athlete-id ATHLETE_ID]
 ```
 
 Planning dry-run checklist:
@@ -135,7 +133,7 @@ icu activities list --oldest HISTORY_START --newest END [--athlete-id ATHLETE_ID
 ```
 
 5. Check the data contract before writing prose.
-   - Required for load/recovery report: athlete, sport settings, 7-day cycling analysis, 42-day wellness if available, next planned events if planning is discussed.
+   - Required for load/recovery report: `analysis coaching` with athlete, sport settings, cycling analysis, wellness analysis, and next planned events if planning is discussed.
    - Required for adaptation: current power curves or MMP model plus historical activity context.
    - Required for W prime/repeatability: work above FTP and W balance fields in activities or activity intervals.
    - Required for heat/environment: weather or activity environmental fields. Do not infer heat stress from prose alone.
@@ -192,5 +190,3 @@ When adding support to `icu` for a missing metric:
 3. Update `analysis cycling` only if the metric is cycling-specific and read-only.
 4. Keep CLI output JSON stable and additive.
 5. Run `go test ./... -count=1`, `go vet ./...`, and `golangci-lint run ./...`.
-
-Current known gap: the repository-wide coverage gate is below 90% because the existing CLI command surface is broadly untested. Do not treat that as caused by a single analysis change.

@@ -247,6 +247,29 @@ plan := icu.AnalyzeTrainingPlanWithContext(
 )
 ```
 
+### Coaching context
+
+```go
+context := icu.BuildCoachingContext(icu.CoachingContextInputs{
+	Athlete:       &athlete,
+	SportSettings: &sportSettings,
+	Cycling:       &cyclingAnalysis,
+	Wellness:      &wellnessAnalysis,
+	Plan:          &plan,
+	Adaptation:    &adaptation,
+	Events:        events,
+}, &icu.CoachingContextOptions{
+	SportType:         "Ride",
+	HistoryStartDate:  "2026-03-08",
+	HistoryEndDate:    "2026-05-30",
+	PlanStartDate:     "2026-06-01",
+	PlanEndDate:       "2026-06-28",
+	IncludeAdaptation: true,
+})
+```
+
+`BuildCoachingContext` is pure and does not mutate the supplied event slice. `calendar.events` and `calendar.notes` serialize as arrays, including `[]` when empty. `dataQuality.warnings` retains façade warnings and adds analyzer warnings with deterministic `cycling:`, `wellness:`, `plan:`, and optional `adaptation:` prefixes while removing exact duplicates.
+
 ### Rebalance proposals
 
 ```go

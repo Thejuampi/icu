@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	analysisTestAthletePath = "/api/v1/athlete/i123"
 	microcycleTestWeekEnd   = "2026-06-14"
 	microcycleTestWeekStart = "2026-06-08"
 )
@@ -89,6 +90,52 @@ func TestAnalysisDateRangeRejectsMissingPairAndInvalidDays(t *testing.T) {
 	}
 }
 
+func TestAnalysisDateRangeRejectsMalformedInvertedAndConflictingInputs(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.May, 29, 12, 0, 0, 0, time.UTC)
+	tests := []map[string]string{
+		{"oldest": "2026-02-30", "newest": "2026-03-01"},
+		{"oldest": "2026-02-01", "newest": "2026-02-30"},
+		{"oldest": "2026-05-30", "newest": "2026-05-29"},
+		{"oldest": "2026-05-01", "newest": "2026-05-29", "days": "7"},
+		{"days": "abc"},
+		{"days": "-1"},
+	}
+
+	for _, flags := range tests {
+		if _, _, err := analysisDateRange(flags, now); err == nil {
+			t.Fatalf("analysisDateRange(%v) error = nil, want error", flags)
+		}
+	}
+}
+
+func TestAnalysisCommandsRejectInvalidDayFlagsBeforeHTTP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		command *Command
+		flags   map[string]string
+	}{
+		{name: "coaching", command: analysisCoachingCommand(), flags: map[string]string{"history-days": "abc"}},
+		{name: "cycling", command: analysisCyclingCommand(), flags: map[string]string{"days": "abc"}},
+		{name: "wellness", command: analysisWellnessCommand(), flags: map[string]string{"days": "abc"}},
+		{name: "plan", command: analysisPlanCommand(), flags: map[string]string{"plan-days": "abc"}},
+		{name: "adaptation", command: analysisAdaptationCommand(), flags: map[string]string{"days": "abc"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := test.command.Run(nil, test.flags, nil); err == nil {
+				t.Fatal("Run error = nil, want invalid day error before client use")
+			}
+		})
+	}
+}
+
 func TestTrainingPlanDateRangesDefaultToTwelveWeekHistoryAndNextISOBlock(t *testing.T) {
 	t.Parallel()
 
@@ -144,6 +191,25 @@ func TestTrainingPlanDateRangesAlignExplicitPlanDatesToISOWeek(t *testing.T) {
 	}
 }
 
+func TestTrainingPlanDateRangesHandleSundayBoundaries(t *testing.T) {
+	t.Parallel()
+	const planMonday = "2026-06-01"
+
+	now := time.Date(2026, time.May, 31, 12, 0, 0, 0, time.UTC)
+	got, explicit, err := trainingPlanDateRanges(map[string]string{
+		"plan-oldest": "2026-06-07",
+		"plan-newest": "2026-06-14",
+	}, now)
+	if err != nil || !explicit || got.Plan.Oldest != planMonday || got.Plan.Newest != "2026-06-14" {
+		t.Fatalf("trainingPlanDateRanges = %+v explicit %v error %v, want 2026-06-01..2026-06-14 true nil", got, explicit, err)
+	}
+
+	defaults, defaultExplicit, err := trainingPlanDateRanges(map[string]string{}, now)
+	if err != nil || defaultExplicit || defaults.Plan.Oldest != planMonday {
+		t.Fatalf("default trainingPlanDateRanges = %+v explicit %v error %v, want next Monday", defaults, defaultExplicit, err)
+	}
+}
+
 func TestTrainingPlanDateRangesRejectInvalidInputs(t *testing.T) {
 	t.Parallel()
 
@@ -158,6 +224,374 @@ func TestTrainingPlanDateRangesRejectInvalidInputs(t *testing.T) {
 		if _, _, err := trainingPlanDateRanges(flags, now); err == nil {
 			t.Fatalf("trainingPlanDateRanges(%v) error = nil, want error", flags)
 		}
+	}
+}
+
+func TestTrainingPlanDateRangesRejectMalformedInvertedAndConflictingInputs(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.May, 29, 12, 0, 0, 0, time.UTC)
+	tests := []map[string]string{
+		{"history-oldest": "2026-02-30", "history-newest": "2026-03-01"},
+		{"history-oldest": "2026-05-30", "history-newest": "2026-05-29"},
+		{"history-oldest": "2026-05-01", "history-newest": "2026-05-29", "history-days": "7"},
+		{"history-days": "abc"},
+		{"history-days": "-1"},
+		{"plan-oldest": "2026-07-05", "plan-newest": "2026-06-29"},
+		{"plan-oldest": "2026-07-03", "plan-newest": "2026-06-30"},
+		{"plan-oldest": "2026-06-29", "plan-newest": "2026-07-26", "plan-days": "28"},
+		{"plan-days": "abc"},
+		{"plan-days": "-1"},
+	}
+
+	for _, flags := range tests {
+		if _, _, err := trainingPlanDateRanges(flags, now); err == nil {
+			t.Fatalf("trainingPlanDateRanges(%v) error = nil, want error", flags)
+		}
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisPlanCommandUsesValidatedAlignedRanges(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	output, err := captureStdout(t, func() error {
+		return analysisPlanCommand().Run(nil, map[string]string{
+			"history-oldest": "2026-04-06",
+			"history-newest": "2026-06-28",
+			"plan-oldest":    "2026-07-01",
+			"plan-newest":    "2026-07-24",
+			"resolve":        "false",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v", err)
+	}
+
+	var analysis icu.TrainingPlanAnalysis
+	if err := json.Unmarshal([]byte(output), &analysis); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	if analysis.Scope.PlanStartDate != "2026-06-29" || analysis.Scope.PlanEndDate != "2026-07-26" {
+		t.Fatalf("plan scope = %s..%s, want aligned 2026-06-29..2026-07-26", analysis.Scope.PlanStartDate, analysis.Scope.PlanEndDate)
+	}
+}
+
+func TestAnalysisPlanCommandReportsUpstreamFailures(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{
+		"/api/v1/athlete/i123/activities",
+		"/api/v1/athlete/i123/sport-settings/Ride",
+		"/api/v1/athlete/i123/wellness",
+		"/api/v1/athlete/i123/events",
+	} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
+			client := newAnalysisFailureClient(t, path)
+			err := analysisPlanCommand().Run(nil, map[string]string{
+				"history-oldest": "2026-04-06",
+				"history-newest": "2026-06-28",
+				"plan-oldest":    "2026-06-29",
+				"plan-newest":    "2026-07-26",
+			}, client)
+			if err == nil {
+				t.Fatal("Run error = nil, want upstream failure")
+			}
+		})
+	}
+}
+
+func TestAnalysisAdaptationCommandReportsUpstreamFailures(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{
+		"/api/v1/athlete/i123/activities",
+		"/api/v1/athlete/i123/power-curves",
+		"/api/v1/athlete/i123/mmp-model",
+		"/api/v1/athlete/i123/sport-settings/Ride",
+		"/api/v1/athlete/i123/wellness",
+	} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
+			client := newAnalysisFailureClient(t, path)
+			err := analysisAdaptationCommand().Run(nil, map[string]string{
+				"oldest": "2026-04-06",
+				"newest": "2026-06-28",
+			}, client)
+			if err == nil {
+				t.Fatal("Run error = nil, want upstream failure")
+			}
+		})
+	}
+}
+
+func newAnalysisFailureClient(t *testing.T, failedPath string) *icu.Client {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == failedPath {
+			http.Error(response, "upstream failure", http.StatusInternalServerError)
+
+			return
+		}
+
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		case strings.Contains(request.URL.Path, "/power-curves"):
+			_, _ = response.Write([]byte(`{"list":[]}`))
+		case strings.Contains(request.URL.Path, "/mmp-model"):
+			_, _ = response.Write([]byte(`{}`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	return icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+}
+
+func TestAnalysisCoachingCommandRegistered(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAnalysisCommands(registry)
+
+	cmd, ok := registry.Lookup("analysis", "coaching")
+	if !ok || cmd == nil {
+		t.Fatal("analysis coaching not found")
+	}
+}
+
+func TestAnalysisCoachingCommandReportsUpstreamFailure(t *testing.T) {
+	t.Parallel()
+
+	client := newAnalysisFailureClient(t, analysisTestAthletePath)
+	err := analysisCoachingCommand().Run(nil, map[string]string{
+		"history-oldest": "2026-04-06",
+		"history-newest": "2026-06-28",
+		"plan-oldest":    "2026-06-29",
+		"plan-newest":    "2026-07-26",
+	}, client)
+	if err == nil {
+		t.Fatal("Run error = nil, want upstream failure")
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisCoachingCommandCombinesContext(t *testing.T) {
+	requested := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requested[request.URL.Path]++
+		response.Header().Set("Content-Type", "application/json")
+
+		switch {
+		case request.URL.Path == analysisTestAthletePath:
+			_, _ = response.Write([]byte(`{"id":"i123","name":"Rider","timezone":"Europe/Madrid"}`))
+		case strings.Contains(request.URL.Path, "/activities"):
+			if request.URL.Query().Get("oldest") != "2026-04-06" {
+				t.Fatalf("activities oldest = %s, want 2026-04-06", request.URL.Query().Get("oldest"))
+			}
+			_, _ = response.Write([]byte(`[` + activityJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		case strings.Contains(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[` + wellnessJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[` + eventJSON() + `,{"id":2,"category":"NOTE","name":"Travel","description":"late flight","startDateLocal":"2026-07-01T00:00:00"}]`))
+		default:
+			_, _ = response.Write([]byte(okJSON))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient(
+		"test-key",
+		"i123",
+		icu.WithHTTPClient(server.Client()),
+		icu.WithBaseURL(server.URL),
+	)
+	cmd := analysisCoachingCommand()
+	out, err := captureStdout(t, func() error {
+		return cmd.Run(nil, map[string]string{
+			"history-oldest": "2026-04-06",
+			"history-newest": "2026-06-28",
+			"plan-oldest":    "2026-06-29",
+			"plan-newest":    "2026-07-26",
+			"sport-type":     "Ride",
+			"resolve":        "true",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.CoachingContext
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json = %q err=%v", out, err)
+	}
+	if got.Scope.Command != "analysis coaching" || len(got.Calendar.Notes) != 1 || got.Analyses.Plan == nil {
+		t.Fatalf("context = %+v, want coaching command with note and plan analysis", got)
+	}
+	for _, want := range []string{analysisTestAthletePath, "/api/v1/athlete/i123/activities", "/api/v1/athlete/i123/sport-settings/Ride", "/api/v1/athlete/i123/wellness", "/api/v1/athlete/i123/events"} {
+		if requested[want] == 0 {
+			t.Fatalf("request %s count = 0, want fetched", want)
+		}
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisCoachingCommandIncludesAdaptationWhenRequested(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.URL.Path == analysisTestAthletePath:
+			_, _ = response.Write([]byte(`{"id":"i123","name":"Rider"}`))
+		case strings.Contains(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[` + activityJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		case strings.Contains(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[` + wellnessJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[` + eventJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/power-curves"):
+			_, _ = response.Write([]byte(`{"list":[{"id":"current","label":"42d","days":42,"secs":[60],"values":[500]},{"id":"baseline","label":"365d","days":365,"secs":[60],"values":[480]}]}`))
+		case strings.Contains(request.URL.Path, "/mmp-model"):
+			_, _ = response.Write([]byte(`{"criticalPower":285,"wPrime":21000,"ftp":285}`))
+		default:
+			_, _ = response.Write([]byte(okJSON))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient(
+		"test-key",
+		"i123",
+		icu.WithHTTPClient(server.Client()),
+		icu.WithBaseURL(server.URL),
+	)
+	cmd := analysisCoachingCommand()
+	out, err := captureStdout(t, func() error {
+		return cmd.Run(nil, map[string]string{
+			"history-oldest":     "2026-04-06",
+			"history-newest":     "2026-06-28",
+			"plan-oldest":        "2026-06-29",
+			"plan-newest":        "2026-07-26",
+			"include-adaptation": "true",
+			"adaptation-curves":  "42d,365d",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.CoachingContext
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json = %q err=%v", out, err)
+	}
+	if got.Analyses.Adaptation == nil {
+		t.Fatal("adaptation = nil, want included")
+	}
+}
+
+func TestReadCoachingContextInputsReportsEachUpstreamFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		failedPath        string
+		includeAdaptation bool
+	}{
+		{name: "athlete", failedPath: analysisTestAthletePath},
+		{name: "sport settings", failedPath: "/api/v1/athlete/i123/sport-settings/Ride"},
+		{name: "activities", failedPath: "/api/v1/athlete/i123/activities"},
+		{name: "wellness", failedPath: "/api/v1/athlete/i123/wellness"},
+		{name: "events", failedPath: "/api/v1/athlete/i123/events"},
+		{name: "power curves", failedPath: "/api/v1/athlete/i123/power-curves", includeAdaptation: true},
+		{name: "mmp model", failedPath: "/api/v1/athlete/i123/mmp-model", includeAdaptation: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				if request.URL.Path == test.failedPath {
+					http.Error(response, "upstream failure", http.StatusInternalServerError)
+
+					return
+				}
+
+				response.Header().Set("Content-Type", "application/json")
+				switch {
+				case request.URL.Path == analysisTestAthletePath:
+					_, _ = response.Write([]byte(`{"id":"i123"}`))
+				case strings.Contains(request.URL.Path, "/sport-settings"):
+					_, _ = response.Write([]byte(sportJSON()))
+				case strings.Contains(request.URL.Path, "/power-curves"):
+					_, _ = response.Write([]byte(`{"list":[]}`))
+				case strings.Contains(request.URL.Path, "/mmp-model"):
+					_, _ = response.Write([]byte(`{}`))
+				default:
+					_, _ = response.Write([]byte(`[]`))
+				}
+			}))
+			t.Cleanup(server.Close)
+
+			client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+			flags := map[string]string{}
+			if test.includeAdaptation {
+				flags["include-adaptation"] = "true"
+			}
+			_, err := readCoachingContextInputs(client, flags, trainingPlanRanges{
+				History: analysisRange{Oldest: "2026-04-06", Newest: "2026-06-28"},
+				Plan:    analysisRange{Oldest: "2026-06-29", Newest: "2026-07-26"},
+			}, true)
+			if err == nil {
+				t.Fatal("readCoachingContextInputs error = nil, want upstream error")
+			}
+		})
+	}
+}
+
+func TestReadCoachingContextInputsAllowsMissingSportSettings(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.URL.Path == analysisTestAthletePath:
+			_, _ = response.Write([]byte(`{"id":"i123"}`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			http.Error(response, "missing", http.StatusNotFound)
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	inputs, err := readCoachingContextInputs(client, map[string]string{}, trainingPlanRanges{
+		History: analysisRange{Oldest: "2026-04-06", Newest: "2026-06-28"},
+		Plan:    analysisRange{Oldest: "2026-06-29", Newest: "2026-07-26"},
+	}, true)
+	if err != nil || inputs.SportSettings != nil {
+		t.Fatalf("readCoachingContextInputs = sportSettings %+v error %v, want absent settings and no error", inputs.SportSettings, err)
 	}
 }
 

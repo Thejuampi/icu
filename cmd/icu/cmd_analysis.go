@@ -58,12 +58,249 @@ type trainingPlanRanges struct {
 
 func registerAnalysisCommands(registry *CommandRegistry) {
 	registry.Register("analysis", "cycling", analysisCyclingCommand())
+	registry.Register("analysis", "coaching", analysisCoachingCommand())
 	registry.Register("analysis", "wellness", analysisWellnessCommand())
 	registry.Register("analysis", "plan", analysisPlanCommand())
 	registry.Register("analysis", "adaptation", analysisAdaptationCommand())
 	registry.Register("analysis", "microcycle", analysisMicrocycleCommand())
 	registry.Register("analysis", "micro", analysisMicroCommand())
 	registry.Register("analysis", "workout", analysisWorkoutCommand())
+}
+
+func analysisCoachingCommand() *Command {
+	return &Command{
+		Name: "",
+		Usage: "analysis coaching [--history-oldest DATE --history-newest DATE] " +
+			"[--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] " +
+			"[--sport-type TYPE] [--calendar-id ID] [--resolve BOOL] [--activity-fields CSV] [--limit N] " +
+			"[--include-adaptation BOOL] [--adaptation-curves CSV]",
+		Description: "Build one JSON coaching context from athlete, sport settings, activities, wellness, plan events, " +
+			"and optional adaptation analysis.",
+		Schema: analysisCoachingSchema(),
+		Validate: func(flags map[string]string) error {
+			_, _, err := trainingPlanDateRanges(flags, time.Now())
+
+			return err
+		},
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			dateRanges, explicit, err := trainingPlanDateRanges(flags, time.Now())
+			if err != nil {
+				return err
+			}
+
+			inputs, err := readCoachingContextInputs(client, flags, dateRanges, explicit)
+			if err != nil {
+				return err
+			}
+
+			tzInfo := analysisTimezone(explicit)
+			context := icu.BuildCoachingContext(inputs, &icu.CoachingContextOptions{
+				SportType:         icu.StringFlag(flags, "sport-type", "Ride"),
+				HistoryStartDate:  dateRanges.History.Oldest,
+				HistoryEndDate:    dateRanges.History.Newest,
+				PlanStartDate:     dateRanges.Plan.Oldest,
+				PlanEndDate:       dateRanges.Plan.Newest,
+				Timezone:          tzInfo.timezone,
+				TimezoneSource:    tzInfo.source,
+				IncludeAdaptation: BoolFlag(flags, "include-adaptation"),
+			})
+
+			return writeJSON(context)
+		},
+	}
+}
+
+func analysisCoachingSchema() *CommandSchema {
+	return &CommandSchema{
+		RejectPositionals: true,
+		Flags: []CommandFlag{
+			{Name: "history-oldest", ValueName: "DATE", Description: "History range start (YYYY-MM-DD)."},
+			{Name: "history-newest", ValueName: "DATE", Description: "History range end (YYYY-MM-DD)."},
+			{Name: "plan-oldest", ValueName: "DATE", Description: "Plan range start (YYYY-MM-DD)."},
+			{Name: "plan-newest", ValueName: "DATE", Description: "Plan range end (YYYY-MM-DD)."},
+			{Name: "history-days", ValueName: "N", Description: "History window length.", Default: "84", Kind: commandFlagPositiveInteger},
+			{Name: "plan-days", ValueName: "N", Description: "Plan window length.", Default: "28", Kind: commandFlagPositiveInteger},
+			{Name: "sport-type", ValueName: "TYPE", Description: "Intervals.icu sport type.", Default: "Ride"},
+			{Name: "calendar-id", ValueName: "ID", Description: "Calendar ID."},
+			{Name: "resolve", ValueName: "BOOL", Description: "Resolve calendar event references.", Kind: commandFlagBoolean},
+			{Name: "activity-fields", ValueName: "CSV", Description: "Activity fields fetched for analysis."},
+			{Name: "limit", ValueName: "N", Description: "Maximum history activities fetched.", Kind: commandFlagPositiveInteger},
+			{Name: "include-adaptation", ValueName: "BOOL", Description: "Include adaptation analysis.", Kind: commandFlagBoolean},
+			{Name: "adaptation-curves", ValueName: "CSV", Description: "Power curves used by adaptation.", Default: "42d,365d"},
+			{Name: "api-key", ValueName: "KEY", Description: "Intervals.icu API key."},
+			{Name: "athlete-id", ValueName: "ID", Description: "Intervals.icu athlete ID."},
+		},
+	}
+}
+
+func readCoachingContextInputs(
+	client *icu.Client,
+	flags map[string]string,
+	dateRanges trainingPlanRanges,
+	explicit bool,
+) (icu.CoachingContextInputs, error) {
+	var inputs icu.CoachingContextInputs
+
+	var athlete icu.Athlete
+	if err := client.Get("athlete", nil, nil, &athlete); err != nil {
+		return inputs, wrapCommandError(err)
+	}
+	inputs.Athlete = &athlete
+
+	sportType := icu.StringFlag(flags, "sport-type", "Ride")
+	var sportSettings icu.SportSettings
+	if err := client.Get("sport-settings", []string{sportType}, nil, &sportSettings); err != nil {
+		if !isHTTPNotFound(err) {
+			return inputs, wrapCommandError(err)
+		}
+	} else {
+		inputs.SportSettings = &sportSettings
+	}
+
+	activities, err := readCoachingActivities(client, flags, dateRanges.History)
+	if err != nil {
+		return inputs, err
+	}
+
+	wellnessRecords, err := readCoachingWellnessRecords(client, dateRanges.History)
+	if err != nil {
+		return inputs, err
+	}
+
+	events, err := readCoachingEvents(client, flags, dateRanges.Plan)
+	if err != nil {
+		return inputs, err
+	}
+	inputs.Events = events
+
+	tzInfo := analysisTimezone(explicit)
+	cycling := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
+		StartDate:      dateRanges.History.Oldest,
+		EndDate:        dateRanges.History.Newest,
+		Timezone:       tzInfo.timezone,
+		TimezoneSource: tzInfo.source,
+	})
+	inputs.Cycling = &cycling
+
+	wellness := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+		StartDate:      dateRanges.History.Oldest,
+		EndDate:        dateRanges.History.Newest,
+		Timezone:       tzInfo.timezone,
+		TimezoneSource: tzInfo.source,
+	})
+	inputs.Wellness = &wellness
+
+	if BoolFlag(flags, "include-adaptation") {
+		adaptation, err := readCoachingAdaptation(client, flags, sportType, dateRanges.History, activities, &wellness, inputs.SportSettings, tzInfo)
+		if err != nil {
+			return inputs, err
+		}
+		inputs.Adaptation = adaptation
+	}
+
+	plan := icu.AnalyzeTrainingPlanWithContext(activities, events, icu.TrainingPlanOptions{
+		HistoryStartDate: dateRanges.History.Oldest,
+		HistoryEndDate:   dateRanges.History.Newest,
+		PlanStartDate:    dateRanges.Plan.Oldest,
+		PlanEndDate:      dateRanges.Plan.Newest,
+	}, icu.TrainingPlanContext{
+		SportSettings: inputs.SportSettings,
+		Wellness:      &wellness,
+		Adaptation:    inputs.Adaptation,
+	})
+	plan.Scope.Timezone = tzInfo.timezone
+	plan.Scope.TimezoneSource = tzInfo.source
+	inputs.Plan = &plan
+
+	return inputs, nil
+}
+
+func readCoachingActivities(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Activity, error) {
+	query := queryFromFlags(flags, "limit")
+	query["oldest"] = dateRange.Oldest
+	query["newest"] = dateRange.Newest
+	query["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+
+	var activities []icu.Activity
+	if err := client.Get("activities", nil, query, &activities); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	return activities, nil
+}
+
+func readCoachingWellnessRecords(client *icu.Client, dateRange analysisRange) ([]icu.Wellness, error) {
+	query := map[string]string{
+		"oldest": dateRange.Oldest,
+		"newest": dateRange.Newest,
+	}
+
+	var records []icu.Wellness
+	if err := client.Get("wellness", nil, query, &records); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	return records, nil
+}
+
+func readCoachingEvents(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Event, error) {
+	query := queryFromFlags(flags, "calendar-id")
+	query["oldest"] = dateRange.Oldest
+	query["newest"] = dateRange.Newest
+	if BoolFlag(flags, "resolve") {
+		query["resolve"] = strTrue
+	}
+
+	var events []icu.Event
+	if err := client.Get("events", nil, query, &events); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	return events, nil
+}
+
+func readCoachingAdaptation(
+	client *icu.Client,
+	flags map[string]string,
+	sportType string,
+	dateRange analysisRange,
+	activities []icu.Activity,
+	wellness *icu.WellnessAnalysis,
+	sportSettings *icu.SportSettings,
+	tzInfo analysisTimezoneInfo,
+) (*icu.CyclingAdaptationAnalysis, error) {
+	curveQuery := map[string]string{
+		"type":   sportType,
+		"curves": icu.StringFlag(flags, "adaptation-curves", "42d,365d"),
+	}
+
+	var curveResponse struct {
+		List []icu.DataCurve `json:"list"`
+	}
+	if err := client.Get("power-curves", nil, curveQuery, &curveResponse); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	var model icu.PowerModel
+	if err := client.Get("mmp-model", nil, map[string]string{"type": sportType}, &model); err != nil {
+		return nil, wrapCommandError(err)
+	}
+
+	analysis := icu.AnalyzeCyclingAdaptation(
+		curveResponse.List,
+		model,
+		sportSettings,
+		activities,
+		wellness,
+		icu.AnalysisOptions{
+			StartDate:      dateRange.Oldest,
+			EndDate:        dateRange.Newest,
+			Timezone:       tzInfo.timezone,
+			TimezoneSource: tzInfo.source,
+		},
+	)
+
+	return &analysis, nil
 }
 
 func analysisCyclingCommand() *Command {
@@ -281,7 +518,7 @@ func readWorkoutExecutionInputs(
 	}
 	var sportSettings icu.SportSettings
 	if err := client.Get("sport-settings", []string{sportType}, nil, &sportSettings); err != nil {
-		if !isHTTPStatus(err, httpStatusNotFound) {
+		if !isHTTPNotFound(err) {
 			return inputs, options, wrapCommandError(err)
 		}
 	}
@@ -289,7 +526,7 @@ func readWorkoutExecutionInputs(
 
 	var powerModel icu.PowerModel
 	if err := client.Get("mmp-model", nil, map[string]string{"type": sportType}, &powerModel); err != nil {
-		if !isHTTPStatus(err, httpStatusNotFound) {
+		if !isHTTPNotFound(err) {
 			return inputs, options, wrapCommandError(err)
 		}
 	}
@@ -451,18 +688,27 @@ func trainingPlanDateRanges(flags map[string]string, now time.Time) (trainingPla
 func trainingPlanHistoryRange(flags map[string]string, now time.Time) (analysisRange, bool, error) {
 	oldest := icu.StringFlag(flags, "history-oldest", "")
 	newest := icu.StringFlag(flags, "history-newest", "")
+	_, hasOldest := flags["history-oldest"]
+	_, hasNewest := flags["history-newest"]
+	_, hasDays := flags["history-days"]
 
-	if oldest != "" || newest != "" {
+	if hasOldest || hasNewest {
+		if hasDays {
+			return analysisRange{}, false, fmt.Errorf("%w: explicit history dates cannot be combined with --history-days", errMissingRequired)
+		}
 		if oldest == "" || newest == "" {
 			return analysisRange{}, false, errMissing("--history-oldest and --history-newest")
+		}
+		if err := validateAnalysisRange("--history-oldest", oldest, "--history-newest", newest); err != nil {
+			return analysisRange{}, false, err
 		}
 
 		return analysisRange{Oldest: oldest, Newest: newest}, true, nil
 	}
 
-	days := IntFlag(flags, "history-days", defaultPlanHistoryDays)
-	if days <= 0 {
-		return analysisRange{}, false, fmt.Errorf("%w: --history-days must be greater than 0", errMissingRequired)
+	days, err := positiveIntFlag(flags, "history-days", defaultPlanHistoryDays)
+	if err != nil {
+		return analysisRange{}, false, err
 	}
 
 	end := now.UTC()
@@ -474,21 +720,36 @@ func trainingPlanHistoryRange(flags map[string]string, now time.Time) (analysisR
 func trainingPlanFutureRange(flags map[string]string, now time.Time) (analysisRange, bool, error) {
 	oldest := icu.StringFlag(flags, "plan-oldest", "")
 	newest := icu.StringFlag(flags, "plan-newest", "")
+	_, hasOldest := flags["plan-oldest"]
+	_, hasNewest := flags["plan-newest"]
+	_, hasDays := flags["plan-days"]
 
-	if oldest != "" || newest != "" {
+	if hasOldest || hasNewest {
+		if hasDays {
+			return analysisRange{}, false, fmt.Errorf("%w: explicit plan dates cannot be combined with --plan-days", errMissingRequired)
+		}
 		if oldest == "" || newest == "" {
 			return analysisRange{}, false, errMissing("--plan-oldest and --plan-newest")
 		}
+		if err := validateAnalysisRange("--plan-oldest", oldest, "--plan-newest", newest); err != nil {
+			return analysisRange{}, false, err
+		}
+
+		alignedOldest := alignToISOWeekStart(oldest)
+		alignedNewest := alignToISOWeekEnd(newest)
+		if err := validateAnalysisRange("aligned --plan-oldest", alignedOldest, "aligned --plan-newest", alignedNewest); err != nil {
+			return analysisRange{}, false, err
+		}
 
 		return analysisRange{
-			Oldest: alignToISOWeekStart(oldest),
-			Newest: alignToISOWeekEnd(newest),
+			Oldest: alignedOldest,
+			Newest: alignedNewest,
 		}, true, nil
 	}
 
-	days := IntFlag(flags, "plan-days", defaultPlanDays)
-	if days <= 0 {
-		return analysisRange{}, false, fmt.Errorf("%w: --plan-days must be greater than 0", errMissingRequired)
+	days, err := positiveIntFlag(flags, "plan-days", defaultPlanDays)
+	if err != nil {
+		return analysisRange{}, false, err
 	}
 
 	start := nextISOBlockStart(now.UTC())
@@ -541,18 +802,27 @@ func alignToISOWeekEnd(date string) string {
 func analysisDateRange(flags map[string]string, now time.Time) (analysisRange, bool, error) {
 	oldest := icu.StringFlag(flags, "oldest", "")
 	newest := icu.StringFlag(flags, "newest", "")
+	_, hasOldest := flags["oldest"]
+	_, hasNewest := flags["newest"]
+	_, hasDays := flags["days"]
 
-	if oldest != "" || newest != "" {
+	if hasOldest || hasNewest {
+		if hasDays {
+			return analysisRange{}, false, fmt.Errorf("%w: explicit dates cannot be combined with --days", errMissingRequired)
+		}
 		if oldest == "" || newest == "" {
 			return analysisRange{}, false, errMissing("--oldest and --newest")
+		}
+		if err := validateAnalysisRange("--oldest", oldest, "--newest", newest); err != nil {
+			return analysisRange{}, false, err
 		}
 
 		return analysisRange{Oldest: oldest, Newest: newest}, true, nil
 	}
 
-	days := IntFlag(flags, "days", defaultAnalysisDays)
-	if days <= 0 {
-		return analysisRange{}, false, fmt.Errorf("%w: --days must be greater than 0", errMissingRequired)
+	days, err := positiveIntFlag(flags, "days", defaultAnalysisDays)
+	if err != nil {
+		return analysisRange{}, false, err
 	}
 
 	normalizedNow := now.UTC()
@@ -560,6 +830,50 @@ func analysisDateRange(flags map[string]string, now time.Time) (analysisRange, b
 	start := normalizedNow.AddDate(0, 0, -days+1).Format("2006-01-02")
 
 	return analysisRange{Oldest: start, Newest: end}, false, nil
+}
+
+func positiveIntFlag(flags map[string]string, name string, defaultValue int) (int, error) {
+	value, ok := flags[name]
+	if !ok {
+		return defaultValue, nil
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%w: --%s must be an integer", errMissingRequired, name)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("%w: --%s must be greater than 0", errMissingRequired, name)
+	}
+
+	return parsed, nil
+}
+
+func validateAnalysisRange(oldestName, oldest, newestName, newest string) error {
+	oldestDate, err := parseAnalysisDate(oldestName, oldest)
+	if err != nil {
+		return err
+	}
+	newestDate, err := parseAnalysisDate(newestName, newest)
+	if err != nil {
+		return err
+	}
+	if oldestDate.After(newestDate) {
+		return fmt.Errorf("%w: %s must be on or before %s", errMissingRequired, oldestName, newestName)
+	}
+
+	return nil
+}
+
+func parseAnalysisDate(name, value string) (time.Time, error) {
+	const layout = "2006-01-02"
+
+	parsed, err := time.Parse(layout, value)
+	if err != nil || parsed.Format(layout) != value {
+		return time.Time{}, fmt.Errorf("%w: %s must use YYYY-MM-DD", errMissingRequired, name)
+	}
+
+	return parsed, nil
 }
 
 func analysisMicroCommand() *Command {
@@ -669,7 +983,7 @@ func readMicrocycleInputs(
 
 	sportType := icu.StringFlag(flags, "sport-type", "Ride")
 	if err := client.Get("sport-settings", []string{sportType}, nil, &inputs.SportSettings); err != nil {
-		if isHTTPStatus(err, httpStatusNotFound) {
+		if isHTTPNotFound(err) {
 			return inputs, nil
 		}
 
@@ -681,12 +995,12 @@ func readMicrocycleInputs(
 
 const httpStatusNotFound = 404
 
-func isHTTPStatus(err error, status int) bool {
+func isHTTPNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	return strings.Contains(err.Error(), fmt.Sprintf("HTTP status error %d", status))
+	return strings.Contains(err.Error(), fmt.Sprintf("HTTP status error %d", httpStatusNotFound))
 }
 
 func readMicrocycleActivities(

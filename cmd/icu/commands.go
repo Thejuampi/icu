@@ -6,6 +6,8 @@ type Command struct {
 	Name        string
 	Usage       string
 	Description string
+	Schema      *CommandSchema
+	Validate    func(flags map[string]string) error
 	Run         func(args []string, flags map[string]string, client *icu.Client) error
 }
 
