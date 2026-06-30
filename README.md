@@ -37,6 +37,7 @@ icu activities list --oldest 2026-05-01 --newest 2026-05-31
 icu wellness get 2026-05-31
 
 # Analysis commands
+icu analysis coaching
 icu analysis cycling
 icu analysis wellness --days 42
 icu analysis plan
@@ -164,7 +165,7 @@ Treat JSON as the effective default output format unless a command explicitly do
 ## Documentation Map
 
 - [docs/cli-reference.md](docs/cli-reference.md): exhaustive command reference for the current CLI surface, including the `zepp` resource
-- [docs/analysis.md](docs/analysis.md): detailed behavior of `analysis cycling`, `analysis wellness`, `analysis plan`, `analysis adaptation`, and `analysis microcycle`
+- [docs/analysis.md](docs/analysis.md): detailed behavior of `analysis coaching`, `analysis cycling`, `analysis wellness`, `analysis plan`, `analysis adaptation`, and `analysis microcycle`
 - [docs/rebalance.md](docs/rebalance.md): dry-run and accept workflow for editable calendar load redistribution proposals
 - [docs/library.md](docs/library.md): usage-oriented guide for `github.com/Thejuampi/icu`, including the `ZeppClient`
 - [docs/api/README.md](docs/api/README.md): OpenAPI snapshot provenance and usage notes
@@ -178,7 +179,7 @@ Current top-level resources:
 | --- | --- |
 | `activities` | `around`, `csv`, `get`, `interval-search`, `list`, `manual`, `search`, `search-full`, `upload` |
 | `activity` | `best-efforts`, `delete`, `file`, `fit-file`, `gpx-file`, `hr-curve`, `intervals`, `map`, `messages`, `pace-curve`, `power-curve`, `power-vs-hr`, `segments`, `show`, `streams`, `update`, `weather`, `weather-summary` |
-| `analysis` | `adaptation`, `cycling`, `micro`, `microcycle`, `plan`, `wellness`, `workout` |
+| `analysis` | `adaptation`, `coaching`, `cycling`, `micro`, `microcycle`, `plan`, `wellness`, `workout` |
 | `athlete` | `plan`, `profile`, `settings`, `show`, `summary`, `update` |
 | `chats` | `get`, `list`, `messages`, `send` |
 | `config` | `diagnose`, `path`, `set`, `show` |
@@ -201,8 +202,9 @@ Current top-level resources:
 
 ## Analysis Overview
 
-`icu` currently ships six primary read-only analysis commands plus the `analysis micro` alias:
+`icu` currently ships seven primary read-only analysis commands plus the `analysis micro` alias:
 
+- `analysis coaching` bundles athlete, sport settings, activities, wellness, planned events, NOTE context, plan analysis, and optional adaptation into one JSON coaching payload.
 - `analysis cycling` summarizes recent cycling load, intensity, environment, durability, anaerobic work, and session-level signals.
 - `analysis wellness` summarizes wellness coverage and physiology signals from wellness records.
 - `analysis plan` compares completed history with planned calendar events and emits a structured four-week planning view.

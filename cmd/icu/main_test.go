@@ -255,6 +255,107 @@ func TestRunMissingAPIKey(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Environment-based auth isolation prevents parallel subtests.
+func TestAnalysisCoachingRejectsInvalidInputBeforeAuth(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("INTERVALS_ICU_API_KEY", "")
+	t.Setenv("INTERVALS_ICU_ATHLETE_ID", "")
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "unknown flag", args: []string{"--bogus"}, want: "unknown flag --bogus"},
+		{name: "positional argument", args: []string{"junk"}, want: "unexpected positional argument"},
+		{name: "missing string value", args: []string{"--sport-type"}, want: "--sport-type requires a value"},
+		{name: "missing integer value", args: []string{"--history-days"}, want: "--history-days requires a value"},
+		{name: "invalid integer", args: []string{"--history-days", "abc"}, want: "--history-days must be an integer"},
+		{name: "non-positive integer", args: []string{"--history-days", "0"}, want: "--history-days must be greater than 0"},
+		{name: "invalid boolean", args: []string{"--resolve", "sometimes"}, want: "--resolve must be a boolean"},
+		{name: "malformed date", args: []string{"--history-oldest", "2026-02-30", "--history-newest", "2026-03-01"}, want: "--history-oldest must use YYYY-MM-DD"},
+		{name: "inverted range", args: []string{"--plan-oldest", "2026-07-05", "--plan-newest", "2026-06-29"}, want: "--plan-oldest must be on or before --plan-newest"},
+		{name: "conflicting range", args: []string{"--plan-oldest", "2026-06-29", "--plan-newest", "2026-07-26", "--plan-days", "28"}, want: "cannot be combined with --plan-days"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := run(append([]string{"icu", "analysis", "coaching"}, test.args...), &stdout, &stderr)
+
+			if code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), test.want) {
+				t.Fatalf("run = code %d stdout %q stderr %q, want code 1 empty stdout and %q", code, stdout.String(), stderr.String(), test.want)
+			}
+			if strings.Contains(stderr.String(), "API key required") {
+				t.Fatalf("stderr = %q, validation must run before auth", stderr.String())
+			}
+		})
+	}
+}
+
+func TestAnalysisCoachingBooleanValuesAreValid(t *testing.T) {
+	t.Parallel()
+
+	cmd := analysisCoachingCommand()
+	for _, value := range []string{"", "true", "false", "1", "0"} {
+		if err := validateCommandInput(cmd, nil, map[string]string{"resolve": value}); err != nil {
+			t.Fatalf("validateCommandInput(resolve=%q) error = %v, want nil", value, err)
+		}
+	}
+}
+
+func TestLegacyCommandWithoutSchemaKeepsLegacyValidation(t *testing.T) {
+	t.Parallel()
+
+	if err := validateCommandInput(&Command{}, []string{"legacy"}, map[string]string{"unknown": "value"}); err != nil {
+		t.Fatalf("validateCommandInput legacy error = %v, want nil", err)
+	}
+}
+
+func TestSchemaWithoutCustomValidationAcceptsValidFlags(t *testing.T) {
+	t.Parallel()
+
+	command := &Command{Schema: &CommandSchema{Flags: []CommandFlag{{Name: "name", ValueName: "VALUE"}}}}
+	if err := validateCommandInput(command, nil, map[string]string{"name": "valid"}); err != nil {
+		t.Fatalf("validateCommandInput error = %v, want nil", err)
+	}
+}
+
+func TestCommandSchemaRejectsUnsupportedFlagKind(t *testing.T) {
+	t.Parallel()
+
+	command := &Command{Schema: &CommandSchema{Flags: []CommandFlag{{Name: "invalid", Kind: CommandFlagKind(99)}}}}
+	if err := validateCommandInput(command, nil, map[string]string{"invalid": "value"}); err == nil {
+		t.Fatal("validateCommandInput error = nil, want unsupported kind error")
+	}
+}
+
+func TestAnalysisCoachingHelpUsesCommandSchema(t *testing.T) {
+	t.Parallel()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"icu", "analysis", "coaching", "--help"}, &stdout, &stderr)
+
+	if code != 0 || stderr.Len() != 0 {
+		t.Fatalf("run = code %d stderr %q, want code 0 and empty stderr", code, stderr.String())
+	}
+	for _, expected := range []string{
+		"Usage: icu analysis coaching",
+		"--history-days N",
+		"default: 84",
+		"--plan-days N",
+		"default: 28",
+		"--limit N",
+		"--include-adaptation BOOL",
+	} {
+		if !strings.Contains(stdout.String(), expected) {
+			t.Fatalf("help = %q, want %q", stdout.String(), expected)
+		}
+	}
+}
+
 func checkContains(t *testing.T, s, substr, desc string) {
 	t.Helper()
 

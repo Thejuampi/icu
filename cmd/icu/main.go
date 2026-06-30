@@ -56,6 +56,10 @@ func runDispatch(
 		return action, pos, fl, true
 	}
 
+	if tryCommandHelp(registry, resource, rest, stdout) {
+		return "", nil, nil, false
+	}
+
 	if indexOfHelp(rest) >= 0 {
 		printHelp(registry, stdout, resource)
 
@@ -85,6 +89,21 @@ func runDispatch(
 	delete(flags, "_posargs_")
 
 	return action, posArgs, flags, true
+}
+
+func tryCommandHelp(registry *CommandRegistry, resource string, rest []string, stdout io.Writer) bool {
+	if len(rest) < 2 || strings.HasPrefix(rest[0], "--") || indexOfHelp(rest[1:]) < 0 {
+		return false
+	}
+
+	command, ok := registry.Lookup(resource, rest[0])
+	if !ok || command.Schema == nil {
+		return false
+	}
+
+	printCommandHelp(stdout, command)
+
+	return true
 }
 
 //nolint:gocritic
@@ -188,6 +207,12 @@ func executeCommand(
 	if !ok {
 		fmt.Fprintf(stderr, "Unknown command: %s %s\n", resource, action)
 		fmt.Fprintf(stderr, "Run 'icu help' for available commands.\n")
+
+		return 1
+	}
+
+	if err := validateCommandInput(cmd, posArgs, flags); err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
 
 		return 1
 	}
@@ -341,5 +366,28 @@ func printResourceHelp(registry *CommandRegistry, w io.Writer, resource string) 
 		}
 
 		fmt.Fprintln(w)
+	}
+}
+
+func printCommandHelp(w io.Writer, command *Command) {
+	fmt.Fprintf(w, "Usage: icu %s\n", command.Usage)
+	if command.Description != "" {
+		fmt.Fprintf(w, "\n%s\n", command.Description)
+	}
+	if command.Schema == nil || len(command.Schema.Flags) == 0 {
+		return
+	}
+
+	fmt.Fprintln(w, "\nFlags:")
+	for _, flag := range command.Schema.Flags {
+		label := "  --" + flag.Name
+		if flag.ValueName != "" {
+			label += " " + flag.ValueName
+		}
+		description := flag.Description
+		if flag.Default != "" {
+			description += " (default: " + flag.Default + ")"
+		}
+		fmt.Fprintf(w, "  %-34s %s\n", label, description)
 	}
 }

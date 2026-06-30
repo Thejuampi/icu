@@ -1,6 +1,6 @@
 # Analysis Commands
 
-The `analysis` resource provides five read-only commands built on top of Intervals.icu data already exposed by the CLI.
+The `analysis` resource provides read-only commands built on top of Intervals.icu data already exposed by the CLI.
 All analysis output is JSON.
 
 ## Shared Behavior
@@ -12,6 +12,76 @@ All analysis output is JSON.
 - Each analysis scope includes `timezone` and `timezoneSource` so consumers can verify which timezone was used for the date range.
 - Missing source metrics are represented as zeros, omitted fields, or warnings rather than fabricated estimates.
 - These commands do not write back to Intervals.icu.
+
+## analysis coaching
+
+### Purpose
+
+Build one coaching/report context payload from the data that otherwise requires several separate CLI calls. This command is intended for LLM or coaching-layer consumers that need completed history, wellness, athlete anchors, sport settings, upcoming calendar context, NOTE events, and plan analysis in one JSON contract.
+
+### CLI Contract
+
+```bash
+icu analysis coaching \
+  [--history-oldest DATE --history-newest DATE] \
+  [--plan-oldest DATE --plan-newest DATE] \
+  [--history-days N] [--plan-days N] \
+  [--sport-type TYPE] [--calendar-id ID] [--resolve BOOL] \
+  [--activity-fields CSV] [--limit N] \
+  [--include-adaptation BOOL] [--adaptation-curves CSV]
+```
+
+Defaults:
+
+- `--history-days 84`
+- `--plan-days 28`
+- `--sport-type Ride`
+- `--adaptation-curves 42d,365d` when `--include-adaptation` is set
+- history window ends on the current UTC date
+- plan window starts on the next ISO block boundary used by the CLI
+- explicit `--plan-oldest` and `--plan-newest` dates are aligned to the enclosing ISO week boundaries (Monday/Sunday)
+
+This command uses strict, command-specific parsing. It rejects unknown flags, positional arguments, missing values, malformed integers, and invalid boolean values before authentication or HTTP calls. Boolean flags accept the bare flag or `true`, `false`, `1`, and `0`. Date values must use `YYYY-MM-DD`; explicit history and plan dates must be complete pairs in chronological order and cannot be combined with the corresponding `--history-days` or `--plan-days` flag. Day counts and `--limit` must be positive integers. Plan order is checked both before and after ISO-week alignment. `--limit` has no default and, when supplied, caps only the history activity fetch.
+
+### Upstream Data
+
+The CLI fetches:
+
+- `athlete`
+- `sport-settings` for `--sport-type`
+- completed `activities` for the history window
+- `wellness` for the history window
+- `events` for the plan window, optionally with `--resolve`
+- `power-curves` and `mmp-model` only when `--include-adaptation` is set
+
+It then runs the existing deterministic analyzers: `AnalyzeCyclingActivities`, `AnalyzeWellness`, `AnalyzeTrainingPlanWithContext`, and optionally `AnalyzeCyclingAdaptation`.
+
+### Output Sections
+
+- `scope`: command, sport, history range, plan range, and `timezone`/`timezoneSource`
+- `athlete`: athlete profile returned by the API
+- `sportSettings`: sport anchors and zones for the selected sport when available
+- `analyses.cycling`: same contract as `analysis cycling`
+- `analyses.wellness`: same contract as `analysis wellness`
+- `analyses.plan`: same contract as `analysis plan`, with wellness and optional adaptation context
+- `analyses.adaptation`: present only with `--include-adaptation`
+- `calendar.events`: all events fetched for the plan range; always an array, including `[]` when empty
+- `calendar.notes`: extracted NOTE events with date, name, and description; always an array, including `[]` when empty
+- `dataQuality`: source, warning, and missing-section metadata. Warnings retain façade warnings and aggregate analyzer warnings in stable cycling, wellness, plan, and optional adaptation order with `cycling:`, `wellness:`, `plan:`, and `adaptation:` prefixes. Exact duplicate messages are removed after prefixing.
+- `sideEffects`: explicit read-only declaration; all mutation fields are `false`
+
+### Interpretation
+
+- Prefer this command for weekly reports and planning reviews when the goal is to minimize CLI calls.
+- The command bundles existing analysis outputs; it does not add a hidden coaching recommender or new readiness thresholds.
+- NOTE events are first-class in the output because they often contain block intent, decision rules, and athlete communication.
+- Use `analysis workout` as a second call when reviewing one specific completed activity against its planned session.
+
+### Current Limitations
+
+- Output can be large because it preserves the full underlying analysis sections and calendar events.
+- Adaptation is opt-in to avoid extra power-curve and MMP calls in the common report path.
+- If sport settings are missing, the command still emits the context with `sportSettings` marked missing, but planning anchors are reduced.
 
 ## analysis cycling
 
