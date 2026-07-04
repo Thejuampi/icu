@@ -20,10 +20,10 @@ Support status meanings:
 | --- | --- | --- | --- |
 | HRV ratio, mean, latest, trend, samples, recent mean, baseline mean, robust z-score | 42-day wellness HRV series | `icu analysis wellness` | supported |
 | Resting HR and delta | 42-day wellness resting HR series | `icu analysis wellness` | supported |
-| Sleep score and coverage | 42-day wellness sleep fields | `icu analysis wellness` | supported |
+| Preferred recovery score and coverage | Zepp HybridCharge/BioCharge when available, otherwise wellness sleepScore | `icu analysis wellness.sleep` (`scoreName`, `fallbackScoreName`) | supported |
 | Subjective wellness coverage | fatigue, stress, soreness, mood, motivation | `icu analysis wellness` | supported |
 | CTL, ATL, TSB | activity or wellness load fields | `icu analysis cycling` | supported |
-| Physiology state | HRV/resting HR/sleep/load-pressure rule | `icu analysis wellness` local deterministic analysis | supported |
+| Physiology state | HRV/resting HR/preferred recovery score/load-pressure rule | `icu analysis wellness` local deterministic analysis | supported |
 | External heat/load context | weather/temp/terrain/VAM fields | `icu analysis cycling` environment context from activity fields | supported |
 
 ## Performance Signals
@@ -65,7 +65,7 @@ Support status meanings:
 | --- | --- | --- | --- |
 | 12-week completed load history | weekly TSS, hours, sessions, intensity, decoupling, and tolerance | `icu analysis plan` completed week series | supported |
 | Current load/recovery state | latest CTL, ATL, TSB, ACWR, monotony, strain | `icu analysis cycling` | supported |
-| Current physiology state | HRV, resting HR, sleep, coverage, confidence | `icu analysis wellness` | supported |
+| Current physiology state | HRV, resting HR, preferred recovery score, coverage, confidence | `icu analysis wellness` | supported |
 | Sport anchors | FTP, LTHR, W prime if available | `icu analysis plan` sport anchors from sport settings | supported |
 | Existing 4-week calendar | future workouts and notes with duration/load/intensity | `icu analysis plan` | supported |
 | Weekly planned-load grouping | ISO-week summary of future events | `icu analysis plan` | supported |
@@ -95,7 +95,7 @@ Planning output should compare the existing calendar against the athlete's recen
 | Default analysis date range | Calculated in **UTC** (`timezone: "UTC"`, `timezoneSource: "default_utc"` in scope output) | Use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate reports. |
 | API timestamps | `startDateLocal` and related fields are returned by Intervals.icu in the athlete's configured timezone; `icu` does not convert them. | Treat API timestamps as athlete-local unless the output scope says otherwise. |
 | Wellness "latest" value | Uses the newest record inside the requested date range; if today's wellness has not synced, the latest value will be from yesterday. | Spot-check `icu wellness get YYYY-MM-DD` when a value looks stale. |
-| Readiness score | Not stored in Intervals.icu wellness records unless the source syncs it. | Do not assume readiness score from another app is available in `icu analysis wellness`. |
+| Preferred recovery score source | `icu analysis wellness` prefers Zepp HybridCharge/BioCharge when Zepp auth is configured, otherwise falls back to Intervals wellness `sleepScore`. | Check `sleep.scoreName`, `sleep.fallbackScoreName`, and `warnings` before assuming Zepp-backed recovery context. |
 
 ## Implementation Priority
 

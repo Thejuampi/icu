@@ -8,7 +8,7 @@
 icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal
 ```
 
-The dry run fetches activities, events, optional sport settings for the explicit `--type`, and wellness records. It writes pretty JSON to `--file` and does not mutate Intervals.icu.
+The dry run fetches activities, events, optional sport settings for the explicit `--type`, and wellness records. When Zepp auth is available it also overlays Zepp `HybridCharge`/`BioCharge` as the preferred recovery score for the wellness analysis, with Intervals wellness `sleepScore` kept only as fallback. It writes pretty JSON to `--file` and does not mutate Intervals.icu.
 
 Use `--max-intensity IF` or `--max-watts WATTS` to cap generated POWER workout intensity. `--max-hr` is rejected because rebalance does not generate HR-target sessions.
 
@@ -65,4 +65,4 @@ Supported operation actions:
 - Planned events on `--now-date` are mutable only with `--allow-today`.
 - Physiological and planning thresholds must be dynamic or user-provided constraints; hidden hardcoded decision caps are not allowed.
 - Sparse or missing history produces blocking validation for generated operations rather than silent defaults.
-- Wellness context uses a documented 42-day default lookback, overridable with `--wellness-lookback-days`.
+- Wellness context uses a documented 42-day default lookback, overridable with `--wellness-lookback-days`, and prefers Zepp `HybridCharge`/`BioCharge` over `sleepScore` when Zepp auth is configured.

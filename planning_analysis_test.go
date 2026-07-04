@@ -581,6 +581,48 @@ func TestAnalyzeTrainingPlanAddsExplicitSleepAndRestingHRRules(t *testing.T) {
 	}
 }
 
+func TestAnalyzeTrainingPlanPrefersNamedRecoveryScoreOverSleepScore(t *testing.T) {
+	t.Parallel()
+
+	event := plannedWorkout("2026-06-01T08:00:00", "VO2 Key", 110, 3600, 0.9)
+	records := []icu.Wellness{
+		{
+			ID:         "2026-05-30",
+			RestingHR:  45,
+			SleepScore: 60,
+			PreferredScore: icu.NamedWellnessScore{
+				Name:  "zepp_hybridcharge",
+				Value: 92,
+			},
+		},
+		{
+			ID:         "2026-05-31",
+			RestingHR:  45,
+			SleepScore: 55,
+			PreferredScore: icu.NamedWellnessScore{
+				Name:  "zepp_hybridcharge",
+				Value: 90,
+			},
+		},
+	}
+
+	wellness := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: "2026-05-30",
+		EndDate:   "2026-05-31",
+	})
+
+	got := icu.AnalyzeTrainingPlanWithContext(nil, []icu.Event{event}, icu.TrainingPlanOptions{
+		HistoryStartDate: "2026-05-01",
+		HistoryEndDate:   "2026-05-31",
+		PlanStartDate:    "2026-06-01",
+		PlanEndDate:      "2026-06-01",
+	}, icu.TrainingPlanContext{Wellness: &wellness})
+
+	if containsAdjustmentCondition(got.DayAdjustments, "sleep_score_watch") || containsAdjustmentCondition(got.DayAdjustments, "sleep_score_red") || containsAdjustmentCondition(got.DayAdjustments, "wellness_state_watch") || containsAdjustmentCondition(got.DayAdjustments, "wellness_state_red") {
+		t.Fatalf("DayAdjustments = %+v, want preferred recovery score to suppress sleep fallback rules", got.DayAdjustments)
+	}
+}
+
 func TestAnalyzeTrainingPlanUsesAdaptationInDecisionGuidance(t *testing.T) {
 	t.Parallel()
 

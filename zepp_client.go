@@ -998,13 +998,30 @@ func (c *ZeppClient) ReadinessDays(ctx context.Context, oldest, newest string) (
 
 // BodyBatteryDays fetches daily body-battery levels from /v2/users/me/events.
 func (c *ZeppClient) BodyBatteryDays(ctx context.Context, oldest, newest string) ([]ZeppBodyBatteryEvent, error) {
-	preset, _ := V2EventPresetByName("body-battery")
-	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	var preset V2EventPreset
+	var raw []byte
+	var err error
+	preset, _ = V2EventPresetByName("body-battery")
+	raw, err = c.FetchV2Events(ctx, preset, oldest, newest)
 	if err != nil {
 		return nil, fmt.Errorf("fetch body battery: %w", err)
 	}
 
 	return DecodeBodyBattery(raw)
+}
+
+// HybridChargeDays fetches daily HybridCharge/BioCharge levels from /v2/users/me/events.
+func (c *ZeppClient) HybridChargeDays(ctx context.Context, oldest, newest string) ([]ZeppHybridChargeEvent, error) {
+	var preset V2EventPreset
+	var raw []byte
+	var err error
+	preset, _ = V2EventPresetByName("hybridcharge")
+	raw, err = c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch hybridcharge: %w", err)
+	}
+
+	return DecodeHybridCharge(raw)
 }
 
 // HealthSummaryDays fetches daily health summaries from /v2/users/me/events.

@@ -38,6 +38,8 @@ func registerZeppCommands(registry *CommandRegistry) {
 
 	registerV2EventCommand(registry, "readiness", mustV2EventPreset("readiness"), icu.DecodeReadiness, "Daily readiness scores from /v2/users/me/events.")
 	registerV2EventCommand(registry, "body-battery", mustV2EventPreset("body-battery"), icu.DecodeBodyBattery, "Body-battery / Charge levels from /v2/users/me/events.")
+	registerV2EventCommand(registry, "hybridcharge", mustV2EventPreset("hybridcharge"), icu.DecodeHybridCharge, "HybridCharge energy scores from /v2/users/me/events.")
+	registerV2EventCommand(registry, "biocharge", mustV2EventPreset("biocharge"), icu.DecodeHybridCharge, "Alias for hybridcharge. Reads legacy BioCharge-compatible energy scores from /v2/users/me/events.")
 	registerV2EventCommand(registry, "health-summary", mustV2EventPreset("daily-health"), icu.DecodeHealthSummary, "Daily health summaries from /v2/users/me/events.")
 	registerV2EventCommand(registry, "mood", mustV2EventPreset("emotion"), icu.DecodeMood, "Mood / emotion readings from /v2/users/me/events.")
 	registerV2EventCommand(registry, "skin-temp", mustV2EventPreset("skin-temp"), icu.DecodeSkinTemp, "Skin temperature delta readings from /v2/users/me/events.")

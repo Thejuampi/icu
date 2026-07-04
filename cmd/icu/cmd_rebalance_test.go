@@ -210,6 +210,39 @@ func TestReadRebalanceWellnessUsesExplicitLookback(t *testing.T) {
 	}
 }
 
+func TestRebalanceDryRunPrefersHybridChargeForWellnessContext(t *testing.T) {
+	withHybridChargeZeppTestServer(t, `{"items":[{"timestamp":1780272000000,"value":90},{"timestamp":1780358400000,"value":88}]}`)
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		if strings.Contains(request.URL.Path, "/wellness") {
+			_, _ = response.Write([]byte(`[{"id":"2026-05-31","sleepScore":55,"restingHr":50,"icuCtl":50,"icuAtl":50},{"id":"2026-06-01","sleepScore":60,"restingHr":49,"icuCtl":50,"icuAtl":50}]`))
+
+			return
+		}
+
+		_, _ = response.Write([]byte(functionalJSONResponse(request.Method, request.URL.Path)))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	cmd, ok := registry.Lookup("rebalance", "show")
+	if !ok {
+		t.Fatalf("missing rebalance command")
+	}
+	file := filepath.Join(t.TempDir(), "rebalance.json")
+	err := cmd.Run(nil, rebalanceDryRunFlags(file), client)
+	if err != nil {
+		t.Fatalf("rebalance dry-run: %v", err)
+	}
+
+	proposal := readRebalanceTestProposal(t, file)
+	if proposal.Context.WellnessState != "OK" {
+		t.Fatalf("wellness state = %q, want OK", proposal.Context.WellnessState)
+	}
+}
+
 func TestRebalanceDryRunRejectsMaxHRFlag(t *testing.T) {
 	t.Parallel()
 

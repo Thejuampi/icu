@@ -1,6 +1,7 @@
 package icu
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -64,18 +65,20 @@ type WellnessCoverage struct {
 }
 
 type WellnessSignal struct {
-	Mean            float64 `json:"mean,omitempty"`
-	Latest          float64 `json:"latest,omitempty"`
-	Ratio           float64 `json:"ratio,omitempty"`
-	Delta           float64 `json:"delta,omitempty"`
-	Trend7Day       float64 `json:"trend7d,omitempty"`
-	RecentMean      float64 `json:"recentMean,omitempty"`
-	BaselineMean    float64 `json:"baselineMean,omitempty"`
-	BaselineMAD     float64 `json:"baselineMad,omitempty"`
-	ZScore          float64 `json:"zScore,omitempty"`
-	ZScoreSource    string  `json:"zScoreSource,omitempty"`
-	Samples         int     `json:"samples"`
-	CoveragePercent float64 `json:"coveragePercent"`
+	Mean              float64 `json:"mean,omitempty"`
+	Latest            float64 `json:"latest,omitempty"`
+	Ratio             float64 `json:"ratio,omitempty"`
+	Delta             float64 `json:"delta,omitempty"`
+	Trend7Day         float64 `json:"trend7d,omitempty"`
+	RecentMean        float64 `json:"recentMean,omitempty"`
+	BaselineMean      float64 `json:"baselineMean,omitempty"`
+	BaselineMAD       float64 `json:"baselineMad,omitempty"`
+	ZScore            float64 `json:"zScore,omitempty"`
+	ZScoreSource      string  `json:"zScoreSource,omitempty"`
+	ScoreName         string  `json:"scoreName,omitempty"`
+	FallbackScoreName string  `json:"fallbackScoreName,omitempty"`
+	Samples           int     `json:"samples"`
+	CoveragePercent   float64 `json:"coveragePercent"`
 }
 
 type SubjectiveWellness struct {
@@ -106,17 +109,21 @@ type wellnessSample struct {
 }
 
 type wellnessAccumulator struct {
-	analysis   WellnessAnalysis
-	hrv        []wellnessSample
-	restingHR  []wellnessSample
-	sleep      []wellnessSample
-	lactate    []wellnessSample
-	fatigue    numericAccumulator
-	stress     numericAccumulator
-	soreness   numericAccumulator
-	motivation numericAccumulator
-	subjective int
-	latestLoad string
+	analysis           WellnessAnalysis
+	hrv                []wellnessSample
+	restingHR          []wellnessSample
+	sleep              []wellnessSample
+	lactate            []wellnessSample
+	fatigue            numericAccumulator
+	stress             numericAccumulator
+	soreness           numericAccumulator
+	motivation         numericAccumulator
+	subjective         int
+	latestLoad         string
+	sleepPreferredName string
+	sleepFallbackName  string
+	sleepPreferredDays int
+	sleepFallbackDays  int
 }
 
 func AnalyzeWellness(records []Wellness, options AnalysisOptions) WellnessAnalysis {
@@ -145,10 +152,43 @@ func newWellnessAccumulator(records []Wellness, options AnalysisOptions) wellnes
 func (accumulator *wellnessAccumulator) add(record *Wellness) {
 	addWellnessSample(record.HRV, &accumulator.hrv, record.ID)
 	addWellnessSample(float64(record.RestingHR), &accumulator.restingHR, record.ID)
-	addWellnessSample(record.SleepScore, &accumulator.sleep, record.ID)
+	accumulator.addSleepScore(record)
 	addWellnessSample(record.Lactate, &accumulator.lactate, record.ID)
 	accumulator.addSubjective(record)
 	accumulator.addLoad(record)
+}
+
+func (accumulator *wellnessAccumulator) addSleepScore(record *Wellness) {
+	score, preferred := preferredWellnessScore(record)
+	if score.Value == 0 {
+		return
+	}
+
+	addWellnessSample(score.Value, &accumulator.sleep, record.ID)
+	if preferred {
+		if accumulator.sleepPreferredName == "" {
+			accumulator.sleepPreferredName = score.Name
+		}
+		accumulator.sleepPreferredDays++
+
+		return
+	}
+
+	if accumulator.sleepFallbackName == "" {
+		accumulator.sleepFallbackName = score.Name
+	}
+	accumulator.sleepFallbackDays++
+}
+
+func preferredWellnessScore(record *Wellness) (NamedWellnessScore, bool) {
+	if record.PreferredScore.Name != "" && record.PreferredScore.Value != 0 {
+		return record.PreferredScore, true
+	}
+	if record.SleepScore != 0 {
+		return NamedWellnessScore{Name: "sleepScore", Value: record.SleepScore}, false
+	}
+
+	return NamedWellnessScore{}, false
 }
 
 func addWellnessSample(value float64, samples *[]wellnessSample, date string) {
@@ -201,6 +241,7 @@ func (accumulator *wellnessAccumulator) finish() WellnessAnalysis {
 	accumulator.analysis.HRV = hrvWellnessSignal(accumulator.hrv, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.RestingHR = wellnessSignal(accumulator.restingHR, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.Sleep = wellnessSignal(accumulator.sleep, accumulator.analysis.Scope.TotalDays)
+	accumulator.annotateSleepSignal()
 	accumulator.analysis.Lactate = lactateCalibration(accumulator.lactate, accumulator.analysis.Scope.TotalDays)
 	accumulator.analysis.Coverage = accumulator.coverage()
 	accumulator.analysis.Subjective = accumulator.subjectiveSummary()
@@ -211,6 +252,29 @@ func (accumulator *wellnessAccumulator) finish() WellnessAnalysis {
 	}
 
 	return accumulator.analysis
+}
+
+func (accumulator *wellnessAccumulator) annotateSleepSignal() {
+	if accumulator.sleepPreferredName != "" {
+		accumulator.analysis.Sleep.ScoreName = accumulator.sleepPreferredName
+	}
+	if accumulator.sleepPreferredName == "" && accumulator.sleepFallbackName != "" {
+		accumulator.analysis.Sleep.ScoreName = accumulator.sleepFallbackName
+
+		return
+	}
+	if accumulator.sleepPreferredName != "" && accumulator.sleepFallbackName != "" && accumulator.sleepFallbackDays > 0 {
+		accumulator.analysis.Sleep.FallbackScoreName = accumulator.sleepFallbackName
+		accumulator.analysis.Warnings = append(
+			accumulator.analysis.Warnings,
+			fmt.Sprintf(
+				"sleep signal uses %s when available and falls back to %s for %d day(s)",
+				accumulator.sleepPreferredName,
+				accumulator.sleepFallbackName,
+				accumulator.sleepFallbackDays,
+			),
+		)
+	}
 }
 
 func lactateCalibration(samples []wellnessSample, totalDays int) WellnessLactateCalibration {

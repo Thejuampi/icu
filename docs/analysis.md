@@ -151,7 +151,7 @@ Defaults:
 
 ### Upstream Data
 
-The CLI fetches `wellness` records for the requested range and passes them to `AnalyzeWellness`.
+The CLI fetches `wellness` records for the requested range. When Zepp auth is available, it also fetches Zepp HybridCharge/BioCharge for the same dates and passes that named score into `AnalyzeWellness` as the preferred recovery signal. If Zepp HybridCharge is missing or unavailable, the analysis falls back to the legacy wellness `sleepScore`.
 
 ### Output Sections
 
@@ -159,7 +159,7 @@ The CLI fetches `wellness` records for the requested range and passes them to `A
 - `coverage`: percentage coverage for HRV, resting HR, sleep, and subjective wellness
 - `hrv`: mean, latest, ratio, delta, 7-day trend, recent moving mean, baseline mean, baseline MAD, and robust z-score when enough samples exist
 - `restingHr`: mean, latest, delta, and trend
-- `sleep`: mean, latest, delta, and trend
+- `sleep`: mean, latest, delta, trend, `scoreName`, and optional `fallbackScoreName`
 - `lactate`: mean, latest, trend, coverage, and local state
 - `subjective`: fatigue, stress, soreness, and motivation means when present
 - `load`: latest CTL, ATL, and derived TSB from wellness records
@@ -171,6 +171,7 @@ The CLI fetches `wellness` records for the requested range and passes them to `A
 - The command is primarily a coverage-aware readiness summary.
 - `state` is intentionally conservative and depends on both signal direction and data completeness.
 - HRV state uses a dynamic personal baseline: the recent 7-day mean is compared with the prior samples in the requested range using MAD-based robust z-score when possible. The latest/mean ratio remains in the output as context, but it does not by itself trigger HRV `WATCH`.
+- Sleep/readiness preference is source-aware: Zepp `HybridCharge`/`BioCharge` is the primary score when available, and `sleepScore` is only a fallback. Check `sleep.scoreName`, `sleep.fallbackScoreName`, and `warnings` before treating the sleep/recovery signal as Zepp-backed.
 - Subjective metrics are only summarized when the underlying records include them.
 
 ### Current Limitations

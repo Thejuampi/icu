@@ -772,12 +772,29 @@ func TestV2EventPresetsIncludesExpectedEntries(t *testing.T) {
 func TestV2EventPresetByNameReturnsKnownPreset(t *testing.T) {
 	t.Parallel()
 
-	preset, ok := icu.V2EventPresetByName("body-battery")
+	var preset icu.V2EventPreset
+	var ok bool
+	preset, ok = icu.V2EventPresetByName("body-battery")
 	if !ok {
 		t.Fatalf("expected body-battery preset")
 	}
 
 	if preset.EventType != "Charge" || preset.SubType != "real_data" {
+		t.Fatalf("preset = %+v", preset)
+	}
+}
+
+func TestV2EventPresetByNameReturnsHybridChargePreset(t *testing.T) {
+	t.Parallel()
+
+	var preset icu.V2EventPreset
+	var ok bool
+	preset, ok = icu.V2EventPresetByName("hybridcharge")
+	if !ok {
+		t.Fatalf("expected hybridcharge preset")
+	}
+
+	if preset.EventType != "Charge" || preset.SubType != "insight_data" {
 		t.Fatalf("preset = %+v", preset)
 	}
 }
@@ -999,14 +1016,35 @@ func TestDecodeReadiness(t *testing.T) {
 func TestDecodeBodyBattery(t *testing.T) {
 	t.Parallel()
 
-	raw := zeppV2EventRaw
+	var raw string
+	raw = zeppV2EventRaw
 
-	events, err := icu.DecodeBodyBattery([]byte(raw))
+	var events []icu.ZeppBodyBatteryEvent
+	var err error
+	events, err = icu.DecodeBodyBattery([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeBodyBattery: %v", err)
 	}
 
 	if len(events) != 1 || events[0].Level != 42.5 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestDecodeHybridCharge(t *testing.T) {
+	t.Parallel()
+
+	var raw string
+	raw = `{"items":[{"timestamp":1780272000000,"value":90,"phase":"wake","source":"watch"}]}`
+
+	var events []icu.ZeppHybridChargeEvent
+	var err error
+	events, err = icu.DecodeHybridCharge([]byte(raw))
+	if err != nil {
+		t.Fatalf("DecodeHybridCharge: %v", err)
+	}
+
+	if len(events) != 1 || events[0].Score != 90 || events[0].Extra["phase"] != "wake" {
 		t.Fatalf("events = %+v", events)
 	}
 }
@@ -1105,9 +1143,20 @@ func TestZeppClientReadinessDaysHitsV2Endpoint(t *testing.T) {
 func TestZeppClientBodyBatteryDaysHitsV2Endpoint(t *testing.T) {
 	t.Parallel()
 
-	client := newZeppV2EventTestServer(t, "Charge", "real_data")
+	var client *icu.ZeppClient
+	client = newZeppV2EventTestServer(t, "Charge", "real_data")
 	if _, err := client.BodyBatteryDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
 		t.Fatalf("BodyBatteryDays: %v", err)
+	}
+}
+
+func TestZeppClientHybridChargeDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	var client *icu.ZeppClient
+	client = newZeppV2EventTestServer(t, "Charge", "insight_data")
+	if _, err := client.HybridChargeDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("HybridChargeDays: %v", err)
 	}
 }
 

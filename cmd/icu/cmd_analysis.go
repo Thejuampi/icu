@@ -162,7 +162,7 @@ func readCoachingContextInputs(
 		return inputs, err
 	}
 
-	wellnessRecords, err := readCoachingWellnessRecords(client, dateRanges.History)
+	wellnessRecords, wellnessWarnings, err := readCoachingWellnessRecords(client, dateRanges.History)
 	if err != nil {
 		return inputs, err
 	}
@@ -182,7 +182,7 @@ func readCoachingContextInputs(
 	})
 	inputs.Cycling = &cycling
 
-	wellness := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+	wellness := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
 		StartDate:      dateRanges.History.Oldest,
 		EndDate:        dateRanges.History.Newest,
 		Timezone:       tzInfo.timezone,
@@ -229,18 +229,8 @@ func readCoachingActivities(client *icu.Client, flags map[string]string, dateRan
 	return activities, nil
 }
 
-func readCoachingWellnessRecords(client *icu.Client, dateRange analysisRange) ([]icu.Wellness, error) {
-	query := map[string]string{
-		"oldest": dateRange.Oldest,
-		"newest": dateRange.Newest,
-	}
-
-	var records []icu.Wellness
-	if err := client.Get("wellness", nil, query, &records); err != nil {
-		return nil, wrapCommandError(err)
-	}
-
-	return records, nil
+func readCoachingWellnessRecords(client *icu.Client, dateRange analysisRange) ([]icu.Wellness, []string, error) {
+	return readWellnessRecordsForAnalysis(client, dateRange.Oldest, dateRange.Newest, nil)
 }
 
 func readCoachingEvents(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Event, error) {
@@ -367,18 +357,13 @@ func analysisPlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			wellnessQuery := map[string]string{
-				"oldest": dateRanges.History.Oldest,
-				"newest": dateRanges.History.Newest,
-			}
-
-			var wellnessRecords []icu.Wellness
-			if err := client.Get("wellness", nil, wellnessQuery, &wellnessRecords); err != nil {
-				return wrapCommandError(err)
+			wellnessRecords, wellnessWarnings, err := readWellnessRecordsForAnalysis(client, dateRanges.History.Oldest, dateRanges.History.Newest, nil)
+			if err != nil {
+				return err
 			}
 
 			tzInfo := analysisTimezone(explicit)
-			wellnessAnalysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
 				StartDate:      dateRanges.History.Oldest,
 				EndDate:        dateRanges.History.Newest,
 				Timezone:       tzInfo.timezone,
@@ -427,17 +412,13 @@ func analysisWellnessCommand() *Command {
 				return err
 			}
 
-			query := queryFromFlags(flags, "fields")
-			query["oldest"] = dateRange.Oldest
-			query["newest"] = dateRange.Newest
-
-			var records []icu.Wellness
-			if err := client.Get("wellness", nil, query, &records); err != nil {
-				return wrapCommandError(err)
+			records, warnings, err := readWellnessRecordsForAnalysis(client, dateRange.Oldest, dateRange.Newest, queryFromFlags(flags, "fields"))
+			if err != nil {
+				return err
 			}
 
 			tzInfo := analysisTimezone(explicit)
-			analysis := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+			analysis := analyzeWellness(records, warnings, icu.AnalysisOptions{
 				StartDate:      dateRange.Oldest,
 				EndDate:        dateRange.Newest,
 				Timezone:       tzInfo.timezone,
@@ -634,18 +615,13 @@ func analysisAdaptationCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			wellnessQuery := map[string]string{
-				"oldest": dateRange.Oldest,
-				"newest": dateRange.Newest,
-			}
-
-			var wellnessRecords []icu.Wellness
-			if err := client.Get("wellness", nil, wellnessQuery, &wellnessRecords); err != nil {
-				return wrapCommandError(err)
+			wellnessRecords, wellnessWarnings, err := readWellnessRecordsForAnalysis(client, dateRange.Oldest, dateRange.Newest, nil)
+			if err != nil {
+				return err
 			}
 
 			tzInfo := analysisTimezone(explicit)
-			wellnessAnalysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
 				StartDate:      dateRange.Oldest,
 				EndDate:        dateRange.Newest,
 				Timezone:       tzInfo.timezone,
@@ -1045,16 +1021,12 @@ func readMicrocycleWellness(
 	timezone string,
 	timezoneSource string,
 ) (*icu.WellnessAnalysis, error) {
-	wellnessQuery := map[string]string{
-		"oldest": lookbackStart,
-		"newest": dateRange.Newest,
-	}
-	var wellnessRecords []icu.Wellness
-	if err := client.Get("wellness", nil, wellnessQuery, &wellnessRecords); err != nil {
-		return nil, wrapCommandError(err)
+	wellnessRecords, warnings, err := readWellnessRecordsForAnalysis(client, lookbackStart, dateRange.Newest, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	analysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+	analysis := analyzeWellness(wellnessRecords, warnings, icu.AnalysisOptions{
 		StartDate:      lookbackStart,
 		EndDate:        dateRange.Newest,
 		Timezone:       timezone,
