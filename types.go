@@ -187,42 +187,53 @@ type ActivitySearchResult struct {
 }
 
 type Wellness struct {
-	ID           string      `json:"id"`
-	Weight       float64     `json:"weight,omitempty"`
-	RestingHR    int         `json:"restingHr,omitempty"`
-	HRV          float64     `json:"hrv,omitempty"`
-	HRVSDNN      float64     `json:"hrvSdnn,omitempty"`
-	SleepSecs    int         `json:"sleepSecs,omitempty"`
-	SleepScore   float64     `json:"sleepScore,omitempty"`
-	SleepQuality int         `json:"sleepQuality,omitempty"`
-	AvgSleepHR   float64     `json:"avgSleepingHr,omitempty"`
-	Readiness    float64     `json:"readiness,omitempty"`
-	BaevskySI    float64     `json:"baevskySi,omitempty"`
-	SpO2         float64     `json:"spO2,omitempty"`
-	Systolic     int         `json:"systolic,omitempty"`
-	Diastolic    int         `json:"diastolic,omitempty"`
-	Kcal         int         `json:"kcalConsumed,omitempty"`
-	Soreness     int         `json:"soreness,omitempty"`
-	Fatigue      int         `json:"fatigue,omitempty"`
-	Stress       int         `json:"stress,omitempty"`
-	Mood         int         `json:"mood,omitempty"`
-	Motivation   int         `json:"motivation,omitempty"`
-	Injury       int         `json:"injury,omitempty"`
-	Hydration    int         `json:"hydration,omitempty"`
-	HydrationVol float64     `json:"hydrationVolume,omitempty"`
-	BloodGlucose float64     `json:"bloodGlucose,omitempty"`
-	Lactate      float64     `json:"lactate,omitempty"`
-	BodyFat      float64     `json:"bodyFat,omitempty"`
-	Abdomen      float64     `json:"abdomen,omitempty"`
-	VO2Max       float64     `json:"vo2max,omitempty"`
-	Steps        int         `json:"steps,omitempty"`
-	Respiration  float64     `json:"respiration,omitempty"`
-	Comments     string      `json:"comments,omitempty"`
-	CTL          float64     `json:"ctl,omitempty"`
-	ATL          float64     `json:"atl,omitempty"`
-	RampRate     float64     `json:"rampRate,omitempty"`
-	SportInfo    []SportInfo `json:"sportInfo,omitempty"`
-	Locked       bool        `json:"locked,omitempty"`
+	ID             string             `json:"id"`
+	Weight         float64            `json:"weight,omitempty"`
+	RestingHR      int                `json:"restingHr,omitempty"`
+	HRV            float64            `json:"hrv,omitempty"`
+	HRVSDNN        float64            `json:"hrvSdnn,omitempty"`
+	SleepSecs      int                `json:"sleepSecs,omitempty"`
+	SleepScore     float64            `json:"sleepScore,omitempty"`
+	SleepQuality   int                `json:"sleepQuality,omitempty"`
+	AvgSleepHR     float64            `json:"avgSleepingHr,omitempty"`
+	Readiness      float64            `json:"readiness,omitempty"`
+	BaevskySI      float64            `json:"baevskySi,omitempty"`
+	SpO2           float64            `json:"spO2,omitempty"`
+	Systolic       int                `json:"systolic,omitempty"`
+	Diastolic      int                `json:"diastolic,omitempty"`
+	Kcal           int                `json:"kcalConsumed,omitempty"`
+	Soreness       int                `json:"soreness,omitempty"`
+	Fatigue        int                `json:"fatigue,omitempty"`
+	Stress         int                `json:"stress,omitempty"`
+	Mood           int                `json:"mood,omitempty"`
+	Motivation     int                `json:"motivation,omitempty"`
+	Injury         int                `json:"injury,omitempty"`
+	Hydration      int                `json:"hydration,omitempty"`
+	HydrationVol   float64            `json:"hydrationVolume,omitempty"`
+	BloodGlucose   float64            `json:"bloodGlucose,omitempty"`
+	Lactate        float64            `json:"lactate,omitempty"`
+	PreferredScore NamedWellnessScore `json:"preferredScore,omitempty"`
+	BodyFat        float64            `json:"bodyFat,omitempty"`
+	Abdomen        float64            `json:"abdomen,omitempty"`
+	VO2Max         float64            `json:"vo2max,omitempty"`
+	Steps          int                `json:"steps,omitempty"`
+	Respiration    float64            `json:"respiration,omitempty"`
+	Comments       string             `json:"comments,omitempty"`
+	CTL            float64            `json:"ctl,omitempty"`
+	ATL            float64            `json:"atl,omitempty"`
+	RampRate       float64            `json:"rampRate,omitempty"`
+	SportInfo      []SportInfo        `json:"sportInfo,omitempty"`
+	Locked         bool               `json:"locked,omitempty"`
+}
+
+type NamedWellnessScore struct {
+	Name  string  `json:"name,omitempty"`
+	Value float64 `json:"value,omitempty"`
+}
+
+type DatedWellnessScore struct {
+	Date  string             `json:"date,omitempty"`
+	Score NamedWellnessScore `json:"score,omitempty"`
 }
 
 type SportInfo struct {

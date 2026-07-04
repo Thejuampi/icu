@@ -214,6 +214,22 @@ wellnessAnalysis := icu.AnalyzeWellness(records, icu.AnalysisOptions{
 
 `WellnessAnalysis.HRV` includes the raw latest/mean ratio plus dynamic fields (`RecentMean`, `BaselineMean`, `BaselineMAD`, `ZScore`, and `ZScoreSource`) when enough records exist. The physiology state uses the dynamic recent-vs-baseline HRV signal instead of hard-coded absolute HRV values.
 
+If you have an external recovery score such as Zepp `HybridCharge`/`BioCharge`, attach it before analysis:
+
+```go
+records = icu.WithPreferredWellnessScores(records, []icu.DatedWellnessScore{
+	{
+		Date: "2026-05-31",
+		Score: icu.NamedWellnessScore{
+			Name:  "zepp_hybridcharge",
+			Value: 90,
+		},
+	},
+})
+```
+
+`AnalyzeWellness` prefers `Wellness.PreferredScore` over the legacy `SleepScore` for the sleep/recovery signal. The output exposes the chosen source in `WellnessAnalysis.Sleep.ScoreName` and, when mixed coverage forced a fallback, `WellnessAnalysis.Sleep.FallbackScoreName`.
+
 ### Adaptation analysis
 
 ```go

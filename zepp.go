@@ -268,6 +268,8 @@ func v2EventPresets() map[string]V2EventPreset {
 		"hrv-rmssd":      {Name: "hrv-rmssd", EventType: "HRVRMSSD", SubType: "real_data"},
 		"readiness":      {Name: "readiness", EventType: "readiness", SubType: "watch_score"},
 		"body-battery":   {Name: "body-battery", EventType: "Charge", SubType: "real_data"},
+		"hybridcharge":   {Name: "hybridcharge", EventType: "Charge", SubType: "insight_data"},
+		"biocharge":      {Name: "biocharge", EventType: "Charge", SubType: "insight_data"},
 		"stress-minute":  {Name: "stress-minute", EventType: "Charge", SubType: "stress_data"},
 		"respiratory":    {Name: "respiratory", EventType: "RespiratoryRate", SubType: "real_data"},
 		"daily-health":   {Name: "daily-health", EventType: "DailyHealth", SubType: "summary"},
@@ -454,6 +456,26 @@ func DecodeBodyBattery(raw []byte) ([]ZeppBodyBatteryEvent, error) {
 			Timestamp: ev.Timestamp,
 			Date:      ev.Date,
 			Level:     ev.Value,
+			Extra:     ev.Extra,
+		}
+	})
+}
+
+// ZeppHybridChargeEvent is one HybridCharge/BioCharge reading.
+type ZeppHybridChargeEvent struct {
+	Timestamp int64          `json:"timestamp"`
+	Date      string         `json:"date"`
+	Score     float64        `json:"score"`
+	Extra     map[string]any `json:"extra,omitempty"`
+}
+
+// DecodeHybridCharge decodes a raw HybridCharge/BioCharge V2 events response.
+func DecodeHybridCharge(raw []byte) ([]ZeppHybridChargeEvent, error) {
+	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppHybridChargeEvent {
+		return ZeppHybridChargeEvent{
+			Timestamp: ev.Timestamp,
+			Date:      ev.Date,
+			Score:     ev.Value,
 			Extra:     ev.Extra,
 		}
 	})

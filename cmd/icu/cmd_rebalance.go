@@ -274,12 +274,11 @@ func readRebalanceSportSettings(client *icu.Client, flags map[string]string) (*i
 
 func readRebalanceWellness(client *icu.Client, oldest, newest string, flags map[string]string) (*icu.WellnessAnalysis, error) {
 	wellnessOldest := rebalanceWellnessStart(oldest, IntFlag(flags, "wellness-lookback-days", rebalanceWellnessLookbackDays))
-	query := map[string]string{"oldest": wellnessOldest, "newest": newest}
-	var records []icu.Wellness
-	if err := client.Get("wellness", nil, query, &records); err != nil {
-		return nil, wrapCommandError(err)
+	records, warnings, err := readWellnessRecordsForAnalysis(client, wellnessOldest, newest, nil)
+	if err != nil {
+		return nil, err
 	}
-	analysis := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+	analysis := analyzeWellness(records, warnings, icu.AnalysisOptions{
 		StartDate:      wellnessOldest,
 		EndDate:        newest,
 		Timezone:       icu.DefaultAnalysisTimezone,
@@ -488,9 +487,8 @@ func readRebalanceInputFromScope(client *icu.Client, startDate, endDate string, 
 	}
 	var wellnessAnalysis *icu.WellnessAnalysis
 	wellnessOldest := rebalanceWellnessStart(startDate, rebalanceWellnessLookbackDays)
-	var wellnessRecords []icu.Wellness
-	if err := client.Get("wellness", nil, map[string]string{"oldest": wellnessOldest, "newest": endDate}, &wellnessRecords); err == nil {
-		analysis := icu.AnalyzeWellness(wellnessRecords, icu.AnalysisOptions{
+	if wellnessRecords, warnings, err := readWellnessRecordsForAnalysis(client, wellnessOldest, endDate, nil); err == nil {
+		analysis := analyzeWellness(wellnessRecords, warnings, icu.AnalysisOptions{
 			StartDate:      wellnessOldest,
 			EndDate:        endDate,
 			Timezone:       icu.DefaultAnalysisTimezone,

@@ -99,6 +99,7 @@ icu zepp spo2    --oldest 2026-06-01 --newest 2026-06-07
 icu zepp stress  --oldest 2026-06-01 --newest 2026-06-07
 icu zepp pai     --oldest 2026-06-01 --newest 2026-06-07
 icu zepp hrv     --metric rmssd --oldest 2026-06-01 --newest 2026-06-07
+icu zepp hybridcharge --oldest 2026-06-01 --newest 2026-06-07
 icu zepp body-battery --oldest 2026-06-01 --newest 2026-06-07
 icu zepp sport-load --oldest 2026-06-01 --newest 2026-06-07
 icu zepp weight  --oldest 2026-06-01 --newest 2026-06-07
@@ -131,13 +132,18 @@ should leave them unset.
 
 #### BioCharge / HybridCharge
 
-The Zepp mobile app calculates **BioCharge** (renamed **HybridCharge** in
-Zepp 10.4.0+) on-device from sleep, stress, PAI, and workout history. The
-public HTTP API does not return the score itself, so the CLI exposes the
-raw inputs the score is derived from. To compute BioCharge in your
-analysis agent, combine the data from `icu zepp sleep`, `icu zepp stress`,
-`icu zepp pai`, and `icu zepp workouts` — the proprietary weighting
-changes between app releases and is not implemented by this CLI.
+Recent Zepp app versions expose the energy score behind **BioCharge**
+(renamed **HybridCharge** in Zepp 10.4.0+) through the Zepp V2 events stream.
+Use `icu zepp hybridcharge` or the legacy alias `icu zepp biocharge` when the
+score is available for your account/app build. The lower-level supporting
+signals are still available through `icu zepp sleep`, `icu zepp stress`,
+`icu zepp pai`, `icu zepp readiness`, `icu zepp body-battery`, and
+`icu zepp workouts` when you need to inspect the components directly.
+
+When Zepp auth is configured, `analysis wellness`, `analysis coaching`,
+`analysis plan`, `analysis microcycle`, and `rebalance` prefer
+`HybridCharge`/`BioCharge` for the sleep/recovery signal and only fall back to
+the Intervals wellness `sleepScore` when the Zepp score is unavailable.
 
 ## Help And Discovery
 
@@ -198,7 +204,7 @@ Current top-level resources:
 | `weather` | `config`, `forecast` |
 | `wellness` | `bulk`, `get`, `list`, `update`, `upload` |
 | `workouts` | `calculate`, `create`, `delete`, `get`, `list`, `tags`, `update` |
-| `zepp` | `blood-pressure`, `body-battery`, `events`, `health-summary`, `heart-rate`, `hrv`, `login`, `logout`, `manual-data`, `mood`, `pai`, `profile`, `readiness`, `respiratory-rate`, `second-heart-rate`, `skin-temp`, `sleep`, `spo2`, `spo2-windows`, `sport-load`, `status`, `stress`, `stress-minute`, `summary`, `token`, `vo2`, `weight`, `workout`, `workouts` |
+| `zepp` | `biocharge`, `blood-pressure`, `body-battery`, `events`, `health-summary`, `heart-rate`, `hrv`, `hybridcharge`, `login`, `logout`, `manual-data`, `mood`, `pai`, `profile`, `readiness`, `respiratory-rate`, `second-heart-rate`, `skin-temp`, `sleep`, `spo2`, `spo2-windows`, `sport-load`, `status`, `stress`, `stress-minute`, `summary`, `token`, `vo2`, `weight`, `workout`, `workouts` |
 
 ## Analysis Overview
 

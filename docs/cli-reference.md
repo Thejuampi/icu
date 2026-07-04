@@ -162,7 +162,7 @@ Invoke these commands as `icu activity <id> <action>`.
 - `coaching`
   Invocation: `icu analysis coaching [--history-oldest DATE --history-newest DATE] [--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve BOOL] [--activity-fields CSV] [--limit N] [--include-adaptation BOOL] [--adaptation-curves CSV]`
   Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`, `--adaptation-curves 42d,365d` when adaptation is requested
-  Notes: Read-only JSON facade for coaching/report workflows. Fetches athlete, sport settings, history activities, wellness, plan-range events, NOTE events, and optional adaptation inputs, then bundles existing cycling, wellness, plan, and adaptation analyses into one payload. Parsing is strict: unknown flags, positional arguments, missing values, malformed dates/integers, and invalid booleans fail before auth or HTTP. Booleans accept bare/`true`/`false`/`1`/`0`; explicit date pairs cannot be mixed with their day flags; day counts and `--limit` must be positive. `--limit` caps only history activities. Plan ranges are validated before and after ISO-week alignment. Empty calendar collections are `[]`; top-level warnings include stable, prefixed, exact-deduplicated analyzer warnings.
+  Notes: Read-only JSON facade for coaching/report workflows. Fetches athlete, sport settings, history activities, wellness, plan-range events, NOTE events, and optional adaptation inputs, then bundles existing cycling, wellness, plan, and adaptation analyses into one payload. Wellness-backed readiness prefers Zepp `HybridCharge`/`BioCharge` when Zepp auth is available and falls back to Intervals wellness `sleepScore` otherwise. Parsing is strict: unknown flags, positional arguments, missing values, malformed dates/integers, and invalid booleans fail before auth or HTTP. Booleans accept bare/`true`/`false`/`1`/`0`; explicit date pairs cannot be mixed with their day flags; day counts and `--limit` must be positive. `--limit` caps only history activities. Plan ranges are validated before and after ISO-week alignment. Empty calendar collections are `[]`; top-level warnings include stable, prefixed, exact-deduplicated analyzer warnings.
   Example: `icu analysis coaching --history-oldest 2026-04-06 --history-newest 2026-06-28 --plan-oldest 2026-06-29 --plan-newest 2026-07-26 --resolve`
 
 - `cycling`
@@ -174,13 +174,13 @@ Invoke these commands as `icu activity <id> <action>`.
 - `wellness`
   Invocation: `icu analysis wellness [--oldest DATE --newest DATE | --days N] [--fields CSV]`
   Defaults: `--days 28`
-  Notes: `--days` must be a positive integer; invalid values are errors. Explicit dates must use `YYYY-MM-DD`, be chronological, and cannot be combined with `--days`. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`. HRV readiness uses a dynamic recent-vs-baseline comparison with robust z-score when enough samples exist; the raw latest/mean ratio is contextual only.
+  Notes: `--days` must be a positive integer; invalid values are errors. Explicit dates must use `YYYY-MM-DD`, be chronological, and cannot be combined with `--days`. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`. HRV readiness uses a dynamic recent-vs-baseline comparison with robust z-score when enough samples exist; the raw latest/mean ratio is contextual only. The sleep/recovery signal prefers Zepp `HybridCharge`/`BioCharge` when Zepp auth is available and exposes the chosen source through `sleep.scoreName`, with `sleep.fallbackScoreName` and `warnings` when it had to fall back to `sleepScore`.
   Example: `icu analysis wellness --oldest 2026-04-20 --newest 2026-05-31`
 
 - `plan`
   Invocation: `icu analysis plan [--history-oldest DATE --history-newest DATE] [--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve] [--activity-fields CSV]`
   Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`
-  Notes: Explicit history and plan ranges must be complete chronological `YYYY-MM-DD` pairs and cannot be combined with their corresponding day flags. `--history-days` and `--plan-days` must be positive integers; invalid values are errors. Plan dates are aligned to ISO week boundaries (Monday/Sunday) and the aligned range is revalidated so weekly planned loads are complete. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`.
+  Notes: Explicit history and plan ranges must be complete chronological `YYYY-MM-DD` pairs and cannot be combined with their corresponding day flags. `--history-days` and `--plan-days` must be positive integers; invalid values are errors. Plan dates are aligned to ISO week boundaries (Monday/Sunday) and the aligned range is revalidated so weekly planned loads are complete. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`. The embedded wellness context uses the same Zepp `HybridCharge`/`BioCharge` preference and `sleepScore` fallback as `analysis wellness`.
   Example: `icu analysis plan --history-days 84 --plan-days 28 --resolve`
 
 - `adaptation`
@@ -192,7 +192,7 @@ Invoke these commands as `icu activity <id> <action>`.
 - `microcycle`
   Invocation: `icu analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]`
   Defaults: current Monday-Sunday microcycle, `--sport-type Ride`, system timezone fallback when `--timezone` is omitted.
-  Notes: Experimental read-only diagnostic contract for LLM/skill consumers. Reads activities with a 90-day lookback, planned events, wellness, and sport settings. JSON is the primary contract; human output is a brief inspection view.
+  Notes: Experimental read-only diagnostic contract for LLM/skill consumers. Reads activities with a 90-day lookback, planned events, wellness, and sport settings. When wellness is enabled, the readiness sleep/recovery signal prefers Zepp `HybridCharge`/`BioCharge` and falls back to `sleepScore` when needed. JSON is the primary contract; human output is a brief inspection view.
   Example: `icu analysis microcycle --from 2026-06-08 --to 2026-06-14 --json`
 
 - `micro`
@@ -210,7 +210,7 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `show`
   Invocation: `icu rebalance show --file PATH --oldest DATE --newest DATE [--target-load N] [--target-tolerance N] [--now-date DATE] [--type SPORT] [--target POWER] [--start-time HH:MM] [--min-session-minutes N] [--duration-step-minutes N] [--allocation-basis explicit_equal] [--allow-today] [--allow-past] [--wellness-lookback-days N] [--max-intensity IF] [--max-watts WATTS]`
-  Notes: Dry-run command. It fetches completed activities, calendar events, sport settings only when `--type` is explicitly provided, and wellness context, then writes a pretty JSON proposal to `--file`. It does not mutate Intervals.icu. The proposal includes baseline load, dynamic targets, selected operations, validation, source hashes for update/cancel operations, and per-session decision sources for sport type, target type, time, allocation, intensity, duration, and classification. `--max-intensity` and `--max-watts` cap generated POWER workout intensity; `--max-hr` is rejected because rebalance does not generate HR-target sessions, and `--target` must be `POWER` when provided. Rebalance does not use hidden fallback IF, sport type, target type, tolerance, duration, time, or allocation defaults; missing sport settings/history must be supplied through explicit flags or the proposal is blocking. `--wellness-lookback-days` defaults to `42` as the analysis window used to fetch wellness context.
+  Notes: Dry-run command. It fetches completed activities, calendar events, sport settings only when `--type` is explicitly provided, and wellness context, then writes a pretty JSON proposal to `--file`. It does not mutate Intervals.icu. Wellness-backed readiness prefers Zepp `HybridCharge`/`BioCharge` when Zepp auth is available and falls back to `sleepScore` otherwise. The proposal includes baseline load, dynamic targets, selected operations, validation, source hashes for update/cancel operations, and per-session decision sources for sport type, target type, time, allocation, intensity, duration, and classification. `--max-intensity` and `--max-watts` cap generated POWER workout intensity; `--max-hr` is rejected because rebalance does not generate HR-target sessions, and `--target` must be `POWER` when provided. Rebalance does not use hidden fallback IF, sport type, target type, tolerance, duration, time, or allocation defaults; missing sport settings/history must be supplied through explicit flags or the proposal is blocking. `--wellness-lookback-days` defaults to `42` as the analysis window used to fetch wellness context.
   Example: `icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal`
 
 - `accept`
@@ -533,10 +533,12 @@ as raw base64 **and** decoded into typed structs so the CLI can render them.
 Workout `hrSeries`/`paceSeries`/`altitudeSeries`/`powerSeries`/`stepSeries` are
 decoded from Zepp's delta-encoded 2-byte shorts back into absolute series.
 
-The Zepp mobile app calculates **BioCharge** (renamed to **HybridCharge** in
-Zepp 10.4.0+) on-device from sleep, stress, PAI, and workout history. The public
-HTTP API does not return the score itself, so the CLI exposes the raw inputs
-the score is derived from. Compute BioCharge in your analysis agent.
+Recent Zepp app versions expose the energy score behind **BioCharge** /
+**HybridCharge** through `/v2/users/me/events` as `Charge/insight_data` for some
+accounts and app builds. The CLI exposes that stream directly as
+`zepp hybridcharge` and `zepp biocharge`, while keeping the lower-level
+readiness/body-battery/health-summary inputs available when you need to inspect
+the raw components.
 
 - `token`
   Invocation: `icu zepp token --email EMAIL [--password PASSWORD]`
@@ -630,6 +632,16 @@ the score is derived from. Compute BioCharge in your analysis agent.
   Invocation: `icu zepp body-battery --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Body-battery / Charge levels from `/v2/users/me/events`.
   Example: `icu zepp body-battery --oldest 2026-06-01 --newest 2026-06-07`
+
+- `hybridcharge`
+  Invocation: `icu zepp hybridcharge --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: HybridCharge energy scores from `/v2/users/me/events` using `Charge/insight_data`. Zepp app 10.4+ renamed BioCharge to HybridCharge.
+  Example: `icu zepp hybridcharge --oldest 2026-06-01 --newest 2026-06-07`
+
+- `biocharge`
+  Invocation: `icu zepp biocharge --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Notes: Alias for `zepp hybridcharge` for older Zepp terminology.
+  Example: `icu zepp biocharge --oldest 2026-06-01 --newest 2026-06-07`
 
 - `health-summary`
   Invocation: `icu zepp health-summary --oldest YYYY-MM-DD --newest YYYY-MM-DD`

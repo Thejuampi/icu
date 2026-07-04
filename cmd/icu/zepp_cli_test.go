@@ -706,6 +706,20 @@ func TestZeppV2WellnessCommandsHitCorrectEndpoint(t *testing.T) {
 			subType:   "real_data",
 		},
 		{
+			name:      "hybridcharge",
+			cmdName:   "hybridcharge",
+			flags:     map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"},
+			eventType: "Charge",
+			subType:   "insight_data",
+		},
+		{
+			name:      "biocharge",
+			cmdName:   "biocharge",
+			flags:     map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"},
+			eventType: "Charge",
+			subType:   "insight_data",
+		},
+		{
 			name:      "health-summary",
 			cmdName:   "health-summary",
 			flags:     map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"},

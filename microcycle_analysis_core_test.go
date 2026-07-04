@@ -292,6 +292,54 @@ func TestAnalyzeMicrocycleHighConfidenceOnTrack(t *testing.T) {
 	}
 }
 
+func TestAnalyzeMicrocyclePrefersNamedRecoveryScoreOverSleepScore(t *testing.T) {
+	t.Parallel()
+
+	wellness := icu.AnalyzeWellness([]icu.Wellness{
+		{
+			ID:         "2026-06-08",
+			HRV:        42,
+			RestingHR:  50,
+			SleepScore: 60,
+			PreferredScore: icu.NamedWellnessScore{
+				Name:  "zepp_hybridcharge",
+				Value: 90,
+			},
+		},
+		{
+			ID:         "2026-06-09",
+			HRV:        44,
+			RestingHR:  49,
+			SleepScore: 55,
+			PreferredScore: icu.NamedWellnessScore{
+				Name:  "zepp_hybridcharge",
+				Value: 88,
+			},
+		},
+	}, icu.AnalysisOptions{StartDate: "2026-06-08", EndDate: "2026-06-14"})
+
+	got := icu.AnalyzeMicrocycle(
+		[]icu.Activity{microcycleActivity("i1", "2026-06-08T07:00:00", 60, 0.7)},
+		[]icu.Event{microcycleWorkout("2026-06-08T07:00:00", 60)},
+		&wellness,
+		&icu.SportSettings{FTP: 285, PowerZones: []int{55, 75, 90, 105}},
+		&icu.MicrocycleOptions{
+			StartDate:        "2026-06-08",
+			EndDate:          "2026-06-14",
+			Timezone:         "UTC",
+			TimezoneSource:   "system",
+			Now:              time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC),
+			PlanIncluded:     true,
+			WellnessIncluded: true,
+			SportType:        "Ride",
+		},
+	)
+
+	if got.Wellness.State.State != "OK" || !microcycleContainsString(got.Wellness.PositiveSignals, "sleep_score_ok") {
+		t.Fatalf("wellness = %+v, want OK state with positive sleep signal from preferred score", got.Wellness)
+	}
+}
+
 func TestAnalyzeMicrocyclePartialHeartRateAvailability(t *testing.T) {
 	t.Parallel()
 
@@ -358,4 +406,14 @@ func microcycleWorkout(date string, load int) icu.Event {
 		MovingTime:     3600,
 		TrainingLoad:   load,
 	}
+}
+
+func microcycleContainsString(values []string, want string) bool {
+	for index := range values {
+		if values[index] == want {
+			return true
+		}
+	}
+
+	return false
 }

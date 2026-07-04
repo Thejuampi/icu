@@ -24,6 +24,18 @@ func wellnessRecordWithHRV(dayOffset int, hrv float64) icu.Wellness {
 	}
 }
 
+func wellnessRecordWithPreferredScore(date string, preferredName string, preferredValue float64, sleepScore float64) icu.Wellness {
+	return icu.Wellness{
+		ID:         date,
+		RestingHR:  50,
+		SleepScore: sleepScore,
+		PreferredScore: icu.NamedWellnessScore{
+			Name:  preferredName,
+			Value: preferredValue,
+		},
+	}
+}
+
 func TestAnalyzeWellnessComputesHRV(t *testing.T) {
 	t.Parallel()
 
@@ -92,6 +104,60 @@ func TestAnalyzeWellnessComputesPhysiologyState(t *testing.T) {
 
 	if got.State.State != "WATCH" || got.State.Confidence != "high" || got.Load.TSB != -14 {
 		t.Fatalf("State = %+v Load = %+v, want WATCH high TSB -14", got.State, got.Load)
+	}
+}
+
+func TestAnalyzeWellnessPrefersNamedScoreOverSleepScore(t *testing.T) {
+	t.Parallel()
+
+	records := []icu.Wellness{
+		wellnessRecordWithPreferredScore(testWellnessStartDate, "zepp_hybridcharge", 92, 60),
+		wellnessRecordWithPreferredScore(testWellnessSecondDate, "zepp_hybridcharge", 88, 55),
+	}
+
+	got := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: testWellnessStartDate,
+		EndDate:   testWellnessSecondDate,
+	})
+
+	if got.Sleep.Latest != 88 || got.Sleep.Mean != 90 || got.Sleep.ScoreName != "zepp_hybridcharge" || got.State.State != "OK" {
+		t.Fatalf("Sleep = %+v State = %+v, want latest 88 mean 90 score zepp_hybridcharge state OK", got.Sleep, got.State)
+	}
+}
+
+func TestAnalyzeWellnessFallsBackToSleepScoreWhenNamedScoreMissing(t *testing.T) {
+	t.Parallel()
+
+	records := []icu.Wellness{
+		{ID: testWellnessStartDate, RestingHR: 50, SleepScore: 82},
+		{ID: testWellnessSecondDate, RestingHR: 49, SleepScore: 78},
+	}
+
+	got := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: testWellnessStartDate,
+		EndDate:   testWellnessSecondDate,
+	})
+
+	if got.Sleep.Latest != 78 || got.Sleep.ScoreName != "sleepScore" || got.Sleep.FallbackScoreName != "" {
+		t.Fatalf("Sleep = %+v, want latest 78 primary sleepScore with no fallback", got.Sleep)
+	}
+}
+
+func TestAnalyzeWellnessReportsNamedScoreFallbackUsage(t *testing.T) {
+	t.Parallel()
+
+	records := []icu.Wellness{
+		wellnessRecordWithPreferredScore(testWellnessStartDate, "zepp_hybridcharge", 90, 75),
+		{ID: testWellnessSecondDate, RestingHR: 49, SleepScore: 72},
+	}
+
+	got := icu.AnalyzeWellness(records, icu.AnalysisOptions{
+		StartDate: testWellnessStartDate,
+		EndDate:   testWellnessSecondDate,
+	})
+
+	if got.Sleep.ScoreName != "zepp_hybridcharge" || got.Sleep.FallbackScoreName != "sleepScore" || len(got.Warnings) == 0 {
+		t.Fatalf("Sleep = %+v Warnings = %v, want zepp_hybridcharge with sleepScore fallback warning", got.Sleep, got.Warnings)
 	}
 }
 

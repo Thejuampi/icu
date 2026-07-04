@@ -313,6 +313,186 @@ func TestAnalysisPlanCommandReportsUpstreamFailures(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisWellnessCommandPrefersZeppHybridCharge(t *testing.T) {
+	t.Setenv("ZEPP_LOGIN_TOKEN", "tok")
+	t.Setenv("ZEPP_APP_TOKEN", "app")
+	t.Setenv("ZEPP_USER_ID", "u1")
+
+	zeppServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		if request.URL.Path != "/v2/users/me/events" {
+			http.NotFound(response, request)
+
+			return
+		}
+		if !strings.Contains(request.URL.RawQuery, "eventType=Charge") || !strings.Contains(request.URL.RawQuery, "subType=insight_data") {
+			http.Error(response, "missing hybridcharge preset", http.StatusBadRequest)
+
+			return
+		}
+
+		_, _ = response.Write([]byte(`{"items":[{"timestamp":1780272000000,"value":90},{"timestamp":1780358400000,"value":88}]}`))
+	}))
+	t.Cleanup(zeppServer.Close)
+	t.Setenv("ZEPP_BASE_URL", zeppServer.URL)
+
+	intervalsServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-06-01","sleepScore":60,"restingHr":50},{"id":"2026-06-02","sleepScore":55,"restingHr":49}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(intervalsServer.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(intervalsServer.Client()), icu.WithBaseURL(intervalsServer.URL))
+	output, err := captureStdout(t, func() error {
+		return analysisWellnessCommand().Run(nil, map[string]string{
+			"oldest": "2026-06-01",
+			"newest": "2026-06-02",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error = %v", err)
+	}
+
+	var got icu.WellnessAnalysis
+	err = json.Unmarshal([]byte(output), &got)
+	if err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	if got.Sleep.ScoreName != "zepp_hybridcharge" || got.Sleep.Latest != 88 || got.State.State != "OK" {
+		t.Fatalf("Sleep = %+v State = %+v, want zepp_hybridcharge latest 88 state OK", got.Sleep, got.State)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisCoachingCommandPropagatesPreferredWellnessScore(t *testing.T) {
+	withHybridChargeZeppTestServer(t, `{"items":[{"timestamp":1780272000000,"value":90},{"timestamp":1780358400000,"value":88}]}`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.URL.Path == analysisTestAthletePath:
+			_, _ = response.Write([]byte(`{"id":"i123","name":"Rider"}`))
+		case strings.Contains(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		case strings.Contains(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-06-01","sleepScore":60,"restingHr":50},{"id":"2026-06-02","sleepScore":55,"restingHr":49}]`))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[]`))
+		default:
+			_, _ = response.Write([]byte(okJSON))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func() error {
+		return analysisCoachingCommand().Run(nil, map[string]string{
+			"history-oldest": "2026-06-01",
+			"history-newest": "2026-06-02",
+			"plan-oldest":    "2026-06-01",
+			"plan-newest":    "2026-06-07",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.CoachingContext
+	err = json.Unmarshal([]byte(out), &got)
+	if err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	if got.Analyses.Wellness == nil || got.Analyses.Wellness.Sleep.ScoreName != "zepp_hybridcharge" || got.Analyses.Wellness.State.State != "OK" {
+		t.Fatalf("wellness = %+v, want zepp_hybridcharge state OK", got.Analyses.Wellness)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisPlanCommandPrefersHybridChargeForWellnessRules(t *testing.T) {
+	withHybridChargeZeppTestServer(t, `{"items":[{"timestamp":1780185600000,"value":92},{"timestamp":1780272000000,"value":90}]}`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		case strings.Contains(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-05-30","sleepScore":60,"restingHr":45},{"id":"2026-05-31","sleepScore":55,"restingHr":45}]`))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[{"id":1,"category":"WORKOUT","type":"Ride","name":"VO2 Key","startDateLocal":"2026-06-01T08:00:00","icuTrainingLoad":110,"movingTime":3600,"icuIntensity":0.9}]`))
+		default:
+			_, _ = response.Write([]byte(okJSON))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func() error {
+		return analysisPlanCommand().Run(nil, map[string]string{
+			"history-oldest": "2026-05-30",
+			"history-newest": "2026-05-31",
+			"plan-oldest":    "2026-06-01",
+			"plan-newest":    "2026-06-01",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.TrainingPlanAnalysis
+	err = json.Unmarshal([]byte(out), &got)
+	if err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	if len(got.PlannedSessions) != 1 || !got.PlannedSessions[0].KeySession || hasAdjustmentCondition(got.DayAdjustments, "sleep_score_watch") || hasAdjustmentCondition(got.DayAdjustments, "sleep_score_red") || hasAdjustmentCondition(got.DayAdjustments, "wellness_state_watch") || hasAdjustmentCondition(got.DayAdjustments, "wellness_state_red") {
+		t.Fatalf("plannedSessions/dayAdjustments = %+v / %+v, want key session without sleep or wellness fallback gates", got.PlannedSessions, got.DayAdjustments)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisMicrocycleCommandPrefersHybridChargeInWellnessSummary(t *testing.T) {
+	withHybridChargeZeppTestServer(t, `{"items":[{"timestamp":1780272000000,"value":90},{"timestamp":1780358400000,"value":88}]}`)
+
+	out := runMicrocycleCommandJSONTest(t, map[string]string{
+		"from":     "2026-06-01",
+		"to":       "2026-06-07",
+		"json":     "true",
+		"timezone": "UTC",
+	}, func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[` + activityJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[` + eventJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-06-01","sleepScore":60,"restingHr":50},{"id":"2026-06-02","sleepScore":55,"restingHr":49}]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		default:
+			_, _ = response.Write([]byte(okJSON))
+		}
+	})
+
+	var got icu.MicrocycleAnalysis
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	if got.Wellness.State.State != "OK" || !containsString(got.Wellness.PositiveSignals, "sleep_score_ok") {
+		t.Fatalf("wellness = %+v, want OK state with sleep_score_ok signal", got.Wellness)
+	}
+}
+
 func TestAnalysisAdaptationCommandReportsUpstreamFailures(t *testing.T) {
 	t.Parallel()
 
@@ -1157,6 +1337,51 @@ func TestReadMicrocycleInputsReturnsSourceErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func withHybridChargeZeppTestServer(t *testing.T, payload string) {
+	t.Helper()
+	t.Setenv("ZEPP_LOGIN_TOKEN", "tok")
+	t.Setenv("ZEPP_APP_TOKEN", "app")
+	t.Setenv("ZEPP_USER_ID", "u1")
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		if request.URL.Path != "/v2/users/me/events" {
+			http.NotFound(response, request)
+
+			return
+		}
+		if !strings.Contains(request.URL.RawQuery, "eventType=Charge") || !strings.Contains(request.URL.RawQuery, "subType=insight_data") {
+			http.Error(response, "missing hybridcharge preset", http.StatusBadRequest)
+
+			return
+		}
+
+		_, _ = response.Write([]byte(payload))
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("ZEPP_BASE_URL", server.URL)
+}
+
+func hasAdjustmentCondition(adjustments []icu.TrainingPlanDayAdjustment, condition string) bool {
+	for index := range adjustments {
+		if adjustments[index].Condition == condition {
+			return true
+		}
+	}
+
+	return false
+}
+
+func containsString(values []string, want string) bool {
+	for index := range values {
+		if values[index] == want {
+			return true
+		}
+	}
+
+	return false
 }
 
 func TestReadMicrocycleInputsAllowsMissingSportSettings(t *testing.T) {
