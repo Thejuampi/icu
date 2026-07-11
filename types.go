@@ -155,6 +155,17 @@ type Activity struct {
 	CTL                float64    `json:"icuCtl,omitempty"`
 }
 
+// ActivityEx represents the request body for updating completed activities.
+// Field names use snake_case to match the Intervals.icu API contract.
+//
+//nolint:tagliatelle // API requires snake_case
+type ActivityEx struct {
+	Name         string `json:"name,omitempty"`
+	Description  string `json:"description,omitempty"`
+	Type         string `json:"type,omitempty"`
+	TrainingLoad int    `json:"icu_training_load,omitempty"`
+}
+
 type ZoneTime struct {
 	ID   string `json:"id"`
 	Secs int    `json:"secs"`
@@ -426,6 +437,12 @@ type ActivityStream struct {
 	Type string `json:"type,omitempty"`
 	Name string `json:"name,omitempty"`
 	Data any    `json:"data,omitempty"`
+}
+
+// UpdateStreamsResult is returned by PUT /api/v1/activity/{id}/streams.
+type UpdateStreamsResult struct {
+	Updated []string `json:"updated,omitempty"`
+	Deleted []string `json:"deleted,omitempty"`
 }
 
 type MapData struct {

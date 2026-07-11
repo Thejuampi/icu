@@ -226,7 +226,7 @@ func TestActivityUpdateSendsTrainingLoad(t *testing.T) {
 
 	err := cmd.Run([]string{"i123"}, flags("training-load", "139"), client)
 
-	if err != nil || len(serverState.Requests) != 1 || !strings.Contains(serverState.Requests[0].Body, `"icuTrainingLoad":139`) {
+	if err != nil || len(serverState.Requests) != 1 || !strings.Contains(serverState.Requests[0].Body, `"icu_training_load":139`) {
 		t.Fatalf("activity update body = %+v err=%v, want training load", serverState.Requests, err)
 	}
 }

@@ -105,7 +105,57 @@ icu activity i123 streams
 
 Use `icu activity <id> show --intervals` when the task needs the full activity payload plus interval data in a single response. Use `icu activity <id> intervals` when only the interval block is needed.
 
-Useful activity fields: `id`, `name`, `start_date_local`, `type`, `moving_time`, `elapsed_time`, `distance`, `total_elevation_gain`, `average_heartrate`, `max_heartrate`, `icu_average_watts`, `icu_weighted_avg_watts`, `calories`, `icu_training_load`, `icu_intensity`, `icu_ftp`, `icu_pm_cp`, `icu_pm_w_prime`, `icu_pm_p_max`, `icu_rolling_cp`, `icu_rolling_w_prime`, `icu_rolling_ftp`, `decoupling`, `icu_efficiency_factor`, `icu_variability_index`, `icu_power_hr`, `icu_rpe`, `feel`, `perceived_exertion`, `session_rpe`, `compliance`, `average_speed`, `average_temp`, `source`, `external_id`, `tags`, `description`, `device_name`, `gear`.
+Useful activity fields: `id`, `name`, `start_date_local`, `type`, `moving_time`, `elapsed_time`, `distance`, `total_elevation_gain`, `average_heartrate`, `max_heartrate`, `icu_average_watts`, `icu_weighted_avg_watts`, `calories`, `icu_training_load`, `hr_load`, `hr_load_type`, `trimp`, `icu_intensity`, `icu_ftp`, `icu_pm_cp`, `icu_pm_w_prime`, `icu_pm_p_max`, `icu_rolling_cp`, `icu_rolling_w_prime`, `icu_rolling_ftp`, `decoupling`, `icu_efficiency_factor`, `icu_variability_index`, `icu_power_hr`, `icu_rpe`, `feel`, `perceived_exertion`, `session_rpe`, `compliance`, `average_speed`, `average_temp`, `average_wind_speed`, `headwind_percent`, `tailwind_percent`, `prevailing_wind_deg`, `average_altitude`, `source`, `external_id`, `tags`, `description`, `device_name`, `gear`.
+
+### Power Meter Death / Estimate Power Gaps
+
+When a dual-sided (or other) power meter dies mid-ride, do **not** treat every zero as coasting and do **not** invent load from RPE.
+
+**Null vs zero**
+
+- Coasting (meter alive): `watts=0` and `cadence` present `0` → `true_zero` (do not fill).
+- PM death: `watts=0` (or null) and **cadence null** while moving → `missing` (fill candidate).
+- Dual-sided PM: `left_right_balance` present while alive (real first half with power + RPM + L/R); long **null L/R tail after the last present balance sample** marks death. Prefer balance over cadence for the death index (mid-ride freewheels null cadence temporarily).
+
+**Standard dry-run → accept**
+
+```bash
+# Dry-run (does not mutate). Default types include left_right_balance.
+icu activity i123 estimate-power --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured --file fill.json
+
+# Inspect: classification.meterDeathIndex, deathSource, fill.*, metrics, weather warnings
+# Accept only after review (supporter feature; mutates watts stream)
+icu activity i123 estimate-power-accept --file fill.json
+```
+
+**Re-fill after a prior accept** (positive watts already written into the dead half look measured):
+
+```bash
+# Prefer: L/R balance death, then cadence end-tail
+icu activity i123 estimate-power --rider-mass-kg 81 --bike-mass-kg 7.8 \
+  --calibrate-from-measured --refill-after-pm-death --file fill.json
+icu activity i123 estimate-power-accept --file fill.json
+```
+
+Other refill controls: `--refill-from-index N`, `--refill-after-cadence-death` (cadence-only). First half with real power stays measured for calibration.
+
+**Weather / aero (outdoor only)**
+
+- Automatic for outdoor rides: activity wind/temp/head-tail if present, else free Open-Meteo (archive → forecast past → historical-forecast). No API key.
+- Relative wind uses track heading from activity map. Density from pressure/temp when available.
+- `--no-weather` skips external fetch (activity fields only). Do not invent wind constants.
+- Indoor / `VirtualRide`: not free-air physics; do not use outdoor estimate-power as truth (prefer `hrLoad` load repair when needed).
+
+**Backtest (outdoor replay validation)**
+
+```bash
+icu activity i123 estimate-power-backtest --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured
+# Modes: mask_second_half | mask_after_fraction | mask_scatter
+```
+
+**Load after fill**
+
+- Accept writes `watts` only. Intervals reanalysis owns NP/load. If load remains wrong with good HR coverage, use API `hrLoad`/`HRSS` via `activity update --training-load N` only with explicit user approval.
 
 ### Wellness
 

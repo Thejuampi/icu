@@ -101,6 +101,23 @@ Invoke these commands as `icu activity <id> <action>`.
   Invocation: `icu activity <id> streams [--types watts,heartrate,cadence]`
   Example: `icu activity i123 streams --types watts,heartrate`
 
+- `estimate-power`
+  Invocation: `icu activity <id> estimate-power --bike-mass-kg N [--rider-mass-kg N] [--cda N | --calibrate-from-measured] [--crr N] [--drivetrain-eff N] [--air-density N] [--min-gap-seconds N] [--include-streams] [--file PATH] [--types CSV] [--ftp N] [--no-weather] [--refill-after-pm-death | --refill-after-cadence-death | --refill-from-index N]`
+  Defaults: stream `--types watts,cadence,left_right_balance,altitude,distance,velocity_smooth,heartrate,time`; when omitted, `--crr` defaults to `0.0045` and `--drivetrain-eff` to `0.975` (both labeled in output warnings as explicit omissions, not silent coaching thresholds). Rider mass falls back to athlete `icuWeight`/`weight` when `--rider-mass-kg` is omitted.
+  Notes: Read-only dry-run. Classifies each sample as `measured`, `true_zero`, or `missing`. Dual-sided PM edge cases use `left_right_balance`: L/R is present only while the meter is alive (first half with real watts+RPM+balance stays measured); a long null L/R tail after the last present sample is meter death. Cadence freewheels mid-ride are not death (end-anchored cadence null only). Prior accepted fills leave positive watts after death; pass `--refill-after-pm-death` (balance → cadence) to re-open only that second-half gap. Outdoor aero weather priority: activity fields → Open-Meteo archive → forecast past → historical-forecast. Prefer `--calibrate-from-measured` on the alive segment. Does not mutate Intervals.icu.
+  Example: `icu activity i123 estimate-power --bike-mass-kg 9 --calibrate-from-measured --refill-after-pm-death --file fill.json`
+
+- `estimate-power-accept`
+  Invocation: `icu activity <id> estimate-power-accept --file PATH`
+  Notes: Mutates the activity by `PUT`ing the filled `watts` stream from a prior `estimate-power --file` result. Requires matching `activityId` and non-empty `filledWatts`. Does not invent `icu_training_load`; server reanalysis owns load after the stream write. Supporter-only upstream.
+  Example: `icu activity i123 estimate-power-accept --file fill.json`
+
+- `estimate-power-backtest`
+  Invocation: `icu activity <id> estimate-power-backtest --bike-mass-kg N [--rider-mass-kg N] [--crr N] [--drivetrain-eff N] [--calibrate-from-measured] [--mode mask_second_half|mask_after_fraction|mask_scatter] [--mask-fraction 0.5] [--no-weather]`
+  Defaults: `--mode mask_second_half`, `--calibrate-from-measured` when `--cda` is omitted, `--mask-fraction 0.5` for `mask_after_fraction`, `0.35` for `mask_scatter`.
+  Notes: Read-only replay for **outdoor** rides only (`VirtualRide`/Zwift/indoor rejected — not real free-air physics). Uses the same real-weather aero path as `estimate-power`. Modes: `mask_second_half` / `mask_after_fraction` simulate mid-ride PM death; `mask_scatter` drops samples across the ride to score model fidelity when neighbors still exist. Scores include pearsonR, spearmanRho, MAD residual z-scores, robustRmse (outlier-aware), zScorePearsonR.
+  Example: `icu activity i123 estimate-power-backtest --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured`
+
 - `power-vs-hr`
   Invocation: `icu activity <id> power-vs-hr`
   Example: `icu activity i123 power-vs-hr`

@@ -10,14 +10,14 @@ func registerActivityCommands(registry *CommandRegistry) {
 	)
 	registry.Register(
 		"activity", "update",
-		updateByIDCommand[icu.Activity, icu.Activity](
+		updateByIDCommand[icu.ActivityEx, icu.Activity](
 			"activity",
 			"activity <id> update --name NAME [--description DESC] [--type Ride] [--training-load N]",
 			"Update an activity.",
 			"activity id",
 			nil,
-			func(flags map[string]string) icu.Activity {
-				var a icu.Activity
+			func(flags map[string]string) icu.ActivityEx {
+				var a icu.ActivityEx
 				if v := flags["name"]; v != "" {
 					a.Name = v
 				}
@@ -72,6 +72,7 @@ func registerActivityCommands(registry *CommandRegistry) {
 	registerActivityCurveCommands(registry)
 	registerActivityDetailCommands(registry)
 	registerActivityDownloadCommands(registry)
+	registerActivityEstimatePowerCommands(registry)
 }
 
 func registerActivityCurveCommands(registry *CommandRegistry) {
