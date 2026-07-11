@@ -150,12 +150,46 @@ Other refill controls: `--refill-from-index N`, `--refill-after-cadence-death` (
 
 ```bash
 icu activity i123 estimate-power-backtest --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured
+# Outdoor only. Prefer continuous measured PM (no prior fill). Scores: pearsonR, spearmanRho, bias, residual MAD-z, robustRmse.
+# In-repo gates: physics ≥0.95 r; outdoor-shaped fixture ≥0.80 r + bias/MAD-z bounds. CFD is not the fidelity path.
 # Modes: mask_second_half | mask_after_fraction | mask_scatter
+```
+
+**Backup before accept (rollback)**
+
+Accept mutates the Intervals watts stream. Before publishing:
+
+1. Save `icu activity ID streams --types watts,...` (or full streams) to a local backup dir.
+2. Keep the dry-run `--file fill.json` that will be accepted.
+3. Build a rollback payload: a prior fill file or streams snapshot that can be re-accepted to restore previous watts.
+4. Only then run `estimate-power-accept`.
+
+Example restore after a bad publish:
+
+```bash
+icu activity i123 estimate-power-accept --file rollback-accept-payload.json
 ```
 
 **Load after fill**
 
 - Accept writes `watts` only. Intervals reanalysis owns NP/load. If load remains wrong with good HR coverage, use API `hrLoad`/`HRSS` via `activity update --training-load N` only with explicit user approval.
+
+**Strava (and other platforms) after fill**
+
+Intervals stream writes do **not** update Strava power. Strava keeps the original upload (often Wahoo/Garmin with dead-PM zeros). The Strava API cannot rewrite watts on an existing activity.
+
+To fix Strava:
+
+1. Export the **Intervals-processed** FIT (includes modified streams after accept), not the original device file:
+   ```bash
+   icu activity i123 fit-file > activity-filled.fit
+   # Optional reference (original device bytes, pre-edit):
+   icu activity i123 file > activity-original.bin
+   ```
+   On Windows PowerShell prefer `icu activity i123 fit-file` written to a path the CLI supports, or download **Fit File** from the Intervals activity UI (not “Original”).
+2. On Strava: **delete** the broken ride, then upload `activity-filled.fit` at https://www.strava.com/upload/select.
+3. Avoid Intervals duplicates: if Strava/Wahoo re-import creates a second activity, keep the already-fixed Intervals activity as training truth and delete/merge the duplicate.
+4. Optional metadata-only: Intervals settings can sync title/description to linked Strava activities; that does **not** fix power.
 
 ### Wellness
 

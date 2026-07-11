@@ -110,7 +110,12 @@ func ConfigAuditPath() string {
 }
 
 func LoadConfig() (*Config, error) {
-	return currentConfigStore().Load()
+	cfg, err := currentConfigStore().Load()
+	if err != nil {
+		return nil, fmt.Errorf("load config: %w", err)
+	}
+
+	return cfg, nil
 }
 
 func SaveConfig(cfg *Config) error {
@@ -121,8 +126,11 @@ func SaveConfigWithAction(cfg *Config, action string) error {
 	if action == "" {
 		action = defaultConfigSaveAction
 	}
+	if err := currentConfigStore().Save(cfg, action); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
 
-	return currentConfigStore().Save(cfg, action)
+	return nil
 }
 
 func (store *MemoryConfigStore) ConfigPath() string {
@@ -362,7 +370,7 @@ func sanitizeTestScopeName(name string) string {
 	return builder.String()
 }
 
-func buildConfigAuditEntry(action, configPath, auditPath string, previous *Config, next *Config, now time.Time, testMode bool) ConfigAuditEntry {
+func buildConfigAuditEntry(action, configPath, auditPath string, previous, next *Config, now time.Time, testMode bool) ConfigAuditEntry {
 	var changedFields []string
 	var secretMutations []string
 
@@ -392,7 +400,7 @@ func buildConfigAuditEntry(action, configPath, auditPath string, previous *Confi
 	}
 }
 
-func appendChangedField(changedFields *[]string, previous string, next string, name string) {
+func appendChangedField(changedFields *[]string, previous, next, name string) {
 	if previous == next {
 		return
 	}
@@ -400,7 +408,7 @@ func appendChangedField(changedFields *[]string, previous string, next string, n
 	*changedFields = append(*changedFields, name)
 }
 
-func appendSecretMutation(mutations *[]string, previous string, next string, name string) {
+func appendSecretMutation(mutations *[]string, previous, next, name string) {
 	if previous == next {
 		return
 	}
@@ -408,7 +416,7 @@ func appendSecretMutation(mutations *[]string, previous string, next string, nam
 	*mutations = append(*mutations, classifySecretMutation(previous, next, name))
 }
 
-func classifySecretMutation(previous string, next string, name string) string {
+func classifySecretMutation(previous, next, name string) string {
 	if previous == "" && next != "" {
 		return name + ":set"
 	}
@@ -422,13 +430,15 @@ func classifySecretMutation(previous string, next string, name string) string {
 func appendFile(path string, data []byte, mode os.FileMode) error {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, mode)
 	if err != nil {
-		return err
+		return fmt.Errorf("open audit file: %w", err)
 	}
 	defer file.Close()
 
-	_, err = file.Write(data)
+	if _, err = file.Write(data); err != nil {
+		return fmt.Errorf("write audit file: %w", err)
+	}
 
-	return err
+	return nil
 }
 
 func currentConfigStore() ConfigStore {

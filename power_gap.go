@@ -20,8 +20,8 @@ const (
 
 // PowerGapInputs are nullable streams used to classify power blanks.
 type PowerGapInputs struct {
-	Watts    NullableSeries
-	Cadence  NullableSeries
+	Watts   NullableSeries
+	Cadence NullableSeries
 	// Balance is left_right_balance (percent left, dual-sided PM). Present only while
 	// the power meter is alive and reporting L/R; null after mid-ride PM death.
 	Balance  NullableSeries
@@ -41,8 +41,8 @@ type PowerGapSegment struct {
 
 // Power meter death detection sources (hardware signals preferred over labels).
 const (
-	PowerDeathSourceBalance   = "left_right_balance"
-	PowerDeathSourceCadence   = "cadence"
+	PowerDeathSourceBalance    = "left_right_balance"
+	PowerDeathSourceCadence    = "cadence"
 	PowerDeathSourceMissingRun = "missing_run"
 )
 
@@ -188,7 +188,7 @@ func classificationLength(inputs *PowerGapInputs) int {
 
 func countPresent(series NullableSeries) int {
 	var n int
-	for index := 0; index < series.Len(); index++ {
+	for index := range series.Len() {
 		if _, ok := series.At(index); ok {
 			n++
 		}
@@ -392,7 +392,7 @@ func DetectBalanceDeathIndex(balance NullableSeries) int {
 	}
 	lastPresent := -1
 	presentCount := 0
-	for index := 0; index < n; index++ {
+	for index := range n {
 		if _, ok := balance.At(index); ok {
 			lastPresent = index
 			presentCount++

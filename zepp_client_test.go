@@ -1058,8 +1058,7 @@ func TestDecodeReadiness(t *testing.T) {
 func TestDecodeBodyBattery(t *testing.T) {
 	t.Parallel()
 
-	var raw string
-	raw = zeppV2EventRaw
+	var raw string = zeppV2EventRaw
 
 	var events []icu.ZeppBodyBatteryEvent
 	var err error
@@ -1076,8 +1075,7 @@ func TestDecodeBodyBattery(t *testing.T) {
 func TestDecodeHybridCharge(t *testing.T) {
 	t.Parallel()
 
-	var raw string
-	raw = `{"items":[{"timestamp":1780272000000,"value":90,"phase":"wake","source":"watch"}]}`
+	var raw string = `{"items":[{"timestamp":1780272000000,"value":90,"phase":"wake","source":"watch"}]}`
 
 	var events []icu.ZeppHybridChargeEvent
 	var err error
@@ -1185,8 +1183,7 @@ func TestZeppClientReadinessDaysHitsV2Endpoint(t *testing.T) {
 func TestZeppClientBodyBatteryDaysHitsV2Endpoint(t *testing.T) {
 	t.Parallel()
 
-	var client *icu.ZeppClient
-	client = newZeppV2EventTestServer(t, "Charge", "real_data")
+	var client *icu.ZeppClient = newZeppV2EventTestServer(t, "Charge", "real_data")
 	if _, err := client.BodyBatteryDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
 		t.Fatalf("BodyBatteryDays: %v", err)
 	}
@@ -1195,8 +1192,7 @@ func TestZeppClientBodyBatteryDaysHitsV2Endpoint(t *testing.T) {
 func TestZeppClientHybridChargeDaysHitsV2Endpoint(t *testing.T) {
 	t.Parallel()
 
-	var client *icu.ZeppClient
-	client = newZeppV2EventTestServer(t, "Charge", "insight_data")
+	var client *icu.ZeppClient = newZeppV2EventTestServer(t, "Charge", "insight_data")
 	if _, err := client.HybridChargeDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
 		t.Fatalf("HybridChargeDays: %v", err)
 	}

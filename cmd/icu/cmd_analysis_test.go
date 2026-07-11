@@ -313,7 +313,6 @@ func TestAnalysisPlanCommandReportsUpstreamFailures(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAnalysisWellnessCommandPrefersZeppHybridCharge(t *testing.T) {
 	t.Setenv("ZEPP_LOGIN_TOKEN", "tok")
 	t.Setenv("ZEPP_APP_TOKEN", "app")

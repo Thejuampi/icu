@@ -646,5 +646,212 @@ func seriesFromCLI(values []float64, present []bool) icu.NullableSeries {
 			present[i] = true
 		}
 	}
+
 	return icu.NullableSeries{Values: values, Present: present}
+}
+
+func refillMaskStreams(n, death int) icu.NullableStreamData {
+	watts := make([]float64, n)
+	wp := make([]bool, n)
+	cad := make([]float64, n)
+	cp := make([]bool, n)
+	bal := make([]float64, n)
+	bp := make([]bool, n)
+	for i := range n {
+		if i < death {
+			watts[i] = 200
+			wp[i] = true
+			cad[i] = 90
+			cp[i] = true
+			bal[i] = 50
+			bp[i] = true
+			continue
+		}
+		// Prior accepted fill sits as positive watts without L/R or cadence.
+		watts[i] = 180
+		wp[i] = true
+		cp[i] = false
+		bp[i] = false
+	}
+
+	return icu.NullableStreamData{
+		"watts":              seriesFromCLI(watts, wp),
+		"cadence":            seriesFromCLI(cad, cp),
+		"left_right_balance": seriesFromCLI(bal, bp),
+	}
+}
+
+func TestApplyEstimatePowerRefillMaskFromIndex(t *testing.T) {
+	t.Parallel()
+
+	streams := refillMaskStreams(100, 40)
+	got, warnings, err := applyEstimatePowerRefillMask(streams, map[string]string{
+		"refill-from-index": "40",
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(warnings) == 0 {
+		t.Fatal("expected refill warning")
+	}
+	// Second half cadence must be absent so classification treats it as missing.
+	cad := icu.NullableStream(got, "cadence")
+	if _, ok := cad.At(50); ok {
+		t.Fatal("expected cadence masked after refill index")
+	}
+	if _, ok := cad.At(10); !ok {
+		t.Fatal("first-half cadence must stay present")
+	}
+}
+
+func TestApplyEstimatePowerRefillMaskInvalidIndex(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := applyEstimatePowerRefillMask(refillMaskStreams(20, 10), map[string]string{
+		"refill-from-index": "nope",
+	})
+	if err == nil {
+		t.Fatal("expected invalid index error")
+	}
+	_, _, err = applyEstimatePowerRefillMask(refillMaskStreams(20, 10), map[string]string{
+		"refill-from-index": "99",
+	})
+	if err == nil {
+		t.Fatal("expected out-of-range index error")
+	}
+}
+
+func TestApplyEstimatePowerRefillMaskAfterPMDeath(t *testing.T) {
+	t.Parallel()
+
+	streams := refillMaskStreams(120, 50)
+	got, warnings, err := applyEstimatePowerRefillMask(streams, map[string]string{
+		"refill-after-pm-death": "true",
+	})
+	if err != nil {
+		t.Fatalf("err=%v warnings=%v", err, warnings)
+	}
+	if len(warnings) == 0 {
+		t.Fatal("expected mask warning")
+	}
+	cad := icu.NullableStream(got, "cadence")
+	if _, ok := cad.At(80); ok {
+		t.Fatal("expected second-half cadence masked")
+	}
+}
+
+func TestApplyEstimatePowerRefillMaskAfterCadenceDeath(t *testing.T) {
+	t.Parallel()
+
+	// Cadence-only death: no balance stream.
+	n := 80
+	watts := make([]float64, n)
+	wp := make([]bool, n)
+	cad := make([]float64, n)
+	cp := make([]bool, n)
+	for i := range n {
+		watts[i] = 190
+		wp[i] = true
+		if i < 40 {
+			cad[i] = 85
+			cp[i] = true
+		}
+	}
+	streams := icu.NullableStreamData{
+		"watts":   seriesFromCLI(watts, wp),
+		"cadence": seriesFromCLI(cad, cp),
+	}
+	got, _, err := applyEstimatePowerRefillMask(streams, map[string]string{
+		"refill-after-cadence-death": "true",
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if _, ok := icu.NullableStream(got, "cadence").At(60); ok {
+		t.Fatal("expected cadence masked after death")
+	}
+}
+
+func TestApplyEstimatePowerRefillMaskPMDeathMissing(t *testing.T) {
+	t.Parallel()
+
+	// All balance present — no death tail.
+	n := 40
+	bal := make([]float64, n)
+	bp := make([]bool, n)
+	cad := make([]float64, n)
+	cp := make([]bool, n)
+	watts := make([]float64, n)
+	wp := make([]bool, n)
+	for i := range n {
+		bal[i] = 50
+		bp[i] = true
+		cad[i] = 90
+		cp[i] = true
+		watts[i] = 200
+		wp[i] = true
+	}
+	streams := icu.NullableStreamData{
+		"watts":              seriesFromCLI(watts, wp),
+		"cadence":            seriesFromCLI(cad, cp),
+		"left_right_balance": seriesFromCLI(bal, bp),
+	}
+	_, _, err := applyEstimatePowerRefillMask(streams, map[string]string{
+		"refill-after-pm-death": "true",
+	})
+	if err == nil {
+		t.Fatal("expected missing death error")
+	}
+}
+
+func TestApplyEstimatePowerRefillMaskSoftHintPriorFill(t *testing.T) {
+	t.Parallel()
+
+	// No refill flag: long synthetic tail after balance death should warn.
+	streams := refillMaskStreams(100, 40)
+	_, warnings, err := applyEstimatePowerRefillMask(streams, map[string]string{})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	found := false
+	for _, warning := range warnings {
+		if strings.Contains(warning, "prior fill") || strings.Contains(warning, "refill-after-pm-death") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected prior-fill soft hint, got %v", warnings)
+	}
+}
+
+func TestResolveRiderMassFromWellness(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if strings.Contains(request.URL.Path, "wellness") {
+			_, _ = writer.Write([]byte(`[{"id":"1","weight":0},{"id":"2","weight":81.5}]`))
+			return
+		}
+		writer.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	mass, source, ok := resolveRiderMassFromWellness(client)
+	if !ok || mass != 81.5 || source != "wellness_weight" {
+		t.Fatalf("mass=%v source=%s ok=%v", mass, source, ok)
+	}
+}
+
+func TestResolveRiderMassFromWellnessEmpty(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	if _, _, ok := resolveRiderMassFromWellness(client); ok {
+		t.Fatal("expected no mass")
+	}
 }

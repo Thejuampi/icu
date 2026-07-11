@@ -1,6 +1,7 @@
 package icu
 
 import (
+	"errors"
 	"fmt"
 	"math"
 )
@@ -478,7 +479,7 @@ func maskStreamsScatter(streams NullableStreamData, fraction float64) (NullableS
 	watts := NullableStream(streams, "watts")
 	n := watts.Len()
 	if n < 60 {
-		return nil, 0, fmt.Errorf("series too short for scatter mask")
+		return nil, 0, errors.New("series too short for scatter mask")
 	}
 	// Deterministic: mask every stride-th sample.
 	stride := int(math.Round(1 / fraction))
@@ -565,7 +566,7 @@ func maskStreamsForBacktest(streams NullableStreamData, maskStart int) NullableS
 
 func actualWattsDense(watts NullableSeries, n int) []float64 {
 	out := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if v, ok := watts.At(i); ok {
 			out[i] = v
 		}

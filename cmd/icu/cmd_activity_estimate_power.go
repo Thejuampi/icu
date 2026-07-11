@@ -511,7 +511,7 @@ func buildWeatherSeries(
 func denseTimeSecs(streams icu.NullableStreamData, sampleCount int) []float64 {
 	timeSeries := icu.NullableStream(streams, "time")
 	timeSecs := make([]float64, sampleCount)
-	for idx := 0; idx < sampleCount; idx++ {
+	for idx := range sampleCount {
 		if value, ok := timeSeries.At(idx); ok {
 			timeSecs[idx] = value
 		} else {

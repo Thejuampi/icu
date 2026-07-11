@@ -280,14 +280,14 @@ func HeadingSeriesFromLatLngs(latlngs [][]float64, sampleCount int) []float64 {
 		return nil
 	}
 	trackHeadings := make([]float64, len(pts))
-	for idx := 0; idx < len(pts)-1; idx++ {
+	for idx := range len(pts) - 1 {
 		trackHeadings[idx] = BearingDeg(pts[idx][0], pts[idx][1], pts[idx+1][0], pts[idx+1][1])
 	}
 	trackHeadings[len(pts)-1] = trackHeadings[len(pts)-2]
 
 	out := make([]float64, sampleCount)
 	last := float64(len(pts) - 1)
-	for idx := 0; idx < sampleCount; idx++ {
+	for idx := range sampleCount {
 		trackIdx := 0
 		if sampleCount > 1 {
 			trackIdx = int(math.Round(float64(idx) * last / float64(sampleCount-1)))
@@ -332,7 +332,7 @@ func HeadwindSeriesFromHours(
 		return nil
 	}
 	out := make([]float64, sampleCount)
-	for idx := 0; idx < sampleCount; idx++ {
+	for idx := range sampleCount {
 		sec := sampleTimeSec(timeSecs, idx)
 		tUnix := startUTC.Unix() + int64(sec)
 		windSpeed, windFrom := interpolateWind(hours, tUnix)
@@ -357,7 +357,7 @@ func DensitySeriesFromHours(
 	meanTempC, fallbackRho float64,
 ) []float64 {
 	out := make([]float64, sampleCount)
-	for idx := 0; idx < sampleCount; idx++ {
+	for idx := range sampleCount {
 		out[idx] = densityAtSample(hours, altitude, timeSecs, startUTC, idx, meanTempC, fallbackRho)
 	}
 
@@ -441,7 +441,7 @@ func hourBracket(hours []OutdoorWeatherHour, tUnix int64) (OutdoorWeatherHour, O
 	if tUnix >= last.TimeUnix {
 		return last, last, 0, true
 	}
-	for idx := 0; idx < len(hours)-1; idx++ {
+	for idx := range len(hours) - 1 {
 		left, right := hours[idx], hours[idx+1]
 		if tUnix < left.TimeUnix || tUnix > right.TimeUnix {
 			continue
@@ -577,7 +577,7 @@ func fetchOpenMeteo(
 	reqURL := base + "?" + values.Encode()
 	ctx, cancel := context.WithTimeout(context.Background(), outdoorWeatherDefaultTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("open-meteo request: %w", err)
 	}
@@ -676,7 +676,7 @@ func filterHoursToWindow(hours []OutdoorWeatherHour, start, end time.Time) []Out
 }
 
 // MapCentroid returns the average of valid latlng points, or bounds center.
-func MapCentroid(bounds [][]float64, latlngs [][]float64) (float64, float64, bool) {
+func MapCentroid(bounds, latlngs [][]float64) (float64, float64, bool) {
 	var sumLat, sumLon float64
 	var count int
 	for _, point := range latlngs {

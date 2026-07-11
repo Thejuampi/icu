@@ -33,6 +33,44 @@ func TestClassifyPowerSamplesCoastingIsTrueZero(t *testing.T) {
 	}
 }
 
+func TestPromoteAmbiguousAfterDeathViaClassify(t *testing.T) {
+	t.Parallel()
+
+	// Meter death: measured first, then zeros without cadence while moving —
+	// ambiguous post-death samples must promote to missing.
+	const n = 80
+	watts := make([]float64, n)
+	wp := make([]bool, n)
+	cad := make([]float64, n)
+	cp := make([]bool, n)
+	speed := make([]float64, n)
+	for i := range n {
+		speed[i] = 8
+		if i < 40 {
+			watts[i] = 200
+			wp[i] = true
+			cad[i] = 90
+			cp[i] = true
+			continue
+		}
+		// Device zeros after death without cadence: missing or ambiguous→missing.
+		watts[i] = 0
+		wp[i] = true
+		cp[i] = false
+	}
+	got := icu.ClassifyPowerSamples(&icu.PowerGapInputs{
+		Watts:   seriesFrom(watts, wp),
+		Cadence: seriesFrom(cad, cp),
+		Speed:   seriesFrom(speed, nil),
+	})
+	if got.MeterDeathIndex == nil || *got.MeterDeathIndex < 0 {
+		t.Fatalf("expected meter death, got %+v", got)
+	}
+	if got.MissingSeconds < 20 {
+		t.Fatalf("missing=%d want post-death promotion", got.MissingSeconds)
+	}
+}
+
 func TestClassifyPowerSamplesNullCadenceMovingIsMissing(t *testing.T) {
 	t.Parallel()
 
@@ -258,7 +296,7 @@ func TestDetectCadenceDeathIndexEndAnchoredTail(t *testing.T) {
 	n := 130
 	cad := make([]float64, n)
 	present := make([]bool, n)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		cad[i] = 90
 		present[i] = true
 	}
@@ -275,7 +313,7 @@ func TestDetectCadenceDeathIgnoresMidRideFreewheel(t *testing.T) {
 	n := 120
 	cad := make([]float64, n)
 	present := make([]bool, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		cad[i] = 90
 		present[i] = true
 	}
@@ -294,7 +332,7 @@ func TestDetectBalanceDeathIndexLastPresentPlusTail(t *testing.T) {
 	n := 200
 	bal := make([]float64, n)
 	present := make([]bool, n)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		bal[i] = 48 + float64(i%5) // ~50% left
 		present[i] = true
 	}
@@ -336,7 +374,7 @@ func TestDetectPowerMeterDeathPrefersBalanceOverCadence(t *testing.T) {
 	balP := make([]bool, n)
 	cad := make([]float64, n)
 	cadP := make([]bool, n)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		bal[i] = 50
 		balP[i] = true
 		cad[i] = 90
@@ -364,7 +402,7 @@ func TestClassifyUsesBalanceDeathForMovingZeros(t *testing.T) {
 	wP := make([]bool, n)
 	cP := make([]bool, n)
 	bP := make([]bool, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		speed[i] = 8
 		if i < 40 {
 			watts[i] = 200
@@ -410,7 +448,7 @@ func TestClassifyPriorFillAfterBalanceDeathStaysMeasured(t *testing.T) {
 	speed := make([]float64, n)
 	wP := make([]bool, n)
 	bP := make([]bool, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		speed[i] = 7
 		watts[i] = 180
 		wP[i] = true

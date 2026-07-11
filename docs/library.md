@@ -367,9 +367,9 @@ result := icu.EstimateAndFillPower(icu.PowerFillRequest{
 })
 ```
 
-`ClassifyPowerSamples` labels each sample `measured`, `true_zero`, or `missing`. Only `missing` samples are estimated. Pass optional `left_right_balance` for dual-sided PM death detection: balance present while the meter is alive (real first-half power+RPM), then a long null L/R tail after the last present sample marks death (`DeathSource=left_right_balance`). Cadence freewheels mid-ride are ignored (end-anchored null cadence only). `DetectPowerMeterDeathIndex` / `MaskStreamsAsPowerMeterDeathFrom` reopen a prior fill on that second half without touching the measured first half. `EstimateAndFillPower` uses a Martin road-balance model with **dynamic** calibration from the measured segment. Aero uses relative wind from real weather when provided.
+`ClassifyPowerSamples` labels each sample `measured`, `true_zero`, or `missing`. Only `missing` samples are estimated. Pass optional `left_right_balance` for dual-sided PM death detection: balance present while the meter is alive (real first-half power+RPM), then a long null L/R tail after the last present sample marks death (`DeathSource=left_right_balance`). Cadence freewheels mid-ride are ignored (end-anchored null cadence only). `DetectPowerMeterDeathIndex` / `MaskStreamsAsPowerMeterDeathFrom` reopen a prior fill on that second half without touching the measured first half. `EstimateAndFillPower` uses a Martin road-balance model with **dynamic** calibration from the measured segment. When `HeadwindMSSeries` / `RhoSeries` are provided, calibration and physics use those **per-sample** values so real weather wind is not baked into CdA as still air. Sample sources in output include `estimated`, `estimated_physics`, and `unfilled`.
 
-The CLI resolves weather automatically; library callers should call `ResolveOutdoorWeather` (free Open-Meteo archive / forecast past / historical-forecast, no API key) or pass activity wind fields. Wind is never invented from fixed outdoor defaults.
+The CLI resolves weather automatically; library callers should call `ResolveOutdoorWeather` (free Open-Meteo archive / forecast past / historical-forecast, no API key) or pass activity wind fields. Wind is never invented from fixed outdoor defaults. Stream `PUT`s performed by the CLI accept path update Intervals.icu only; other platforms (Strava, device clouds) keep their original files unless the athlete re-exports and re-uploads an Intervals-processed FIT.
 
 Replay validation (required before trusting fills):
 
@@ -383,7 +383,9 @@ bt := icu.BacktestPowerEstimate(icu.PowerBacktestRequest{
 	CalibrateFromMeasured: true,
 	Mode:                  icu.PowerBacktestMaskSecondHalf,
 })
-// bt.Scores: pearsonR, spearmanRho, residual MAD-z, robustRmse (outlier-aware), zScorePearsonR
+// bt.Scores: pearsonR, spearmanRho, bias, residual MAD-z, robustRmse (outlier-aware), zScorePearsonR
+// In-repo gates (tests): physics synthetic ≥0.95 r; outdoor-shaped fixture ≥0.80 r + bias/MAD-z bounds;
+// known planted headwind must beat still-air. Live outdoor is corroboration only; CFD is out of scope.
 ```
 
 Relevant exported analysis types:

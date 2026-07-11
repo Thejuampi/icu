@@ -17,6 +17,9 @@ const (
 	powerEstimateRound4Scale   = 10000.0
 	powerParamSourceUser       = "user"
 	powerParamSourceCalibrated = "calibrated"
+	powerSampleSourceEstimated = "estimated"
+	powerSampleSourcePhysics   = "estimated_physics"
+	powerSampleSourceUnfilled  = "unfilled"
 	// ISA / ideal-gas constants for air density from altitude + temperature.
 	powerEstimateSeaLevelPa   = 101325.0
 	powerEstimateDryAirR      = 287.05 // J/(kg·K)
@@ -272,6 +275,18 @@ func estimateAndFillPower(req *PowerFillRequest) PowerFillResult {
 	if len(headwindSeries) != sampleCount {
 		headwindSeries = nil
 	}
+	// Seed mean headwind from the series before calibration so scalar CdA/Crr
+	// fits do not treat real weather wind as still air.
+	if len(headwindSeries) == sampleCount {
+		meanHW := MeanHeadwindFromSeries(headwindSeries)
+		if params.HeadwindMS.Source == "" {
+			params.HeadwindMS = LabeledParam{Value: round4(meanHW), Source: "weather_track_heading"}
+		}
+		result.Warnings = append(result.Warnings, fmt.Sprintf(
+			"per-sample aero headwind from real weather × track heading (mean %.2f m/s)",
+			meanHW,
+		))
+	}
 	// Acceleration is not used in virtual power: GPS Δv is too noisy. Still computed for cal filters.
 	accel := deriveAccelSeries(speedDense, timeSeries, sampleCount)
 
@@ -280,7 +295,10 @@ func estimateAndFillPower(req *PowerFillRequest) PowerFillResult {
 		ctx.minCalRows = 10 // absolute minimum for any median statistic
 	}
 
-	params, cal, calWarnings := maybeCalibrateParams(&params, req.CalibrateFromMeasured, class.Labels, watts, cadence, speedDense, grade, accel, &ctx)
+	params, cal, calWarnings := maybeCalibrateParams(
+		&params, req.CalibrateFromMeasured, class.Labels, watts, cadence, speedDense, grade, accel,
+		rhoSeries, headwindSeries, &ctx,
+	)
 	result.Warnings = append(result.Warnings, calWarnings...)
 	if params.CdA.Source == "" || params.CdA.Value <= 0 {
 		result.BlockingError = "CdA required: pass --cda or --calibrate-from-measured with enough measured samples"
@@ -295,7 +313,7 @@ func estimateAndFillPower(req *PowerFillRequest) PowerFillResult {
 
 	cal.DescentCoastRate = round2(ctx.descentCoastRate)
 	hrDense := make([]float64, sampleCount)
-	for i := 0; i < sampleCount; i++ {
+	for i := range sampleCount {
 		if h, ok := hr.At(i); ok {
 			hrDense[i] = h
 		}
@@ -326,16 +344,6 @@ func estimateAndFillPower(req *PowerFillRequest) PowerFillResult {
 		result.Warnings = append(result.Warnings, fmt.Sprintf(
 			"outdoor ensemble blend direct=%.2f residual=%.2f linear=%.2f hrBin=%.2f (tuned on measured)",
 			blend.wDirect, blend.wResid, blend.wLin, blend.wHR,
-		))
-	}
-	if len(headwindSeries) == sampleCount {
-		meanHW := MeanHeadwindFromSeries(headwindSeries)
-		if params.HeadwindMS.Source == "" {
-			params.HeadwindMS = LabeledParam{Value: round4(meanHW), Source: "weather_track_heading"}
-		}
-		result.Warnings = append(result.Warnings, fmt.Sprintf(
-			"per-sample aero headwind from real weather × track heading (mean %.2f m/s)",
-			meanHW,
 		))
 	}
 
@@ -541,6 +549,7 @@ func maybeCalibrateParams(
 	labels []string,
 	watts, cadence NullableSeries,
 	speed, grade, accel []float64,
+	rho, headwind []float64,
 	ctx *measuredContext,
 ) (PowerModelParams, PowerFillCalibration, []string) {
 	if params == nil {
@@ -561,7 +570,7 @@ func maybeCalibrateParams(
 		}
 	}
 
-	cda, calCdA, err := calibrateCdA(&out, labels, watts, cadence, speed, grade, accel, ctx)
+	cda, calCdA, err := calibrateCdA(&out, labels, watts, cadence, speed, grade, accel, rho, headwind, ctx)
 	if err != nil {
 		return out, cal, []string{err.Error()}
 	}
@@ -577,7 +586,7 @@ func calibrateCrrFromMeasured(
 	params *PowerModelParams,
 	labels []string,
 	watts, cadence NullableSeries,
-	speed, grade, accel []float64,
+	speed, grade, _ []float64,
 	ctx *measuredContext,
 ) (float64, int, bool) {
 	// Low-speed band: below measured speed median (aero smaller → rolling residual).
@@ -635,13 +644,14 @@ func calibrateCdA(
 	labels []string,
 	watts, cadence NullableSeries,
 	speed, grade, accel []float64,
+	rho, headwind []float64,
 	ctx *measuredContext,
 ) (LabeledParam, PowerFillCalibration, error) {
 	var cdaSamples []float64
 	mass := totalMassKg(params)
 	eta := params.DrivetrainEff.Value
 	crr := params.Crr.Value
-	rho := params.AirDensity.Value
+	rhoBase := params.AirDensity.Value
 
 	// Speed band and grade band from measured MAD (dynamic).
 	speedLo := ctx.speedMedian - 2*ctx.speedMAD
@@ -683,8 +693,13 @@ func calibrateCdA(
 			crr*mass*powerEstimateGravity*vel*(1/denom)
 		residual := w*eta - pKnown
 		// CdA from P_aero = ½ ρ CdA v_air|v_air| v_ground  ⇒ CdA = P_aero / (½ ρ v_air|v_air| v_ground)
-		airSpeed := vel + params.HeadwindMS.Value
-		xAero := 0.5 * rho * airSpeed * math.Abs(airSpeed) * vel
+		// Use per-sample weather ρ / headwind when available so wind is not baked into CdA.
+		sampleRho := rhoBase
+		if index < len(rho) && rho[index] > 0 {
+			sampleRho = rho[index]
+		}
+		airSpeed := vel + sampleHeadwind(params, headwind, index)
+		xAero := 0.5 * sampleRho * airSpeed * math.Abs(airSpeed) * vel
 		if residual <= 0 || xAero < 1 {
 			continue
 		}
@@ -706,7 +721,9 @@ func calibrateCdA(
 	fitted := LabeledParam{Value: round4(cda), Source: powerParamSourceCalibrated}
 	paramsFitted := *params
 	paramsFitted.CdA = fitted
-	cal.FitBiasWatts, cal.FitErrorWattsRMSE = calibrationErrors(&paramsFitted, labels, watts, cadence, speed, grade, accel, ctx)
+	cal.FitBiasWatts, cal.FitErrorWattsRMSE = calibrationErrors(
+		&paramsFitted, labels, watts, cadence, speed, grade, accel, rho, headwind, ctx,
+	)
 
 	return fitted, cal, nil
 }
@@ -787,7 +804,7 @@ func sampleHeadwind(params *PowerModelParams, headwind []float64, index int) flo
 
 func attachRollingFeatures(
 	ctx *measuredContext,
-	labels []string,
+	_ []string,
 	speedRoll, gradeRoll, hrRoll []float64,
 	sampleCount int,
 ) {
@@ -813,9 +830,9 @@ func attachRollingFeatures(
 }
 
 func fitMultiLinearPower(
-	labels []string,
-	watts NullableSeries,
-	speed, grade, hr []float64,
+	_ []string,
+	_ NullableSeries,
+	_, _, _ []float64,
 	params *PowerModelParams,
 	ctx *measuredContext,
 ) multiLinearPower {
@@ -844,9 +861,9 @@ func fitMultiLinearPower(
 		}
 		x := [p]float64{1, phys, sample.hr, sample.speed, sample.grade}
 		y := sample.watts
-		for a := 0; a < p; a++ {
+		for a := range p {
 			xty[a] += x[a] * y
-			for b := 0; b < p; b++ {
+			for b := range p {
 				xtx[a][b] += x[a] * x[b]
 			}
 		}
@@ -900,14 +917,14 @@ func solveSymmetric(a [5][5]float64, b [5]float64) ([5]float64, bool) {
 	const n = 5
 	// Augment.
 	m := make([][]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m[i] = make([]float64, n+1)
-		for j := 0; j < n; j++ {
+		for j := range n {
 			m[i][j] = a[i][j]
 		}
 		m[i][n] = b[i]
 	}
-	for col := 0; col < n; col++ {
+	for col := range n {
 		// Pivot.
 		pivot := col
 		for row := col + 1; row < n; row++ {
@@ -923,7 +940,7 @@ func solveSymmetric(a [5][5]float64, b [5]float64) ([5]float64, bool) {
 		for j := col; j <= n; j++ {
 			m[col][j] /= div
 		}
-		for row := 0; row < n; row++ {
+		for row := range n {
 			if row == col {
 				continue
 			}
@@ -934,7 +951,7 @@ func solveSymmetric(a [5][5]float64, b [5]float64) ([5]float64, bool) {
 		}
 	}
 	var x [5]float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = m[i][n]
 	}
 
@@ -969,7 +986,7 @@ func fillPowerSeriesOutdoor(
 			sources[index] = PowerSampleTrueZero
 		case PowerSampleMissing:
 			if speed[index] <= 0 && !hasMotion {
-				sources[index] = "unfilled"
+				sources[index] = powerSampleSourceUnfilled
 				fill.UnfilledSeconds++
 				continue
 			}
@@ -1002,7 +1019,7 @@ func fillPowerSeriesOutdoor(
 			fill.MeanEstimatedWatts += est
 			fill.EstimatedKj += est * sampleDeltaSeconds(timeSeries, index) / powerEstimateJoulesPerKj
 		default:
-			sources[index] = "unfilled"
+			sources[index] = powerSampleSourceUnfilled
 			fill.UnfilledSeconds++
 		}
 	}
@@ -1027,7 +1044,7 @@ func outdoorEstimateSample(
 	// Descent freewheel first when gravity + aero net is non-positive.
 	if grade < ctx.descentGradeCut {
 		if aeroWheelPower(params, speed, grade, params.AirDensity.Value) <= 0 {
-			return 0, "estimated"
+			return 0, powerSampleSourceEstimated
 		}
 	}
 
@@ -1091,7 +1108,7 @@ func outdoorEstimateSample(
 		if grade < ctx.descentGradeCut {
 			phys = descentAwareEstimateRhoHW(phys, speed, grade, params.AirDensity.Value, params.HeadwindMS.Value, params, ctx)
 		}
-		return phys, "estimated_physics"
+		return phys, powerSampleSourcePhysics
 	}
 	est := (wd*direct + wr*resid + wl*linear + wh*hrBin) / sumW
 	if grade < ctx.descentGradeCut && ctx.descentCoastRate > 0.4 {
@@ -1101,7 +1118,7 @@ func outdoorEstimateSample(
 		est = 0
 	}
 
-	return est, "estimated"
+	return est, powerSampleSourceEstimated
 }
 
 // buildHRPhysBins partitions measured samples into dynamic HR quantiles and
@@ -1141,7 +1158,7 @@ func buildHRPhysBins(ctx *measuredContext) []hrPhysBin {
 			continue
 		}
 		b := nBins - 1
-		for j := 0; j < nBins; j++ {
+		for j := range nBins {
 			if sample.hr >= edges[j] && sample.hr < edges[j+1] {
 				b = j
 				break
@@ -1153,7 +1170,7 @@ func buildHRPhysBins(ctx *measuredContext) []hrPhysBin {
 		listsW[b] = append(listsW[b], sample.watts)
 		listsP[b] = append(listsP[b], sample.phys)
 	}
-	for b := 0; b < nBins; b++ {
+	for b := range nBins {
 		bins[b] = hrPhysBin{
 			hrLo:        edges[b],
 			hrHi:        edges[b+1],
@@ -1248,7 +1265,7 @@ func fitOutdoorBlendWeights(ctx *measuredContext, params *PowerModelParams, lin 
 	// Coarse simplex grid over 4 weights (steps of 1/3 for speed).
 	bestErr := math.MaxFloat64
 	best := out
-	for di := 0; di <= 3; di++ {
+	for di := range 4 {
 		for ri := 0; ri <= 3-di; ri++ {
 			for li := 0; li <= 3-di-ri; li++ {
 				hi := 3 - di - ri - li
@@ -1259,24 +1276,24 @@ func fitOutdoorBlendWeights(ctx *measuredContext, params *PowerModelParams, lin 
 				var sumAbs float64
 				var count int
 				for _, row := range rows {
-					a, b, c, d := wd, wr, wl, wh
+					wDirect, wResid, wLin, wHR := wd, wr, wl, wh
 					if !row.hd {
-						a = 0
+						wDirect = 0
 					}
 					if !row.hr {
-						b = 0
+						wResid = 0
 					}
 					if !row.hl {
-						c = 0
+						wLin = 0
 					}
 					if !row.hh {
-						d = 0
+						wHR = 0
 					}
-					s := a + b + c + d
+					s := wDirect + wResid + wLin + wHR
 					if s <= 0 {
 						continue
 					}
-					pred := (a*row.d + b*row.r + c*row.l + d*row.h) / s
+					pred := (wDirect*row.d + wResid*row.r + wLin*row.l + wHR*row.h) / s
 					sumAbs += math.Abs(pred - row.y)
 					count++
 				}
@@ -1371,13 +1388,13 @@ func residualKNN(speedRoll, gradeRoll, hrRoll float64, ctx *measuredContext) (fl
 	return rSum / wSum, true
 }
 
-func applyInstantCap(filled []float64, sources []string, cap float64) {
-	if cap <= 0 {
+func applyInstantCap(filled []float64, sources []string, wattCap float64) {
+	if wattCap <= 0 {
 		return
 	}
 	for i := range filled {
-		if isEstimatedSource(sources[i]) && filled[i] > cap {
-			filled[i] = cap
+		if isEstimatedSource(sources[i]) && filled[i] > wattCap {
+			filled[i] = wattCap
 		}
 	}
 }
@@ -1580,16 +1597,16 @@ func estimateFromMeasuredNeighborhood(speed, grade, hr float64, params *PowerMod
 	return est, true
 }
 
-func applyLinearCalibrationAndCap(filled []float64, sources []string, gain, offset, cap float64) {
+func applyLinearCalibrationAndCap(filled []float64, sources []string, gain, offset, wattCap float64) {
 	if gain <= 0 {
 		gain = 1
 	}
 	for index := range filled {
 		// Only physics fallback needs linear PM alignment; neighborhood estimates
 		// already sit on the measured scale.
-		if sources[index] != "estimated_physics" {
-			if sources[index] == "estimated" && cap > 0 && filled[index] > cap {
-				filled[index] = cap
+		if sources[index] != powerSampleSourcePhysics {
+			if sources[index] == powerSampleSourceEstimated && wattCap > 0 && filled[index] > wattCap {
+				filled[index] = wattCap
 			}
 			continue
 		}
@@ -1602,8 +1619,8 @@ func applyLinearCalibrationAndCap(filled []float64, sources []string, gain, offs
 		if v < 0 {
 			v = 0
 		}
-		if cap > 0 && v > cap {
-			v = cap
+		if wattCap > 0 && v > wattCap {
+			v = wattCap
 		}
 		filled[index] = v
 	}
@@ -1761,7 +1778,7 @@ func airDensitySeries(altitude NullableSeries, sampleCount int, meanTempC, fallb
 		base = powerEstimateDefaultRho
 	}
 	isa0 := airDensityFromAltitudeTemp(0, meanTempC)
-	for i := 0; i < sampleCount; i++ {
+	for i := range sampleCount {
 		if alt, ok := altitude.At(i); ok {
 			if fallbackRho > 0 && isa0 > 0 {
 				isaH := airDensityFromAltitudeTemp(alt, meanTempC)
@@ -1832,7 +1849,8 @@ func calibrationErrors(
 	params *PowerModelParams,
 	labels []string,
 	watts, cadence NullableSeries,
-	speed, grade, accel []float64,
+	speed, grade, _ []float64,
+	rho, headwind []float64,
 	ctx *measuredContext,
 ) (float64, float64) {
 	var sumErr, sumErr2 float64
@@ -1855,7 +1873,12 @@ func calibrationErrors(
 		if c, cOK := cadence.At(index); !cOK || c < cadFloor {
 			continue
 		}
-		err := virtualPowerWatts(params, vel, grade[index], 0) - w
+		sampleRho := params.AirDensity.Value
+		if index < len(rho) && rho[index] > 0 {
+			sampleRho = rho[index]
+		}
+		hw := sampleHeadwind(params, headwind, index)
+		err := virtualPowerWattsRhoHW(params, vel, grade[index], 0, sampleRho, hw) - w
 		sumErr += err
 		sumErr2 += err * err
 		count++
@@ -1942,7 +1965,7 @@ func smoothSpeedSeries(speed []float64, halfWindow int) []float64 {
 }
 
 func isEstimatedSource(source string) bool {
-	return source == "estimated" || source == "estimated_physics"
+	return source == powerSampleSourceEstimated || source == powerSampleSourcePhysics
 }
 
 func smoothEstimatedSamples(filled []float64, sources []string, halfWindow int) {
@@ -2101,7 +2124,7 @@ func recomputeFillSummary(filled []float64, sources []string, timeSeries Nullabl
 	*fill = PowerFillSummary{}
 	for index := range filled {
 		if !isEstimatedSource(sources[index]) {
-			if sources[index] == "unfilled" {
+			if sources[index] == powerSampleSourceUnfilled {
 				fill.UnfilledSeconds++
 			}
 			continue
