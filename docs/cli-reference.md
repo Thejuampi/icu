@@ -292,7 +292,7 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `show`
   Invocation: `icu config show`
-  Notes: prints masked config values and defaults.
+  Notes: prints config path and non-secret values. API key and Zepp login token show only a 12-character SHA256 fingerprint and length, never partial or raw secret characters.
   Example: `icu config show`
 
 - `set`
@@ -573,7 +573,7 @@ the raw components.
 
 - `logout`
   Invocation: `icu zepp logout`
-  Notes: Clears the persisted Zepp tokens from the config file.
+  Notes: Clears all persisted Zepp credentials from the config file (`zeppLoginToken`, `zeppAppToken`, `zeppUserID`, `zeppCountryCode`).
   Example: `icu zepp logout`
 
 - `status`

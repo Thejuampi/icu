@@ -21,3 +21,13 @@ Thumbs.db
 *.pem
 *.key
 .env
+
+# Local training/debug artifacts (never publish)
+backups/
+.codex-tmp/
+fill-*.json
+streams-*.json
+coverage*.out
+coverage_pkg
+coverage_pkg/
+power-fill-*.png

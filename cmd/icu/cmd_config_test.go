@@ -58,6 +58,86 @@ func TestConfigCommandsFunctionalRoundTrip(t *testing.T) {
 	}
 }
 
+func TestConfigShowDoesNotExposeAPIKey(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("INTERVALS_ICU_API_KEY", "")
+	t.Setenv("INTERVALS_ICU_ATHLETE_ID", "")
+
+	const apiKey = "abcd1234wxyz"
+
+	registry := NewCommandRegistry()
+	registerConfigCommands(registry)
+
+	if err := runConfigCommand(t, registry, "set", map[string]string{"api-key": apiKey}); err != nil {
+		t.Fatalf("config set failed: %v", err)
+	}
+
+	cmd, ok := registry.Lookup("config", "show")
+	if !ok {
+		t.Fatal("missing config show command")
+	}
+
+	output, err := captureStdout(t, func() error { return cmd.Run(nil, nil, nil) })
+	if err != nil {
+		t.Fatalf("config show failed: %v", err)
+	}
+
+	if strings.Contains(output, apiKey) || strings.Contains(output, "abcd") || strings.Contains(output, "wxyz") {
+		t.Fatalf("config show exposed api key: %q", output)
+	}
+
+	fingerprint := icu.SecretFingerprint(apiKey)
+	if !strings.Contains(output, "fingerprint="+fingerprint) {
+		t.Fatalf("config show missing fingerprint: %q", output)
+	}
+
+	if !strings.Contains(output, "length=12") {
+		t.Fatalf("config show missing length: %q", output)
+	}
+}
+
+func TestConfigShowShortAPIKeyUsesFingerprint(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("INTERVALS_ICU_API_KEY", "")
+	t.Setenv("INTERVALS_ICU_ATHLETE_ID", "")
+
+	const apiKey = "abc"
+
+	registry := NewCommandRegistry()
+	registerConfigCommands(registry)
+
+	if err := runConfigCommand(t, registry, "set", map[string]string{"api-key": apiKey}); err != nil {
+		t.Fatalf("config set failed: %v", err)
+	}
+
+	cmd, ok := registry.Lookup("config", "show")
+	if !ok {
+		t.Fatal("missing config show command")
+	}
+
+	output, err := captureStdout(t, func() error { return cmd.Run(nil, nil, nil) })
+	if err != nil {
+		t.Fatalf("config show failed: %v", err)
+	}
+
+	if strings.Contains(output, apiKey) {
+		t.Fatalf("config show exposed short api key: %q", output)
+	}
+
+	fingerprint := icu.SecretFingerprint(apiKey)
+	if !strings.Contains(output, "fingerprint="+fingerprint) {
+		t.Fatalf("config show missing fingerprint: %q", output)
+	}
+
+	if !strings.Contains(output, "length=3") {
+		t.Fatalf("config show missing length: %q", output)
+	}
+}
+
 func TestConfigDiagnoseVerboseFlag(t *testing.T) {
 	t.Parallel()
 

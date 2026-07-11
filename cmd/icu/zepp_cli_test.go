@@ -152,11 +152,16 @@ func TestRunZeppLoginPersistsTokensOnSuccess(t *testing.T) {
 	}
 }
 
-func TestRunZeppLogoutClearsToken(t *testing.T) {
+func TestRunZeppLogoutClearsAllZeppFields(t *testing.T) {
 	withZeppTestEnv(t)
 	t.Setenv("ZEPP_LOGIN_TOKEN", "tok-to-clear")
 
-	if err := icu.SaveConfig(&icu.Config{ZeppLoginToken: "tok-to-clear"}); err != nil {
+	if err := icu.SaveConfig(&icu.Config{
+		ZeppLoginToken:  "tok-to-clear",
+		ZeppAppToken:    "app-to-clear",
+		ZeppUserID:      "user-to-clear",
+		ZeppCountryCode: "US",
+	}); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -175,6 +180,18 @@ func TestRunZeppLogoutClearsToken(t *testing.T) {
 
 	if cfg.ZeppLoginToken != "" {
 		t.Errorf("LoginToken = %q, want empty", cfg.ZeppLoginToken)
+	}
+
+	if cfg.ZeppAppToken != "" {
+		t.Errorf("AppToken = %q, want empty", cfg.ZeppAppToken)
+	}
+
+	if cfg.ZeppUserID != "" {
+		t.Errorf("UserID = %q, want empty", cfg.ZeppUserID)
+	}
+
+	if cfg.ZeppCountryCode != "" {
+		t.Errorf("CountryCode = %q, want empty", cfg.ZeppCountryCode)
 	}
 }
 

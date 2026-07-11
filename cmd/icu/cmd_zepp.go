@@ -517,11 +517,14 @@ func runZeppLogout() error {
 		return wrapCommandError(fmt.Errorf("loading config: %w", err))
 	}
 
-	if cfg.ZeppLoginToken == "" {
+	if cfg.ZeppLoginToken == "" && cfg.ZeppAppToken == "" && cfg.ZeppUserID == "" && cfg.ZeppCountryCode == "" {
 		return writeJSON(map[string]any{"ok": true, "cleared": false})
 	}
 
 	cfg.ZeppLoginToken = ""
+	cfg.ZeppAppToken = ""
+	cfg.ZeppUserID = ""
+	cfg.ZeppCountryCode = ""
 
 	if err := icu.SaveConfigWithAction(cfg, "zepp_logout"); err != nil {
 		return wrapCommandError(fmt.Errorf("saving config: %w", err))
