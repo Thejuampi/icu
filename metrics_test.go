@@ -207,6 +207,23 @@ func TestDecoupling(t *testing.T) {
 	}
 }
 
+func TestDecouplingUsesFirstHalfReference(t *testing.T) {
+	t.Parallel()
+
+	// Constant power, two equal halves of HR so EF1 and EF2 are exact.
+	// watts=200 for all; half1 HR avg=125 → EF1=1.6; half2 HR avg=145 → EF2≈1.379
+	watts := []float64{200, 200, 200, 200}
+	hr := []float64{120, 130, 140, 150}
+	got := icu.Decoupling(watts, hr)
+
+	firstEF := 200.0 / 125.0
+	secondEF := 200.0 / 145.0
+	want := (1 - secondEF/firstEF) * 100
+	if math.Abs(got-want) > 0.05 {
+		t.Fatalf("Decoupling = %v, want Friel formula %v", got, want)
+	}
+}
+
 func TestDecouplingFlat(t *testing.T) {
 	t.Parallel()
 
@@ -259,9 +276,10 @@ func TestHeartRateRecovery(t *testing.T) {
 
 	hr := []float64{120, 130, 140, 150, 160, 170, 180, 175, 170, 165, 160, 155}
 
+	// Peak 180 at index 6; 5 samples later is 155 → total drop 25 bpm (not rate 5).
 	got := icu.HeartRateRecovery(hr, 6, 5)
-	if got <= 0 {
-		t.Fatalf("HeartRateRecovery = %v, want positive", got)
+	if math.Abs(got-25) > 0.01 {
+		t.Fatalf("HeartRateRecovery = %v, want total drop 25", got)
 	}
 }
 
@@ -273,6 +291,20 @@ func TestHeartRateRecoveryShortWindow(t *testing.T) {
 
 	if math.Abs(got-10) > 1 {
 		t.Fatalf("HeartRateRecovery = %v, want ~10 (drops from 180 to 170 in 1 step)", got)
+	}
+}
+
+func TestHeartRateRecoveryOneMinuteTotalDrop(t *testing.T) {
+	t.Parallel()
+
+	hr := make([]float64, 61)
+	hr[0] = 180
+	for i := 1; i < len(hr); i++ {
+		hr[i] = 180 - float64(i) // linear 1 bpm/s drop
+	}
+	got := icu.HeartRateRecovery(hr, 0, 60)
+	if math.Abs(got-60) > 0.01 {
+		t.Fatalf("HeartRateRecovery 60s = %v, want total drop 60 (not 1.0 rate)", got)
 	}
 }
 

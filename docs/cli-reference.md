@@ -31,7 +31,7 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 
 - `list`
   Invocation: `icu activities list --oldest DATE --newest DATE [--fields f1,f2] [--limit N] [--route_id ID]`
-  Notes: `--route_id` is supported by the implementation even though it is omitted from help text.
+  Notes: `--route_id` is supported by the implementation even though it is omitted from help text. Activity JSON includes Intervals load fields such as `icuTrainingLoad`, and when provided by the API also exposes HR-derived `hrLoad`, `hrLoadType`, and `trimp`.
   Example: `icu activities list --oldest 2026-05-01 --newest 2026-05-31 --limit 50`
 
 - `get`
@@ -85,7 +85,8 @@ Invoke these commands as `icu activity <id> <action>`.
   Example: `icu activity i123 show --intervals`
 
 - `update`
-  Invocation: `icu activity <id> update --name NAME [--description DESC] [--type Ride]`
+  Invocation: `icu activity <id> update --name NAME [--description DESC] [--type Ride] [--training-load N]`
+  Notes: `--training-load` writes the activity `icuTrainingLoad` value. Use a measured or API-provided HR-derived load when correcting activities with incomplete power data; the CLI does not invent HRSS/tTSS values.
   Example: `icu activity i123 update --name "Afternoon Ride" --description "Updated title"`
 
 - `delete`
@@ -99,6 +100,23 @@ Invoke these commands as `icu activity <id> <action>`.
 - `streams`
   Invocation: `icu activity <id> streams [--types watts,heartrate,cadence]`
   Example: `icu activity i123 streams --types watts,heartrate`
+
+- `estimate-power`
+  Invocation: `icu activity <id> estimate-power --bike-mass-kg N [--rider-mass-kg N] [--cda N | --calibrate-from-measured] [--crr N] [--drivetrain-eff N] [--air-density N] [--min-gap-seconds N] [--include-streams] [--file PATH] [--types CSV] [--ftp N] [--no-weather] [--refill-after-pm-death | --refill-after-cadence-death | --refill-from-index N]`
+  Defaults: stream `--types watts,cadence,left_right_balance,altitude,distance,velocity_smooth,heartrate,time`; when omitted, `--crr` defaults to `0.0045` and `--drivetrain-eff` to `0.975` (both labeled in output warnings as explicit omissions, not silent coaching thresholds). Rider mass falls back to athlete `icuWeight`/`weight` when `--rider-mass-kg` is omitted.
+  Notes: Read-only dry-run. Classifies each sample as `measured`, `true_zero`, or `missing`. Dual-sided PM edge cases use `left_right_balance`: L/R is present only while the meter is alive (first half with real watts+RPM+balance stays measured); a long null L/R tail after the last present sample is meter death. Cadence freewheels mid-ride are not death (end-anchored cadence null only). Prior accepted fills leave positive watts after death; pass `--refill-after-pm-death` (balance → cadence) to re-open only that second-half gap. Outdoor aero weather priority: activity fields → Open-Meteo archive → forecast past → historical-forecast. Per-sample headwind uses weather × track heading; density from pressure/temp when available. Calibration from the measured segment uses those per-sample series so wind is not absorbed into CdA as still air. Prefer `--calibrate-from-measured` on the alive segment. Does not mutate Intervals.icu. Does not update Strava or other platforms.
+  Example: `icu activity i123 estimate-power --bike-mass-kg 9 --calibrate-from-measured --refill-after-pm-death --file fill.json`
+
+- `estimate-power-accept`
+  Invocation: `icu activity <id> estimate-power-accept --file PATH`
+  Notes: Mutates the activity by `PUT`ing the filled `watts` stream from a prior `estimate-power --file` result. Requires matching `activityId` and non-empty `filledWatts`. Does not invent `icu_training_load`; server reanalysis owns load after the stream write. Supporter-only upstream. Back up streams and the dry-run fill file before accept for rollback (re-accept a prior watts payload). **Strava is not updated:** export `fit-file` after accept, delete the broken Strava activity, and re-upload; see notes under `fit-file` below.
+  Example: `icu activity i123 estimate-power-accept --file fill.json`
+
+- `estimate-power-backtest`
+  Invocation: `icu activity <id> estimate-power-backtest --bike-mass-kg N [--rider-mass-kg N] [--crr N] [--drivetrain-eff N] [--calibrate-from-measured] [--mode mask_second_half|mask_after_fraction|mask_scatter] [--mask-fraction 0.5] [--no-weather]`
+  Defaults: `--mode mask_second_half`, `--calibrate-from-measured` when `--cda` is omitted, `--mask-fraction 0.5` for `mask_after_fraction`, `0.35` for `mask_scatter`.
+  Notes: Read-only replay for **outdoor** rides only (`VirtualRide`/Zwift/indoor rejected — not real free-air physics). Uses the same real-weather aero path as `estimate-power`. Prefer continuous measured PM (no prior fill accept) so held-out watts are real. Modes: `mask_second_half` / `mask_after_fraction` simulate mid-ride PM death; `mask_scatter` drops samples across the ride to score model fidelity when neighbors still exist. Scores include pearsonR, spearmanRho, bias, MAD residual z-scores, robustRmse (outlier-aware), zScorePearsonR. In-repo automated gates: physics-consistent synthetic mask → pearsonR/spearmanRho ≥ 0.95 and residualZMedianAbs ≤ 1.0; outdoor-shaped noisy fixture → pearsonR/spearmanRho ≥ 0.80, |bias| within absolute/relative bounds, residualZMedianAbs ≤ 1.5. Known planted headwind series must beat still-air. Live outdoor scores are corroboration only (draft/GPS noise); CFD is out of scope.
+  Example: `icu activity i123 estimate-power-backtest --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured`
 
 - `power-vs-hr`
   Invocation: `icu activity <id> power-vs-hr`
@@ -144,13 +162,13 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `file`
   Invocation: `icu activity <id> file`
-  Notes: returns raw bytes.
+  Notes: Returns raw bytes for the **original** uploaded device/source file. Does **not** include Intervals stream edits (for example filled watts after `estimate-power-accept`).
   Example: `icu activity i123 file > activity.bin`
 
 - `fit-file`
   Invocation: `icu activity <id> fit-file`
-  Notes: returns raw bytes.
-  Example: `icu activity i123 fit-file > activity.fit`
+  Notes: Returns raw bytes for an Intervals-generated FIT that **includes processed streams** (power/HR fixes and other stream edits on the activity). Use this after `estimate-power-accept` when re-uploading to Strava or another platform: Strava does not receive Intervals stream `PUT`s, and the Strava API cannot rewrite watts on an existing activity. Typical workflow: accept fill on Intervals → download `fit-file` → delete the broken Strava activity → upload the FIT at https://www.strava.com/upload/select. Watch for duplicate re-imports into Intervals from Strava/Wahoo after re-upload.
+  Example: `icu activity i123 fit-file > activity-filled.fit`
 
 - `gpx-file`
   Invocation: `icu activity <id> gpx-file`
@@ -612,7 +630,8 @@ the raw components.
 
 - `events`
   Invocation: `icu zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD`
-  Notes: Calls `/v2/users/me/events` on the regional data host. Presets map
+  Notes: Calls `/v2/users/me/events` on the Zepp events host
+  `api-mifit.zepp.com`. Presets map
   to Zepp `eventType`/`subType` pairs (e.g. `body-battery` →
   `Charge`/`real_data`). Use `icu zepp events --help` to list presets.
   Example: `icu zepp events --preset body-battery --oldest 2026-06-01 --newest 2026-06-07`

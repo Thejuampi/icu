@@ -146,9 +146,13 @@ func WithZeppCountryCode(countryCode string) ZeppClientOption {
 	}
 }
 
+const defaultZeppClientTimeout = 30 * time.Second
+
 func NewZeppClientFromAuth(auth *ZeppAuthResult, options ...ZeppClientOption) *ZeppClient {
 	client := &ZeppClient{
-		httpClient:  &http.Client{},
+		httpClient: &http.Client{
+			Timeout: defaultZeppClientTimeout,
+		},
 		loginToken:  auth.LoginToken,
 		appToken:    auth.AppToken,
 		userID:      auth.UserID,
@@ -924,14 +928,14 @@ func (c *ZeppClient) userInfoFromHost(ctx context.Context, host string) (ZeppUse
 }
 
 // FetchV2Events fetches raw bytes from /v2/users/me/events for a given preset
-// and date range. The request goes to the regional data host (matching the
-// behaviour observed in m4ary/zepp-health-cli).
+// and date range. V2 wellness events live on the dedicated Zepp events host,
+// not the regional data host used by band summaries and user resources.
 func (c *ZeppClient) FetchV2Events(ctx context.Context, preset V2EventPreset, oldest, newest string) ([]byte, error) {
 	if err := c.ensureAuthenticated(); err != nil {
 		return nil, err
 	}
 
-	endpoint, err := V2EventsURL(c.dataHost, preset, oldest, newest)
+	endpoint, err := V2EventsURL(c.eventsBase, preset, oldest, newest)
 	if err != nil {
 		return nil, err
 	}

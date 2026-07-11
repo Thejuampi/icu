@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -129,7 +130,9 @@ func (c *Client) UploadFile(resource, localPath, filePath string, query map[stri
 		return fmt.Errorf("copying file data: %w", err)
 	}
 
-	mpw.Close()
+	if err := mpw.Close(); err != nil {
+		return fmt.Errorf("closing multipart writer: %w", err)
+	}
 
 	pathParts := []string{}
 	if localPath != "" {
@@ -219,22 +222,18 @@ func (c *Client) do(method, resource string, parts []string, query map[string]st
 }
 
 func (c *Client) buildFullURL(path string, query map[string]string) string {
-	if c.baseURL != BaseURL {
-		if len(query) == 0 {
-			return c.baseURL + path
-		}
-
-		q := ""
-		for k, v := range query {
-			if q != "" {
-				q += "&"
-			}
-
-			q += k + "=" + v
-		}
-
-		return c.baseURL + path + "?" + q
+	if len(query) == 0 {
+		return c.baseURL + path
 	}
 
-	return BuildURL(path, query)
+	// Always percent-encode and sort query keys, including custom bases
+	// (httptest, proxies). Previously only the production BaseURL path encoded.
+	var builder strings.Builder
+	builder.Grow(len(c.baseURL) + len(path) + 1 + queryEncodedLength(query))
+	builder.WriteString(c.baseURL)
+	builder.WriteString(path)
+	builder.WriteByte('?')
+	writeEncodedQuery(&builder, query)
+
+	return builder.String()
 }

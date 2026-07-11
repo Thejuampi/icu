@@ -209,6 +209,28 @@ func TestActivityShowPassesIntervalsFlag(t *testing.T) {
 	}
 }
 
+func TestActivityUpdateSendsTrainingLoad(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	serverState := &commandServer{}
+	server := httptest.NewServer(http.HandlerFunc(serverState.handle))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	cmd, ok := registry.Lookup("activity", "update")
+	if !ok {
+		t.Fatalf("missing command activity update")
+	}
+
+	err := cmd.Run([]string{"i123"}, flags("training-load", "139"), client)
+
+	if err != nil || len(serverState.Requests) != 1 || !strings.Contains(serverState.Requests[0].Body, `"icu_training_load":139`) {
+		t.Fatalf("activity update body = %+v err=%v, want training load", serverState.Requests, err)
+	}
+}
+
 func TestWorkoutsCalculatePrintsEstimate(t *testing.T) {
 	t.Parallel()
 

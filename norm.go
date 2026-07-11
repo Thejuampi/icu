@@ -72,8 +72,12 @@ func coerceToFloat64Slice(data any) ([]float64, error) {
 	case []any:
 		result := make([]float64, len(values))
 		for i, val := range values {
+			// intervals.icu streams commonly include JSON null for missing
+			// samples. Treat null as 0 so the stream is still usable rather
+			// than dropping the entire series.
 			if val == nil {
-				return nil, nil
+				result[i] = 0
+				continue
 			}
 			f, ok := toFloat64(val)
 			if !ok {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -31,7 +32,7 @@ func readPreferredWellnessScores(oldest, newest string) ([]icu.DatedWellnessScor
 	err := runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 		events, err := client.HybridChargeDays(ctx, oldest, newest)
 		if err != nil {
-			return err
+			return fmt.Errorf("hybridcharge days: %w", err)
 		}
 
 		for index := range events {

@@ -356,7 +356,7 @@ func TestRebalanceMetricRestingHRWithData(t *testing.T) {
 
 	input := &icu.RebalanceInput{
 		Wellness: &icu.WellnessAnalysis{
-			Scope:    icu.WellnessScope{Records: 10},
+			Scope:     icu.WellnessScope{Records: 10},
 			RestingHR: icu.WellnessSignal{Delta: -3},
 		},
 	}

@@ -184,7 +184,7 @@ Current top-level resources:
 | Resource | Actions |
 | --- | --- |
 | `activities` | `around`, `csv`, `get`, `interval-search`, `list`, `manual`, `search`, `search-full`, `upload` |
-| `activity` | `best-efforts`, `delete`, `file`, `fit-file`, `gpx-file`, `hr-curve`, `intervals`, `map`, `messages`, `pace-curve`, `power-curve`, `power-vs-hr`, `segments`, `show`, `streams`, `update`, `weather`, `weather-summary` |
+| `activity` | `best-efforts`, `delete`, `estimate-power`, `estimate-power-accept`, `estimate-power-backtest`, `file`, `fit-file`, `gpx-file`, `hr-curve`, `intervals`, `map`, `messages`, `pace-curve`, `power-curve`, `power-vs-hr`, `segments`, `show`, `streams`, `update`, `weather`, `weather-summary` |
 | `analysis` | `adaptation`, `coaching`, `cycling`, `micro`, `microcycle`, `plan`, `wellness`, `workout` |
 | `athlete` | `plan`, `profile`, `settings`, `show`, `summary`, `update` |
 | `chats` | `get`, `list`, `messages`, `send` |
@@ -205,6 +205,30 @@ Current top-level resources:
 | `wellness` | `bulk`, `get`, `list`, `update`, `upload` |
 | `workouts` | `calculate`, `create`, `delete`, `get`, `list`, `tags`, `update` |
 | `zepp` | `biocharge`, `blood-pressure`, `body-battery`, `events`, `health-summary`, `heart-rate`, `hrv`, `hybridcharge`, `login`, `logout`, `manual-data`, `mood`, `pai`, `profile`, `readiness`, `respiratory-rate`, `second-heart-rate`, `skin-temp`, `sleep`, `spo2`, `spo2-windows`, `sport-load`, `status`, `stress`, `stress-minute`, `summary`, `token`, `vo2`, `weight`, `workout`, `workouts` |
+
+## Power Gap Fill (PM Death)
+
+When a power meter dies mid-ride, use outdoor physics fill rather than inventing TSS from RPE:
+
+```bash
+# Dry-run (classifies measured / true_zero / missing; real weather aero outdoors)
+icu activity i123 estimate-power --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured --file fill.json
+
+# If a prior fill already wrote watts into the dead half, re-open via L/R balance (then cadence)
+icu activity i123 estimate-power --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured --refill-after-pm-death --file fill.json
+
+# Optional: score the model on a continuous measured outdoor ride first
+icu activity i123 estimate-power-backtest --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured
+
+# Accept after review (mutates watts stream on Intervals; supporter feature)
+icu activity i123 estimate-power-accept --file fill.json
+```
+
+Dual-sided meters: death is detected from the long null tail of `left_right_balance` after a live first half (real watts + RPM + L/R). Outdoor aero uses activity wind when present, otherwise free Open-Meteo (archive → forecast past → historical-forecast) with track heading for relative wind. Back up streams and the dry-run fill file before accept so you can re-accept a rollback payload if needed.
+
+**Strava does not receive the filled watts.** Accept only updates Intervals.icu streams. To fix Strava, export the Intervals-processed FIT (`icu activity i123 fit-file` — includes stream edits; not `file`, which is the original device upload), delete the broken Strava activity, and re-upload the FIT. Title/description sync is metadata-only.
+
+Details: [docs/cli-reference.md](docs/cli-reference.md), [docs/library.md](docs/library.md).
 
 ## Analysis Overview
 

@@ -85,7 +85,7 @@ func configSetCommand() *Command {
 				cfg.ZeppLoginToken = v
 			}
 
-			if err := icu.SaveConfig(cfg); err != nil {
+			if err := icu.SaveConfigWithAction(cfg, "config_set"); err != nil {
 				return fmt.Errorf("saving config: %w", err)
 			}
 

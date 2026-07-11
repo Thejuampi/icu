@@ -983,6 +983,48 @@ func TestZeppClientFetchV2EventsReturnsErrorOnNon2xx(t *testing.T) {
 	}
 }
 
+func TestZeppClientFetchV2EventsUsesEventsHost(t *testing.T) {
+	t.Parallel()
+
+	dataServer := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path == "/v2/users/me/events" {
+			return http.StatusTeapot, `{"code":418}`
+		}
+
+		return http.StatusNotFound, err404
+	})
+	t.Cleanup(dataServer.Close)
+
+	eventsServer := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/v2/users/me/events" {
+			return http.StatusNotFound, err404
+		}
+
+		if !strings.Contains(record.Query, "eventType=Charge") || !strings.Contains(record.Query, "subType=insight_data") {
+			return http.StatusBadRequest, errMissingEventType
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"value":90}]}`
+	})
+	t.Cleanup(eventsServer.Close)
+
+	auth := &icu.ZeppAuthResult{AppToken: "test-app-token", UserID: "u1", CountryCode: "US"}
+	client := icu.NewZeppClientFromAuth(
+		auth,
+		icu.WithZeppBaseURL(dataServer.server.URL),
+		icu.WithZeppEventsURL(eventsServer.server.URL),
+	)
+
+	days, err := client.HybridChargeDays(t.Context(), "2026-06-01", "2026-06-01")
+	if err != nil {
+		t.Fatalf("HybridChargeDays: %v", err)
+	}
+
+	if len(days) != 1 || days[0].Score != 90 {
+		t.Fatalf("days = %+v, want one score 90 from events host", days)
+	}
+}
+
 func TestDecodeHRV(t *testing.T) {
 	t.Parallel()
 
@@ -1016,8 +1058,7 @@ func TestDecodeReadiness(t *testing.T) {
 func TestDecodeBodyBattery(t *testing.T) {
 	t.Parallel()
 
-	var raw string
-	raw = zeppV2EventRaw
+	var raw string = zeppV2EventRaw
 
 	var events []icu.ZeppBodyBatteryEvent
 	var err error
@@ -1034,8 +1075,7 @@ func TestDecodeBodyBattery(t *testing.T) {
 func TestDecodeHybridCharge(t *testing.T) {
 	t.Parallel()
 
-	var raw string
-	raw = `{"items":[{"timestamp":1780272000000,"value":90,"phase":"wake","source":"watch"}]}`
+	var raw string = `{"items":[{"timestamp":1780272000000,"value":90,"phase":"wake","source":"watch"}]}`
 
 	var events []icu.ZeppHybridChargeEvent
 	var err error
@@ -1143,8 +1183,7 @@ func TestZeppClientReadinessDaysHitsV2Endpoint(t *testing.T) {
 func TestZeppClientBodyBatteryDaysHitsV2Endpoint(t *testing.T) {
 	t.Parallel()
 
-	var client *icu.ZeppClient
-	client = newZeppV2EventTestServer(t, "Charge", "real_data")
+	var client *icu.ZeppClient = newZeppV2EventTestServer(t, "Charge", "real_data")
 	if _, err := client.BodyBatteryDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
 		t.Fatalf("BodyBatteryDays: %v", err)
 	}
@@ -1153,8 +1192,7 @@ func TestZeppClientBodyBatteryDaysHitsV2Endpoint(t *testing.T) {
 func TestZeppClientHybridChargeDaysHitsV2Endpoint(t *testing.T) {
 	t.Parallel()
 
-	var client *icu.ZeppClient
-	client = newZeppV2EventTestServer(t, "Charge", "insight_data")
+	var client *icu.ZeppClient = newZeppV2EventTestServer(t, "Charge", "insight_data")
 	if _, err := client.HybridChargeDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
 		t.Fatalf("HybridChargeDays: %v", err)
 	}

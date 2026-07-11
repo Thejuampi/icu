@@ -3,6 +3,7 @@ package icu_test
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,16 +11,14 @@ import (
 )
 
 func TestDiagnoseConfigReturnsErrorOnCorruptedConfig(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
+	dir := t.TempDir()
+	t.Setenv("ICU_CONFIG_DIR", dir)
 
-	icuDir := home + "/.icu"
-	if err := os.MkdirAll(icuDir, 0o700); err != nil {
+	cfgPath := icu.ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	cfgPath := icuDir + "/config.json"
 	if err := os.WriteFile(cfgPath, []byte("{invalid json}"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -31,16 +30,13 @@ func TestDiagnoseConfigReturnsErrorOnCorruptedConfig(t *testing.T) {
 }
 
 func TestSaveConfigMkdirFailsOnFileAtPath(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-
-	filePath := home + "/.icu"
+	filePath := filepath.Join(t.TempDir(), "blocked-config-dir")
+	t.Setenv("ICU_CONFIG_DIR", filePath)
 	if err := os.WriteFile(filePath, []byte("blocker"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	cfg := &icu.Config{APIKey: "", AthleteID: "", Output: "", ZeppLoginToken: "test", ZeppAppToken: "", ZeppUserID: "", ZeppCountryCode: ""}
+	cfg := &icu.Config{APIKey: "test"}
 
 	if err := icu.SaveConfig(cfg); err == nil {
 		t.Fatal("expected error: a file exists at the path where config dir should be")
@@ -57,9 +53,7 @@ func TestBuildConfigDiagnosticHandlesNilConfig(t *testing.T) {
 }
 
 func TestDiagnoseConfigFallsBackToEmptyConfigOnLoadError(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
+	t.Setenv("ICU_CONFIG_DIR", t.TempDir())
 
 	diag := icu.DiagnoseConfig(nil)
 	if diag.ConfigPath == "" {

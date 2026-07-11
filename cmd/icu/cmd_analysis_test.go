@@ -313,7 +313,6 @@ func TestAnalysisPlanCommandReportsUpstreamFailures(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAnalysisWellnessCommandPrefersZeppHybridCharge(t *testing.T) {
 	t.Setenv("ZEPP_LOGIN_TOKEN", "tok")
 	t.Setenv("ZEPP_APP_TOKEN", "app")
@@ -335,7 +334,7 @@ func TestAnalysisWellnessCommandPrefersZeppHybridCharge(t *testing.T) {
 		_, _ = response.Write([]byte(`{"items":[{"timestamp":1780272000000,"value":90},{"timestamp":1780358400000,"value":88}]}`))
 	}))
 	t.Cleanup(zeppServer.Close)
-	t.Setenv("ZEPP_BASE_URL", zeppServer.URL)
+	t.Setenv("ZEPP_EVENTS_URL", zeppServer.URL)
 
 	intervalsServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
@@ -1232,6 +1231,53 @@ func TestAnalysisMicrocycleCommandWritesHumanOutput(t *testing.T) {
 }
 
 //nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisMicrocycleCommandForwardsCalendarID(t *testing.T) {
+	var eventsQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/events"):
+			eventsQuery = request.URL.RawQuery
+			_, _ = response.Write([]byte(`[` + eventJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[` + activityJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[` + wellnessJSON() + `]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		default:
+			_, _ = response.Write([]byte(okJSON))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient(
+		"test-key",
+		"0",
+		icu.WithHTTPClient(server.Client()),
+		icu.WithBaseURL(server.URL),
+	)
+	cmd := analysisMicrocycleCommand()
+	_, err := captureStdout(t, func() error {
+		return cmd.Run(nil, map[string]string{
+			"from":        "2026-06-01",
+			"to":          "2026-06-07",
+			"json":        "true",
+			"timezone":    "UTC",
+			"calendar-id": "42",
+			"no-wellness": "true",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	// queryFromFlags maps calendar-id → calendar_id for the Intervals API.
+	if !strings.Contains(eventsQuery, "calendar_id=42") {
+		t.Fatalf("events query = %q, want calendar_id=42 (pre-fix used wrong flag key)", eventsQuery)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAnalysisMicrocycleCommandAllowsMissingSportSettings(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
@@ -1361,7 +1407,7 @@ func withHybridChargeZeppTestServer(t *testing.T, payload string) {
 		_, _ = response.Write([]byte(payload))
 	}))
 	t.Cleanup(server.Close)
-	t.Setenv("ZEPP_BASE_URL", server.URL)
+	t.Setenv("ZEPP_EVENTS_URL", server.URL)
 }
 
 func hasAdjustmentCondition(adjustments []icu.TrainingPlanDayAdjustment, condition string) bool {

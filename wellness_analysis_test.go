@@ -24,7 +24,7 @@ func wellnessRecordWithHRV(dayOffset int, hrv float64) icu.Wellness {
 	}
 }
 
-func wellnessRecordWithPreferredScore(date string, preferredName string, preferredValue float64, sleepScore float64) icu.Wellness {
+func wellnessRecordWithPreferredScore(date, preferredName string, preferredValue, sleepScore float64) icu.Wellness {
 	return icu.Wellness{
 		ID:         date,
 		RestingHR:  50,

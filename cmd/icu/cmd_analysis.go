@@ -999,7 +999,9 @@ func readMicrocycleActivities(
 }
 
 func readMicrocycleEvents(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Event, error) {
-	eventQuery := queryFromFlags(flags, "calendar_id")
+	// Flag parser normalizes to hyphen keys ("calendar-id"); queryFromFlags
+	// then maps them to snake_case API params ("calendar_id").
+	eventQuery := queryFromFlags(flags, "calendar-id")
 	eventQuery["oldest"] = dateRange.Oldest
 	eventQuery["newest"] = dateRange.Newest
 	if BoolFlag(flags, "resolve") {

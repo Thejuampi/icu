@@ -3,6 +3,7 @@ package icu
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 )
@@ -262,6 +263,9 @@ func MatchWorkoutEvent(activity *Activity, events []Event, options WorkoutEventM
 	if activity == nil {
 		return result
 	}
+	if options.MatchWindowHours <= 0 {
+		options.MatchWindowHours = workoutDefaultMatchWindowHours
+	}
 
 	var best WorkoutEventCandidate
 	var alternates []WorkoutEventCandidate
@@ -301,6 +305,19 @@ func MatchWorkoutEvent(activity *Activity, events []Event, options WorkoutEventM
 
 func scoreWorkoutEvent(activity *Activity, event *Event, options WorkoutEventMatchOptions) workoutEventScore {
 	var result workoutEventScore
+	explicit := options.ExplicitEventID > 0 && event.ID == options.ExplicitEventID
+	inWindow := withinWorkoutWindow(activity.StartDateLocal, event.StartDateLocal, options.MatchWindowHours)
+	// Hard-require temporal proximity unless the user pinned an event ID.
+	// Category/type/name alone must not match a workout days or weeks away.
+	if !inWindow && !explicit {
+		return result
+	}
+	scoreWorkoutIdentity(&result, activity, event, inWindow, explicit)
+	scoreWorkoutSimilarity(&result, activity, event)
+	return result
+}
+
+func scoreWorkoutIdentity(result *workoutEventScore, activity *Activity, event *Event, inWindow, explicit bool) {
 	if event.Category == "WORKOUT" {
 		result.score += workoutMatchCategoryWeight
 		result.reasons = append(result.reasons, "category_workout")
@@ -309,10 +326,17 @@ func scoreWorkoutEvent(activity *Activity, event *Event, options WorkoutEventMat
 		result.score += workoutMatchTypeWeight
 		result.reasons = append(result.reasons, "sport_type_match")
 	}
-	if withinWorkoutWindow(activity.StartDateLocal, event.StartDateLocal, options.MatchWindowHours) {
+	if inWindow {
 		result.score += workoutMatchTimeWeight
 		result.reasons = append(result.reasons, "time_window_match")
 	}
+	if explicit {
+		result.score += workoutMatchCategoryWeight
+		result.reasons = append(result.reasons, "explicit_event_id")
+	}
+}
+
+func scoreWorkoutSimilarity(result *workoutEventScore, activity *Activity, event *Event) {
 	if event.MovingTime > 0 && activity.MovingTime > 0 {
 		result.score += similarityScore(float64(activity.MovingTime), float64(event.MovingTime), workoutMatchDurationWeight)
 		result.reasons = append(result.reasons, "duration_similarity")
@@ -329,11 +353,6 @@ func scoreWorkoutEvent(activity *Activity, event *Event, options WorkoutEventMat
 		result.score += workoutMatchStructuredWeight
 		result.reasons = append(result.reasons, "structured_plan_available")
 	}
-	if options.ExplicitEventID > 0 && event.ID == options.ExplicitEventID {
-		result.score += workoutMatchCategoryWeight
-		result.reasons = append(result.reasons, "explicit_event_id")
-	}
-	return result
 }
 
 func workoutComparison(activity *Activity, event *Event, plan *WorkoutPlanSummary, intervals *IntervalsDTO, micro *ActivityMicroAnalysis, ftp int) WorkoutExecutionComparison {
@@ -597,5 +616,6 @@ func streamKeys(streams StreamData) []string {
 	for key := range streams {
 		result = append(result, key)
 	}
+	sort.Strings(result)
 	return result
 }

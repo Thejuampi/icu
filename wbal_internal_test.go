@@ -143,7 +143,7 @@ func TestActivityModelReliableDetectsLowCP(t *testing.T) {
 		{name: "CP at 100% of FTP", activity: &Activity{CriticalPower: 285, FTP: 285}, want: true},
 		{name: "CP above FTP", activity: &Activity{CriticalPower: 295, FTP: 285}, want: true},
 		{name: "no CP data", activity: &Activity{FTP: 285}, want: true},
-		{name: "no FTP data", activity: &Activity{CriticalPower: 287}, want: true},
+		{name: "no FTP data with CP", activity: &Activity{CriticalPower: 287}, want: false},
 	}
 
 	for _, tc := range cases {

@@ -324,6 +324,70 @@ analysis := icu.AnalyzeWorkoutExecution(
 Use `DecodeWorkoutDoc` and `ExpandWorkoutSteps` when you need to inspect or
 pre-process a planned event's structured workout document directly.
 
+### Power gap classification and virtual power fill
+
+When a power meter dies mid-ride, device streams often keep writing **zero watts** while **cadence becomes null**. Use nullable stream preservation so null ≠ zero:
+
+```go
+streams, err := icu.PreserveNullableStreams(rawActivityStreams)
+class := icu.ClassifyPowerSamples(icu.PowerGapInputs{
+	Watts:    icu.NullableStream(streams, "watts"),
+	Cadence:  icu.NullableStream(streams, "cadence"),
+	Balance:  icu.NullableStream(streams, "left_right_balance"), // dual-sided PM death
+	Speed:    icu.NullableStream(streams, "velocity_smooth"),
+	Distance: icu.NullableStream(streams, "distance"),
+	Time:     icu.NullableStream(streams, "time"),
+})
+// class.MeterDeathIndex / class.DeathSource ("left_right_balance" | "cadence" | "missing_run")
+// Re-open a prior fill on the dead half only:
+// streams = icu.MaskStreamsAsPowerMeterDeathFrom(streams, *class.MeterDeathIndex)
+// Optional: resolve real outdoor weather (activity fields → free Open-Meteo fallbacks).
+weather := icu.ResolveOutdoorWeather(httpClient, icu.OutdoorWeatherQuery{
+	Lat: lat, Lon: lon, StartUTC: startUTC, DurationSec: elapsed,
+	ActivityWindSpeed: activity.AverageWindSpeed, ActivityWindSpeedIsKmh: true,
+	ActivityHeadwindPercent: activity.HeadwindPercent, ActivityTailwindPercent: activity.TailwindPercent,
+	ActivityDeviceTempC: activity.AverageTemp, ActivityAvgAltitudeM: activity.AverageAltitude,
+})
+params := icu.PowerModelParams{ /* mass, Crr, eta, optional CdA */ }
+aero := icu.PowerAeroInputs{}
+_ = icu.ApplyOutdoorWeatherToAero(weather, &params, &aero)
+headwind := icu.HeadwindSeriesFromHours(weather.Hours, headings, timeSecs, startUTC, n)
+rho := icu.DensitySeriesFromHours(weather.Hours, altitude, timeSecs, startUTC, n, weather.MeanTempC, 0)
+
+result := icu.EstimateAndFillPower(icu.PowerFillRequest{
+	ActivityID:            activity.ID,
+	Streams:               streams,
+	CalibrateFromMeasured: true,
+	Params:                params,
+	Aero:                  aero,
+	HeadwindMSSeries:      headwind,
+	RhoSeries:             rho,
+	FTP:                   activity.FTP,
+	IncludeStreams:        true,
+})
+```
+
+`ClassifyPowerSamples` labels each sample `measured`, `true_zero`, or `missing`. Only `missing` samples are estimated. Pass optional `left_right_balance` for dual-sided PM death detection: balance present while the meter is alive (real first-half power+RPM), then a long null L/R tail after the last present sample marks death (`DeathSource=left_right_balance`). Cadence freewheels mid-ride are ignored (end-anchored null cadence only). `DetectPowerMeterDeathIndex` / `MaskStreamsAsPowerMeterDeathFrom` reopen a prior fill on that second half without touching the measured first half. `EstimateAndFillPower` uses a Martin road-balance model with **dynamic** calibration from the measured segment. When `HeadwindMSSeries` / `RhoSeries` are provided, calibration and physics use those **per-sample** values so real weather wind is not baked into CdA as still air. Sample sources in output include `estimated`, `estimated_physics`, and `unfilled`.
+
+The CLI resolves weather automatically; library callers should call `ResolveOutdoorWeather` (free Open-Meteo archive / forecast past / historical-forecast, no API key) or pass activity wind fields. Wind is never invented from fixed outdoor defaults. Stream `PUT`s performed by the CLI accept path update Intervals.icu only; other platforms (Strava, device clouds) keep their original files unless the athlete re-exports and re-uploads an Intervals-processed FIT.
+
+Replay validation (required before trusting fills):
+
+```go
+bt := icu.BacktestPowerEstimate(icu.PowerBacktestRequest{
+	Streams:               streams, // complete measured ride
+	Params:                params,
+	Aero:                  aero,
+	HeadwindMSSeries:      headwind,
+	RhoSeries:             rho,
+	CalibrateFromMeasured: true,
+	Mode:                  icu.PowerBacktestMaskSecondHalf,
+})
+// bt.Scores: pearsonR, spearmanRho, bias, residual MAD-z, robustRmse (outlier-aware), zScorePearsonR
+// In-repo gates (tests): physics synthetic ≥0.95 r; outdoor-shaped fixture ≥0.80 r + bias/MAD-z bounds;
+// known planted headwind must beat still-air. Live outdoor is corroboration only; CFD is out of scope.
+```
+
 Relevant exported analysis types:
 
 - `AnalysisOptions`
@@ -338,6 +402,13 @@ Relevant exported analysis types:
 - `WorkoutExecutionAnalysis`
 - `WorkoutDoc`
 - `PlannedWorkoutStep`
+- `NullableStreamData` / `NullableSeries` / `PreserveNullableStreams`
+- `PowerGapInputs` / `PowerGapClassification` / `ClassifyPowerSamples`
+- `DetectPowerMeterDeathIndex` / `DetectBalanceDeathIndex` / `DetectCadenceDeathIndex` / `MaskStreamsAsPowerMeterDeathFrom`
+- `PowerFillRequest` / `PowerFillResult` / `EstimateAndFillPower`
+- `PowerBacktestRequest` / `PowerBacktestResult` / `BacktestPowerEstimate`
+- `OutdoorWeatherQuery` / `OutdoorWeatherResult` / `ResolveOutdoorWeather` / `ApplyOutdoorWeatherToAero`
+- `HeadwindSeriesFromHours` / `DensitySeriesFromHours` / `HeadingSeriesFromLatLngs` / `MapCentroid`
 
 See [docs/analysis.md](analysis.md) for the meaning of the major output sections.
 
@@ -360,7 +431,8 @@ hosted on `api-mifit.huami.com` and uses its own auth flow. The flow is:
    `SecondHeartRateFiles`, `SpO2Windows`, `SportLoad`, `VO2Max`, `Workouts`,
    `Workout`, `UserInfo`, or `FetchV2Events` to fetch data. `FetchV2Events`
    is the low-level escape hatch for the watch-centric `/v2/users/me/events`
-   stream (HRV, body battery, readiness, etc.). `Workouts` and `Workout`
+   stream on the dedicated Zepp events host (HRV, body battery, readiness,
+   etc.). `Workouts` and `Workout`
    accept a sport name (`run`, `walking`, `ride`/`cycling`, `swimming`)
    resolved via `SportNameToSegment`. Exported URL builders (`V2EventsURL`,
    `WatchSportStatisticsURL`, `UserHeartRateURL`, `WeightRecordsURL`,
@@ -398,7 +470,7 @@ func main() {
 		fmt.Println(d.Date, d.Summary.Steps.Total, d.Summary.Sleep.DeepMinutes)
 	}
 
-	// Per-day SpO2 events come from a separate host (api-mifit.zepp.com).
+	// Per-day SpO2 and V2 wellness events come from the Zepp events host.
 	spo2, err := client.SpO2Readings(ctx, "2026-05-01", "2026-05-07")
 	if err != nil {
 		panic(err)

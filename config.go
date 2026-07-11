@@ -1,11 +1,7 @@
 package icu
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
 )
 
 type Config struct {
@@ -16,66 +12,6 @@ type Config struct {
 	ZeppAppToken    string `json:"zeppAppToken,omitempty"`
 	ZeppUserID      string `json:"zeppUserId,omitempty"`
 	ZeppCountryCode string `json:"zeppCountryCode,omitempty"`
-}
-
-func configDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ".icu"
-	}
-
-	return filepath.Join(home, ".icu")
-}
-
-func ConfigPath() string {
-	return filepath.Join(configDir(), "config.json")
-}
-
-func LoadConfig() (*Config, error) {
-	path := ConfigPath()
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			var cfg Config
-
-			return &cfg, nil
-		}
-
-		return nil, fmt.Errorf("reading config file: %w", err)
-	}
-
-	var cfg Config
-	if len(data) == 0 {
-		return &cfg, nil
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config: %w", err)
-	}
-
-	return &cfg, nil
-}
-
-func SaveConfig(cfg *Config) error {
-	if cfg == nil {
-		return errors.New("cannot save nil config")
-	}
-
-	dir := configDir()
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("creating config dir: %w", err)
-	}
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encoding config: %w", err)
-	}
-
-	if err := os.WriteFile(ConfigPath(), data, 0o600); err != nil {
-		return fmt.Errorf("writing config: %w", err)
-	}
-
-	return nil
 }
 
 func StringFlag(args map[string]string, name, defaultVal string) string {
