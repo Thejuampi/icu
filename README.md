@@ -73,7 +73,7 @@ Athlete ID resolution order:
 3. `~/.icu/config.json`
 4. default `"0"` for the authenticated athlete
 
-`icu config show` prints the config file path and masks the stored API key.
+`icu config show` prints the config file path and shows only a 12-character SHA256 fingerprint for the stored API key (never partial or raw characters).
 `icu config diagnose` prints source resolution details and a non-reversible fingerprint, not the raw secret.
 
 ### Zepp / Amazfit Authentication

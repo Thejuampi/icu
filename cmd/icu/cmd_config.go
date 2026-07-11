@@ -28,7 +28,8 @@ func configShowCommand() *Command {
 
 			fmt.Fprintf(out, "config file: %s\n\n", icu.ConfigPath())
 			if cfg.APIKey != "" {
-				fmt.Fprintf(out, "  api_key:    %s...%s\n", cfg.APIKey[:4], cfg.APIKey[len(cfg.APIKey)-4:])
+				fingerprint := icu.SecretFingerprint(cfg.APIKey)
+				fmt.Fprintf(out, "  api_key:    set (fingerprint=%s, length=%d)\n", fingerprint, len(cfg.APIKey))
 			} else {
 				fmt.Fprintln(out, "  api_key:    (not set)")
 			}
