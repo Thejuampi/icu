@@ -360,7 +360,8 @@ hosted on `api-mifit.huami.com` and uses its own auth flow. The flow is:
    `SecondHeartRateFiles`, `SpO2Windows`, `SportLoad`, `VO2Max`, `Workouts`,
    `Workout`, `UserInfo`, or `FetchV2Events` to fetch data. `FetchV2Events`
    is the low-level escape hatch for the watch-centric `/v2/users/me/events`
-   stream (HRV, body battery, readiness, etc.). `Workouts` and `Workout`
+   stream on the dedicated Zepp events host (HRV, body battery, readiness,
+   etc.). `Workouts` and `Workout`
    accept a sport name (`run`, `walking`, `ride`/`cycling`, `swimming`)
    resolved via `SportNameToSegment`. Exported URL builders (`V2EventsURL`,
    `WatchSportStatisticsURL`, `UserHeartRateURL`, `WeightRecordsURL`,
@@ -398,7 +399,7 @@ func main() {
 		fmt.Println(d.Date, d.Summary.Steps.Total, d.Summary.Sleep.DeepMinutes)
 	}
 
-	// Per-day SpO2 events come from a separate host (api-mifit.zepp.com).
+	// Per-day SpO2 and V2 wellness events come from the Zepp events host.
 	spo2, err := client.SpO2Readings(ctx, "2026-05-01", "2026-05-07")
 	if err != nil {
 		panic(err)

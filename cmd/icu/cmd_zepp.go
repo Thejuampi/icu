@@ -501,7 +501,7 @@ func runZeppLogin(email, password string) error {
 	cfg.ZeppUserID = auth.UserID
 	cfg.ZeppCountryCode = auth.CountryCode
 
-	if err := icu.SaveConfig(cfg); err != nil {
+	if err := icu.SaveConfigWithAction(cfg, "zepp_login"); err != nil {
 		return wrapCommandError(fmt.Errorf("saving config: %w", err))
 	}
 
@@ -523,7 +523,7 @@ func runZeppLogout() error {
 
 	cfg.ZeppLoginToken = ""
 
-	if err := icu.SaveConfig(cfg); err != nil {
+	if err := icu.SaveConfigWithAction(cfg, "zepp_logout"); err != nil {
 		return wrapCommandError(fmt.Errorf("saving config: %w", err))
 	}
 

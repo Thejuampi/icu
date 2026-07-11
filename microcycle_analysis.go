@@ -188,15 +188,18 @@ func AnalyzeMicrocycle(
 	settings *SportSettings,
 	options *MicrocycleOptions,
 ) MicrocycleAnalysis {
-	if options == nil {
-		options = &MicrocycleOptions{}
+	// Work on a local copy so caller-owned options are never mutated.
+	local := MicrocycleOptions{}
+	if options != nil {
+		local = *options
 	}
-	if options.Now.IsZero() {
-		options.Now = time.Now()
+	if local.Now.IsZero() {
+		local.Now = time.Now()
 	}
-	if options.SportType == "" {
-		options.SportType = "Ride"
+	if local.SportType == "" {
+		local.SportType = "Ride"
 	}
+	options = &local
 
 	selectedActivities := filterActivitiesByDate(activities, options.StartDate, options.EndDate)
 	cycling := AnalyzeCyclingActivities(selectedActivities, AnalysisOptions{
@@ -894,7 +897,17 @@ func previousLoad(activities []Activity, start string, days int) int {
 	previousStart := startDate.AddDate(0, 0, -days).Format(microcycleDateLayout)
 	previousEnd := startDate.AddDate(0, 0, -1).Format(microcycleDateLayout)
 
-	return activityLoad(filterActivitiesByDate(activities, previousStart, previousEnd))
+	// Current microcycle load is cycling-only; compare against cycling history
+	// so runs/swims do not inflate the baseline and mislabel the week.
+	filtered := filterActivitiesByDate(activities, previousStart, previousEnd)
+	cycling := make([]Activity, 0, len(filtered))
+	for index := range filtered {
+		if IsCyclingActivityType(filtered[index].Type) {
+			cycling = append(cycling, filtered[index])
+		}
+	}
+
+	return activityLoad(cycling)
 }
 
 func compareLoad(current, previous int) string {

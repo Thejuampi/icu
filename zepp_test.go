@@ -307,20 +307,15 @@ func TestNewZeppClientFromAuthDefaultsToGlobalHost(t *testing.T) {
 	}
 }
 
-func TestConfigDirFallsBackToDotIcu(t *testing.T) {
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-
+func TestConfigPathUsesIsolatedOverride(t *testing.T) {
 	path := icu.ConfigPath()
-	if !strings.HasSuffix(path, ".icu/config.json") && !strings.HasSuffix(path, ".icu\\config.json") {
-		t.Fatalf("expected .icu in path, got %q", path)
+	if !strings.Contains(path, "icu-test-config-") {
+		t.Fatalf("expected isolated test config path, got %q", path)
 	}
 }
 
 func TestResolveZeppLoginTokenFlagBeatsEnvBeatsConfig(t *testing.T) {
 	t.Setenv("ZEPP_LOGIN_TOKEN", "env-token")
-
 	cfg := &icu.Config{ZeppLoginToken: "config-token"}
 
 	t.Setenv("HOME", t.TempDir())

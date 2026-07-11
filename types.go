@@ -94,6 +94,9 @@ type Activity struct {
 	AverageCadence     float64    `json:"averageCadence,omitempty"`
 	Calories           int        `json:"calories,omitempty"`
 	TrainingLoad       int        `json:"icuTrainingLoad,omitempty"`
+	HRLoad             int        `json:"hrLoad,omitempty"`
+	HRLoadType         string     `json:"hrLoadType,omitempty"`
+	TRIMP              float64    `json:"trimp,omitempty"`
 	Intensity          float64    `json:"icuIntensity,omitempty"`
 	FTP                int        `json:"icuFtp,omitempty"`
 	CriticalPower      int        `json:"icuPmCp,omitempty"`

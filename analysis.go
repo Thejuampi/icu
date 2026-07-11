@@ -493,6 +493,15 @@ func (accumulator *cyclingAnalysisAccumulator) updateLatestLoad(activity *Activi
 		return
 	}
 
+	// Skip activities that omit CTL/ATL (both zero). A later session without
+	// fitness-model fields must not wipe a previously recorded form state.
+	if activity.CTL == 0 && activity.ATL == 0 {
+		if accumulator.latestLoadDate == "" {
+			accumulator.latestLoadDate = date
+		}
+		return
+	}
+
 	accumulator.latestLoadDate = date
 	accumulator.analysis.Load.LatestCTL = activity.CTL
 	accumulator.analysis.Load.LatestATL = activity.ATL
@@ -931,18 +940,33 @@ func buildDailyTrainingLoads(loads map[string]int, options AnalysisOptions) []Da
 }
 
 func dailyTrainingLoadsFromMap(loads map[string]int) []DailyTrainingLoad {
-	dates := make([]string, 0, len(loads))
+	if len(loads) == 0 {
+		return nil
+	}
 
+	dates := make([]string, 0, len(loads))
 	for date := range loads {
 		dates = append(dates, date)
 	}
-
 	sort.Strings(dates)
 
-	days := make([]DailyTrainingLoad, 0, len(dates))
+	startDate, startErr := time.Parse(analysisDateLayout, dates[0])
+	endDate, endErr := time.Parse(analysisDateLayout, dates[len(dates)-1])
+	// Fall back to sparse ride-only series when keys are not calendar dates.
+	if startErr != nil || endErr != nil || endDate.Before(startDate) {
+		days := make([]DailyTrainingLoad, 0, len(dates))
+		for _, date := range dates {
+			days = append(days, DailyTrainingLoad{Date: date, Load: loads[date]})
+		}
+		return days
+	}
 
-	for _, date := range dates {
-		days = append(days, DailyTrainingLoad{Date: date, Load: loads[date]})
+	// Expand min→max inclusive so rest days contribute zero load for monotony,
+	// strain, and acute/chronic windows (Foster-style consecutive days).
+	var days []DailyTrainingLoad
+	for current := startDate; !current.After(endDate); current = current.AddDate(0, 0, 1) {
+		key := current.Format(analysisDateLayout)
+		days = append(days, DailyTrainingLoad{Date: key, Load: loads[key]})
 	}
 
 	return days

@@ -3,6 +3,7 @@ package icu
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -137,11 +138,11 @@ func parseWorkoutDuration(value, unit string) (int, error) {
 
 	switch unit {
 	case "h":
-		return int(number * secondsPerHour), nil
+		return int(math.Round(number * float64(secondsPerHour))), nil
 	case "m":
-		return int(number * secondsPerMinute), nil
+		return int(math.Round(number * float64(secondsPerMinute))), nil
 	case "s":
-		return int(number), nil
+		return int(math.Round(number)), nil
 	default:
 		return 0, fmt.Errorf("%w: invalid duration unit %q", ErrWorkoutDescriptionUnsupported, unit)
 	}

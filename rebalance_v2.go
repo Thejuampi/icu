@@ -149,6 +149,25 @@ func rebalanceRatFromInt(value int) RebalanceRat {
 	return NewRebalanceRatFromInt(value, 1)
 }
 
+// rebalanceRatSqrt returns a decimal approximation of sqrt(value).
+// Rebalance math is otherwise exact-rational; square roots are transcendental
+// over the rationals, so this uses a high-precision float path and re-parses
+// the shortest stable decimal form.
+func rebalanceRatSqrt(value RebalanceRat) RebalanceRat {
+	if value.Sign() < 0 {
+		return ZeroRebalanceRat()
+	}
+	if value.IsZero() {
+		return ZeroRebalanceRat()
+	}
+	text := strconv.FormatFloat(math.Sqrt(value.Float64()), 'f', 12, 64)
+	parsed, err := ParseRebalanceRat(text)
+	if err != nil {
+		return ZeroRebalanceRat()
+	}
+	return parsed
+}
+
 // rebalanceRatFloorInt returns the integer floor of a RebalanceRat.
 func rebalanceRatFloorInt(value RebalanceRat) int {
 	num := new(big.Int)
@@ -461,6 +480,8 @@ func rebalanceV2Projection(
 		session, step, blocked := rebalanceV2BuildSession(input, slot, compensatedShare, level, mode)
 		inflight.sessions = append(inflight.sessions, session)
 		if blocked {
+			// Carry the full unapplied compensated share so later slots can absorb it.
+			residual = compensatedShare
 			projection.Steps = append(projection.Steps, step)
 			continue
 		}
@@ -469,7 +490,7 @@ func rebalanceV2Projection(
 		residual = compensatedShare.Sub(actualApplied)
 		errStep := actualApplied.Sub(step.ExactLoadRat)
 		if errStep.Sign() < 0 {
-			errStep = errStep.Sub(ZeroRebalanceRat())
+			errStep = ZeroRebalanceRat().Sub(errStep)
 		}
 		if errStep.Cmp(maxError) > 0 {
 			maxError = errStep
@@ -760,7 +781,7 @@ func rebalanceV2ExactSeconds(load RebalanceRat, ifloat float64) RebalanceRat {
 }
 
 func rebalanceV2ExactIF(load, seconds RebalanceRat) RebalanceRat {
-	// IF = sqrt(load / (hours * 100)) ; compute rationally as load/(seconds/3600*100)
+	// IF equals the square root of load divided by (hours times 100).
 	hundred := NewRebalanceRatFromInt(rebalancePercentScale, 1)
 	secondsPerHour := NewRebalanceRatFromInt(rebalanceSecondsPerHour, 1)
 	hours := seconds.Quo(secondsPerHour)
@@ -768,7 +789,11 @@ func rebalanceV2ExactIF(load, seconds RebalanceRat) RebalanceRat {
 	if denom.IsZero() {
 		return ZeroRebalanceRat()
 	}
-	return load.Quo(denom)
+	ratio := load.Quo(denom)
+	if ratio.Sign() < 0 {
+		return ZeroRebalanceRat()
+	}
+	return rebalanceRatSqrt(ratio)
 }
 
 func rebalanceV2RoundSeconds(input *RebalanceInput, exact RebalanceRat) int {

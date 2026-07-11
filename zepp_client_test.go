@@ -983,6 +983,48 @@ func TestZeppClientFetchV2EventsReturnsErrorOnNon2xx(t *testing.T) {
 	}
 }
 
+func TestZeppClientFetchV2EventsUsesEventsHost(t *testing.T) {
+	t.Parallel()
+
+	dataServer := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path == "/v2/users/me/events" {
+			return http.StatusTeapot, `{"code":418}`
+		}
+
+		return http.StatusNotFound, err404
+	})
+	t.Cleanup(dataServer.Close)
+
+	eventsServer := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/v2/users/me/events" {
+			return http.StatusNotFound, err404
+		}
+
+		if !strings.Contains(record.Query, "eventType=Charge") || !strings.Contains(record.Query, "subType=insight_data") {
+			return http.StatusBadRequest, errMissingEventType
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"value":90}]}`
+	})
+	t.Cleanup(eventsServer.Close)
+
+	auth := &icu.ZeppAuthResult{AppToken: "test-app-token", UserID: "u1", CountryCode: "US"}
+	client := icu.NewZeppClientFromAuth(
+		auth,
+		icu.WithZeppBaseURL(dataServer.server.URL),
+		icu.WithZeppEventsURL(eventsServer.server.URL),
+	)
+
+	days, err := client.HybridChargeDays(t.Context(), "2026-06-01", "2026-06-01")
+	if err != nil {
+		t.Fatalf("HybridChargeDays: %v", err)
+	}
+
+	if len(days) != 1 || days[0].Score != 90 {
+		t.Fatalf("days = %+v, want one score 90 from events host", days)
+	}
+}
+
 func TestDecodeHRV(t *testing.T) {
 	t.Parallel()
 

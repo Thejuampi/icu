@@ -36,13 +36,23 @@ func NormalizedPower(watts []float64, start, end int) float64 {
 		return AveragePower(watts, start, end)
 	}
 
-	var sum float64
-	for i := start; i+npWindow <= end; i++ {
-		avg := AveragePower(watts, i, i+npWindow)
-		sum += math.Pow(avg, npExponent)
+	// Rolling 30s average is O(n); the prior per-window rescan was O(n*window).
+	var windowSum float64
+	for i := start; i < start+npWindow; i++ {
+		windowSum += watts[i]
 	}
 
-	count := end - start - npWindow + 1
+	var sum float64
+	count := 0
+	for i := start; i+npWindow <= end; i++ {
+		if i > start {
+			windowSum += watts[i+npWindow-1] - watts[i-1]
+		}
+		avg := windowSum / float64(npWindow)
+		sum += math.Pow(avg, npExponent)
+		count++
+	}
+
 	if count <= 0 {
 		return 0
 	}
@@ -121,7 +131,9 @@ func Decoupling(watts, hr []float64) float64 {
 		return 0
 	}
 
-	return (firstRatio/secondRatio - 1) * percentScale
+	// Friel aerobic decoupling: percent change relative to the first half EF.
+	// ((EF1 - EF2) / EF1) * 100  ==  (1 - EF2/EF1) * 100
+	return (1 - secondRatio/firstRatio) * percentScale
 }
 
 func TimeInZone(watts []float64, ftp int, minPct, maxPct float64) int {
@@ -153,9 +165,10 @@ func HeartRateRecovery(hr []float64, peakIndex, windowSize int) float64 {
 
 	peakHR := hr[peakIndex]
 	endHR := hr[peakIndex+windowSize]
-	drop := peakHR - endHR
 
-	return drop / float64(windowSize)
+	// Conventional HRR is total bpm recovered over the window (e.g. HRR60),
+	// not bpm per sample. Decay rate lives on CooldownAnalysis.HRDecayRate.
+	return peakHR - endHR
 }
 
 func Slope(data []float64) float64 {

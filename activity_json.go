@@ -33,6 +33,9 @@ func (activity *Activity) applySnakeFields(raw map[string]json.RawMessage) {
 	copyRawIfSet(&activity.AveragePower, raw, "icu_average_watts")
 	copyRawIfSet(&activity.WeightedAvgPower, raw, "icu_weighted_avg_watts")
 	copyRawIfSet(&activity.TrainingLoad, raw, "icu_training_load")
+	copyRawIfSet(&activity.HRLoad, raw, "hr_load")
+	copyRawIfSet(&activity.HRLoadType, raw, "hr_load_type")
+	copyRawIfSet(&activity.TRIMP, raw, "trimp")
 	copyRawIfSet(&activity.Intensity, raw, "icu_intensity")
 	copyRawIfSet(&activity.FTP, raw, "icu_ftp")
 	copyRawIfSet(&activity.CriticalPower, raw, "icu_pm_cp")
@@ -97,7 +100,9 @@ func copyRawAnyIfSet(target *any, raw map[string]json.RawMessage, key string) {
 
 func copyRawIfSet[T comparable](target *T, raw map[string]json.RawMessage, key string) {
 	var value T
-	if decodeRawIfPresent(raw, key, &value) && value != *new(T) {
+	// If the snake_case key is present (and not null), always assign — including
+	// explicit zeros/false/"" — so dual-key payloads cannot keep a stale camelCase value.
+	if decodeRawIfPresent(raw, key, &value) {
 		*target = value
 	}
 }

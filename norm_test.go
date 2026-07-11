@@ -224,7 +224,7 @@ func TestNormalizeStreamsNilData(t *testing.T) {
 	}
 }
 
-func TestNormalizeStreamsSkipsStreamWithNilElement(t *testing.T) {
+func TestNormalizeStreamsNullElementsBecomeZero(t *testing.T) {
 	t.Parallel()
 
 	raw := []icu.ActivityStream{
@@ -236,7 +236,11 @@ func TestNormalizeStreamsSkipsStreamWithNilElement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if _, ok := got["cadence"]; ok {
-		t.Fatal("cadence stream with nil element should be skipped")
+	cadence, ok := got["cadence"]
+	if !ok {
+		t.Fatal("cadence stream with null samples should be kept")
+	}
+	if len(cadence) != 2 || cadence[0] != 0 || cadence[1] != 80 {
+		t.Fatalf("cadence = %v, want [0 80]", cadence)
 	}
 }

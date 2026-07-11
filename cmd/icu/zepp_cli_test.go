@@ -206,7 +206,6 @@ func TestZeppProfileCommandHitsCorrectEndpoint(t *testing.T) {
 	})
 	t.Cleanup(srv.Close)
 	t.Setenv("ZEPP_BASE_URL", srv.URL())
-	t.Setenv("ZEPP_EVENTS_URL", srv.URL())
 
 	registry := NewCommandRegistry()
 	registerZeppCommands(registry)
@@ -658,7 +657,7 @@ func TestZeppEventsCommandHitsV2Endpoint(t *testing.T) {
 		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"real_data","value":85}]}`
 	})
 	t.Cleanup(srv.Close)
-	t.Setenv("ZEPP_BASE_URL", srv.URL())
+	t.Setenv("ZEPP_EVENTS_URL", srv.URL())
 
 	registry := NewCommandRegistry()
 	registerZeppCommands(registry)
@@ -772,7 +771,7 @@ func TestZeppV2WellnessCommandsHitCorrectEndpoint(t *testing.T) {
 				return http.StatusOK, `{"items":[{"timestamp":1780272000000,"value":42}]}`
 			})
 			t.Cleanup(srv.Close)
-			t.Setenv("ZEPP_BASE_URL", srv.URL())
+			t.Setenv("ZEPP_EVENTS_URL", srv.URL())
 
 			registry := NewCommandRegistry()
 			registerZeppCommands(registry)
@@ -836,7 +835,7 @@ func TestZeppBloodPressureCommandDefaultsToWatchSource(t *testing.T) {
 		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"extra":{"systolic":120,"diastolic":80}}]}`
 	})
 	t.Cleanup(srv.Close)
-	t.Setenv("ZEPP_BASE_URL", srv.URL())
+	t.Setenv("ZEPP_EVENTS_URL", srv.URL())
 
 	registry := NewCommandRegistry()
 	registerZeppCommands(registry)

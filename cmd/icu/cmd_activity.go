@@ -12,7 +12,7 @@ func registerActivityCommands(registry *CommandRegistry) {
 		"activity", "update",
 		updateByIDCommand[icu.Activity, icu.Activity](
 			"activity",
-			"activity <id> update --name NAME [--description DESC] [--type Ride]",
+			"activity <id> update --name NAME [--description DESC] [--type Ride] [--training-load N]",
 			"Update an activity.",
 			"activity id",
 			nil,
@@ -28,6 +28,10 @@ func registerActivityCommands(registry *CommandRegistry) {
 
 				if v := flags["type"]; v != "" {
 					a.Type = v
+				}
+
+				if v := IntFlag(flags, "training-load", 0); v > 0 {
+					a.TrainingLoad = v
 				}
 
 				return a

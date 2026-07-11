@@ -31,7 +31,7 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 
 - `list`
   Invocation: `icu activities list --oldest DATE --newest DATE [--fields f1,f2] [--limit N] [--route_id ID]`
-  Notes: `--route_id` is supported by the implementation even though it is omitted from help text.
+  Notes: `--route_id` is supported by the implementation even though it is omitted from help text. Activity JSON includes Intervals load fields such as `icuTrainingLoad`, and when provided by the API also exposes HR-derived `hrLoad`, `hrLoadType`, and `trimp`.
   Example: `icu activities list --oldest 2026-05-01 --newest 2026-05-31 --limit 50`
 
 - `get`
@@ -85,7 +85,8 @@ Invoke these commands as `icu activity <id> <action>`.
   Example: `icu activity i123 show --intervals`
 
 - `update`
-  Invocation: `icu activity <id> update --name NAME [--description DESC] [--type Ride]`
+  Invocation: `icu activity <id> update --name NAME [--description DESC] [--type Ride] [--training-load N]`
+  Notes: `--training-load` writes the activity `icuTrainingLoad` value. Use a measured or API-provided HR-derived load when correcting activities with incomplete power data; the CLI does not invent HRSS/tTSS values.
   Example: `icu activity i123 update --name "Afternoon Ride" --description "Updated title"`
 
 - `delete`
@@ -612,7 +613,8 @@ the raw components.
 
 - `events`
   Invocation: `icu zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD`
-  Notes: Calls `/v2/users/me/events` on the regional data host. Presets map
+  Notes: Calls `/v2/users/me/events` on the Zepp events host
+  `api-mifit.zepp.com`. Presets map
   to Zepp `eventType`/`subType` pairs (e.g. `body-battery` →
   `Charge`/`real_data`). Use `icu zepp events --help` to list presets.
   Example: `icu zepp events --preset body-battery --oldest 2026-06-01 --newest 2026-06-07`

@@ -67,8 +67,7 @@ func BuildZeppEventsURL(userID string) string {
 }
 
 // V2EventsURL composes a fully-qualified /v2/users/me/events URL for a preset
-// and a date range. The base URL is typically the regional data host returned
-// by zeppDataHostFor.
+// and a date range. The base URL should be the Zepp events host.
 func V2EventsURL(base string, preset V2EventPreset, oldest, newest string) (string, error) {
 	return buildZeppDateRangeURL(
 		base, "/v2/users/me/events", oldest, newest,

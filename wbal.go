@@ -147,10 +147,16 @@ func ActivityModelReliable(activity *Activity) bool {
 	if activity == nil {
 		return false
 	}
-	if activity.CriticalPower > 0 && activity.FTP > 0 {
-		return float64(activity.CriticalPower) >= float64(activity.FTP)*wbalReliableCPRatio
+	// Reliability requires both activity CP and FTP so the 85% ratio can be
+	// checked. A non-zero CP with missing FTP is the low-intensity collapse
+	// case the guard exists for; treat it as unreliable rather than optimistic.
+	if activity.CriticalPower <= 0 {
+		return true
 	}
-	return true
+	if activity.FTP <= 0 {
+		return false
+	}
+	return float64(activity.CriticalPower) >= float64(activity.FTP)*wbalReliableCPRatio
 }
 
 // RecomputeWBalDepletion combines artifact detection, stream cleaning,
