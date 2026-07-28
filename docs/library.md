@@ -306,6 +306,35 @@ Generated sessions in the proposal expose decision-source fields so consumers ca
 
 `BuildRebalanceProposal` is pure and returns an editable JSON-friendly proposal. `DynamicRebalanceTargets` derives Z1/Z2 and capacity context from sport settings or recent cycling history with robust outlier filtering. Use `MarshalRebalanceProposal` to write pretty JSON for review before applying operations through the CLI.
 
+`PreviewCalendarOperations` summarizes pending create/update/cancel ops shared by rebalance and plan proposals. `EventSourceHash` fingerprints an event for drift detection on update/cancel.
+
+### Plan proposals
+
+```go
+proposal := icu.BuildPlanProposal(&icu.PlanInput{
+	NowDate:       "2026-07-27",
+	Activities:    activities,
+	Events:        events,
+	SportSettings: &sportSettings,
+	Intent: icu.PlanIntent{
+		SchemaVersion: icu.PlanIntentSchemaVersion,
+		Oldest:        "2026-07-28",
+		Newest:        "2026-08-02",
+		FTP:           285,
+		Constraints: icu.PlanConstraints{
+			AllowCreate: true, AllowUpdate: true,
+			DefaultStartTime: "07:00", DefaultType: "Ride", DefaultCategory: "WORKOUT",
+		},
+		Sessions: []icu.PlanSessionDraft{{
+			Date: "2026-07-28", Name: "Z2 HR-Control Waves",
+			Desc: "- 60m 70% FTP", DescLocal: "- 60m 70%",
+		}},
+	},
+})
+```
+
+`BuildPlanProposal` is pure: it matches intent sessions to existing events by `uid` or date+name, estimates load from `descLocal`/`desc`, and emits calendar operations with source hashes. Use `MarshalPlanProposal` / `ValidatePlanProposal` before applying through the CLI (`icu plan accept`).
+
 ### Workout execution analysis
 
 ```go

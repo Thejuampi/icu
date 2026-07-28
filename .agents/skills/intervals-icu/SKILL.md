@@ -210,6 +210,17 @@ icu events list --oldest 2026-05-20 --newest 2026-05-31 --category WORKOUT
 icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc "- 15m Ramp 55-72% FTP\n- 4x8m 105% FTP\n- 10m Ramp 55-50% FTP"
 ```
 
+**Prefer `icu plan` for multi-session calendar writes.** Build an intent JSON with explicit sessions, then:
+
+```bash
+icu plan show --file plan.json --intent-file intent.json --now-date 2026-07-27 --type Ride
+icu plan preview --file plan.json
+# inspect/edit plan.json operations if needed
+icu plan accept --file plan.json
+```
+
+Use single `events create/update` only for one-off edits. Use `icu rebalance` for weekly load redistribution of existing structure (show → optional preview → accept), not for writing an explicit session list. See `docs/plan.md` and `docs/rebalance.md`.
+
 Common event categories: `WORKOUT`, `RACE_A`, `RACE_B`, `RACE_C`, `NOTE`, `PLAN`, `HOLIDAY`, `SICK`, `INJURED`, `SET_EFTP`, `FITNESS_DAYS`, `SEASON_START`, `TARGET`, `SET_FITNESS`.
 
 Practical behavior to remember:

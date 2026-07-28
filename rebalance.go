@@ -319,10 +319,16 @@ func ValidateRebalanceProposal(proposal *RebalanceProposalFile) RebalanceValidat
 	if proposal == nil {
 		return RebalanceValidation{Blocking: true, Errors: []string{"proposal is required"}}
 	}
+	seeded := proposal.Validation
 	validateRebalanceHeader(proposal, &validation)
 	validateRebalanceDecisionSources(proposal, &validation)
 	for index := range proposal.Operations {
 		validateRebalanceOperation(&proposal.Operations[index], &validation)
+	}
+	validation.Errors = appendUniqueStrings(validation.Errors, seeded.Errors...)
+	validation.Warnings = appendUniqueStrings(validation.Warnings, seeded.Warnings...)
+	if seeded.Blocking && len(validation.Errors) == 0 {
+		validation.Errors = append(validation.Errors, "proposal validation is marked blocking")
 	}
 	validation.Blocking = len(validation.Errors) > 0
 	validation.Feasible = !validation.Blocking
@@ -989,21 +995,7 @@ func validateRebalanceOperationSource(operation *RebalanceOperation, validation 
 }
 
 func validateRebalanceOperation(operation *RebalanceOperation, validation *RebalanceValidation) {
-	if operation.ID == "" {
-		validation.Errors = append(validation.Errors, "operation id is required")
-	}
-	if !validRebalanceAction(operation.Action) {
-		validation.Errors = append(validation.Errors, "operation action is unsupported: "+operation.Action)
-	}
-	if !validRebalanceStatus(operation.Status) {
-		validation.Errors = append(validation.Errors, "operation status is unsupported: "+operation.Status)
-	}
-	if operation.Action != RebalanceActionCreate && operation.EventID == 0 {
-		validation.Errors = append(validation.Errors, "eventId is required for "+operation.Action)
-	}
-	if operation.Action != RebalanceActionCancel && operation.Body.Name == "" {
-		validation.Errors = append(validation.Errors, "body.name is required for "+operation.Action)
-	}
+	validation.Errors = append(validation.Errors, CalendarOperationErrors(operation)...)
 }
 
 func validRebalanceAction(action string) bool {

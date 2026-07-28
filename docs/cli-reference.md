@@ -224,6 +224,23 @@ Invoke these commands as `icu activity <id> <action>`.
   Notes: Read-only JSON contract for planned-workout execution review. The command fetches the activity, detected intervals, raw streams, sport settings, and either the explicit `--event-id` or nearby resolved calendar events. It emits match confidence, planned workout steps, execution micro metrics, session/rep/step comparison, and warnings when plan, stream, interval, FTP, or LTHR data is missing.
   Example: `icu analysis workout i123 --calendar-id 1`
 
+## plan
+
+- `show`
+  Invocation: `icu plan show --file PATH --intent-file PATH [--allow-today] [--allow-past] [--now-date DATE] [--type SPORT]`
+  Notes: Dry-run command. Reads an explicit multi-session intent JSON (`icu.plan.intent.v1`), fetches activities/events for the intent range and optional sport settings when `--type` is set, builds an editable `icu.plan.v1` proposal, and writes pretty JSON to `--file` (mode `0600`). Does not mutate Intervals.icu. Sessions are matched to existing events by `uid` or by date+name. `desc` is written to the event body; `descLocal` (else `desc`) is used for local planned-load calculation. Cancel defaults off; weekly targets warn unless `strictTargets` is true. No embedded session library or coach heuristics.
+  Example: `icu plan show --file plan.json --intent-file intent.json --now-date 2026-07-27 --type Ride`
+
+- `preview`
+  Invocation: `icu plan preview --file PATH [--no-live-check]`
+  Notes: Validates the proposal and prints a non-mutating calendar operation preview (pending create/update/cancel counts, expected load, and `validation` blocking/errors/warnings). Exits non-zero when validation is blocking. Live-checks source hashes and baseline drift only when non-blocking, unless `--no-live-check` is set. Unknown flags are rejected.
+  Example: `icu plan preview --file plan.json`
+
+- `accept`
+  Invocation: `icu plan accept --file PATH`
+  Notes: Re-validates the proposal (including stored blocking errors and `strictTargets` weekly misses) and hard-fails before any API call when blocking. Then rejects baseline drift, applies pending `create`/`update`/`cancel` operations, writes apply results back to the same file, and prints the apply summary. Unknown flags are rejected.
+  Example: `icu plan accept --file plan.json`
+
 ## rebalance
 
 - `show`
@@ -231,9 +248,14 @@ Invoke these commands as `icu activity <id> <action>`.
   Notes: Dry-run command. It fetches completed activities, calendar events, sport settings only when `--type` is explicitly provided, and wellness context, then writes a pretty JSON proposal to `--file`. It does not mutate Intervals.icu. Wellness-backed readiness prefers Zepp `HybridCharge`/`BioCharge` when Zepp auth is available and falls back to `sleepScore` otherwise. The proposal includes baseline load, dynamic targets, selected operations, validation, source hashes for update/cancel operations, and per-session decision sources for sport type, target type, time, allocation, intensity, duration, and classification. `--max-intensity` and `--max-watts` cap generated POWER workout intensity; `--max-hr` is rejected because rebalance does not generate HR-target sessions, and `--target` must be `POWER` when provided. Rebalance does not use hidden fallback IF, sport type, target type, tolerance, duration, time, or allocation defaults; missing sport settings/history must be supplied through explicit flags or the proposal is blocking. `--wellness-lookback-days` defaults to `42` as the analysis window used to fetch wellness context.
   Example: `icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal`
 
+- `preview`
+  Invocation: `icu rebalance preview --file PATH [--no-live-check]`
+  Notes: Validates the proposal and prints a non-mutating calendar operation preview including `validation` blocking/errors/warnings. Exits non-zero when blocking. Live-checks source hashes and baseline drift only when non-blocking, unless `--no-live-check` is set. Unknown flags are rejected. Does not mutate Intervals.icu.
+  Example: `icu rebalance preview --file rebalance.json`
+
 - `accept`
   Invocation: `icu rebalance accept --file PATH`
-  Notes: Reads the edited proposal, validates schema and operations, verifies source hashes for update/cancel operations, applies pending `create`, `update`, and `cancel` operations, writes apply results back to the same file, and prints the apply summary.
+  Notes: Reads the edited proposal, re-validates schema/operations/stored blocking errors and hard-fails before any API call when blocking, verifies source hashes for update/cancel operations, applies pending `create`, `update`, and `cancel` operations, writes apply results back to the same file, and prints the apply summary. Unknown flags are rejected.
   Example: `icu rebalance accept --file rebalance.json`
 
 - `approve`

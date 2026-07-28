@@ -146,13 +146,22 @@ func resolveDefault(registry *CommandRegistry, resource string, stdout io.Writer
 		return defaultAction
 	}
 
-	if !hasAction(acts, defaultAction) {
+	if requiresExplicitAction(resource) || !hasAction(acts, defaultAction) {
 		printHelp(registry, stdout, resource)
 
 		return ""
 	}
 
 	return defaultAction
+}
+
+func requiresExplicitAction(resource string) bool {
+	switch resource {
+	case "plan", "rebalance":
+		return true
+	default:
+		return false
+	}
 }
 
 func hasAction(acts []string, target string) bool {

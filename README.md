@@ -48,8 +48,14 @@ icu analysis workout i123
 # Calculate planned workout load locally before writing events
 icu workouts calculate --ftp 300 --desc "- 60m 70%"
 
+# Multi-session plan from explicit intent (preferred for writing several workouts)
+icu plan show --file plan.json --intent-file intent.json --now-date 2026-07-27 --type Ride
+icu plan preview --file plan.json
+icu plan accept --file plan.json
+
 # Dry-run an editable calendar rebalance proposal, then apply it
 icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal
+icu rebalance preview --file rebalance.json
 icu rebalance approve --file rebalance.json --reason "coach override" --target-load 380 --level 0.7
 icu rebalance accept --file rebalance.json
 
@@ -172,7 +178,8 @@ Treat JSON as the effective default output format unless a command explicitly do
 
 - [docs/cli-reference.md](docs/cli-reference.md): exhaustive command reference for the current CLI surface, including the `zepp` resource
 - [docs/analysis.md](docs/analysis.md): detailed behavior of `analysis coaching`, `analysis cycling`, `analysis wellness`, `analysis plan`, `analysis adaptation`, and `analysis microcycle`
-- [docs/rebalance.md](docs/rebalance.md): dry-run and accept workflow for editable calendar load redistribution proposals
+- [docs/rebalance.md](docs/rebalance.md): dry-run, preview, and accept workflow for editable calendar load redistribution proposals
+- [docs/plan.md](docs/plan.md): intent → show/preview/accept workflow for explicit multi-session calendar writes
 - [docs/library.md](docs/library.md): usage-oriented guide for `github.com/Thejuampi/icu`, including the `ZeppClient`
 - [docs/api/README.md](docs/api/README.md): OpenAPI snapshot provenance and usage notes
 - [AGENTS.md](AGENTS.md): contributor rules, quality gates, and the documentation gate
@@ -196,7 +203,8 @@ Current top-level resources:
 | `folders` | `create`, `delete`, `list`, `update` |
 | `ftp` | `show`, `update` |
 | `gear` | `create`, `delete`, `list`, `update` |
-| `rebalance` | `accept`, `show` |
+| `plan` | `accept`, `preview`, `show` |
+| `rebalance` | `accept`, `approve`, `preview`, `show` |
 | `routes` | `get`, `list` |
 | `shared-event` | `get` |
 | `sports` | `delete`, `get`, `list`, `update` |

@@ -58,8 +58,12 @@ If the investigation exposes a CLI bug, parser mismatch, auth ambiguity, or data
 Each `-` step line is `duration zone%` (e.g., `15m 55-72%`). A bare `Nx` on its own line starts a repeating block; the indented `-` lines beneath it define the steps to repeat. Do not include rest duration text like `with 5m rest` in the step line — rest is its own indented step.
 - The `workout_doc` and `workout` fields in the EventEx schema are **read-only** in practice. The API ignores them in POST/PUT requests and only generates `workoutDoc` from the `--desc` text description. Workout structure (including step-level `text` cues) can only be set via the description text parser. The text parser strips arbitrary text annotations — only power/HR zones and keywords (warmup, cooldown, etc.) are preserved as step text. Step-level coaching cues must be added manually in the Intervals.icu UI after creation.
 - Before creating or updating planned workouts for load-sensitive blocks, calculate local load with `icu workouts calculate --ftp FTP --desc DESC`. This is mandatory for deload weeks, ramp correction, and any plan option where weekly TSS/CTL ramp is part of the decision.
+- **Dual description format when writing calendar workouts.** Local `icu workouts calculate` accepts strict steps like `- 15m 55-85%` and `Nx` blocks; it rejects prose and does not require `Ramp`/`FTP` tokens. Intervals.icu's upstream parser reliably expands repeats only with the multi-line `Nx` form, blank lines between sections, and often `Ramp` + `FTP` suffixes (e.g. `- 15m Ramp 55-85% FTP`). Workflow: (1) design structure, (2) `workouts calculate` on the local-clean desc, (3) `events create/update` with the Intervals-friendly desc plus explicit `--moving-time` / `--training-load` from the local estimate (or `--calculate-load --ftp` when the local desc is used end-to-end), (4) verify server `workoutDoc` has `reps > 1` on interval blocks and that server load/time match local within tolerance. If server load collapses on a structured session, the upstream parser dropped the repeats — fix the desc format, do not accept a flat single-pass parse.
+- **Session structure is varied by default.** Never ship a plan whose aerobic/easy/long sessions are only `warmup → one long constant block → cooldown`. That shape is a failure mode, not a baseline. See Planning Policy → Session Structure Norm.
+- **Use the session library.** Canonical templates live in [session-library.md](./session-library.md). Pick a template by role, scale it, calculate load, then write the calendar. Do not freehand a flat session when a library model fits. For this athlete, default Z2 is `z2_hr_control_waves` (2–3 min mid/high Z2 + 30–40s valley when HR rises); long durable HR ceiling is athlete-specific (~≤140 bpm), not the full Intervals Z2 chart ceiling.
 - Use `events create/update --calculate-load --ftp FTP --desc DESC` when writing workouts that should carry locally calculated `moving_time` and `icu_training_load`. The flag is explicit by design: if `--calculate-load` is absent, the CLI must not assume or overwrite load values.
-- For multi-day load redistribution, prefer `icu rebalance --dry-run --file FILE --oldest START --newest END --target-load LOAD --target-tolerance TOL --start-time HH:MM --min-session-minutes MIN --duration-step-minutes STEP`, inspect/edit the JSON, then run `icu rebalance accept --file FILE`. The dry run is non-mutating; accept applies only explicit pending operations and checks source hashes for stale calendar events. Do not rely on hidden fallback intensity, timing, duration, or allocation defaults; provide explicit constraints when athlete history or sport settings are sparse.
+- For multi-session calendar writes, prefer `icu plan show --file plan.json --intent-file intent.json [--type Ride] [--now-date DATE]`, then `icu plan preview --file plan.json`, inspect/edit operations, then `icu plan accept --file plan.json`. Intent sessions are explicit (name/date/desc/descLocal); plan does not invent a session library. `desc` goes to Intervals; `descLocal` is for local load calc. Matching uses uid or date+name. Cancel defaults off.
+- For multi-day load redistribution (not explicit session lists), prefer `icu rebalance show --file FILE --oldest START --newest END --target-load LOAD --target-tolerance TOL --start-time HH:MM --min-session-minutes MIN --duration-step-minutes STEP`, optional `icu rebalance preview --file FILE`, inspect/edit the JSON, then run `icu rebalance accept --file FILE`. The dry run is non-mutating; accept applies only explicit pending operations and checks source hashes for stale calendar events. Do not rely on hidden fallback intensity, timing, duration, or allocation defaults; provide explicit constraints when athlete history or sport settings are sparse.
 - Treat local planned-load calculation as the pre-write precision check and Intervals.icu's returned event as the post-write calibration check. If the response contains `{event, estimate, warnings}`, inspect warnings before trusting the event for plan math.
 - The local parser supports the same strict line-oriented workout format used above: `- 10m 55-75%`, `- 5m 90%`, and repeat blocks like `3x` with indented child steps. Do not use free prose when exact TSS is required.
 - When completed ride power is incomplete or corrupt (e.g. power meter battery dies mid-ride), do not infer replacement TSS from feel. First fetch `icu_training_load`, `hr_load`, `hr_load_type`, `trimp`, HR zones, power zones, average/weighted watts, IF, VI, CTL/ATL, and duration. If HR coverage is good and Intervals exposes `hrLoad` with a known `hrLoadType` such as `HRSS`, use that API-provided HR-derived load as the candidate replacement for `icuTrainingLoad`; document the original load, replacement load, and reason. If power coverage is complete and plausible, keep power-based `icuTrainingLoad` as source-of-truth and treat `hrLoad`/`trimp` as secondary context only.
@@ -137,10 +141,11 @@ Planning dry-run checklist:
 - Group the next 4 weeks of planned events by ISO week and compare planned TSS/hours against recent tolerance with `analysis plan`.
 - For any new or edited workout that changes weekly load, run `icu workouts calculate --ftp FTP --desc DESC` first and use the returned `trainingLoad`, `durationSeconds`, and `intensityFactor` in the plan math. Never insert estimated deload values by feel.
 - Review week roles and session classifications, not just TSS: `reentry`, `build`, `overload`, `deload`, `high_intensity`, `tempo_threshold`, `long_endurance`, `recovery`, `aerobic`, `opener`, `rest`.
-- Review `execution.recommendedTitle` and `execution.cues` for each workout. Use short representative titles such as `4x5 VO2Max`, `2x20 SS`, `3h Z2`, or `3x15 Tempo` when the session structure supports them.
+- Review `execution.recommendedTitle` and `execution.cues` for each workout. Use short representative titles such as `4x5 VO2Max`, `2x20 SS`, `Z2 Cruise-Float`, or `3x15 Tempo` when the session structure supports them. Prefer structure-first names over generic `Z2 Aerobic`.
 - Use encouragement cues for high-intensity, tempo/threshold, and selected endurance work. Use restraint/recovery cues for easy or recovery rides; do not add hype to Z1 recovery sessions.
-- For indoor Z2 sessions, avoid flat prescriptions like `180m @ steady watts`. Prefer varied aerobic structures: 4-minute Z2 waves, 40-second HR-control valleys, low/mid/high Z2 rotation, occasional max-Z2 caps, and mid-Z2 shadow blocks that preserve aerobic intent.
-- Preserve the current plan when it is structurally sound; adjust execution rules before rewriting workouts.
+- **Apply Session Structure Norm to every planned WORKOUT** (easy, Z2, long, tempo, VO2, over-unders, ALTs). Reject flat `warmup + constant main + cooldown` unless the athlete explicitly asked for a continuous free-ride or a true recovery spin with minimal structure.
+- Before publishing a week, spot-check each desc: at least two distinct work phases or one repeat block with changing targets inside the aerobic band; HI sessions need openers and a controlled closer, not only the main set.
+- Preserve the current plan when it is structurally sound; adjust execution rules before rewriting workouts. If the calendar is sound on load but monotonous on structure, rewrite structure in place while holding weekly TSS targets.
 - Make intensity days conditional when physiology is `WATCH` or TSB is meaningfully negative.
 
 Use wider ranges for trend questions:
@@ -196,7 +201,50 @@ For the expanded field-by-field contract, use [report-data-contract.md](./report
 - Add day-level decision rules for HRV, sleep, resting HR, TSB, decoupling, and heat rather than pretending the plan is fixed regardless of recovery state.
 - Make workout names human-scannable and device-friendly: representative interval structure first, training system second, extra context last.
 - Keep device cue messages short enough to be read during effort. Preview what is coming, cue the purpose of the next block, and only encourage when the workout intensity merits it.
-- Keep indoor Z2 profiles engaging without turning them into tempo. HR-control valleys are for drift management, not full recovery; max-Z2 peaks must stay below tempo/threshold intent.
+
+### Session library
+
+Canonical models: [session-library.md](./session-library.md). Workflow: **pick template → scale duration/reps/IF → `workouts calculate` → write event → optional week `rebalance`**. Prefer library IDs in titles (`Z2 HR-Control Waves`, `3x13 30/15 VO2`). Expand the library when a repeated athlete-specific pattern is missing; do not grow it with one-off Zwift map names.
+
+### Session Structure Norm (default for all planned rides)
+
+**Norm, not exception:** planned sessions must feel like a sequence of purposeful phases. Monotone steady blocks are banned as the default template for easy, aerobic, endurance, and long rides (indoor or outdoor erg/power targets). Outdoor free-ride / terrain-led rides may be lighter on prescribed steps, but still name intent and optional surges when power targets are used.
+
+**Banned default shape**
+
+```
+- 15m warmup
+- 90m 68%          # one constant main block
+- 15m cooldown
+```
+
+**Required shape properties** (every WORKOUT unless athlete opted out)
+
+1. **≥2 distinct work phases** after openers, or **≥1 repeat block** that alternates targets inside the session's intensity band.
+2. **Phase changes every ~8–20 min** on endurance rides longer than ~45 min (waves, rotate, cruise-float, ladder, or story blocks).
+3. **HI / tempo / VO2 / over-under:** structured openers (short build or activation reps), clear main sets, and a controlled spin-down — not warmup → main only → cooldown.
+4. **Stay in role:** variety must not sneak intensity up a zone. Easy stays easy; Z2 peaks stay ≤ high-Z2 / max-Z2, never tempo/threshold; valleys are HR-control floats, not full Z1 nap intervals unless the session is recovery.
+5. **Name the pattern** in the event title (`Z2 Waves`, `Cruise-Float`, `Low-Mid Rotate`, `Z2 Ladder`, `Durable Story`, `Easy Undulate`) so the calendar is scannable.
+6. **ALTs follow the same norm.** Fallback Z2 notes must also be multi-phase, not a flat continuous block.
+7. **Load first, spice second.** Build the varied desc, then `icu workouts calculate`; adjust phase lengths to hit the week's TSS target. Do not flatten structure to hit load.
+
+**Pattern library (pick per session; rotate across the week so days do not clone each other)**
+
+| Pattern | Intent | Sketch |
+|---------|--------|--------|
+| `Easy Undulate` | recovery / health | short low-Z1/Z2 oscillations (e.g. 3m up / 1m down) |
+| `Z2 Waves` | aerobic engagement | 3–5m mid-Z2 + 30–45s valley |
+| `Cruise-Float` | durable aerobic | 6–10m cruise + 1–2m float |
+| `Low-Mid Rotate` | anti-monotony Z2 | alternate low-Z2 and mid-Z2 blocks with brief resets |
+| `Z2 Ladder` | progressive aerobic | step low → mid → high-Z2, then descend |
+| `Durable Story` | long ride | multi-act: settle → mid waves → high-Z2 caps → steady → finish (all ≤ Z2) |
+| `HI with openers` | tempo/VO2/O-U | activation reps → main sets → optional spin-down pickups |
+
+**Self-check before create/update**
+
+- Would a rider on a trainer be bored in the first 20 minutes of the main set? If yes, rewrite.
+- Does `workoutDoc` after write show repeat blocks (`reps > 1`) where expected?
+- Did weekly TSS stay on target after the rewrite?
 
 ## Development Loop
 
