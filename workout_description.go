@@ -11,9 +11,15 @@ import (
 
 var ErrWorkoutDescriptionUnsupported = errors.New("workout description unsupported")
 
+const stepLinePrefix = "-"
+
 var (
 	repeatLinePattern = regexp.MustCompile(`^(\d+)x$`)
-	stepLinePattern   = regexp.MustCompile(`^-\s*(\d+(?:\.\d+)?)([hms])\s+(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?%\s*(.*)$`)
+	// Intervals.icu writes steps as "- 12m Ramp 50-58% FTP": an optional
+	// keyword sits between the duration and the target, and the unit may be
+	// repeated after the percent sign.
+	stepLinePattern = regexp.MustCompile(
+		`^-\s*(\d+(?:\.\d+)?)([hms])\s+(?:([A-Za-z]+)\s+)?(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?%\s*(.*)$`)
 )
 
 func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
@@ -38,6 +44,13 @@ func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
 			}
 			doc.Steps = append(doc.Steps, block)
 			index = nextIndex - 1
+			continue
+		}
+
+		// Intervals.icu lets a description open with free-text coaching notes
+		// before the structure. Only lines that claim to be steps must parse,
+		// so a typo in a step line is still an error rather than silent prose.
+		if !strings.HasPrefix(line, stepLinePrefix) {
 			continue
 		}
 
@@ -103,19 +116,19 @@ func parseWorkoutDescriptionStep(line string) (WorkoutStep, error) {
 		return WorkoutStep{}, err
 	}
 
-	start, err := strconv.ParseFloat(matches[3], 64)
+	start, err := strconv.ParseFloat(matches[4], 64)
 	if err != nil {
 		return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
 	}
 
 	step := WorkoutStep{
 		Duration: duration,
-		Text:     strings.TrimSpace(matches[5]),
+		Text:     workoutStepText(matches[3], matches[6]),
 		Power:    &WorkoutTarget{Units: "%ftp"},
 	}
 
-	if matches[4] != "" {
-		end, parseErr := strconv.ParseFloat(matches[4], 64)
+	if matches[5] != "" {
+		end, parseErr := strconv.ParseFloat(matches[5], 64)
 		if parseErr != nil {
 			return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
 		}
@@ -128,6 +141,21 @@ func parseWorkoutDescriptionStep(line string) (WorkoutStep, error) {
 	step.Power.Value = start
 
 	return step, nil
+}
+
+// workoutStepText joins the keyword written before the target with any text
+// written after it, dropping a repeated power unit such as the "FTP" in
+// "- 12m Ramp 50-58% FTP" so it does not leak into the step label.
+func workoutStepText(keyword, trailing string) string {
+	parts := make([]string, 0, 2)
+	if keyword = strings.TrimSpace(keyword); keyword != "" {
+		parts = append(parts, keyword)
+	}
+	if trailing = strings.TrimSpace(trailing); trailing != "" && !strings.EqualFold(trailing, "ftp") {
+		parts = append(parts, trailing)
+	}
+
+	return strings.Join(parts, " ")
 }
 
 func parseWorkoutDuration(value, unit string) (int, error) {

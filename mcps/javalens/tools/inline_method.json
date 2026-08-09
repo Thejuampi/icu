@@ -1,0 +1,26 @@
+{
+  "name": "inline_method",
+  "description": "Inline a method call by replacing it with the method body.\n\nReturns the text edit needed to inline the method call.\nThe caller should apply this edit to perform the inlining.\n\nUSAGE: Position cursor on a method call\nOUTPUT: Edit to replace call with method body\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nLIMITATIONS:\n- Method must be in the same project (source available)\n- Works best with simple methods (no complex control flow)\n- Single return statement is handled, multiple returns may need review\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number (on method name)",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file containing the method call",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number of method call",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

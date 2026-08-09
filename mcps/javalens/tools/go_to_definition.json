@@ -1,0 +1,26 @@
+{
+  "name": "go_to_definition",
+  "description": "Navigate to symbol definition.\n\nUSAGE: Position cursor on a symbol reference, returns definition location.\nOUTPUT: File path, line, column of the definition.\n\nIMPORTANT: Uses ZERO-BASED coordinates.\nIf editor shows 'Line 14, Column 5', pass line=13, column=4\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file (absolute or relative to project)",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

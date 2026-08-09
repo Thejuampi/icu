@@ -1,0 +1,30 @@
+{
+  "name": "find_implementations",
+  "description": "Find implementations of an interface or extensions of a class.\n\nUSAGE: Position on a type (interface or class), find all implementors/subclasses\nOUTPUT: List of implementing/extending types with locations\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      },
+      "maxResults": {
+        "description": "Max implementations to return (default 100)",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

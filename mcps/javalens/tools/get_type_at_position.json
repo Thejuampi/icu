@@ -1,0 +1,26 @@
+{
+  "name": "get_type_at_position",
+  "description": "Get type information at a specific position.\n\nUSAGE: Position on a type reference or declaration\nOUTPUT: Type details including kind, modifiers, superclass, interfaces\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

@@ -1,0 +1,744 @@
+{
+  "schemaVersion": "icu.plan.v1",
+  "proposalId": "plan-905fb4828a62",
+  "generatedAt": "2026-08-04T05:34:17Z",
+  "scope": {
+    "startDate": "2026-08-10",
+    "endDate": "2026-08-23",
+    "nowDate": "2026-08-04"
+  },
+  "intent": {
+    "schemaVersion": "icu.plan.intent.v1",
+    "oldest": "2026-08-10",
+    "newest": "2026-08-23",
+    "ftp": 285,
+    "weeklyTargets": [
+      {
+        "weekStart": "2026-08-10",
+        "targetLoad": 280,
+        "tolerance": 50
+      },
+      {
+        "weekStart": "2026-08-17",
+        "targetLoad": 300,
+        "tolerance": 50
+      }
+    ],
+    "constraints": {
+      "allowCreate": false,
+      "allowUpdate": true,
+      "allowCancel": false,
+      "allowToday": true,
+      "allowPast": true,
+      "defaultStartTime": "07:00",
+      "defaultType": "Ride",
+      "defaultCategory": "WORKOUT",
+      "defaultTarget": "POWER"
+    },
+    "sessions": [
+      {
+        "date": "2026-08-13",
+        "name": "W33 Thu Z2 Ladder Low",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Z2 durable 170-180W (60-63%). Ladder stays low-mid Z2. HR ~130-140.\n\n- 12m Ramp 50-58% FTP\n\n- 12m 58-61% FTP\n\n- 15m 60-63% FTP\n\n- 12m 61-64% FTP\n\n5x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 12m 60-63% FTP\n\n- 12m 58-61% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "descLocal": "- 12m 50-58%\n- 12m 58-61%\n- 15m 60-63%\n- 12m 61-64%\n5x\n  - 3m 62-65%\n  - 2m 52-56%\n- 12m 60-63%\n- 12m 58-61%\n- 10m 58-50%\n",
+        "role": "aerobic",
+        "uid": "062788ee-01c1-4916-a819-ef443da92e7f"
+      },
+      {
+        "date": "2026-08-15",
+        "name": "W33 Sat Z2 Durable Story",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Long Z2 durable 170-180W. Not chart Z2. HR cruise ~130-140. Skin gate.\n\n- 15m Ramp 50-58% FTP\n\n- 30m 58-61% FTP\n\n10x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 20m 59-62% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 15m 60-63% FTP\n\n4x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+        "descLocal": "- 15m 50-58%\n- 30m 58-61%\n10x\n  - 3m 60-63%\n  - 45s 50-55%\n- 20m 59-62%\n8x\n  - 3m 60-63%\n  - 45s 50-55%\n- 15m 60-63%\n4x\n  - 3m 62-65%\n  - 2m 52-56%\n- 15m 58-61%\n- 12m 58-50%\n",
+        "role": "long_endurance",
+        "uid": "868d252b-00fe-48b6-83c7-2ae2a00496cf"
+      },
+      {
+        "date": "2026-08-16",
+        "name": "W33 Sun Easy Spin Optional",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Easy undulate. Keep soft.\n\n- 8m Ramp 50-58% FTP\n\n6x\n  - 3m 58-62% FTP\n  - 1m 50-55% FTP\n\n- 8m Ramp 55-50% FTP\n",
+        "descLocal": "- 8m 50-58%\n6x\n  - 3m 58-62%\n  - 1m 50-55%\n- 8m 55-50%\n",
+        "role": "recovery",
+        "uid": "d2b6f39a-9f13-4228-8c89-088de57301ec"
+      },
+      {
+        "date": "2026-08-22",
+        "name": "W34 Sat Z2 Durable Story",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Long Z2 durable 170-180W. Not chart Z2. HR cruise ~130-140. Skin gate.\n\n- 15m Ramp 50-58% FTP\n\n- 30m 58-61% FTP\n\n12x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 20m 59-62% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 15m 60-63% FTP\n\n5x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+        "descLocal": "- 15m 50-58%\n- 30m 58-61%\n12x\n  - 3m 60-63%\n  - 45s 50-55%\n- 20m 59-62%\n8x\n  - 3m 60-63%\n  - 45s 50-55%\n- 15m 60-63%\n5x\n  - 3m 62-65%\n  - 2m 52-56%\n- 15m 58-61%\n- 12m 58-50%\n",
+        "role": "long_endurance",
+        "uid": "9ba8e2ee-e530-4953-b2bc-7e833db5f077"
+      },
+      {
+        "date": "2026-08-23",
+        "name": "W34 Sun Easy Play Optional",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Easy undulate. Keep soft.\n\n- 8m Ramp 50-58% FTP\n\n7x\n  - 3m 58-62% FTP\n  - 1m 50-55% FTP\n\n- 8m Ramp 55-50% FTP\n",
+        "descLocal": "- 8m 50-58%\n7x\n  - 3m 58-62%\n  - 1m 50-55%\n- 8m 55-50%\n",
+        "role": "recovery",
+        "uid": "6a1e430f-e7d4-456a-838d-4d175e2f3685"
+      },
+      {
+        "date": "2026-08-11",
+        "name": "ALT B - W33 Tue Z2 Cruise-Float",
+        "category": "NOTE",
+        "type": "Ride",
+        "desc": "ALT if tempo skipped. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n6x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n4x\n  - 3m 61-64% FTP\n  - 1m 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "uid": "aab9e442-fa0b-4045-99dd-3ebcb2945684"
+      },
+      {
+        "date": "2026-08-18",
+        "name": "ALT B - W34 Tue Z2 Waves",
+        "category": "NOTE",
+        "type": "Ride",
+        "desc": "ALT if VO2 skipped. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n6x\n  - 3m 61-64% FTP\n  - 45s 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "uid": "018e81f0-d6d7-4a43-a280-7317a31c2b9b"
+      },
+      {
+        "date": "2026-08-20",
+        "name": "ALT B - W34 Thu Z2 Cruise-Float",
+        "category": "NOTE",
+        "type": "Ride",
+        "desc": "ALT if O/U skipped or residue. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n7x\n  - 8m 60-63% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "uid": "42dab504-5142-461d-9385-2f089cf265f4"
+      },
+      {
+        "date": "2026-08-10",
+        "name": "W33 focus build light",
+        "category": "NOTE",
+        "type": "Ride",
+        "desc": "W33 build light. Target ~270-310 TSS. Z2 power 170-180W (60-63%), not chart Z2. Tue tempo only if wellness OK else ALT B. Protect long Sat. No VO2.\n",
+        "uid": "bd4e8765-00b3-4177-92f8-9ba4d647a6a0"
+      },
+      {
+        "date": "2026-08-17",
+        "name": "W34 focus build + VO2 reentry",
+        "category": "NOTE",
+        "type": "Ride",
+        "desc": "W34 build. Target ~290-340 TSS. Z2 days 170-180W. Tue VO2 RE-ENTRY only. ALT B if weak. Thu O/U only if Tue clean else ALT B.\n",
+        "uid": "69fcc1a9-e0e5-442c-87df-b01aec25a06f"
+      }
+    ]
+  },
+  "constraints": {
+    "allowCreate": false,
+    "allowUpdate": true,
+    "allowCancel": false,
+    "allowToday": true,
+    "allowPast": true,
+    "defaultStartTime": "07:00",
+    "defaultType": "Ride",
+    "defaultCategory": "WORKOUT",
+    "defaultTarget": "POWER"
+  },
+  "context": {
+    "ftp": 285,
+    "ftpSource": "intent"
+  },
+  "baseline": {
+    "completedLoad": 0,
+    "lockedPlannedLoad": 0,
+    "mutablePlannedLoad": 659,
+    "weeklyLoad": 659
+  },
+  "sessions": [
+    {
+      "id": "update-125663246",
+      "date": "2026-08-13",
+      "name": "W33 Thu Z2 Ladder Low",
+      "action": "update",
+      "eventId": 125663246,
+      "sourceHash": "5ee97a48d973",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "aerobic",
+      "uid": "062788ee-01c1-4916-a819-ef443da92e7f",
+      "desc": "Z2 durable 170-180W (60-63%). Ladder stays low-mid Z2. HR ~130-140.\n\n- 12m Ramp 50-58% FTP\n\n- 12m 58-61% FTP\n\n- 15m 60-63% FTP\n\n- 12m 61-64% FTP\n\n5x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 12m 60-63% FTP\n\n- 12m 58-61% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "descLocal": "- 12m 50-58%\n- 12m 58-61%\n- 15m 60-63%\n- 12m 61-64%\n5x\n  - 3m 62-65%\n  - 2m 52-56%\n- 12m 60-63%\n- 12m 58-61%\n- 10m 58-50%\n",
+      "trainingLoad": 65,
+      "movingTimeSecs": 6600,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663247",
+      "date": "2026-08-15",
+      "name": "W33 Sat Z2 Durable Story",
+      "action": "update",
+      "eventId": 125663247,
+      "sourceHash": "fbe944905308",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "long_endurance",
+      "uid": "868d252b-00fe-48b6-83c7-2ae2a00496cf",
+      "desc": "Long Z2 durable 170-180W. Not chart Z2. HR cruise ~130-140. Skin gate.\n\n- 15m Ramp 50-58% FTP\n\n- 30m 58-61% FTP\n\n10x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 20m 59-62% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 15m 60-63% FTP\n\n4x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+      "descLocal": "- 15m 50-58%\n- 30m 58-61%\n10x\n  - 3m 60-63%\n  - 45s 50-55%\n- 20m 59-62%\n8x\n  - 3m 60-63%\n  - 45s 50-55%\n- 15m 60-63%\n4x\n  - 3m 62-65%\n  - 2m 52-56%\n- 15m 58-61%\n- 12m 58-50%\n",
+      "trainingLoad": 114,
+      "movingTimeSecs": 11670,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663248",
+      "date": "2026-08-16",
+      "name": "W33 Sun Easy Spin Optional",
+      "action": "update",
+      "eventId": 125663248,
+      "sourceHash": "a0d27385eee9",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "recovery",
+      "uid": "d2b6f39a-9f13-4228-8c89-088de57301ec",
+      "desc": "Easy undulate. Keep soft.\n\n- 8m Ramp 50-58% FTP\n\n6x\n  - 3m 58-62% FTP\n  - 1m 50-55% FTP\n\n- 8m Ramp 55-50% FTP\n",
+      "descLocal": "- 8m 50-58%\n6x\n  - 3m 58-62%\n  - 1m 50-55%\n- 8m 55-50%\n",
+      "trainingLoad": 21,
+      "movingTimeSecs": 2400,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663254",
+      "date": "2026-08-22",
+      "name": "W34 Sat Z2 Durable Story",
+      "action": "update",
+      "eventId": 125663254,
+      "sourceHash": "537164f6d10d",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "long_endurance",
+      "uid": "9ba8e2ee-e530-4953-b2bc-7e833db5f077",
+      "desc": "Long Z2 durable 170-180W. Not chart Z2. HR cruise ~130-140. Skin gate.\n\n- 15m Ramp 50-58% FTP\n\n- 30m 58-61% FTP\n\n12x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 20m 59-62% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 15m 60-63% FTP\n\n5x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+      "descLocal": "- 15m 50-58%\n- 30m 58-61%\n12x\n  - 3m 60-63%\n  - 45s 50-55%\n- 20m 59-62%\n8x\n  - 3m 60-63%\n  - 45s 50-55%\n- 15m 60-63%\n5x\n  - 3m 62-65%\n  - 2m 52-56%\n- 15m 58-61%\n- 12m 58-50%\n",
+      "trainingLoad": 121,
+      "movingTimeSecs": 12420,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663255",
+      "date": "2026-08-23",
+      "name": "W34 Sun Easy Play Optional",
+      "action": "update",
+      "eventId": 125663255,
+      "sourceHash": "f5dfd33ae11c",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "recovery",
+      "uid": "6a1e430f-e7d4-456a-838d-4d175e2f3685",
+      "desc": "Easy undulate. Keep soft.\n\n- 8m Ramp 50-58% FTP\n\n7x\n  - 3m 58-62% FTP\n  - 1m 50-55% FTP\n\n- 8m Ramp 55-50% FTP\n",
+      "descLocal": "- 8m 50-58%\n7x\n  - 3m 58-62%\n  - 1m 50-55%\n- 8m 55-50%\n",
+      "trainingLoad": 23,
+      "movingTimeSecs": 2640,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663245",
+      "date": "2026-08-11",
+      "name": "ALT B - W33 Tue Z2 Cruise-Float",
+      "action": "update",
+      "eventId": 125663245,
+      "sourceHash": "bd350592f1c1",
+      "category": "NOTE",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "uid": "aab9e442-fa0b-4045-99dd-3ebcb2945684",
+      "desc": "ALT if tempo skipped. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n6x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n4x\n  - 3m 61-64% FTP\n  - 1m 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663250",
+      "date": "2026-08-18",
+      "name": "ALT B - W34 Tue Z2 Waves",
+      "action": "update",
+      "eventId": 125663250,
+      "sourceHash": "ae3abd7a6772",
+      "category": "NOTE",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "uid": "018e81f0-d6d7-4a43-a280-7317a31c2b9b",
+      "desc": "ALT if VO2 skipped. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n6x\n  - 3m 61-64% FTP\n  - 45s 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663253",
+      "date": "2026-08-20",
+      "name": "ALT B - W34 Thu Z2 Cruise-Float",
+      "action": "update",
+      "eventId": 125663253,
+      "sourceHash": "3040a0527dfe",
+      "category": "NOTE",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "uid": "42dab504-5142-461d-9385-2f089cf265f4",
+      "desc": "ALT if O/U skipped or residue. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n7x\n  - 8m 60-63% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663259",
+      "date": "2026-08-10",
+      "name": "W33 focus build light",
+      "action": "update",
+      "eventId": 125663259,
+      "sourceHash": "8cce2ce19ba0",
+      "category": "NOTE",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "uid": "bd4e8765-00b3-4177-92f8-9ba4d647a6a0",
+      "desc": "W33 build light. Target ~270-310 TSS. Z2 power 170-180W (60-63%), not chart Z2. Tue tempo only if wellness OK else ALT B. Protect long Sat. No VO2.\n",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663260",
+      "date": "2026-08-17",
+      "name": "W34 focus build + VO2 reentry",
+      "action": "update",
+      "eventId": 125663260,
+      "sourceHash": "5ec23b034e49",
+      "category": "NOTE",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "uid": "69fcc1a9-e0e5-442c-87df-b01aec25a06f",
+      "desc": "W34 build. Target ~290-340 TSS. Z2 days 170-180W. Tue VO2 RE-ENTRY only. ALT B if weak. Thu O/U only if Tue clean else ALT B.\n",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    }
+  ],
+  "operations": [
+    {
+      "id": "update-125663245",
+      "action": "update",
+      "eventId": 125663245,
+      "sourceHash": "bd350592f1c1",
+      "body": {
+        "start_date_local": "2026-08-11T07:00:00",
+        "category": "NOTE",
+        "type": "Ride",
+        "name": "ALT B - W33 Tue Z2 Cruise-Float",
+        "description": "ALT if tempo skipped. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n6x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n4x\n  - 3m 61-64% FTP\n  - 1m 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "target": "POWER",
+        "external_id": "aab9e442-fa0b-4045-99dd-3ebcb2945684"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "status": "applied",
+      "appliedEventId": 125663245
+    },
+    {
+      "id": "update-125663246",
+      "action": "update",
+      "eventId": 125663246,
+      "sourceHash": "5ee97a48d973",
+      "body": {
+        "start_date_local": "2026-08-13T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W33 Thu Z2 Ladder Low",
+        "description": "Z2 durable 170-180W (60-63%). Ladder stays low-mid Z2. HR ~130-140.\n\n- 12m Ramp 50-58% FTP\n\n- 12m 58-61% FTP\n\n- 15m 60-63% FTP\n\n- 12m 61-64% FTP\n\n5x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 12m 60-63% FTP\n\n- 12m 58-61% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "icu_training_load": 65,
+        "moving_time": 6600,
+        "target": "POWER",
+        "external_id": "062788ee-01c1-4916-a819-ef443da92e7f"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 65,
+      "expectedMovingTimeSecs": 6600,
+      "status": "applied",
+      "appliedEventId": 125663246
+    },
+    {
+      "id": "update-125663247",
+      "action": "update",
+      "eventId": 125663247,
+      "sourceHash": "fbe944905308",
+      "body": {
+        "start_date_local": "2026-08-15T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W33 Sat Z2 Durable Story",
+        "description": "Long Z2 durable 170-180W. Not chart Z2. HR cruise ~130-140. Skin gate.\n\n- 15m Ramp 50-58% FTP\n\n- 30m 58-61% FTP\n\n10x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 20m 59-62% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 15m 60-63% FTP\n\n4x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+        "icu_training_load": 114,
+        "moving_time": 11670,
+        "target": "POWER",
+        "external_id": "868d252b-00fe-48b6-83c7-2ae2a00496cf"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 114,
+      "expectedMovingTimeSecs": 11670,
+      "status": "applied",
+      "appliedEventId": 125663247
+    },
+    {
+      "id": "update-125663248",
+      "action": "update",
+      "eventId": 125663248,
+      "sourceHash": "a0d27385eee9",
+      "body": {
+        "start_date_local": "2026-08-16T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W33 Sun Easy Spin Optional",
+        "description": "Easy undulate. Keep soft.\n\n- 8m Ramp 50-58% FTP\n\n6x\n  - 3m 58-62% FTP\n  - 1m 50-55% FTP\n\n- 8m Ramp 55-50% FTP\n",
+        "icu_training_load": 21,
+        "moving_time": 2400,
+        "target": "POWER",
+        "external_id": "d2b6f39a-9f13-4228-8c89-088de57301ec"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 21,
+      "expectedMovingTimeSecs": 2400,
+      "status": "applied",
+      "appliedEventId": 125663248
+    },
+    {
+      "id": "update-125663250",
+      "action": "update",
+      "eventId": 125663250,
+      "sourceHash": "ae3abd7a6772",
+      "body": {
+        "start_date_local": "2026-08-18T07:00:00",
+        "category": "NOTE",
+        "type": "Ride",
+        "name": "ALT B - W34 Tue Z2 Waves",
+        "description": "ALT if VO2 skipped. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n6x\n  - 3m 61-64% FTP\n  - 45s 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "target": "POWER",
+        "external_id": "018e81f0-d6d7-4a43-a280-7317a31c2b9b"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "status": "applied",
+      "appliedEventId": 125663250
+    },
+    {
+      "id": "update-125663253",
+      "action": "update",
+      "eventId": 125663253,
+      "sourceHash": "3040a0527dfe",
+      "body": {
+        "start_date_local": "2026-08-20T07:00:00",
+        "category": "NOTE",
+        "type": "Ride",
+        "name": "ALT B - W34 Thu Z2 Cruise-Float",
+        "description": "ALT if O/U skipped or residue. Z2 170-180W only.\n\n- 12m Ramp 50-58% FTP\n\n7x\n  - 8m 60-63% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "target": "POWER",
+        "external_id": "42dab504-5142-461d-9385-2f089cf265f4"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "status": "applied",
+      "appliedEventId": 125663253
+    },
+    {
+      "id": "update-125663254",
+      "action": "update",
+      "eventId": 125663254,
+      "sourceHash": "537164f6d10d",
+      "body": {
+        "start_date_local": "2026-08-22T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W34 Sat Z2 Durable Story",
+        "description": "Long Z2 durable 170-180W. Not chart Z2. HR cruise ~130-140. Skin gate.\n\n- 15m Ramp 50-58% FTP\n\n- 30m 58-61% FTP\n\n12x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 20m 59-62% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 15m 60-63% FTP\n\n5x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+        "icu_training_load": 121,
+        "moving_time": 12420,
+        "target": "POWER",
+        "external_id": "9ba8e2ee-e530-4953-b2bc-7e833db5f077"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 121,
+      "expectedMovingTimeSecs": 12420,
+      "status": "applied",
+      "appliedEventId": 125663254
+    },
+    {
+      "id": "update-125663255",
+      "action": "update",
+      "eventId": 125663255,
+      "sourceHash": "f5dfd33ae11c",
+      "body": {
+        "start_date_local": "2026-08-23T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W34 Sun Easy Play Optional",
+        "description": "Easy undulate. Keep soft.\n\n- 8m Ramp 50-58% FTP\n\n7x\n  - 3m 58-62% FTP\n  - 1m 50-55% FTP\n\n- 8m Ramp 55-50% FTP\n",
+        "icu_training_load": 23,
+        "moving_time": 2640,
+        "target": "POWER",
+        "external_id": "6a1e430f-e7d4-456a-838d-4d175e2f3685"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 23,
+      "expectedMovingTimeSecs": 2640,
+      "status": "applied",
+      "appliedEventId": 125663255
+    },
+    {
+      "id": "update-125663259",
+      "action": "update",
+      "eventId": 125663259,
+      "sourceHash": "8cce2ce19ba0",
+      "body": {
+        "start_date_local": "2026-08-10T07:00:00",
+        "category": "NOTE",
+        "type": "Ride",
+        "name": "W33 focus build light",
+        "description": "W33 build light. Target ~270-310 TSS. Z2 power 170-180W (60-63%), not chart Z2. Tue tempo only if wellness OK else ALT B. Protect long Sat. No VO2.\n",
+        "target": "POWER",
+        "external_id": "bd4e8765-00b3-4177-92f8-9ba4d647a6a0"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "status": "applied",
+      "appliedEventId": 125663259
+    },
+    {
+      "id": "update-125663260",
+      "action": "update",
+      "eventId": 125663260,
+      "sourceHash": "5ec23b034e49",
+      "body": {
+        "start_date_local": "2026-08-17T07:00:00",
+        "category": "NOTE",
+        "type": "Ride",
+        "name": "W34 focus build + VO2 reentry",
+        "description": "W34 build. Target ~290-340 TSS. Z2 days 170-180W. Tue VO2 RE-ENTRY only. ALT B if weak. Thu O/U only if Tue clean else ALT B.\n",
+        "target": "POWER",
+        "external_id": "69fcc1a9-e0e5-442c-87df-b01aec25a06f"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "status": "applied",
+      "appliedEventId": 125663260
+    }
+  ],
+  "weeklyLoads": [
+    {
+      "weekStart": "2026-08-10",
+      "targetLoad": 280,
+      "tolerance": 50,
+      "plannedLoad": 200,
+      "completedLoad": 0,
+      "delta": -80,
+      "withinTarget": false
+    },
+    {
+      "weekStart": "2026-08-17",
+      "targetLoad": 300,
+      "tolerance": 50,
+      "plannedLoad": 144,
+      "completedLoad": 0,
+      "delta": -156,
+      "withinTarget": false
+    }
+  ],
+  "validation": {
+    "feasible": true,
+    "blocking": false,
+    "warnings": [
+      "parse workout description: workout description unsupported: \"ALT if tempo skipped. Z2 170-180W only.\"",
+      "parse workout description: workout description unsupported: \"ALT if VO2 skipped. Z2 170-180W only.\"",
+      "parse workout description: workout description unsupported: \"ALT if O/U skipped or residue. Z2 170-180W only.\"",
+      "parse workout description: workout description unsupported: \"W33 build light. Target ~270-310 TSS. Z2 power 170-180W (60-63%), not chart Z2. Tue tempo only if wellness OK else ALT B. Protect long Sat. No VO2.\"",
+      "parse workout description: workout description unsupported: \"W34 build. Target ~290-340 TSS. Z2 days 170-180W. Tue VO2 RE-ENTRY only. ALT B if weak. Thu O/U only if Tue clean else ALT B.\"",
+      "week 2026-08-10 planned load 200 outside target 280±50 (delta -80)",
+      "week 2026-08-17 planned load 144 outside target 300±50 (delta -156)"
+    ]
+  },
+  "preview": {
+    "pendingCreates": 0,
+    "pendingUpdates": 0,
+    "pendingCancels": 0,
+    "pending": 0,
+    "skipped": 0,
+    "applied": 10,
+    "failed": 0,
+    "expectedLoad": 0,
+    "expectedMovingTimeSecs": 0,
+    "operations": [
+      {
+        "id": "update-125663245",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663245,
+        "name": "ALT B - W33 Tue Z2 Cruise-Float",
+        "date": "2026-08-11"
+      },
+      {
+        "id": "update-125663246",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663246,
+        "name": "W33 Thu Z2 Ladder Low",
+        "date": "2026-08-13",
+        "expectedLoad": 65
+      },
+      {
+        "id": "update-125663247",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663247,
+        "name": "W33 Sat Z2 Durable Story",
+        "date": "2026-08-15",
+        "expectedLoad": 114
+      },
+      {
+        "id": "update-125663248",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663248,
+        "name": "W33 Sun Easy Spin Optional",
+        "date": "2026-08-16",
+        "expectedLoad": 21
+      },
+      {
+        "id": "update-125663250",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663250,
+        "name": "ALT B - W34 Tue Z2 Waves",
+        "date": "2026-08-18"
+      },
+      {
+        "id": "update-125663253",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663253,
+        "name": "ALT B - W34 Thu Z2 Cruise-Float",
+        "date": "2026-08-20"
+      },
+      {
+        "id": "update-125663254",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663254,
+        "name": "W34 Sat Z2 Durable Story",
+        "date": "2026-08-22",
+        "expectedLoad": 121
+      },
+      {
+        "id": "update-125663255",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663255,
+        "name": "W34 Sun Easy Play Optional",
+        "date": "2026-08-23",
+        "expectedLoad": 23
+      },
+      {
+        "id": "update-125663259",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663259,
+        "name": "W33 focus build light",
+        "date": "2026-08-10"
+      },
+      {
+        "id": "update-125663260",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663260,
+        "name": "W34 focus build + VO2 reentry",
+        "date": "2026-08-17"
+      }
+    ]
+  },
+  "apply": {
+    "applied": 10,
+    "skipped": 0,
+    "failed": 0,
+    "results": [
+      {
+        "operationId": "update-125663245",
+        "action": "update",
+        "eventId": 125663245,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663246",
+        "action": "update",
+        "eventId": 125663246,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663247",
+        "action": "update",
+        "eventId": 125663247,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663248",
+        "action": "update",
+        "eventId": 125663248,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663250",
+        "action": "update",
+        "eventId": 125663250,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663253",
+        "action": "update",
+        "eventId": 125663253,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663254",
+        "action": "update",
+        "eventId": 125663254,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663255",
+        "action": "update",
+        "eventId": 125663255,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663259",
+        "action": "update",
+        "eventId": 125663259,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663260",
+        "action": "update",
+        "eventId": 125663260,
+        "status": "applied"
+      }
+    ]
+  }
+}

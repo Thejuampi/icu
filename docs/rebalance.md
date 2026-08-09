@@ -5,7 +5,7 @@
 ## Dry Run
 
 ```bash
-icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal
+icu rebalance show --file rebalance.json --oldest 2026-06-22 --newest 2026-06-28 --type Ride --target POWER --target-load 354 --target-tolerance 10 --start-time 07:00 --min-session-minutes 20 --duration-step-minutes 5 --allocation-basis explicit_equal --max-intensity 0.85 --max-watts 280
 ```
 
 The dry run fetches activities, events, optional sport settings for the explicit `--type`, and wellness records. When Zepp auth is available it also overlays Zepp `HybridCharge`/`BioCharge` as the preferred recovery score for the wellness analysis, with Intervals wellness `sleepScore` kept only as fallback. It writes pretty JSON to `--file` and does not mutate Intervals.icu.
@@ -32,13 +32,24 @@ The file is intentionally user-editable. You can change `selectedOptionId`, remo
 
 Do not edit `sourceHash` unless you intentionally want to bypass drift detection. If a calendar event changed after dry-run, `accept` fails that operation instead of mutating stale state.
 
+## Preview
+
+```bash
+icu rebalance preview --file rebalance.json
+icu rebalance preview --file rebalance.json --no-live-check
+```
+
+`preview` validates the proposal and prints a non-mutating operation summary (pending create/update/cancel counts, expected load, and `validation` blocking/errors/warnings). It exits non-zero when validation is blocking. Live-checks run only when non-blocking unless `--no-live-check` is set. Preview never mutates Intervals.icu.
+
+For explicit multi-session writes (not load redistribution), prefer [`docs/plan.md`](plan.md).
+
 ## Accept
 
 ```bash
 icu rebalance accept --file rebalance.json
 ```
 
-`accept` rereads the file, validates it, verifies source hashes for update/cancel operations, applies pending operations, writes an `apply` summary back to the file, and prints that summary.
+`accept` rereads the file, re-validates it (including stored blocking errors), and hard-fails before any API mutation when blocking. It then verifies source hashes for update/cancel operations, applies pending operations, writes an `apply` summary back to the file, and prints that summary.
 
 ## Approve
 

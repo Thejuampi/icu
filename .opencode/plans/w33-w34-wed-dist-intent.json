@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "icu.plan.intent.v1",
+  "oldest": "2026-08-10",
+  "newest": "2026-08-23",
+  "ftp": 285,
+  "weeklyTargets": [
+    {
+      "targetLoad": 300,
+      "tolerance": 40,
+      "weekStart": "2026-08-10"
+    },
+    {
+      "targetLoad": 320,
+      "tolerance": 40,
+      "weekStart": "2026-08-17"
+    }
+  ],
+  "strictTargets": false,
+  "constraints": {
+    "defaultStartTime": "07:00",
+    "defaultCategory": "WORKOUT",
+    "allowUpdate": true,
+    "defaultTarget": "POWER",
+    "defaultType": "Ride",
+    "allowPast": true,
+    "allowCreate": true,
+    "allowToday": true,
+    "allowCancel": false
+  },
+  "sessions": [
+    {
+      "role": "aerobic",
+      "startTime": "07:00",
+      "type": "Ride",
+      "date": "2026-08-12",
+      "name": "W33 Wed Z2 HR-Control Waves",
+      "desc": "Wed bridge Z2 170-180W after Tue quality. HR ~130-140. Not a second hard day.\n\n- 12m Ramp 50-58% FTP\n\n- 10m 58-61% FTP\n\n10x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n6x\n  - 3m 61-64% FTP\n  - 45s 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "descLocal": "- 12m 50-58%\n- 10m 58-61%\n10x\n  - 3m 60-63%\n  - 45s 50-55%\n6x\n  - 3m 61-64%\n  - 45s 50-55%\n- 10m 58-50%\n",
+      "category": "WORKOUT"
+    },
+    {
+      "role": "aerobic",
+      "startTime": "07:00",
+      "type": "Ride",
+      "date": "2026-08-19",
+      "name": "W34 Wed Z2 Absorb Waves",
+      "desc": "Wed absorb-leaning Z2 after VO2. 170-180W. Keep easy if legs residue.\n\n- 12m Ramp 50-58% FTP\n\n- 8m 58-61% FTP\n\n10x\n  - 3m 58-62% FTP\n  - 45s 50-55% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "descLocal": "- 12m 50-58%\n- 8m 58-61%\n10x\n  - 3m 58-62%\n  - 45s 50-55%\n6x\n  - 3m 60-63%\n  - 45s 50-55%\n- 10m 58-50%\n",
+      "category": "WORKOUT"
+    },
+    {
+      "type": "Ride",
+      "date": "2026-08-15",
+      "startTime": "07:00",
+      "uid": "868d252b-00fe-48b6-83c7-2ae2a00496cf",
+      "descLocal": "- 15m 50-58%\n- 25m 58-61%\n8x\n  - 3m 60-63%\n  - 45s 50-55%\n- 15m 59-62%\n6x\n  - 3m 60-63%\n  - 45s 50-55%\n- 12m 60-63%\n4x\n  - 3m 62-65%\n  - 2m 52-56%\n- 12m 58-61%\n- 12m 58-50%\n",
+      "name": "W33 Sat Z2 Durable Story",
+      "desc": "Long Z2 durable 170-180W. Load partly moved to Wed. HR ~130-140. Skin gate.\n\n- 15m Ramp 50-58% FTP\n\n- 25m 58-61% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 15m 59-62% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 12m 60-63% FTP\n\n4x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 12m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+      "role": "long_endurance",
+      "category": "WORKOUT"
+    },
+    {
+      "type": "Ride",
+      "date": "2026-08-22",
+      "startTime": "07:00",
+      "uid": "9ba8e2ee-e530-4953-b2bc-7e833db5f077",
+      "descLocal": "- 15m 50-58%\n- 25m 58-61%\n10x\n  - 3m 60-63%\n  - 45s 50-55%\n- 15m 59-62%\n6x\n  - 3m 60-63%\n  - 45s 50-55%\n- 12m 60-63%\n4x\n  - 3m 62-65%\n  - 2m 52-56%\n- 12m 58-61%\n- 12m 58-50%\n",
+      "name": "W34 Sat Z2 Durable Story",
+      "desc": "Long Z2 durable 170-180W. Load partly moved to Wed. HR ~130-140. Skin gate.\n\n- 15m Ramp 50-58% FTP\n\n- 25m 58-61% FTP\n\n10x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 15m 59-62% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n- 12m 60-63% FTP\n\n4x\n  - 3m 62-65% FTP\n  - 2m 52-56% FTP\n\n- 12m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+      "role": "long_endurance",
+      "category": "WORKOUT"
+    },
+    {
+      "type": "Ride",
+      "uid": "bd4e8765-00b3-4177-92f8-9ba4d647a6a0",
+      "date": "2026-08-10",
+      "category": "NOTE",
+      "name": "W33 focus build light",
+      "desc": "W33 build light. Target ~290-320 TSS. Pattern: Tue quality, Wed Z2 bridge, Thu Z2, Fri off, Sat long, Sun optional. Z2=170-180W. Tempo only if wellness OK else ALT B. No VO2.\n"
+    },
+    {
+      "type": "Ride",
+      "uid": "69fcc1a9-e0e5-442c-87df-b01aec25a06f",
+      "date": "2026-08-17",
+      "category": "NOTE",
+      "name": "W34 focus build + VO2 reentry",
+      "desc": "W34 build. Target ~300-340 TSS. Tue VO2 re-entry, Wed absorb Z2, Thu O/U only if Tue clean else ALT B, Fri off, Sat long. Z2=170-180W.\n"
+    }
+  ],
+  "notes": []
+}

@@ -73,7 +73,7 @@ Support status meanings:
 | Block phase and week roles | build/recovery/maintenance plus reentry/build/overload/deload roles | `icu analysis plan` | supported |
 | Representative workout titles | device-friendly titles from interval pattern, duration, and session class | `icu analysis plan` | supported |
 | Device cue messages | preview, work, encouragement, restraint, finish messages by session class | `icu analysis plan` | supported |
-| Indoor Z2 variation profile | 4m Z2 waves, 40s HR-control valleys, low/mid/high Z2 rotation, max-Z2 caps | `icu analysis plan` | supported |
+| Session Structure Norm | multi-phase default for all planned rides (waves, cruise-float, rotate, ladder, durable story, HI openers); flat warmup→constant main→cooldown banned as default | planning skill / calendar write path | supported (process norm; not a separate CLI field) |
 | CTL/ATL/TSB forecast | future planned load impulse model | `icu analysis plan` forecast | supported |
 | Day-level adjustment rules | HRV/sleep/RHR/TSB/decoupling/heat gates | `icu analysis plan` deterministic day adjustments | supported |
 

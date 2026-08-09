@@ -15,6 +15,7 @@ const rebalanceWellnessLookbackDays = 42
 
 func registerRebalanceCommands(registry *CommandRegistry) {
 	registry.Register("rebalance", "show", rebalanceDryRunCommand())
+	registry.Register("rebalance", "preview", rebalancePreviewCommand())
 	registry.Register("rebalance", "accept", rebalanceAcceptCommand())
 	registry.Register("rebalance", "approve", rebalanceApproveCommand())
 }
@@ -26,8 +27,9 @@ func rebalanceDryRunCommand() *Command {
 			"[--target-load N] [--target-tolerance N] [--type SPORT] [--target TARGET] " +
 			"[--start-time HH:MM] [--min-session-minutes N] [--duration-step-minutes N] " +
 			"[--allocation-basis explicit_equal] [--allow-today] [--allow-past] " +
-			"[--wellness-lookback-days N] [--now-date DATE]",
+			"[--wellness-lookback-days N] [--now-date DATE] [--max-intensity IF] [--max-watts WATTS]",
 		Description: "Write an editable weekly load rebalance proposal without mutating Intervals.icu.",
+		Schema:      rebalanceShowSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			flags["dry-run"] = "true"
 			input, err := readRebalanceInput(flags, client)
@@ -41,11 +43,48 @@ func rebalanceDryRunCommand() *Command {
 	}
 }
 
+func rebalancePreviewCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "rebalance preview --file PATH [--no-live-check]",
+		Description: "Validate a rebalance proposal and print a non-mutating operation preview.",
+		Schema:      rebalancePreviewSchema(),
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			proposal, err := readRebalanceProposal(flags)
+			if err != nil {
+				return err
+			}
+			validation := icu.ValidateRebalanceProposal(&proposal)
+			var blockingErr error
+			if validation.Blocking {
+				blockingErr = fmt.Errorf("validate rebalance proposal: %s", validation.Errors[0])
+			}
+
+			return runCalendarOpsPreview(
+				flags,
+				proposal.Operations,
+				calendarValidationFromRebalance(validation),
+				validation.Blocking,
+				blockingErr,
+				func() []string {
+					warnings := liveCheckCalendarOperations(client, proposal.Operations)
+					if err := checkRebalanceBaselineDrift(client, &proposal, flags); err != nil {
+						warnings = append(warnings, err.Error())
+					}
+
+					return warnings
+				},
+			)
+		},
+	}
+}
+
 func rebalanceAcceptCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "rebalance accept --file PATH",
 		Description: "Apply pending create/update/cancel operations from a rebalance proposal file.",
+		Schema:      rebalanceAcceptSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			proposal, err := readRebalanceProposal(flags)
 			if err != nil {
@@ -69,31 +108,8 @@ func rebalanceAcceptCommand() *Command {
 					return errors.New("rebalance approval limits mismatch: approved limits changed after approve")
 				}
 			}
-
-			// Drift detection: fetch current activities and events for the scope week
-			currentActivities, err := readRebalanceActivities(client, proposal.Scope.StartDate, proposal.Scope.EndDate, flags)
-			if err != nil {
+			if err := checkRebalanceBaselineDrift(client, &proposal, flags); err != nil {
 				return err
-			}
-			currentEvents, err := readRebalanceEvents(client, proposal.Scope.StartDate, proposal.Scope.EndDate)
-			if err != nil {
-				return err
-			}
-			driftInput := icu.RebalanceInput{
-				Activities:  currentActivities,
-				Events:      currentEvents,
-				Constraints: proposal.Constraints,
-				Scope:       proposal.Scope,
-				NowDate:     proposal.Scope.EndDate,
-			}
-			currentBaseline := icu.RebalanceBaseline(&driftInput)
-			if currentBaseline.CompletedLoad != proposal.Baseline.CompletedLoad ||
-				currentBaseline.LockedPlannedLoad != proposal.Baseline.LockedPlannedLoad {
-				return fmt.Errorf(
-					"calendar drift detected: completed %d→%d or locked %d→%d; re-run rebalance show and approve",
-					proposal.Baseline.CompletedLoad, currentBaseline.CompletedLoad,
-					proposal.Baseline.LockedPlannedLoad, currentBaseline.LockedPlannedLoad,
-				)
 			}
 
 			proposal.Apply = applyRebalanceProposal(client, &proposal)
@@ -104,6 +120,35 @@ func rebalanceAcceptCommand() *Command {
 			return writeJSON(proposal.Apply)
 		},
 	}
+}
+
+func checkRebalanceBaselineDrift(client *icu.Client, proposal *icu.RebalanceProposalFile, flags map[string]string) error {
+	currentActivities, err := readRebalanceActivities(client, proposal.Scope.StartDate, proposal.Scope.EndDate, flags)
+	if err != nil {
+		return err
+	}
+	currentEvents, err := readRebalanceEvents(client, proposal.Scope.StartDate, proposal.Scope.EndDate)
+	if err != nil {
+		return err
+	}
+	driftInput := icu.RebalanceInput{
+		Activities:  currentActivities,
+		Events:      currentEvents,
+		Constraints: proposal.Constraints,
+		Scope:       proposal.Scope,
+		NowDate:     proposal.Scope.EndDate,
+	}
+	currentBaseline := icu.RebalanceBaseline(&driftInput)
+	if currentBaseline.CompletedLoad != proposal.Baseline.CompletedLoad ||
+		currentBaseline.LockedPlannedLoad != proposal.Baseline.LockedPlannedLoad {
+		return fmt.Errorf(
+			"calendar drift detected: completed %d→%d or locked %d→%d; re-run rebalance show and approve",
+			proposal.Baseline.CompletedLoad, currentBaseline.CompletedLoad,
+			proposal.Baseline.LockedPlannedLoad, currentBaseline.LockedPlannedLoad,
+		)
+	}
+
+	return nil
 }
 
 func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.RebalanceInput, error) {
@@ -161,11 +206,79 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 	}, nil
 }
 
+func rebalanceShowSchema() *CommandSchema {
+	return &CommandSchema{
+		RejectPositionals: true,
+		Flags: append([]CommandFlag{
+			{Name: "file", ValueName: "PATH", Description: "Output proposal JSON path."},
+			{Name: "oldest", ValueName: "DATE", Description: "Range start (YYYY-MM-DD)."},
+			{Name: "newest", ValueName: "DATE", Description: "Range end (YYYY-MM-DD)."},
+			{Name: "target-load", ValueName: "N", Description: "Target weekly training load."},
+			{Name: "target-tolerance", ValueName: "N", Description: "Allowed load delta from target."},
+			{Name: "type", ValueName: "SPORT", Description: "Sport type for settings/history."},
+			{Name: "target", ValueName: "TARGET", Description: "Workout target type (POWER)."},
+			{Name: "start-time", ValueName: "HH:MM", Description: "Default session start time."},
+			{Name: "min-session-minutes", ValueName: "N", Description: "Minimum generated session duration."},
+			{Name: "duration-step-minutes", ValueName: "N", Description: "Duration rounding step."},
+			{Name: "allocation-basis", ValueName: "MODE", Description: "Load allocation basis."},
+			{Name: "allow-today", ValueName: "BOOL", Description: "Allow mutating today.", Kind: commandFlagBoolean},
+			{Name: "allow-past", ValueName: "BOOL", Description: "Allow mutating past dates.", Kind: commandFlagBoolean},
+			{Name: "wellness-lookback-days", ValueName: "N", Description: "Wellness history lookback days."},
+			{Name: "now-date", ValueName: "DATE", Description: "Lock boundary date (YYYY-MM-DD)."},
+			{Name: "max-intensity", ValueName: "IF", Description: "Cap generated POWER intensity factor."},
+			{Name: "max-watts", ValueName: "WATTS", Description: "Cap generated POWER watts."},
+			{Name: "max-session-minutes", ValueName: "N", Description: "Maximum generated session duration."},
+			{Name: "z1-if", ValueName: "IF", Description: "Explicit Z1 intensity factor."},
+			{Name: "z2-if", ValueName: "IF", Description: "Explicit Z2 intensity factor."},
+			{Name: "note", ValueName: "TEXT", Description: "Proposal note."},
+			{Name: "level", ValueName: "X", Description: "Envelope level."},
+			{Name: "mode", ValueName: "MODE", Description: "Rebalance mode."},
+			{Name: "week", ValueName: "LABEL", Description: "Optional week label."},
+			{Name: "strategy", ValueName: "NAME", Description: "Rebalance strategy."},
+			{Name: "activity-fields", ValueName: "CSV", Description: "Activity fields to fetch."},
+			{Name: "limit", ValueName: "N", Description: "Activity fetch limit."},
+		}, commonAuthFlags()...),
+	}
+}
+
+func rebalancePreviewSchema() *CommandSchema {
+	return &CommandSchema{
+		RejectPositionals: true,
+		Flags: append([]CommandFlag{
+			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
+			{Name: "no-live-check", ValueName: "BOOL", Description: "Skip live source-hash and baseline drift checks.", Kind: commandFlagBoolean},
+		}, commonAuthFlags()...),
+	}
+}
+
+func rebalanceAcceptSchema() *CommandSchema {
+	return &CommandSchema{
+		RejectPositionals: true,
+		Flags: append([]CommandFlag{
+			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
+		}, commonAuthFlags()...),
+	}
+}
+
+func rebalanceApproveSchema() *CommandSchema {
+	return &CommandSchema{
+		RejectPositionals: true,
+		Flags: append([]CommandFlag{
+			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
+			{Name: "reason", ValueName: "TEXT", Description: "Approval rationale."},
+			{Name: "target-load", ValueName: "N", Description: "Approved target load."},
+			{Name: "level", ValueName: "X", Description: "Approved envelope level."},
+			{Name: "mode", ValueName: "MODE", Description: "Approved mode."},
+		}, commonAuthFlags()...),
+	}
+}
+
 func rebalanceApproveCommand() *Command {
 	return &Command{
 		Name:        "",
 		Usage:       "rebalance approve --file PATH --reason TEXT [--target-load N] [--level X] [--mode MODE]",
 		Description: "Recalculate the proposal under explicit limits and approved constraints, then bind approval hashes for accept verification.",
+		Schema:      rebalanceApproveSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			proposal, err := readRebalanceProposal(flags)
 			if err != nil {
@@ -354,96 +467,11 @@ func writeRebalanceProposal(flags map[string]string, proposal *icu.RebalanceProp
 }
 
 func applyRebalanceProposal(client *icu.Client, proposal *icu.RebalanceProposalFile) *icu.RebalanceApplySummary {
-	summary := &icu.RebalanceApplySummary{}
-	for index := range proposal.Operations {
-		operation := &proposal.Operations[index]
-		result := applyRebalanceOperation(client, operation)
-		summary.Results = append(summary.Results, result)
-		countRebalanceApplyResult(summary, result)
-	}
-
-	return summary
+	return applyCalendarOperations(client, proposal.Operations)
 }
 
 func applyRebalanceOperation(client *icu.Client, operation *icu.RebalanceOperation) icu.RebalanceApplyResult {
-	result := icu.RebalanceApplyResult{OperationID: operation.ID, Action: operation.Action, EventID: operation.EventID}
-	if operation.Status != "" && operation.Status != icu.RebalanceStatusPending {
-		operation.Status = icu.RebalanceStatusSkipped
-		result.Status = icu.RebalanceStatusSkipped
-
-		return result
-	}
-	if err := verifyRebalanceSourceHash(client, operation); err != nil {
-		operation.Status = icu.RebalanceStatusFailed
-		operation.Error = err.Error()
-		result.Status = icu.RebalanceStatusFailed
-		result.Error = err.Error()
-
-		return result
-	}
-	var event icu.Event
-	err := applyRebalanceMutation(client, operation, &event)
-	if err != nil {
-		operation.Status = icu.RebalanceStatusFailed
-		operation.Error = err.Error()
-		result.Status = icu.RebalanceStatusFailed
-		result.Error = err.Error()
-
-		return result
-	}
-	operation.Status = icu.RebalanceStatusApplied
-	operation.AppliedEventID = appliedRebalanceEventID(operation, &event)
-	result.Status = icu.RebalanceStatusApplied
-	result.EventID = operation.AppliedEventID
-
-	return result
-}
-
-func verifyRebalanceSourceHash(client *icu.Client, operation *icu.RebalanceOperation) error {
-	if operation.Action == icu.RebalanceActionCreate || operation.SourceHash == "" {
-		return nil
-	}
-	var current icu.Event
-	if err := client.Get("events", []string{strconv.Itoa(operation.EventID)}, nil, &current); err != nil {
-		return wrapCommandError(err)
-	}
-	if got := icu.RebalanceEventHash(&current); got != operation.SourceHash {
-		return fmt.Errorf("event %d changed since dry-run", operation.EventID)
-	}
-
-	return nil
-}
-
-func applyRebalanceMutation(client *icu.Client, operation *icu.RebalanceOperation, event *icu.Event) error {
-	switch operation.Action {
-	case icu.RebalanceActionCreate:
-		return wrapCommandError(client.Post("events", nil, nil, operation.Body, event))
-	case icu.RebalanceActionUpdate:
-		return wrapCommandError(client.Put("events", []string{strconv.Itoa(operation.EventID)}, nil, operation.Body, event))
-	case icu.RebalanceActionCancel:
-		return wrapCommandError(client.Delete("events", []string{strconv.Itoa(operation.EventID)}, nil, event))
-	default:
-		return fmt.Errorf("unsupported rebalance action %q", operation.Action)
-	}
-}
-
-func appliedRebalanceEventID(operation *icu.RebalanceOperation, event *icu.Event) int {
-	if event.ID != 0 {
-		return event.ID
-	}
-
-	return operation.EventID
-}
-
-func countRebalanceApplyResult(summary *icu.RebalanceApplySummary, result icu.RebalanceApplyResult) {
-	switch result.Status {
-	case icu.RebalanceStatusApplied:
-		summary.Applied++
-	case icu.RebalanceStatusSkipped:
-		summary.Skipped++
-	default:
-		summary.Failed++
-	}
+	return applyCalendarOperation(client, operation)
 }
 
 func applyApprovedLimits(proposal *icu.RebalanceProposalFile) {

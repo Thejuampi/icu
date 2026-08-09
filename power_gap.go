@@ -98,7 +98,8 @@ func ClassifyPowerSamples(inputs *PowerGapInputs) PowerGapClassification {
 	}
 	hasBalance := countPresent(inputs.Balance) > 0
 	if hasBalance {
-		result.Warnings = append(result.Warnings,
+		result.Warnings = append(
+			result.Warnings,
 			"left_right_balance present: dual-sided PM death detection prefers L/R null tail over cadence alone",
 		)
 	}

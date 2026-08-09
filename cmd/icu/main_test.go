@@ -117,6 +117,28 @@ func TestRunResourceHelp(t *testing.T) {
 			},
 		},
 		{
+			Name:    "bare plan prints resource help",
+			Args:    []string{"icu", "plan"},
+			WantOut: 0,
+			Check: func(t *testing.T, stdout, _ string) {
+				t.Helper()
+				checkContains(t, stdout, "Commands for plan:", "plan resource help header")
+				checkContains(t, stdout, "plan show", "plan show usage")
+				checkContains(t, stdout, "plan preview", "plan preview usage")
+			},
+		},
+		{
+			Name:    "bare rebalance prints resource help",
+			Args:    []string{"icu", "rebalance"},
+			WantOut: 0,
+			Check: func(t *testing.T, stdout, _ string) {
+				t.Helper()
+				checkContains(t, stdout, "Commands for rebalance:", "rebalance resource help header")
+				checkContains(t, stdout, "rebalance show", "rebalance show usage")
+				checkContains(t, stdout, "--max-intensity", "rebalance max-intensity flag")
+			},
+		},
+		{
 			Name:    "resource with no show action - wellness",
 			Args:    []string{"icu", "wellness"},
 			WantOut: 0,

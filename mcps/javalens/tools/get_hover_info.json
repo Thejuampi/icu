@@ -1,0 +1,26 @@
+{
+  "name": "get_hover_info",
+  "description": "Get hover information (documentation) for a symbol at a position.\n\nUSAGE: Position on any symbol\nOUTPUT: Signature, Javadoc, and quick info similar to IDE hover\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

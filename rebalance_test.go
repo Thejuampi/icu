@@ -168,6 +168,26 @@ func TestValidateRebalanceProposalRejectsMissingUpdateEventID(t *testing.T) {
 	}
 }
 
+func TestValidateRebalanceProposalHonorsStoredBlocking(t *testing.T) {
+	t.Parallel()
+
+	validation := icu.ValidateRebalanceProposal(&icu.RebalanceProposalFile{
+		SchemaVersion: icu.RebalanceSchemaVersion,
+		Validation: icu.RebalanceValidation{
+			Blocking: true,
+			Errors:   []string{"stored blocking reason"},
+		},
+		Constraints: icu.RebalanceConstraints{
+			TargetTolerance: 10, Z2IF: 0.65, MinSessionMinutes: 20, DurationStepMinutes: 5,
+			SportType: "Ride", WorkoutTarget: "POWER",
+		},
+	})
+
+	if !validation.Blocking {
+		t.Fatalf("validation = %+v, want stored blocking honored", validation)
+	}
+}
+
 func TestBuildRebalanceProposalCancelsMutableEventsWhenTargetAlreadyMet(t *testing.T) {
 	t.Parallel()
 

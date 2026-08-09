@@ -1,0 +1,34 @@
+{
+  "name": "analyze_method",
+  "description": "Comprehensive method analysis in a single call.\n\nCombines:\n- Method info (signature, modifiers, return type)\n- Parameters with types\n- Declared exceptions\n- Incoming calls (who calls this method)\n- Outgoing calls (what this method calls)\n- Override information (super method, overriding methods)\n\nUse this instead of multiple calls to get_method_at_position + call hierarchy tools.\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      },
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "maxCallers": {
+        "description": "Maximum callers to return (default 20)",
+        "type": "integer"
+      },
+      "maxCallees": {
+        "description": "Maximum callees to return (default 50)",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

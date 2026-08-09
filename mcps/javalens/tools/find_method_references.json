@@ -1,0 +1,30 @@
+{
+  "name": "find_method_references",
+  "description": "Find all method reference expressions (Foo::bar lambda syntax).\n\nJDT-UNIQUE: This fine-grained search is not available in LSP.\n\nUSAGE: Position on a method, or provide method details\nOUTPUT: All locations where the method is used as a method reference\n\nUseful for:\n- Understanding functional programming patterns\n- Finding lambda-style usages of methods\n- Refactoring analysis\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "filePath": {
+        "type": "string",
+        "description": "Path to source file containing the method"
+      },
+      "line": {
+        "type": "integer",
+        "description": "Zero-based line number of the method"
+      },
+      "column": {
+        "type": "integer",
+        "description": "Zero-based column number"
+      },
+      "maxResults": {
+        "type": "integer",
+        "description": "Maximum results to return (default 100)"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

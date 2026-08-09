@@ -1,0 +1,22 @@
+{
+  "name": "find_unused_code",
+  "description": "Find unused private methods and fields in the project.\n\nUSAGE: find_unused_code()\nUSAGE: find_unused_code(filePath=\"path/to/File.java\")\nOUTPUT: List of unused private members\n\nDetects:\n- Unused private methods\n- Unused private fields\n- Write-only fields (set but never read)\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "includeMethods": {
+        "description": "Include unused methods (default true)",
+        "type": "boolean"
+      },
+      "includeFields": {
+        "description": "Include unused fields (default true)",
+        "type": "boolean"
+      },
+      "filePath": {
+        "description": "Optional: specific file to check (default: all files)",
+        "type": "string"
+      }
+    },
+    "required": []
+  }
+}

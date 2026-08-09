@@ -14,6 +14,7 @@ func registerAllCommands(registry *CommandRegistry) {
 	registerFTPCommands(registry)
 	registerGearCommands(registry)
 	registerMiscCommands(registry)
+	registerPlanCommands(registry)
 	registerRebalanceCommands(registry)
 	registerRoutesCommands(registry)
 	registerSportsCommands(registry)

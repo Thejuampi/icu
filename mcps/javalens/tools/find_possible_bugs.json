@@ -1,0 +1,18 @@
+{
+  "name": "find_possible_bugs",
+  "description": "Find possible bugs and code quality issues.\n\nUSAGE: find_possible_bugs()\nUSAGE: find_possible_bugs(filePath=\"path/to/File.java\")\nOUTPUT: List of potential issues\n\nDetects:\n- Null pointer risks (dereferencing potentially null values)\n- Resource leaks (unclosed streams, connections)\n- Empty catch blocks\n- Comparison issues (== on objects instead of equals)\n- Synchronization issues (sync on String)\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "filePath": {
+        "description": "Optional: specific file to check (default: all files)",
+        "type": "string"
+      },
+      "severity": {
+        "description": "Filter by severity: high, medium, low, all (default: all)",
+        "type": "string"
+      }
+    },
+    "required": []
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "inline_variable",
+  "description": "Inline a local variable by replacing all usages with its initializer expression.\n\nReturns the text edits needed to inline the variable.\nThe caller should apply these edits to perform the inlining.\n\nUSAGE: Position cursor on variable declaration or usage\nOUTPUT: Edits to delete declaration and replace usages with initializer\n\nIMPORTANT: Uses ZERO-BASED coordinates.\nSAFETY: Will refuse if variable is modified after initialization.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number of variable declaration or usage",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

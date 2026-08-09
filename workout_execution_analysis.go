@@ -23,6 +23,10 @@ const (
 	workoutMatchCategoryWeight     = 40
 	workoutMatchTypeWeight         = 20
 	workoutMatchTimeWeight         = 20
+	// A planned session on the same calendar date outranks any neighbouring day.
+	// It must beat duration+load similarity combined so an undershot long ride
+	// is not stolen by the shorter workout planned for the next day.
+	workoutMatchSameDateWeight     = 25
 	workoutMatchDurationWeight     = 10
 	workoutMatchLoadWeight         = 10
 	workoutMatchNameWeight         = 8
@@ -329,6 +333,10 @@ func scoreWorkoutIdentity(result *workoutEventScore, activity *Activity, event *
 	if inWindow {
 		result.score += workoutMatchTimeWeight
 		result.reasons = append(result.reasons, "time_window_match")
+	}
+	if activityLocalDate(activity) != "" && activityLocalDate(activity) == eventLocalDate(event.StartDateLocal) {
+		result.score += workoutMatchSameDateWeight
+		result.reasons = append(result.reasons, "same_date_match")
 	}
 	if explicit {
 		result.score += workoutMatchCategoryWeight

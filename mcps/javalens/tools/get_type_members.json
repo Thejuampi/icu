@@ -1,0 +1,24 @@
+{
+  "name": "get_type_members",
+  "description": "Get all members (methods, fields, nested types) of a specific type.\n\nUSAGE: Provide a type name to get all its members\nOUTPUT: Lists of methods, fields, and nested types with their details\n\nOptions:\n- includeInherited: Also include members from superclasses/interfaces\n- memberKind: Filter to \"method\", \"field\", or \"type\" only\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "typeName": {
+        "description": "Fully qualified or simple type name",
+        "type": "string"
+      },
+      "memberKind": {
+        "description": "Filter: 'method', 'field', 'type', or null for all",
+        "type": "string"
+      },
+      "includeInherited": {
+        "description": "Include inherited members (default false)",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "typeName"
+    ]
+  }
+}

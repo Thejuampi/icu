@@ -1,0 +1,31 @@
+{
+  "name": "rename_symbol",
+  "description": "Rename a symbol (variable, method, field, class, etc.) across the project.\n\nReturns text edits for all occurrences that need to be changed.\nThe caller should apply these edits to perform the rename.\n\nUSAGE: Position on symbol, provide new name\nOUTPUT: List of text edits to apply\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      },
+      "newName": {
+        "description": "New name for the symbol",
+        "type": "string"
+      },
+      "filePath": {
+        "description": "Path to source file containing the symbol",
+        "type": "string"
+      },
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column",
+      "newName"
+    ]
+  }
+}

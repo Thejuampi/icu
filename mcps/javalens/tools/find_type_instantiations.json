@@ -1,0 +1,20 @@
+{
+  "name": "find_type_instantiations",
+  "description": "Find all instantiations of a type (new Foo() calls).\n\nJDT-UNIQUE: This fine-grained search is not available in LSP.\n\nUSAGE: Provide fully qualified type name\nOUTPUT: All locations where the type is instantiated with 'new'\n\nUseful for:\n- Understanding object creation patterns\n- Identifying factory method candidates\n- Finding coupling points\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "typeName": {
+        "type": "string",
+        "description": "Fully qualified type name (e.g., 'java.util.ArrayList')"
+      },
+      "maxResults": {
+        "type": "integer",
+        "description": "Maximum results to return (default 100)"
+      }
+    },
+    "required": [
+      "typeName"
+    ]
+  }
+}

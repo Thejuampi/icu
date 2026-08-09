@@ -1,0 +1,38 @@
+{
+  "name": "extract_interface",
+  "description": "Extract an interface from a class containing selected public methods.\n\nReturns the text for a new interface file and edits to add 'implements'\nclause to the original class.\n\nUSAGE: Position on class, provide interface name, optionally specify methods\nOUTPUT: Interface file content and class modification edit\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "interfaceName": {
+        "description": "Name for the new interface",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number of class declaration",
+        "type": "integer"
+      },
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file containing the class",
+        "type": "string"
+      },
+      "methodNames": {
+        "description": "Specific method names to include (default: all public non-static methods)",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column",
+      "interfaceName"
+    ]
+  }
+}

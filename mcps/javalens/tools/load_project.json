@@ -1,0 +1,16 @@
+{
+  "name": "load_project",
+  "description": "Load a Java project for analysis.\nMUST be called before using other analysis tools.\n\nUSAGE: load_project(projectPath=\"/path/to/project\")\nOUTPUT: Project structure summary including packages, source files, build system\n\nSupports:\n- Maven projects (pom.xml)\n- Gradle projects (build.gradle or build.gradle.kts)\n- Plain Java projects with src/ directory\n\nWORKFLOW:\n1. Call load_project with absolute path to project root\n2. Wait for project to load (may take a few seconds for large projects)\n3. Use health_check to verify project is loaded\n4. Begin using analysis tools (search_symbols, find_references, etc.)\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "projectPath": {
+        "description": "Absolute path to the project root directory containing pom.xml or build.gradle",
+        "type": "string"
+      }
+    },
+    "required": [
+      "projectPath"
+    ]
+  }
+}
