@@ -1,0 +1,443 @@
+{
+  "schemaVersion": "icu.plan.v1",
+  "proposalId": "plan-705d21d5b509",
+  "generatedAt": "2026-08-04T01:42:57Z",
+  "scope": {
+    "startDate": "2026-08-03",
+    "endDate": "2026-08-09",
+    "nowDate": "2026-08-03"
+  },
+  "intent": {
+    "schemaVersion": "icu.plan.intent.v1",
+    "oldest": "2026-08-03",
+    "newest": "2026-08-09",
+    "ftp": 285,
+    "weeklyTargets": [
+      {
+        "weekStart": "2026-08-03",
+        "targetLoad": 340,
+        "tolerance": 50
+      }
+    ],
+    "constraints": {
+      "allowCreate": true,
+      "allowUpdate": true,
+      "allowCancel": false,
+      "allowToday": true,
+      "allowPast": false,
+      "defaultStartTime": "07:00",
+      "defaultType": "Ride",
+      "defaultCategory": "WORKOUT",
+      "defaultTarget": "POWER"
+    },
+    "sessions": [
+      {
+        "date": "2026-08-04",
+        "name": "W32 Tue Z2 Waves + Z3 Spikes",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Z2 170-180W + short Z3 spikes. Skip spike if HR already high.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n3x\n  - 2m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n5x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n3x\n  - 2m 61-64% FTP\n  - 40s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "descLocal": "- 12m 50-58%\n4x\n  - 3m 60-63%\n  - 45s 50-55%\n3x\n  - 2m 60-63%\n  - 45s 85-90%\n  - 2m 52-56%\n5x\n  - 3m 60-63%\n  - 40s 50-55%\n3x\n  - 2m 61-64%\n  - 40s 85-90%\n  - 2m 52-56%\n- 10m 58-50%\n",
+        "role": "aerobic",
+        "uid": "8865419a-35bb-49a9-9713-c5ac9d02e034"
+      },
+      {
+        "date": "2026-08-05",
+        "name": "W32 Wed Z2 Volume + Z3 Spikes",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Z2 volume 170-180W + 4x30s Z3 spikes. Skip spikes if HR high.\n\n- 12m Ramp 50-58% FTP\n\n- 10m 58-61% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 30s 86-90% FTP\n  - 90s 52-56% FTP\n\n6x\n  - 3m 61-64% FTP\n  - 40s 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "descLocal": "- 12m 50-58%\n- 10m 58-61%\n8x\n  - 3m 60-63%\n  - 40s 50-55%\n4x\n  - 3m 60-63%\n  - 30s 86-90%\n  - 90s 52-56%\n6x\n  - 3m 61-64%\n  - 40s 50-55%\n- 10m 58-50%\n",
+        "role": "aerobic"
+      },
+      {
+        "date": "2026-08-06",
+        "name": "W32 Thu Z2 Cruise + Z3 Spikes",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Z2 cruise 170-180W + 4x1m Z3 spikes. Full easy after each spike.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n4x\n  - 4m 60-63% FTP\n  - 1m 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "descLocal": "- 12m 50-58%\n4x\n  - 6m 60-63%\n  - 2m 52-56%\n4x\n  - 4m 60-63%\n  - 1m 85-90%\n  - 2m 52-56%\n- 10m 58-50%\n",
+        "role": "aerobic",
+        "uid": "97b2b796-1951-4320-b6a4-f40f1cb77b31"
+      },
+      {
+        "date": "2026-08-08",
+        "name": "W32 Sat Z2 Durable + Z3 Spikes",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Long Z2 170-180W HR~130-140 + short Z3 spikes. Skin gate active.\n\n- 15m Ramp 50-58% FTP\n\n- 20m 58-61% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 15m 59-62% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n3x\n  - 2m 61-64% FTP\n  - 45s 86-90% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+        "descLocal": "- 15m 50-58%\n- 20m 58-61%\n6x\n  - 3m 60-63%\n  - 40s 50-55%\n4x\n  - 3m 60-63%\n  - 45s 85-90%\n  - 2m 52-56%\n- 15m 59-62%\n6x\n  - 3m 60-63%\n  - 40s 50-55%\n3x\n  - 2m 61-64%\n  - 45s 86-90%\n  - 2m 52-56%\n- 15m 58-61%\n- 12m 58-50%\n",
+        "role": "long_endurance",
+        "uid": "93854d3d-b4ed-48d0-bce0-946642943188"
+      },
+      {
+        "date": "2026-08-09",
+        "name": "W32 Sun Z2 Cruise + Z3 Spikes",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "startTime": "07:00",
+        "desc": "Optional-feeling Z2 170-180W + 3x45s Z3 spikes. Skip if tired/skin bad.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n3x\n  - 4m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "descLocal": "- 12m 50-58%\n4x\n  - 6m 60-63%\n  - 2m 52-56%\n3x\n  - 4m 60-63%\n  - 45s 85-90%\n  - 2m 52-56%\n- 10m 58-50%\n",
+        "role": "aerobic",
+        "uid": "19f589a0-bac1-4a34-88eb-a1b24c49cb1c"
+      },
+      {
+        "date": "2026-08-03",
+        "name": "W32 focus aerobic reentry",
+        "category": "NOTE",
+        "type": "Ride",
+        "desc": "W32 reentry+volume. Z2 power 170-180W (60-63% FTP), not chart Z2. Short Z3 spikes 30-60s@85-90% only. Skip spike if HR high. Target ~340-360 TSS. Mon gate done. Fri off. Skin gate on long rides.\n",
+        "uid": "3b4ec6a6-226d-451d-8a3f-4caf32b187b8"
+      }
+    ]
+  },
+  "constraints": {
+    "allowCreate": true,
+    "allowUpdate": true,
+    "allowCancel": false,
+    "allowToday": true,
+    "allowPast": false,
+    "defaultStartTime": "07:00",
+    "defaultType": "Ride",
+    "defaultCategory": "WORKOUT",
+    "defaultTarget": "POWER"
+  },
+  "context": {
+    "ftp": 285,
+    "ftpSource": "intent"
+  },
+  "baseline": {
+    "completedLoad": 40,
+    "lockedPlannedLoad": 0,
+    "mutablePlannedLoad": 255,
+    "weeklyLoad": 295
+  },
+  "sessions": [
+    {
+      "id": "update-125663239",
+      "date": "2026-08-04",
+      "name": "W32 Tue Z2 Waves + Z3 Spikes",
+      "action": "update",
+      "eventId": 125663239,
+      "sourceHash": "a7ad08fd4222",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "aerobic",
+      "uid": "8865419a-35bb-49a9-9713-c5ac9d02e034",
+      "desc": "Z2 170-180W + short Z3 spikes. Skip spike if HR already high.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n3x\n  - 2m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n5x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n3x\n  - 2m 61-64% FTP\n  - 40s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "descLocal": "- 12m 50-58%\n4x\n  - 3m 60-63%\n  - 45s 50-55%\n3x\n  - 2m 60-63%\n  - 45s 85-90%\n  - 2m 52-56%\n5x\n  - 3m 60-63%\n  - 40s 50-55%\n3x\n  - 2m 61-64%\n  - 40s 85-90%\n  - 2m 52-56%\n- 10m 58-50%\n",
+      "trainingLoad": 51,
+      "movingTimeSecs": 5015,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "create-2026-08-05-W32-Wed-Z2-Volume---Z3-Spikes",
+      "date": "2026-08-05",
+      "name": "W32 Wed Z2 Volume + Z3 Spikes",
+      "action": "create",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "aerobic",
+      "desc": "Z2 volume 170-180W + 4x30s Z3 spikes. Skip spikes if HR high.\n\n- 12m Ramp 50-58% FTP\n\n- 10m 58-61% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 30s 86-90% FTP\n  - 90s 52-56% FTP\n\n6x\n  - 3m 61-64% FTP\n  - 40s 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "descLocal": "- 12m 50-58%\n- 10m 58-61%\n8x\n  - 3m 60-63%\n  - 40s 50-55%\n4x\n  - 3m 60-63%\n  - 30s 86-90%\n  - 90s 52-56%\n6x\n  - 3m 61-64%\n  - 40s 50-55%\n- 10m 58-50%\n",
+      "trainingLoad": 61,
+      "movingTimeSecs": 6200,
+      "loadSource": "local_power_workout_description",
+      "reason": "explicit intent session with no matching calendar event"
+    },
+    {
+      "id": "update-125663241",
+      "date": "2026-08-06",
+      "name": "W32 Thu Z2 Cruise + Z3 Spikes",
+      "action": "update",
+      "eventId": 125663241,
+      "sourceHash": "12def841bec2",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "aerobic",
+      "uid": "97b2b796-1951-4320-b6a4-f40f1cb77b31",
+      "desc": "Z2 cruise 170-180W + 4x1m Z3 spikes. Full easy after each spike.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n4x\n  - 4m 60-63% FTP\n  - 1m 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "descLocal": "- 12m 50-58%\n4x\n  - 6m 60-63%\n  - 2m 52-56%\n4x\n  - 4m 60-63%\n  - 1m 85-90%\n  - 2m 52-56%\n- 10m 58-50%\n",
+      "trainingLoad": 50,
+      "movingTimeSecs": 4920,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663242",
+      "date": "2026-08-08",
+      "name": "W32 Sat Z2 Durable + Z3 Spikes",
+      "action": "update",
+      "eventId": 125663242,
+      "sourceHash": "2569a4969441",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "long_endurance",
+      "uid": "93854d3d-b4ed-48d0-bce0-946642943188",
+      "desc": "Long Z2 170-180W HR~130-140 + short Z3 spikes. Skin gate active.\n\n- 15m Ramp 50-58% FTP\n\n- 20m 58-61% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 15m 59-62% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n3x\n  - 2m 61-64% FTP\n  - 45s 86-90% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+      "descLocal": "- 15m 50-58%\n- 20m 58-61%\n6x\n  - 3m 60-63%\n  - 40s 50-55%\n4x\n  - 3m 60-63%\n  - 45s 85-90%\n  - 2m 52-56%\n- 15m 59-62%\n6x\n  - 3m 60-63%\n  - 40s 50-55%\n3x\n  - 2m 61-64%\n  - 45s 86-90%\n  - 2m 52-56%\n- 15m 58-61%\n- 12m 58-50%\n",
+      "trainingLoad": 96,
+      "movingTimeSecs": 9495,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    },
+    {
+      "id": "update-125663243",
+      "date": "2026-08-09",
+      "name": "W32 Sun Z2 Cruise + Z3 Spikes",
+      "action": "update",
+      "eventId": 125663243,
+      "sourceHash": "551b5f71f6dc",
+      "category": "WORKOUT",
+      "type": "Ride",
+      "startTime": "07:00",
+      "target": "POWER",
+      "role": "aerobic",
+      "uid": "19f589a0-bac1-4a34-88eb-a1b24c49cb1c",
+      "desc": "Optional-feeling Z2 170-180W + 3x45s Z3 spikes. Skip if tired/skin bad.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n3x\n  - 4m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+      "descLocal": "- 12m 50-58%\n4x\n  - 6m 60-63%\n  - 2m 52-56%\n3x\n  - 4m 60-63%\n  - 45s 85-90%\n  - 2m 52-56%\n- 10m 58-50%\n",
+      "trainingLoad": 44,
+      "movingTimeSecs": 4455,
+      "loadSource": "local_power_workout_description",
+      "matchedBy": "uid",
+      "reason": "explicit intent session matched existing calendar event"
+    }
+  ],
+  "operations": [
+    {
+      "id": "create-2026-08-05-W32-Wed-Z2-Volume---Z3-Spikes",
+      "action": "create",
+      "body": {
+        "start_date_local": "2026-08-05T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W32 Wed Z2 Volume + Z3 Spikes",
+        "description": "Z2 volume 170-180W + 4x30s Z3 spikes. Skip spikes if HR high.\n\n- 12m Ramp 50-58% FTP\n\n- 10m 58-61% FTP\n\n8x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 30s 86-90% FTP\n  - 90s 52-56% FTP\n\n6x\n  - 3m 61-64% FTP\n  - 40s 50-55% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "icu_training_load": 61,
+        "moving_time": 6200,
+        "target": "POWER"
+      },
+      "reason": "explicit intent session with no matching calendar event",
+      "expectedLoad": 61,
+      "expectedMovingTimeSecs": 6200,
+      "status": "applied",
+      "appliedEventId": 127176263
+    },
+    {
+      "id": "update-125663239",
+      "action": "update",
+      "eventId": 125663239,
+      "sourceHash": "a7ad08fd4222",
+      "body": {
+        "start_date_local": "2026-08-04T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W32 Tue Z2 Waves + Z3 Spikes",
+        "description": "Z2 170-180W + short Z3 spikes. Skip spike if HR already high.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n3x\n  - 2m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n5x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n3x\n  - 2m 61-64% FTP\n  - 40s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "icu_training_load": 51,
+        "moving_time": 5015,
+        "target": "POWER",
+        "external_id": "8865419a-35bb-49a9-9713-c5ac9d02e034"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 51,
+      "expectedMovingTimeSecs": 5015,
+      "status": "applied",
+      "appliedEventId": 125663239
+    },
+    {
+      "id": "update-125663241",
+      "action": "update",
+      "eventId": 125663241,
+      "sourceHash": "12def841bec2",
+      "body": {
+        "start_date_local": "2026-08-06T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W32 Thu Z2 Cruise + Z3 Spikes",
+        "description": "Z2 cruise 170-180W + 4x1m Z3 spikes. Full easy after each spike.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n4x\n  - 4m 60-63% FTP\n  - 1m 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "icu_training_load": 50,
+        "moving_time": 4920,
+        "target": "POWER",
+        "external_id": "97b2b796-1951-4320-b6a4-f40f1cb77b31"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 50,
+      "expectedMovingTimeSecs": 4920,
+      "status": "applied",
+      "appliedEventId": 125663241
+    },
+    {
+      "id": "update-125663242",
+      "action": "update",
+      "eventId": 125663242,
+      "sourceHash": "2569a4969441",
+      "body": {
+        "start_date_local": "2026-08-08T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W32 Sat Z2 Durable + Z3 Spikes",
+        "description": "Long Z2 170-180W HR~130-140 + short Z3 spikes. Skin gate active.\n\n- 15m Ramp 50-58% FTP\n\n- 20m 58-61% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n4x\n  - 3m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 15m 59-62% FTP\n\n6x\n  - 3m 60-63% FTP\n  - 40s 50-55% FTP\n\n3x\n  - 2m 61-64% FTP\n  - 45s 86-90% FTP\n  - 2m 52-56% FTP\n\n- 15m 58-61% FTP\n\n- 12m Ramp 58-50% FTP\n",
+        "icu_training_load": 96,
+        "moving_time": 9495,
+        "target": "POWER",
+        "external_id": "93854d3d-b4ed-48d0-bce0-946642943188"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 96,
+      "expectedMovingTimeSecs": 9495,
+      "status": "applied",
+      "appliedEventId": 125663242
+    },
+    {
+      "id": "update-125663243",
+      "action": "update",
+      "eventId": 125663243,
+      "sourceHash": "551b5f71f6dc",
+      "body": {
+        "start_date_local": "2026-08-09T07:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "name": "W32 Sun Z2 Cruise + Z3 Spikes",
+        "description": "Optional-feeling Z2 170-180W + 3x45s Z3 spikes. Skip if tired/skin bad.\n\n- 12m Ramp 50-58% FTP\n\n4x\n  - 6m 60-63% FTP\n  - 2m 52-56% FTP\n\n3x\n  - 4m 60-63% FTP\n  - 45s 85-90% FTP\n  - 2m 52-56% FTP\n\n- 10m Ramp 58-50% FTP\n",
+        "icu_training_load": 44,
+        "moving_time": 4455,
+        "target": "POWER",
+        "external_id": "19f589a0-bac1-4a34-88eb-a1b24c49cb1c"
+      },
+      "reason": "explicit intent session matched existing calendar event",
+      "expectedLoad": 44,
+      "expectedMovingTimeSecs": 4455,
+      "status": "applied",
+      "appliedEventId": 125663243
+    }
+  ],
+  "weeklyLoads": [
+    {
+      "weekStart": "2026-08-03",
+      "targetLoad": 340,
+      "tolerance": 50,
+      "plannedLoad": 342,
+      "completedLoad": 40,
+      "delta": 2,
+      "withinTarget": true
+    }
+  ],
+  "validation": {
+    "feasible": true,
+    "blocking": false,
+    "warnings": [
+      "session W32 focus aerobic reentry on 2026-08-03 is locked (completed/past/today)"
+    ]
+  },
+  "preview": {
+    "pendingCreates": 0,
+    "pendingUpdates": 0,
+    "pendingCancels": 0,
+    "pending": 0,
+    "skipped": 0,
+    "applied": 5,
+    "failed": 0,
+    "expectedLoad": 0,
+    "expectedMovingTimeSecs": 0,
+    "operations": [
+      {
+        "id": "create-2026-08-05-W32-Wed-Z2-Volume---Z3-Spikes",
+        "action": "create",
+        "status": "applied",
+        "name": "W32 Wed Z2 Volume + Z3 Spikes",
+        "date": "2026-08-05",
+        "expectedLoad": 61
+      },
+      {
+        "id": "update-125663239",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663239,
+        "name": "W32 Tue Z2 Waves + Z3 Spikes",
+        "date": "2026-08-04",
+        "expectedLoad": 51
+      },
+      {
+        "id": "update-125663241",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663241,
+        "name": "W32 Thu Z2 Cruise + Z3 Spikes",
+        "date": "2026-08-06",
+        "expectedLoad": 50
+      },
+      {
+        "id": "update-125663242",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663242,
+        "name": "W32 Sat Z2 Durable + Z3 Spikes",
+        "date": "2026-08-08",
+        "expectedLoad": 96
+      },
+      {
+        "id": "update-125663243",
+        "action": "update",
+        "status": "applied",
+        "eventId": 125663243,
+        "name": "W32 Sun Z2 Cruise + Z3 Spikes",
+        "date": "2026-08-09",
+        "expectedLoad": 44
+      }
+    ]
+  },
+  "apply": {
+    "applied": 5,
+    "skipped": 0,
+    "failed": 0,
+    "results": [
+      {
+        "operationId": "create-2026-08-05-W32-Wed-Z2-Volume---Z3-Spikes",
+        "action": "create",
+        "eventId": 127176263,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663239",
+        "action": "update",
+        "eventId": 125663239,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663241",
+        "action": "update",
+        "eventId": 125663241,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663242",
+        "action": "update",
+        "eventId": 125663242,
+        "status": "applied"
+      },
+      {
+        "operationId": "update-125663243",
+        "action": "update",
+        "eventId": 125663243,
+        "status": "applied"
+      }
+    ]
+  }
+}
