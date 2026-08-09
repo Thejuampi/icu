@@ -719,7 +719,7 @@ func TestAnalyzeTrainingPlanAddsIndoorZ2MicroVariation(t *testing.T) {
 	t.Parallel()
 
 	event := plannedWorkout("2026-06-06T08:00:00", "Ride - Long Durability Indoor", 135, 10380, 0.684)
-	event.Indoor = true
+	event.Indoor = boolPtr(true)
 
 	got := icu.AnalyzeTrainingPlan([]icu.Activity{}, []icu.Event{event}, icu.TrainingPlanOptions{
 		HistoryStartDate: "",
@@ -738,7 +738,7 @@ func TestAnalyzeTrainingPlanIndoorZ2UsesFourMinuteMicroIntervals(t *testing.T) {
 	t.Parallel()
 
 	event := plannedWorkout("2026-06-06T08:00:00", "Ride - Long Durability Indoor", 135, 10380, 0.684)
-	event.Indoor = true
+	event.Indoor = boolPtr(true)
 
 	got := icu.AnalyzeTrainingPlan([]icu.Activity{}, []icu.Event{event}, icu.TrainingPlanOptions{
 		HistoryStartDate: "",
@@ -760,6 +760,8 @@ func TestAnalyzeTrainingPlanIndoorZ2UsesFourMinuteMicroIntervals(t *testing.T) {
 		t.Fatalf("WorkoutProfile.Blocks[1] = %+v, want %+v", got.PlannedSessions[0].Execution.WorkoutProfile.Blocks[1], want)
 	}
 }
+
+func boolPtr(b bool) *bool { return &b }
 
 func plannedWorkout(date, name string, load, movingTime int, intensity float64) icu.Event {
 	var event icu.Event

@@ -1,0 +1,8 @@
+{
+  "_provenance": "Generated at base SHA 7a706cb9916e8360551adcaf7cd647f8e07de46b by marshalling icu.Event (pre-wave-1a shape: Indoor bool) with json.Marshal before Event.Indoor became *bool. Regenerable only by an explicit reviewed action recording the new base SHA — never recomputed from current code at test time (W1a-R03).",
+  "fixtures": {
+    "absent": "{\"id\":1,\"startDateLocal\":\"2026-06-01T08:00:00\",\"category\":\"WORKOUT\",\"type\":\"Ride\",\"name\":\"Absent Flag Ride\",\"description\":\"steady endurance\",\"icuTrainingLoad\":60,\"movingTime\":3600,\"distance\":30000,\"color\":\"blue\",\"icuFtp\":270,\"tags\":[\"endurance\"],\"externalId\":\"ext-abs-1\"}",
+    "false": "{\"id\":2,\"startDateLocal\":\"2026-06-02T08:00:00\",\"category\":\"WORKOUT\",\"type\":\"Ride\",\"name\":\"False Flag Ride\",\"description\":\"tempo\",\"icuTrainingLoad\":70,\"movingTime\":4200,\"distance\":35000,\"color\":\"green\",\"icuFtp\":270,\"tags\":[\"tempo\"],\"externalId\":\"ext-false-2\"}",
+    "true": "{\"id\":3,\"startDateLocal\":\"2026-06-03T08:00:00\",\"category\":\"WORKOUT\",\"type\":\"VirtualRide\",\"name\":\"True Flag Ride\",\"description\":\"zwift\",\"icuTrainingLoad\":80,\"movingTime\":3000,\"color\":\"red\",\"indoor\":true,\"icuFtp\":285,\"tags\":[\"zwift\"],\"externalId\":\"ext-true-3\"}"
+  }
+}

@@ -269,7 +269,7 @@ type Event struct {
 	MovingTime           int      `json:"movingTime,omitempty"`
 	Distance             float64  `json:"distance,omitempty"`
 	Color                string   `json:"color,omitempty"`
-	Indoor               bool     `json:"indoor,omitempty"`
+	Indoor               *bool    `json:"indoor,omitempty"`
 	FTP                  int      `json:"icuFtp,omitempty"`
 	ATL                  float64  `json:"icuAtl,omitempty"`
 	CTL                  float64  `json:"icuCtl,omitempty"`

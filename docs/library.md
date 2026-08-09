@@ -9,6 +9,29 @@ It is intended for applications that want direct access to the Intervals.icu API
 go get github.com/Thejuampi/icu@latest
 ```
 
+## Breaking Changes
+
+**`Event.Indoor` changed from `bool` to `*bool` (wave-1a, icu-web-parity).** `nil` and `false` both
+mean "not asserted indoor" — the pre-existing zero-value semantics are preserved; only a non-nil
+pointer to `true` means the event is confirmed indoor. This lets the FTP resolver (see
+[FTP Selection](#ftp-selection) below) distinguish "we don't know" from "the API said false" — the
+Intervals.icu API frequently omits or nulls this field (151 of 253 planned events in one measured
+account carry `indoor: null`).
+
+The module has never been tagged (`git tag -l` is empty), so it is pre-1.0 and this is a sanctioned
+exported-field type change under Go's own module-versioning convention: no migration section and no
+`/v2` module path bump. Effects:
+
+- Code that read `Event.Indoor` as a bare `bool` will fail to compile and must add a nil check
+  (`ev.Indoor != nil && *ev.Indoor`). No production call site in this repository did so before this
+  change; if you vendor this package, check your own call sites.
+- `EventEx.Indoor` (the write-path struct used by `events create`/`events update` and by
+  `rebalance`/`plan` operation bodies) is **unaffected** and stays `bool`; this change does not touch
+  any write payload.
+- `Event.MarshalJSON` reproduces the old wire form byte-for-byte: `nil` and `false` both omit the
+  `"indoor"` key, and only `true` emits it. JSON consumers of this package's HTTP responses see no
+  change on the wire.
+
 ## What The Package Provides
 
 - `Client`: authenticated HTTP client for the supported Intervals.icu resources
@@ -193,6 +216,65 @@ fmt.Println(estimate.TrainingLoad)
 ```
 
 The parser intentionally supports the explicit line-oriented grammar used by the CLI planning workflow: single steps like `- 10m 55-75%`, steady targets like `- 5m 90%`, and repeat blocks like `3x` with indented child steps. Unsupported text returns `ErrWorkoutDescriptionUnsupported` instead of guessing.
+
+### FTP Selection
+
+`ResolveFTP` is the single rule for choosing a session's indoor-vs-outdoor FTP, replacing three
+rules that used to disagree on the same activity. It is pure and does no I/O.
+
+```go
+selection := icu.ResolveFTP(icu.FTPRequest{
+	Type:     "VirtualRide",
+	Entity:   icu.FTPEntityActivity, // or icu.FTPEntityEvent
+	Trainer:  nil,                   // *bool; nil means "no flag evidence"
+	Settings: &sportSettings,
+})
+
+fmt.Println(selection.Watts, selection.Source, selection.Confidence)
+```
+
+`FTPEntity` selects which of two resolution tables applies. `Ride` resolves differently by entity:
+it is an outdoor-default class for a completed activity, but a flag-decided ambiguous class for a
+planned event. The two tables are deliberately not merged into one — do not assume a rule that holds
+for activities also describes events, or vice versa.
+
+`FTPRequest.Trainer` (activity) and `FTPRequest.EventIndoor` (event) are the two environment flags —
+evidence, never the sole discriminator for a type-inherent class. `FTPRequest.StubShape` marks a
+record with the STRAVA-stub shape (five keys, `_note` present, `source == "STRAVA"`); when set, it
+short-circuits both partitions to `not_a_record` before `Type` is even inspected.
+
+`FTPClass` is total over five values:
+
+| Value | Meaning |
+| --- | --- |
+| `indoor` | Type is inherently indoor (`VirtualRide`, `IndoorCycling` — see `icu.IndoorCyclingTypes`). A `false`/absent flag is ignored; only an explicit `true` can raise `Disagreement`. |
+| `outdoor` | Activity-only: `Ride` defaults to outdoor unless `Trainer` is explicitly `true`. |
+| `ambiguous` | Any other cycling type. The flag decides when present; on the activity partition an absent flag resolves `unknown`/`low` confidence, but on the event partition an absent flag still resolves confidently (`type_default`/`medium`), never `low`. |
+| `not_applicable` | A non-cycling type (`Walk`, `Run`, `VirtualRun`, `WeightTraining`, `Workout`, plus `NOTE` for events) or an empty type string. No FTP-backed value applies; `Applicable` is `false`. |
+| `not_a_record` | The record is a STRAVA stub (five keys, `_note` present, `source == "STRAVA"`) — not a real activity. Gets no load, no time, no slot, and no pairing. `Applicable` is `false`, same as `not_applicable`, but the two are distinct classes: one means "this type doesn't use FTP," the other means "this isn't a session at all." |
+
+`Confidence` is a three-tier contract, not a bare bool — the two are not equally trustworthy:
+
+| Tier | When | Operational meaning |
+| --- | --- | --- |
+| `high` | `Source: type_inherent` only | This type cannot be otherwise (a `VirtualRide` is never really outdoors). |
+| `medium` | `Source: type_default` or `flag_asserted` | Usually right, or asserted by a flag whose positive-observed direction has very few samples. Proceed, but the source is worth surfacing. |
+| `low` | `Source: unknown` | No type default and no flag. `Warning` is populated. Read/analysis call sites should proceed and warn; write/prescription call sites should refuse or require an explicit override. |
+
+`FTPSelection.Disagreement` is `true` exactly when a flag contradicts its class's own default
+direction (a `false` flag on an `indoor`-class type, or a `true` flag on outdoor-default `Ride`). It
+is always `false` for `ambiguous`, which has no default to contradict — the flag decides outright.
+
+`FTPSelection.ZoneWatts` is returned by the same call that yields `Watts`, derived from
+`SportSettings.PowerZones` (percentages) and the selected watts. There is no separate zone lookup:
+the API's zone table is one array of percentages shared by whichever FTP applies.
+
+`FTPRequest.Explicit` is reserved for a future `--session-environment` override and is not yet
+consumed by `ResolveFTP`.
+
+As of this release, `ResolveFTP` exists as a standalone pure function but is not yet wired into the
+`rebalance`, `plan`, or `analysis` command output — those commands still use their own, divergent FTP
+picks. Call-site wiring lands separately.
 
 ### Cycling analysis
 

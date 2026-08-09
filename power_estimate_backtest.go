@@ -49,7 +49,7 @@ func IsOutdoorCyclingActivity(activityType string) bool {
 	case "Ride", "GravelRide", "MountainBikeRide", "EBikeRide", "EMountainBikeRide",
 		"Cyclocross", "Handcycle", "TrackRide":
 		return true
-	case "VirtualRide", "IndoorCycling", "Workout":
+	case ActivityTypeVirtualRide, ActivityTypeIndoorCycling, "Workout":
 		return false
 	default:
 		// Unknown types are not treated as outdoor for backtest purposes.
