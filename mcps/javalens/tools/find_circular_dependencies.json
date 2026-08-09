@@ -1,0 +1,18 @@
+{
+  "name": "find_circular_dependencies",
+  "description": "Detect cycles in packages.\n\nUSAGE: find_circular_dependencies()\nUSAGE: find_circular_dependencies(packageFilter=\"com.example\")\nOUTPUT: List of circular dependency cycles\n\nUses Tarjan's SCC algorithm to efficiently detect all cycles.\nReports cycle paths and affected packages.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "maxCycleLength": {
+        "description": "Maximum cycle length to report (default: 10)",
+        "type": "integer"
+      },
+      "packageFilter": {
+        "description": "Package prefix to analyze (default: all project packages)",
+        "type": "string"
+      }
+    },
+    "required": []
+  }
+}

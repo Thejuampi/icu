@@ -1,0 +1,20 @@
+{
+  "name": "find_instanceof_checks",
+  "description": "Find all instanceof checks for a type (x instanceof Foo).\n\nJDT-UNIQUE: This fine-grained search is not available in LSP.\n\nUSAGE: Provide fully qualified type name\nOUTPUT: All locations where instanceof checks against this type occur\n\nUseful for:\n- Identifying type checking patterns\n- Finding polymorphism opportunities (replace instanceof with virtual dispatch)\n- Understanding type discrimination logic\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "typeName": {
+        "type": "string",
+        "description": "Fully qualified type name to find instanceof checks for"
+      },
+      "maxResults": {
+        "type": "integer",
+        "description": "Maximum results to return (default 100)"
+      }
+    },
+    "required": [
+      "typeName"
+    ]
+  }
+}

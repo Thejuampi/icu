@@ -1,0 +1,30 @@
+{
+  "name": "find_field_writes",
+  "description": "Find all write accesses (mutations) to a field.\n\nUSAGE: Position cursor on a field declaration or reference\nOUTPUT: List of locations where the field is modified\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nUnlike find_references which returns all usages, this returns only\nlocations where the field value is changed (assignments, increments, etc).\nUseful for data flow analysis and understanding state mutations.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      },
+      "maxResults": {
+        "description": "Max write locations to return (default 100)",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "apply_quick_fix",
+  "description": "Apply a fix by ID.\n\nUSAGE: apply_quick_fix(filePath=\"...\", fixId=\"add_import:java.util.List\")\nOUTPUT: Text edits to apply the fix\n\nFix ID formats:\n- add_import:{fullyQualifiedName} - Add an import statement\n- remove_import:{index} - Remove import at index\n- add_throws:{exceptionType} - Add throws declaration to method\n- surround_try_catch:{exceptionType} - Wrap statement in try-catch\n\nIMPORTANT: Uses ZERO-BASED line numbers.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "fixId": {
+        "description": "The fix ID from get_quick_fixes (e.g., 'add_import:java.util.List')",
+        "type": "string"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number (required for some fixes like add_throws)",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "fixId"
+    ]
+  }
+}

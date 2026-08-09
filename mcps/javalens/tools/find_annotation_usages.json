@@ -1,0 +1,20 @@
+{
+  "name": "find_annotation_usages",
+  "description": "Find all usages of an annotation type in the project.\n\nJDT-UNIQUE: This fine-grained search is not available in LSP.\n\nUSAGE: Provide fully qualified annotation name\nOUTPUT: All locations where the annotation is applied\n\nExamples:\n- find_annotation_usages(annotation=\"org.springframework.beans.factory.annotation.Autowired\")\n- find_annotation_usages(annotation=\"org.junit.jupiter.api.Test\")\n- find_annotation_usages(annotation=\"javax.persistence.Entity\")\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "annotation": {
+        "type": "string",
+        "description": "Fully qualified annotation type name (e.g., 'org.springframework.beans.factory.annotation.Autowired')"
+      },
+      "maxResults": {
+        "type": "integer",
+        "description": "Maximum results to return (default 100)"
+      }
+    },
+    "required": [
+      "annotation"
+    ]
+  }
+}

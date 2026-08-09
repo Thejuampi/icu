@@ -1,0 +1,30 @@
+{
+  "name": "get_call_hierarchy_incoming",
+  "description": "Find all callers of a method (incoming calls).\n\nUSAGE: Position cursor on a method name\nOUTPUT: List of methods that call this method\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nUseful for understanding who depends on a method before changing it.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      },
+      "maxResults": {
+        "description": "Max callers to return (default 50)",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

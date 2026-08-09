@@ -1,0 +1,24 @@
+{
+  "name": "analyze_type",
+  "description": "Comprehensive type analysis in a single call.\n\nCombines:\n- Type info (name, kind, modifiers, location)\n- All members (methods, fields, constructors)\n- Type hierarchy (superclass, interfaces, subtypes)\n- Usage summary (instantiations, casts, etc.)\n- Diagnostics for the type's file\n\nUse this instead of multiple calls to get_type_members + get_type_hierarchy + get_type_usage_summary.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "typeName": {
+        "description": "Fully qualified or simple type name",
+        "type": "string"
+      },
+      "includeUsages": {
+        "description": "Include usage analysis (default true)",
+        "type": "boolean"
+      },
+      "maxUsages": {
+        "description": "Max usages per category (default 10)",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "typeName"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "get_call_hierarchy_outgoing",
+  "description": "Find all methods called by a method (outgoing calls).\n\nUSAGE: Position cursor on a method name\nOUTPUT: List of methods that this method calls\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nUseful for understanding what a method depends on.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

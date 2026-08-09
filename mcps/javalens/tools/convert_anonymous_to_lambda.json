@@ -1,0 +1,26 @@
+{
+  "name": "convert_anonymous_to_lambda",
+  "description": "Convert an anonymous class implementing a functional interface to a lambda expression.\n\nReturns the text edit needed to convert the anonymous class to a lambda.\nThe caller should apply this edit to perform the conversion.\n\nUSAGE: Position cursor on the 'new' keyword of the anonymous class\nOUTPUT: Edit to replace anonymous class with lambda\n\nIMPORTANT: Uses ZERO-BASED coordinates.\nREQUIREMENTS: The anonymous class must implement a functional interface\n(exactly one abstract method).\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number of anonymous class (on 'new' keyword)",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

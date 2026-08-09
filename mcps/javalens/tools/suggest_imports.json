@@ -1,0 +1,20 @@
+{
+  "name": "suggest_imports",
+  "description": "Find import candidates for unresolved type.\n\nUSAGE: suggest_imports(typeName=\"List\")\nOUTPUT: List of matching types with fully qualified names and relevance\n\nSearches project sources, JDK, and libraries for types matching\nthe simple name. Results are sorted by relevance (java.util types\nranked higher than java.awt, etc.).\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "typeName": {
+        "description": "Simple type name to find imports for (e.g., 'List', 'Map')",
+        "type": "string"
+      },
+      "maxResults": {
+        "description": "Maximum candidates to return (default 20)",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "typeName"
+    ]
+  }
+}

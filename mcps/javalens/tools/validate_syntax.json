@@ -1,0 +1,22 @@
+{
+  "name": "validate_syntax",
+  "description": "Quick syntax-only validation for a file or inline code.\n\nUSAGE: validate_syntax(filePath=\"...\") or validate_syntax(content=\"...\")\nOUTPUT: Syntax errors (no semantic analysis for speed)\n\nMuch faster than get_diagnostics - use for quick syntax checks.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "content": {
+        "description": "Inline Java source code to validate (alternative to filePath)",
+        "type": "string"
+      },
+      "fileName": {
+        "description": "Optional filename for inline content (default: Untitled.java)",
+        "type": "string"
+      },
+      "filePath": {
+        "description": "Path to source file to validate",
+        "type": "string"
+      }
+    },
+    "required": []
+  }
+}

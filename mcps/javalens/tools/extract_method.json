@@ -1,0 +1,41 @@
+{
+  "name": "extract_method",
+  "description": "Extract a code block into a new method.\n\nUSAGE: Select code range, provide method name\nOUTPUT: Text edits for method declaration and call site\n\nThe tool analyzes the selected code to:\n- Determine which variables become parameters\n- Determine return type based on variables modified\n- Generate appropriate method signature\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "endColumn": {
+        "description": "Zero-based end column",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "startColumn": {
+        "description": "Zero-based start column",
+        "type": "integer"
+      },
+      "endLine": {
+        "description": "Zero-based end line of code to extract",
+        "type": "integer"
+      },
+      "startLine": {
+        "description": "Zero-based start line of code to extract",
+        "type": "integer"
+      },
+      "methodName": {
+        "description": "Name for the new method",
+        "type": "string"
+      }
+    },
+    "required": [
+      "filePath",
+      "startLine",
+      "startColumn",
+      "endLine",
+      "endColumn",
+      "methodName"
+    ]
+  }
+}

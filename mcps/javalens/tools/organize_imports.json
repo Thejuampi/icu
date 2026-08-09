@@ -1,0 +1,16 @@
+{
+  "name": "organize_imports",
+  "description": "Organize imports in a Java file.\n\nRemoves unused imports and sorts remaining imports alphabetically.\nReturns the organized import block that should replace the existing imports.\n\nUSAGE: organize_imports(filePath=\"path/to/File.java\")\nOUTPUT: Organized import statements and list of changes\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      }
+    },
+    "required": [
+      "filePath"
+    ]
+  }
+}

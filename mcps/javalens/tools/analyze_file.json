@@ -1,0 +1,24 @@
+{
+  "name": "analyze_file",
+  "description": "Comprehensive file analysis in a single call.\n\nCombines:\n- File info (path, package, line count)\n- All imports (with static/on-demand flags)\n- All types with member counts\n- Compilation diagnostics (errors/warnings)\n\nUse this instead of multiple calls to get_document_symbols + get_diagnostics.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "includeMembers": {
+        "description": "Include full member details for each type (default false)",
+        "type": "boolean"
+      },
+      "includeDiagnostics": {
+        "description": "Include compilation errors/warnings (default true)",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "filePath"
+    ]
+  }
+}

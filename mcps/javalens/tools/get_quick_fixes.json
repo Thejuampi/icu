@@ -1,0 +1,25 @@
+{
+  "name": "get_quick_fixes",
+  "description": "List available fixes for a problem at position.\n\nUSAGE: get_quick_fixes(filePath=\"...\", line=10)\nOUTPUT: List of quick fixes with fixId, label, and category\n\nSupported fixes:\n- UndefinedType: Suggest imports for unresolved types\n- UnusedImport: Remove unused import\n- UnhandledException: Add throws or surround with try-catch\n\nIMPORTANT: Uses ZERO-BASED line numbers.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number (optional, uses whole line if omitted)",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line"
+    ]
+  }
+}

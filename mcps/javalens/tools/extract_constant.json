@@ -1,0 +1,41 @@
+{
+  "name": "extract_constant",
+  "description": "Extract an expression into a static final constant at class level.\n\nReturns the text edits needed to extract the expression.\nThe caller should apply these edits to perform the extraction.\n\nUSAGE: Select expression by providing start and end positions\nOUTPUT: Constant declaration and replacement edits\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "constantName": {
+        "description": "Name for the constant (should be UPPER_SNAKE_CASE)",
+        "type": "string"
+      },
+      "endColumn": {
+        "description": "Zero-based end column of expression",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "startColumn": {
+        "description": "Zero-based start column of expression",
+        "type": "integer"
+      },
+      "endLine": {
+        "description": "Zero-based end line of expression",
+        "type": "integer"
+      },
+      "startLine": {
+        "description": "Zero-based start line of expression",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "startLine",
+      "startColumn",
+      "endLine",
+      "endColumn",
+      "constantName"
+    ]
+  }
+}

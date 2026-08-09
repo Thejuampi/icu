@@ -1,0 +1,9 @@
+{
+  "name": "health_check",
+  "description": "Check server status and project state.\n\nUSAGE: Call on startup to verify server is operational.\nOUTPUT: Server status, project info if loaded, capabilities.\n\nWORKFLOW:\n1. Call health_check to verify server is running\n2. If no project loaded, call load_project next\n3. Use returned capabilities to understand available features\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "get_project_structure",
+  "description": "Get project structure showing package hierarchy.\n\nUSAGE: Call to see the package tree of the loaded project\nOUTPUT: Source roots with packages and file counts\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "maxDepth": {
+        "description": "Maximum package depth to show (default 10)",
+        "type": "integer"
+      },
+      "includeFiles": {
+        "description": "Include file names in each package (default false)",
+        "type": "boolean"
+      }
+    }
+  }
+}

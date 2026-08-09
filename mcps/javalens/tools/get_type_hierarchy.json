@@ -1,0 +1,29 @@
+{
+  "name": "get_type_hierarchy",
+  "description": "Get the type hierarchy (supertypes and subtypes) for a Java type.\n\nUSAGE: Position on a type, returns full inheritance chain\nOUTPUT: Superclasses, interfaces, and all subtypes\n\nCan be called with either:\n- File position (filePath, line, column) - finds type at cursor\n- Type name (typeName) - looks up type by qualified name\n\nIMPORTANT: Uses ZERO-BASED coordinates when using file position.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      },
+      "maxDepth": {
+        "description": "Maximum depth of hierarchy to return (default 10)",
+        "type": "integer"
+      },
+      "typeName": {
+        "description": "Fully qualified type name (alternative to position)",
+        "type": "string"
+      },
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file (for position-based lookup)",
+        "type": "string"
+      }
+    }
+  }
+}

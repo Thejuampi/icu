@@ -1,0 +1,18 @@
+{
+  "name": "find_tests",
+  "description": "Find test classes and methods in the project.\n\nUSAGE: find_tests()\nOUTPUT: List of test classes with their test methods\n\nSupports:\n- JUnit 4 (@Test, @Before, @After, etc.)\n- JUnit 5 (@Test, @BeforeEach, @AfterEach, etc.)\n- TestNG annotations\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "includeDisabled": {
+        "description": "Include disabled/ignored tests (default false)",
+        "type": "boolean"
+      },
+      "pattern": {
+        "description": "Filter test classes by name pattern (glob)",
+        "type": "string"
+      }
+    },
+    "required": []
+  }
+}

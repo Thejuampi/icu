@@ -1,0 +1,20 @@
+{
+  "name": "find_throws_declarations",
+  "description": "Find all throws declarations of an exception type in method signatures.\n\nJDT-UNIQUE: This fine-grained search is not available in LSP.\n\nUSAGE: Provide fully qualified exception type name\nOUTPUT: All methods that declare 'throws ExceptionType'\n\nUseful for:\n- Understanding exception flow in the codebase\n- Finding all methods that can throw a specific exception\n- Exception handling analysis\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "exceptionType": {
+        "type": "string",
+        "description": "Fully qualified exception type name (e.g., 'java.io.IOException')"
+      },
+      "maxResults": {
+        "type": "integer",
+        "description": "Maximum results to return (default 100)"
+      }
+    },
+    "required": [
+      "exceptionType"
+    ]
+  }
+}

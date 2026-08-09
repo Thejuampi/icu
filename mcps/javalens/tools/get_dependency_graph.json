@@ -1,0 +1,29 @@
+{
+  "name": "get_dependency_graph",
+  "description": "Get package/type dependencies.\n\nUSAGE: get_dependency_graph(scope=\"type\", name=\"com.example.OrderService\")\nUSAGE: get_dependency_graph(scope=\"package\", name=\"com.example.service\")\nOUTPUT: Dependency graph with nodes and edges\n\nDependency types tracked:\n- import: Direct imports\n- extends: Superclass inheritance\n- implements: Interface implementation\n- field: Field type dependencies\n- parameter: Method parameter types\n- return: Method return types\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "scope": {
+        "description": "Scope: 'type' or 'package'",
+        "type": "string"
+      },
+      "name": {
+        "description": "Type name (fully qualified) or package name",
+        "type": "string"
+      },
+      "includeExternal": {
+        "description": "Include JDK/library dependencies (default: false)",
+        "type": "boolean"
+      },
+      "depth": {
+        "description": "How deep to follow dependencies (default: 1)",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "scope",
+      "name"
+    ]
+  }
+}

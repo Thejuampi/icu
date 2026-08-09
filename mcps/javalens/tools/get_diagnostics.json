@@ -1,0 +1,22 @@
+{
+  "name": "get_diagnostics",
+  "description": "Get compilation diagnostics (errors and warnings) for a file or project.\n\nUSAGE: get_diagnostics() for all files, or get_diagnostics(filePath=\"...\") for one file\nOUTPUT: List of compilation errors and warnings with locations\n\nUseful for finding syntax errors, type mismatches, missing imports, etc.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "maxResults": {
+        "description": "Max diagnostics to return (default 100)",
+        "type": "integer"
+      },
+      "severity": {
+        "description": "Filter by severity: 'error', 'warning', or 'all' (default: 'all')",
+        "type": "string"
+      },
+      "filePath": {
+        "description": "Optional path to source file. If omitted, checks all files.",
+        "type": "string"
+      }
+    },
+    "required": []
+  }
+}

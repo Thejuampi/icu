@@ -1,0 +1,26 @@
+{
+  "name": "get_javadoc",
+  "description": "Get parsed Javadoc documentation for a symbol.\n\nUSAGE: Position on any documented symbol\nOUTPUT: Parsed Javadoc with summary, @param, @return, @throws, etc.\n\nIMPORTANT: Uses ZERO-BASED coordinates.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "column": {
+        "description": "Zero-based column number",
+        "type": "integer"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      },
+      "line": {
+        "description": "Zero-based line number",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filePath",
+      "line",
+      "column"
+    ]
+  }
+}

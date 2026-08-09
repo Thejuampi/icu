@@ -1,0 +1,20 @@
+{
+  "name": "get_type_usage_summary",
+  "description": "Get comprehensive usage summary for a type across the codebase.\n\nAggregates all usage patterns in a single call:\n- Instantiations (new Foo())\n- Casts ((Foo) x)\n- Instanceof checks (x instanceof Foo)\n- Type arguments (List<Foo>)\n- Annotation usages (if annotation type)\n\nUse this to understand how a type is used throughout the project.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "typeName": {
+        "description": "Fully qualified or simple type name",
+        "type": "string"
+      },
+      "maxPerCategory": {
+        "description": "Maximum results per category (default 10)",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "typeName"
+    ]
+  }
+}

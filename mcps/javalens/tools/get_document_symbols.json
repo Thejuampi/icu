@@ -1,0 +1,24 @@
+{
+  "name": "get_document_symbols",
+  "description": "Get all symbols (types, methods, fields) in a source file.\n\nUSAGE: Provide a file path to get all symbols in that file\nOUTPUT: Hierarchical list of all types, methods, fields, and nested types\n\nReturns symbols with their locations, kinds, and modifiers.\n\nRequires load_project to be called first.\n",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "maxResults": {
+        "description": "Maximum symbols to return (default 500)",
+        "type": "integer"
+      },
+      "includePrivate": {
+        "description": "Include private members (default true)",
+        "type": "boolean"
+      },
+      "filePath": {
+        "description": "Path to source file",
+        "type": "string"
+      }
+    },
+    "required": [
+      "filePath"
+    ]
+  }
+}
