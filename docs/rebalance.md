@@ -26,6 +26,39 @@ Each generated session records auditable decision sources for sport type, target
 
 Dynamic targets prefer sport power zones. If sport zones are unavailable, they use recent cycling activity intensity history with MAD-style outlier filtering. If neither data source is available and no explicit IF is provided, the proposal is blocking instead of using fallback IF values.
 
+## FTP Selection (Per Session)
+
+`schemaVersion` is `icu.rebalance.v3`. The bump exists because this wave changes what a proposal *means*, not just its shape: pre-v3 files priced every session in the week at one FTP number regardless of indoor/outdoor context, which could disagree with the athlete's real indoor FTP by 15W or more. `rebalance preview` and `rebalance accept` reject an older `schemaVersion` outright with a migration message rather than silently repricing a stale file.
+
+Every generated `session` carries its own resolved FTP, independent of the week-level `context.ftp`:
+
+- `ftpApplied`: the watts this specific session was priced at.
+- `ftpSource`: `type_inherent` (an indoor-only type like `VirtualRide`/`IndoorCycling` — cannot be otherwise), `type_default` (an ambiguous cycling type with no `Indoor` flag, defaults outdoor), `flag_asserted` (the event's own `Indoor: true` decided it), `explicit` (`--session-environment` decided it), or `athlete_default` (indoor and outdoor FTP are the same number or `IndoorFTP` is unset — no discrimination needed, no gate, no warning).
+- `ftpDisagreement`: true when the resolved environment contradicts another signal on the same record (for example a type-inherent indoor session whose `Indoor` flag is `false`).
+- `confidence`: `high` (type-inherent only — this type cannot be otherwise) or `medium` (type-default or flag/explicit-asserted). **Interpretation:** `medium` still prices and proceeds — it is weaker evidence than `high`, not a warning to ignore, and it is not the same thing as `low`. `low` is a distinct tier reserved for activities of an ambiguous cycling type with no discriminating flag at all (the *read/analysis* path, see `docs/analysis.md`); the rebalance/plan write path operates only on calendar events, and the event partition never produces `low` (an ambiguous event with no flag resolves `type_default`/`medium`, never `unknown`/`low` — see `TestResolveFTPEventPartition` in `ftp_selection_test.go`). Consequently `ftp_confidence_low` is not a gate you will see fire out of `rebalance`; the write-time equivalent of "refuse when the environment cannot be determined" is the mixed-environment-week refusal below.
+- `context.ftpDiscriminatorConflicts.eventFlagAssertedIndoor`: counts events where an ambiguous type's `Indoor` flag was explicitly asserted `true` — kept observable rather than assumed, since the flag's positive direction has very few historical examples to validate against.
+
+The week-level `context.ftp` / `context.ftpSource` remain for backward compatibility and human summary only — they document "what an unclassified session of the week's default sport type would use," not a value any generated session is actually priced at. Always read a session's own `ftpApplied`.
+
+`context.zoneBasis` is `"per-session"`: zone watt boundaries (Z1/Z2/etc, in watts) now vary per session because each session may resolve a different FTP. A weekly time-in-zone total is therefore not comparable, across this boundary, to a historical aggregate computed against one fixed FTP — the boundaries the minutes were measured against are not identical.
+
+`Ride` resolves differently depending on which side of the tool it is seen from: at analysis time (a completed activity, `docs/analysis.md`) it is a distinct class-2 "default outdoor" case; at rebalance/plan time (a calendar event) it falls into the broader class-3 "ambiguous" bucket alongside other cycling types. Both resolve outdoor by default with `medium` confidence, but do not assume the two tables are the same rule — a `Ride` activity trusts a `false`/absent `Trainer` flag by default, while a `Ride` event only leaves class 3 when its own `Indoor` flag is `false`/absent.
+
+### `--session-environment`
+
+`--session-environment indoor|outdoor` is a per-invocation override for sessions with no per-record signal (D-10c). It is distinct from `--indoor` on `events create` / `ftp update` / `sports update`: those flags set a specific record's own stored `Indoor`/environment flag; `--session-environment` only decides which FTP number *this proposal* prices otherwise-ambiguous sessions at, and never writes anything to a record by itself. It appears in `icu rebalance show --help`.
+
+`--session-environment` is rejected outright — the whole proposal is blocking, naming the mixed week — when the week already contains sessions that naturally resolve to different environments (for example a `VirtualRide` alongside a `Ride`). A single scalar cannot correctly describe a week that already splits indoor/outdoor by type; accepting it there would reintroduce, one level up, the "one FTP for the whole week" assumption this wave removes.
+
+## Time Accounting (`timeAccounting`)
+
+Sessions whose type is not applicable to FTP pricing at all (D-10 class 4 — `Walk`, `Run`, `VirtualRun`, `WeightTraining`, `Workout`, `NOTE`) are enumerated, not silently dropped and not silently priced:
+
+- `context.timeAccounting.entries`: one entry per such session, with `date`, `name`, `type`, `movingTimeSecs`, and `loadSource: "none"`.
+- `context.timeAccounting.unaccountedSessions`: how many such sessions exist in the week.
+- `context.timeAccounting.loadAccounting`: `"partial"` whenever `unaccountedSessions > 0`, otherwise `"complete"`. **It resolves** — moves from `"partial"` back to `"complete"` — once every non-FTP-applicable session in the week either leaves the week or gains a load basis of its own (for example a future wave's HR-based load for runs); rebalance does not attempt to price these sessions today (F-27: no per-day capacity bound exists until wave-3), it only makes the gap visible.
+- A STRAVA stub-shaped activity (`Class: not_a_record`, D-24) is excluded entirely: it consumes no time and does not appear as a `timeAccounting` entry or as a session.
+
 ## Edit
 
 The file is intentionally user-editable. You can change `selectedOptionId`, remove operations, mark operations as `skipped`, or adjust operation bodies before acceptance.
@@ -77,3 +110,4 @@ Supported operation actions:
 - Physiological and planning thresholds must be dynamic or user-provided constraints; hidden hardcoded decision caps are not allowed.
 - Sparse or missing history produces blocking validation for generated operations rather than silent defaults.
 - Wellness context uses a documented 42-day default lookback, overridable with `--wellness-lookback-days`, and prefers Zepp `HybridCharge`/`BioCharge` over `sleepScore` when Zepp auth is configured.
+- `update` operation bodies preserve the event's existing indoor/outdoor classification (`Indoor`) unless `--session-environment` explicitly overrides it — an update that does not intend an environment change never resets `Indoor` to Go's zero value.

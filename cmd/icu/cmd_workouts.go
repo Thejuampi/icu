@@ -82,5 +82,5 @@ func workoutEstimateFromFlags(flags map[string]string) (icu.PlannedLoadEstimate,
 		return icu.PlannedLoadEstimate{}, fmt.Errorf("parse workout description: %w", err)
 	}
 
-	return icu.EstimatePlannedLoad(doc, IntFlag(flags, "ftp", 0)), nil
+	return icu.EstimatePlannedLoad(doc, icu.FTPSelectionFromWatts(IntFlag(flags, "ftp", 0))), nil
 }

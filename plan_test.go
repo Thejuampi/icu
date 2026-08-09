@@ -37,6 +37,102 @@ func TestBuildPlanProposalCreatesSessionFromIntent(t *testing.T) {
 	}
 }
 
+// TestBuildPlanProposalIndoorDraftPricedAtIndoorFTP is plan's W1b-R01/P01
+// analogue: FTP:270, IndoorFTP:285, one draft marked Indoor: true and one
+// left at the outdoor default in the same intent — the indoor draft must
+// price at 285 and the outdoor draft at 270, two different ftpApplied in
+// one proposal (D-11). Pre-1b's planFTP returned one week-level number for
+// every session regardless of Indoor, which would have priced both drafts
+// identically.
+func TestBuildPlanProposalIndoorDraftPricedAtIndoorFTP(t *testing.T) {
+	t.Parallel()
+
+	trueValue := true
+	proposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate:       "2026-07-27",
+		SportSettings: &icu.SportSettings{FTP: 270, IndoorFTP: 285},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-07-28",
+			Newest: "2026-07-29",
+			Constraints: icu.PlanConstraints{
+				AllowCreate: true, DefaultStartTime: "07:00", DefaultType: "Ride", DefaultCategory: "WORKOUT",
+			},
+			Sessions: []icu.PlanSessionDraft{
+				{Date: "2026-07-28", Name: "Indoor session", DescLocal: "- 60m 70%", Desc: "- 60m 70%", Indoor: &trueValue},
+				{Date: "2026-07-29", Name: "Outdoor session", DescLocal: "- 60m 70%", Desc: "- 60m 70%"},
+			},
+		},
+	})
+
+	indoor := planResolvedSessionByName(&proposal, "Indoor session")
+	outdoor := planResolvedSessionByName(&proposal, "Outdoor session")
+	if indoor == nil || outdoor == nil || indoor.FTPApplied != 285 || outdoor.FTPApplied != 270 {
+		t.Fatalf("indoor/outdoor sessions = %+v/%+v, want ftpApplied 285/270", indoor, outdoor)
+	}
+}
+
+// TestPlanAndRebalanceAgreeOnSameSessionExpectedLoad is W1b-P02: for the
+// same session (same WorkoutDoc, same date, same Indoor flag, same athlete
+// FTP settings), plan and rebalance must compute identical expected load —
+// F-1's disagreement (rebalanceFTP always preferring IndoorFTP vs. planFTP's
+// own separate week-level pick) is gone because both now resolve the same
+// per-session FTPSelection via resolveEventFTP and price it through the
+// same EstimatePlannedLoad.
+func TestPlanAndRebalanceAgreeOnSameSessionExpectedLoad(t *testing.T) {
+	t.Parallel()
+
+	settings := &icu.SportSettings{FTP: 270, IndoorFTP: 285}
+	trueValue := true
+	doc := icu.WorkoutDoc{Steps: []icu.WorkoutStep{{Duration: 3600, Power: &icu.WorkoutTarget{Value: 70, Units: "%ftp"}}}}
+	event := icu.Event{
+		ID: 42, Category: "WORKOUT", Type: "Ride", Indoor: &trueValue,
+		StartDateLocal: "2026-07-28T06:30:00", Name: "Z2", WorkoutDoc: doc,
+	}
+
+	planProposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate:       "2026-07-27",
+		SportSettings: settings,
+		Events:        []icu.Event{event},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-07-28", Newest: "2026-07-28",
+			Constraints: icu.PlanConstraints{AllowUpdate: true, DefaultStartTime: "07:00", DefaultType: "Ride"},
+			Sessions: []icu.PlanSessionDraft{{
+				Date: "2026-07-28", Name: "Z2", Desc: "- 60m 70% FTP", DescLocal: "- 60m 70%", Indoor: &trueValue,
+			}},
+		},
+	})
+
+	rebalanceProposal := icu.BuildRebalanceProposal(&icu.RebalanceInput{
+		AthleteID: "i1", NowDate: "2026-07-20",
+		SportSettings: settings,
+		Events:        []icu.Event{event},
+		Scope:         icu.RebalanceScope{StartDate: "2026-07-27", EndDate: "2026-08-02", Week: "2026-W31"},
+		Constraints: icu.RebalanceConstraints{
+			// Wide tolerance so rebalance reports the session's own baseline
+			// reading rather than redistributing it toward a new target —
+			// what "reading the same session" means for a tool whose job is
+			// otherwise to change the number.
+			AllowUpdate: true, TargetLoad: 1, TargetTolerance: 1000,
+			WorkoutTarget: "POWER", StartTime: "07:00", MinSessionMinutes: 20, DurationStepMinutes: 5,
+		},
+	})
+
+	if planProposal.Operations[0].ExpectedLoad != rebalanceProposal.Baseline.MutablePlannedLoad {
+		t.Fatalf("plan expectedLoad = %d, rebalance baseline mutablePlannedLoad = %d, want equal",
+			planProposal.Operations[0].ExpectedLoad, rebalanceProposal.Baseline.MutablePlannedLoad)
+	}
+}
+
+func planResolvedSessionByName(proposal *icu.PlanProposalFile, name string) *icu.PlanResolvedSession {
+	for index := range proposal.Sessions {
+		if proposal.Sessions[index].Name == name {
+			return &proposal.Sessions[index]
+		}
+	}
+
+	return nil
+}
+
 func TestBuildPlanProposalUpdatesMatchedEventByDateName(t *testing.T) {
 	t.Parallel()
 
@@ -74,6 +170,75 @@ func TestBuildPlanProposalUpdatesMatchedEventByDateName(t *testing.T) {
 
 	if len(proposal.Operations) != 1 || proposal.Operations[0].Action != icu.CalendarActionUpdate || proposal.Operations[0].EventID != 42 {
 		t.Fatalf("operations = %+v, want one update for event 42", proposal.Operations)
+	}
+}
+
+// TestBuildPlanProposalUpdateBodyPreservesIndoorTrue is plan's side of
+// W1b-E05: an UPDATE on an event with Indoor: true, with no
+// --session-environment override intending a change, must carry
+// Indoor: true on the operation body — not silently drop back to Go's
+// zero value (D-25/T1b.11).
+func TestBuildPlanProposalUpdateBodyPreservesIndoorTrue(t *testing.T) {
+	t.Parallel()
+
+	event := icu.Event{
+		ID: 42, Name: "Z2 HR-Control Waves", Category: "WORKOUT", Type: "Ride",
+		StartDateLocal: "2026-07-28T06:30:00", TrainingLoad: 30, MovingTime: 1800, Target: "POWER",
+		Indoor: boolPtr(true),
+	}
+	proposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate: "2026-07-27",
+		Events:  []icu.Event{event},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-07-28",
+			Newest: "2026-07-28",
+			FTP:    300,
+			Constraints: icu.PlanConstraints{
+				AllowUpdate: true, DefaultStartTime: "07:00", DefaultType: "Ride",
+			},
+			Sessions: []icu.PlanSessionDraft{{
+				Date: "2026-07-28", Name: "Z2 HR-Control Waves",
+				Desc: "- 60m 70% FTP", DescLocal: "- 60m 70%",
+			}},
+		},
+	})
+
+	if len(proposal.Operations) != 1 || !proposal.Operations[0].Body.Indoor {
+		t.Fatalf("operations = %+v, want one update with body.Indoor true", proposal.Operations)
+	}
+}
+
+// TestBuildPlanProposalUpdateBodySessionEnvironmentOverridesIndoorTrue is
+// plan's side of W1b-E06: --session-environment outdoor on an event with
+// Indoor: true still wins.
+func TestBuildPlanProposalUpdateBodySessionEnvironmentOverridesIndoorTrue(t *testing.T) {
+	t.Parallel()
+
+	event := icu.Event{
+		ID: 42, Name: "Z2 HR-Control Waves", Category: "WORKOUT", Type: "Ride",
+		StartDateLocal: "2026-07-28T06:30:00", TrainingLoad: 30, MovingTime: 1800, Target: "POWER",
+		Indoor: boolPtr(true),
+	}
+	proposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate: "2026-07-27",
+		Events:  []icu.Event{event},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-07-28",
+			Newest: "2026-07-28",
+			FTP:    300,
+			Constraints: icu.PlanConstraints{
+				AllowUpdate: true, DefaultStartTime: "07:00", DefaultType: "Ride",
+				SessionEnvironment: icu.SessionEnvironmentOutdoor,
+			},
+			Sessions: []icu.PlanSessionDraft{{
+				Date: "2026-07-28", Name: "Z2 HR-Control Waves",
+				Desc: "- 60m 70% FTP", DescLocal: "- 60m 70%",
+			}},
+		},
+	})
+
+	if len(proposal.Operations) != 1 || proposal.Operations[0].Body.Indoor {
+		t.Fatalf("operations = %+v, want one update with body.Indoor false (explicit outdoor override)", proposal.Operations)
 	}
 }
 
@@ -389,7 +554,12 @@ func TestBuildPlanProposalFTPFromSportSettings(t *testing.T) {
 		},
 	})
 
-	if proposal.Context.FTP != 300 || proposal.Context.FTPSource != "sport_settings" || proposal.Operations[0].ExpectedLoad != 49 {
+	// FTPSource is "athlete_default" (D-10's inertness guard, wave-1b): with
+	// no IndoorFTP configured there is no real number to discriminate
+	// between, so Source no longer distinguishes "came from intent" vs.
+	// "came from sport settings" — Watts (still 300, from SportSettings) and
+	// ExpectedLoad are what this test actually protects.
+	if proposal.Context.FTP != 300 || proposal.Context.FTPSource != icu.FTPSourceAthleteDefault || proposal.Operations[0].ExpectedLoad != 49 {
 		t.Fatalf("context/ops = %+v / %+v, want ftp from sport settings and load 49", proposal.Context, proposal.Operations)
 	}
 }
@@ -629,6 +799,24 @@ func TestBuildPlanProposalNOTEAllowsNoLoad(t *testing.T) {
 	}
 }
 
+// TestValidatePlanProposalRejectsOldSchemaVersionWithMigrationMessage
+// mirrors W1b-E02 for plan: a proposal file still at the pre-1b schema
+// version is rejected with a message naming both the stale version and the
+// remedy, not a bare "unsupported" string a caller cannot act on.
+func TestValidatePlanProposalRejectsOldSchemaVersionWithMigrationMessage(t *testing.T) {
+	t.Parallel()
+
+	validation := icu.ValidatePlanProposal(&icu.PlanProposalFile{
+		SchemaVersion: "icu.plan.v1",
+		Scope:         icu.PlanScope{StartDate: "2026-07-28", EndDate: "2026-07-30"},
+	})
+
+	if !validation.Blocking || !strings.Contains(strings.Join(validation.Errors, "\n"), "icu.plan.v1") ||
+		!strings.Contains(strings.Join(validation.Errors, "\n"), "regenerate") {
+		t.Fatalf("validation = %+v, want blocking with a migration message naming icu.plan.v1 and regenerate", validation)
+	}
+}
+
 func TestValidatePlanProposalHonorsStoredBlocking(t *testing.T) {
 	t.Parallel()
 
@@ -810,5 +998,29 @@ func TestCalendarOperationErrorsNil(t *testing.T) {
 
 	if len(errors) != 1 {
 		t.Fatalf("errors = %v, want one nil error", errors)
+	}
+}
+
+// TestPlanSchemaVersionsDidNotDrift pins the literal wire strings (T1b.7,
+// D-7b), not the constants against themselves: PlanSchemaVersion moved to
+// v2 because per-session FTP changes what a proposal's prescribed watts
+// mean, while PlanIntentSchemaVersion stays v1 because the wave-1b addition
+// to PlanSessionDraft (Indoor) is additive and does not change the meaning
+// of an already-accepted intent. Comparing icu.PlanSchemaVersion against
+// itself would pass regardless of what the constant holds; only a literal
+// catches an accidental version bump or an accidental non-bump.
+func TestPlanSchemaVersionsDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.PlanSchemaVersion != "icu.plan.v2" {
+		t.Fatalf("PlanSchemaVersion = %q, want icu.plan.v2", icu.PlanSchemaVersion)
+	}
+}
+
+func TestPlanIntentSchemaVersionDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.PlanIntentSchemaVersion != "icu.plan.intent.v1" {
+		t.Fatalf("PlanIntentSchemaVersion = %q, want icu.plan.intent.v1", icu.PlanIntentSchemaVersion)
 	}
 }

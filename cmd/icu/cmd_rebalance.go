@@ -27,7 +27,8 @@ func rebalanceDryRunCommand() *Command {
 			"[--target-load N] [--target-tolerance N] [--type SPORT] [--target TARGET] " +
 			"[--start-time HH:MM] [--min-session-minutes N] [--duration-step-minutes N] " +
 			"[--allocation-basis explicit_equal] [--allow-today] [--allow-past] " +
-			"[--wellness-lookback-days N] [--now-date DATE] [--max-intensity IF] [--max-watts WATTS]",
+			"[--wellness-lookback-days N] [--now-date DATE] [--max-intensity IF] [--max-watts WATTS] " +
+			"[--session-environment indoor|outdoor]",
 		Description: "Write an editable weekly load rebalance proposal without mutating Intervals.icu.",
 		Schema:      rebalanceShowSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
@@ -166,6 +167,9 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 	if target := icu.StringFlag(flags, "target", ""); target != "" && target != "POWER" {
 		return icu.RebalanceInput{}, fmt.Errorf("target %q is not supported for rebalance sessions; use POWER", target)
 	}
+	if _, err := sessionEnvironmentFromFlags(flags); err != nil {
+		return icu.RebalanceInput{}, err
+	}
 	activities, err := readRebalanceActivities(client, oldest, newest, flags)
 	if err != nil {
 		return icu.RebalanceInput{}, err
@@ -235,6 +239,12 @@ func rebalanceShowSchema() *CommandSchema {
 			{Name: "mode", ValueName: "MODE", Description: "Rebalance mode."},
 			{Name: "week", ValueName: "LABEL", Description: "Optional week label."},
 			{Name: "strategy", ValueName: "NAME", Description: "Rebalance strategy."},
+			{
+				Name: "session-environment", ValueName: "indoor|outdoor",
+				Description: "Explicit FTP environment override for sessions with no per-record signal (D-10c). " +
+					"Distinct from --indoor on events/ftp/sports: those set a record's own flag, this overrides " +
+					"which FTP number a proposal prices sessions at when the record leaves it ambiguous.",
+			},
 			{Name: "activity-fields", ValueName: "CSV", Description: "Activity fields to fetch."},
 			{Name: "limit", ValueName: "N", Description: "Activity fetch limit."},
 		}, commonAuthFlags()...),
@@ -421,6 +431,8 @@ func rebalanceConstraintsFromFlags(flags map[string]string) icu.RebalanceConstra
 	constraints.Note = icu.StringFlag(flags, "note", "")
 	constraints.Level = icu.StringFlag(flags, "level", "")
 	constraints.Mode = icu.StringFlag(flags, "mode", "")
+	// Validated in readRebalanceInput before this constructor runs.
+	constraints.SessionEnvironment, _ = sessionEnvironmentFromFlags(flags)
 
 	return constraints
 }

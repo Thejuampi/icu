@@ -350,6 +350,46 @@ func TestPlanShowRequiresIntentFile(t *testing.T) {
 	}
 }
 
+func TestReadPlanInputRejectsInvalidSessionEnvironmentFlag(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	intentFile := filepath.Join(t.TempDir(), "intent.json")
+	writePlanTestIntent(t, intentFile, samplePlanIntent())
+
+	_, err := readPlanInput(map[string]string{
+		"intent-file":         intentFile,
+		"session-environment": "sideways",
+	}, client)
+
+	if err == nil {
+		t.Fatalf("err = nil, want rejection of invalid session-environment value")
+	}
+}
+
+func TestReadPlanInputSessionEnvironmentFlagOverridesIntentFile(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	intent := samplePlanIntent()
+	intent.Constraints.SessionEnvironment = icu.SessionEnvironmentIndoor
+	intentFile := filepath.Join(t.TempDir(), "intent.json")
+	writePlanTestIntent(t, intentFile, intent)
+
+	input, err := readPlanInput(map[string]string{
+		"intent-file":         intentFile,
+		"session-environment": "outdoor",
+	}, client)
+	if err != nil {
+		t.Fatalf("read plan input: %v", err)
+	}
+
+	if input.Intent.Constraints.SessionEnvironment != icu.SessionEnvironmentOutdoor {
+		t.Fatalf("session environment = %q, want outdoor (flag overrides intent file)",
+			input.Intent.Constraints.SessionEnvironment)
+	}
+}
+
 func TestPlanAcceptDetectsBaselineDrift(t *testing.T) {
 	t.Parallel()
 

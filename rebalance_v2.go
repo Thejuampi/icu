@@ -203,6 +203,7 @@ func buildRebalanceProposalV2(input *RebalanceInput) RebalanceProposalFile {
 	validation := RebalanceValidation{Feasible: true}
 	rebalanceV2ValidateLevel(input, &validation)
 	rebalanceV2ValidateMode(input, &validation)
+	validation.Errors = append(validation.Errors, rebalanceSessionEnvironmentBlockingReasons(input)...)
 	regime, notes, ok := rebalanceV2HistoryContext(input, notes, &validation, &proposal)
 	if !ok {
 		return rebalanceV2FinalizeProposal(&proposal, notes, &validation)
@@ -231,6 +232,7 @@ func buildRebalanceProposalV2(input *RebalanceInput) RebalanceProposalFile {
 	proposal.SelectedOptionID = "adaptive_bidirectional"
 	targets := DynamicRebalanceTargets(input)
 	proposal.Context = rebalanceContext(input, &targets, inflight.warnings)
+	proposal.TimeAccounting = rebalanceTimeAccounting(input)
 
 	if outside {
 		validation.Warnings = append(
@@ -650,6 +652,8 @@ func v2SlotsToPlain(slots []rebalanceV2Slot) []rebalanceSlot {
 }
 
 func rebalanceV2BuildSession(input *RebalanceInput, slot *rebalanceV2Slot, share, level RebalanceRat, mode string) (RebalanceSession, RebalanceProjectionStep, bool) {
+	sportType := rebalanceSessionSportType(input, &slot.slot)
+	selection := resolveEventFTP(sportType, rebalanceSlotIndoor(&slot.slot), input.SportSettings, input.Constraints.SessionEnvironment)
 	effectiveMax := rebalanceV2EffectiveMax(input)
 	step := RebalanceProjectionStep{ID: slot.slot.date, ExactLoad: share.DecimalString(), ExactLoadRat: share}
 	zero := NewRebalanceRatFromInt(0, 1)
@@ -689,7 +693,7 @@ func rebalanceV2BuildSession(input *RebalanceInput, slot *rebalanceV2Slot, share
 
 	// CP/W'/PMax duration-power limit at level=1
 	if level.Cmp(NewRebalanceRatFromInt(1, 1)) == 0 {
-		ftp := rebalanceFTP(input)
+		ftp := selection.Watts
 		if ftp > 0 {
 			cp := float64(ftp)
 			wPrime := 0
@@ -742,13 +746,13 @@ func rebalanceV2BuildSession(input *RebalanceInput, slot *rebalanceV2Slot, share
 	step.Residual = rebalanceRatFromInt(appliedLoad).Sub(share).DecimalString()
 	step.ExactSeconds = exactSeconds.DecimalString()
 
-	session := buildRebalanceV2Session(input, slot, appliedLoad, appliedSeconds, targetIF)
+	session := buildRebalanceV2Session(input, slot, appliedLoad, appliedSeconds, targetIF, selection)
 
 	// preserve-structure: scale workout steps and generate description
 	if mode == RebalanceModePreserveStructure && slot.slot.event != nil && math.Abs(targetIF-origIF) > 0.0001 {
 		desc := RebalanceScaleWorkoutDescription(slot.slot.event, origIF, targetIF)
 		if desc != "" {
-			session.Description = desc
+			session.Description = appendFTPNote(desc, selection.Watts)
 		}
 	}
 
@@ -809,7 +813,7 @@ func rebalanceV2RoundSeconds(input *RebalanceInput, exact RebalanceRat) int {
 	return maxInt(0, minutes) * rebalanceSecondsPerMinute
 }
 
-func buildRebalanceV2Session(input *RebalanceInput, slot *rebalanceV2Slot, load, seconds int, ifloat float64) RebalanceSession {
+func buildRebalanceV2Session(input *RebalanceInput, slot *rebalanceV2Slot, load, seconds int, ifloat float64, selection FTPSelection) RebalanceSession {
 	intensity := round3(ifloat)
 	action := RebalanceActionCreate
 	eventID := 0
@@ -849,10 +853,15 @@ func buildRebalanceV2Session(input *RebalanceInput, slot *rebalanceV2Slot, load,
 		DurationSource:       rebalanceSessionDurationSource(input),
 		IntensityFactor:      intensity,
 		IntensitySource:      rebalanceSessionIntensitySource(input),
-		WattsRange:           wattsRange(input, intensity),
-		Description:          rebalanceWorkoutDescription(minutes, intensity),
+		WattsRange:           wattsRange(selection, intensity),
+		Description:          rebalanceWorkoutDescription(minutes, intensity, selection.Watts),
 		SourceHash:           sourceHash,
 		Reason:               "adaptive-bidirectional level-driven magnitude transform",
+		FTPApplied:           selection.Watts,
+		FTPSource:            selection.Source,
+		FTPDisagreement:      selection.Disagreement,
+		Confidence:           selection.Confidence,
+		Indoor:               selection.Indoor,
 	}
 }
 

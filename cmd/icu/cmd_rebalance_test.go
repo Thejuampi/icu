@@ -257,6 +257,30 @@ func TestRebalanceDryRunRejectsMaxHRFlag(t *testing.T) {
 	}
 }
 
+func TestRebalanceDryRunRejectsInvalidSessionEnvironmentFlag(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["session-environment"] = "sideways"
+
+	_, err := readRebalanceInput(flags, client)
+
+	if err == nil {
+		t.Fatalf("err = nil, want rejection of invalid session-environment value")
+	}
+}
+
+func TestRebalanceConstraintsFromFlagsCarriesSessionEnvironment(t *testing.T) {
+	t.Parallel()
+
+	constraints := rebalanceConstraintsFromFlags(map[string]string{"session-environment": "outdoor"})
+
+	if constraints.SessionEnvironment != "outdoor" {
+		t.Fatalf("session environment = %q, want outdoor", constraints.SessionEnvironment)
+	}
+}
+
 func TestRebalanceConstraintsFromFlagsLeavesTypeAndTargetEmptyWithoutFlags(t *testing.T) {
 	t.Parallel()
 

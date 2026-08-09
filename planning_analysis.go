@@ -534,7 +534,11 @@ func trainingPlanEventWithDerivedLoad(event *Event, ftp int) Event {
 	if err != nil {
 		return plannedEvent
 	}
-	estimate := EstimatePlannedLoad(doc, ftp)
+	// planning_analysis.go is out of wave-1b's scope; this is a mechanical,
+	// behavior-preserving adaptation to EstimatePlannedLoad's new
+	// FTPSelection-shaped signature (T1b.4), not a D-10 classification —
+	// ftp is already a single week-level int here, unchanged.
+	estimate := EstimatePlannedLoad(doc, FTPSelectionFromWatts(ftp))
 	if estimate.TrainingLoad <= 0 || len(estimate.Warnings) > 0 {
 		return plannedEvent
 	}

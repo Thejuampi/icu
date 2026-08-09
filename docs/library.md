@@ -258,8 +258,8 @@ short-circuits both partitions to `not_a_record` before `Type` is even inspected
 | Tier | When | Operational meaning |
 | --- | --- | --- |
 | `high` | `Source: type_inherent` only | This type cannot be otherwise (a `VirtualRide` is never really outdoors). |
-| `medium` | `Source: type_default` or `flag_asserted` | Usually right, or asserted by a flag whose positive-observed direction has very few samples. Proceed, but the source is worth surfacing. |
-| `low` | `Source: unknown` | No type default and no flag. `Warning` is populated. Read/analysis call sites should proceed and warn; write/prescription call sites should refuse or require an explicit override. |
+| `medium` | `Source: type_default` or `flag_asserted` | **Interpretation:** proceeds and prescribes/reports at this FTP — it is weaker evidence than `high`, not a reason to distrust the number, and it is a different thing from `low`. `type_default` means the type alone decided (no per-record flag exists or was needed); `flag_asserted` means a per-record `Trainer`/`EventIndoor` flag (or `--session-environment`) decided an otherwise-ambiguous type — evidence of the same weight as the type default, not stronger proof. |
+| `low` | `Source: unknown` | No type default and no flag — only reachable on the **activity** partition's `ambiguous` class; the **event** partition (what `rebalance`/`plan` resolve) never produces `low` (an ambiguous event with no flag resolves `type_default`/`medium` instead). `Warning` is populated. Per D-10c: read/analysis call sites proceed and warn; write/prescription call sites would refuse with `ftp_confidence_low` or require `--session-environment` — but since the event partition never reaches `low`, this refusal has no live trigger in `rebalance`/`plan` today. |
 
 `FTPSelection.Disagreement` is `true` exactly when a flag contradicts its class's own default
 direction (a `false` flag on an `indoor`-class type, or a `true` flag on outdoor-default `Ride`). It
@@ -269,12 +269,19 @@ is always `false` for `ambiguous`, which has no default to contradict — the fl
 `SportSettings.PowerZones` (percentages) and the selected watts. There is no separate zone lookup:
 the API's zone table is one array of percentages shared by whichever FTP applies.
 
-`FTPRequest.Explicit` is reserved for a future `--session-environment` override and is not yet
-consumed by `ResolveFTP`.
+`FTPRequest.Explicit` carries `--session-environment` (`"indoor"` | `"outdoor"`, `nil`/`""` means no
+override). It decides the environment for the `ambiguous`/`type_default` classes at `medium`
+confidence, and never overrides a `type_inherent` resolution — "this type cannot be otherwise"
+outranks a per-invocation scalar. `rebalance`/`plan` refuse outright, naming the mixed week, rather
+than apply `Explicit` to a week whose sessions already imply different environments by type (a
+`VirtualRide` alongside a `Ride`): a single scalar cannot describe both, and applying it anyway would
+reintroduce the one-FTP-per-week assumption this rule removes.
 
-As of this release, `ResolveFTP` exists as a standalone pure function but is not yet wired into the
-`rebalance`, `plan`, or `analysis` command output — those commands still use their own, divergent FTP
-picks. Call-site wiring lands separately.
+`ResolveFTP` is wired into `rebalance`, `plan`, and the `analysis workout` command output: `rebalance`
+and `plan` call it once per calendar event/session (`FTPEntityEvent`) via each proposal's own
+`resolveEventFTP` helper, and `analysis workout` calls it once per completed activity
+(`FTPEntityActivity`). See `docs/rebalance.md` and `docs/plan.md` for the per-session `ftpApplied`/
+`ftpSource`/`confidence` output fields, and `docs/analysis.md` for the read-path equivalents.
 
 ### Cycling analysis
 
@@ -389,6 +396,8 @@ Generated sessions in the proposal expose decision-source fields so consumers ca
 `BuildRebalanceProposal` is pure and returns an editable JSON-friendly proposal. `DynamicRebalanceTargets` derives Z1/Z2 and capacity context from sport settings or recent cycling history with robust outlier filtering. Use `MarshalRebalanceProposal` to write pretty JSON for review before applying operations through the CLI.
 
 `PreviewCalendarOperations` summarizes pending create/update/cancel ops shared by rebalance and plan proposals. `EventSourceHash` fingerprints an event for drift detection on update/cancel.
+
+`RebalanceContext.TimeAccounting` enumerates sessions whose type does not use FTP at all (D-10 `not_applicable`, e.g. `Run`/`Walk`/`WeightTraining`) with their moving time, so they are visible but never priced (`loadSource: "none"`); `LoadAccounting` is `"partial"` whenever such a session exists in the week, `"complete"` otherwise. No capacity comparison is attempted — there is no per-day time budget in this release.
 
 ### Plan proposals
 

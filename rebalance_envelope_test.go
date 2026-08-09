@@ -367,3 +367,37 @@ func TestRebalanceMetricRestingHRWithData(t *testing.T) {
 	}
 	_ = report
 }
+
+// TestRebalanceZoneDistributionMetricCountsIndoorFTPAlone is T1b.9's
+// rebalance_envelope.go fixture: the zone-distribution metric's data-
+// availability gate (athleteHasFTP, replacing the deleted rebalanceFTP)
+// must count IndoorFTP alone as "FTP is configured" — an athlete with only
+// IndoorFTP set (270/285 is the wave's own asymmetric FTP/IndoorFTP pair;
+// this fixture uses the boundary case of IndoorFTP set and FTP unset) must
+// get one more available metric, and therefore higher completeness, than
+// an otherwise-identical input with no SportSettings at all.
+func TestRebalanceZoneDistributionMetricCountsIndoorFTPAlone(t *testing.T) {
+	t.Parallel()
+
+	regime := stableRegime([]float64{280, 290, 300, 310, 320, 300, 305, 295, 315, 300})
+	activities := []icu.Activity{
+		{Type: "Ride", StartDateLocal: "2026-06-24T06:30:00", Intensity: 0.7, MovingTime: 3600},
+	}
+
+	withIndoorFTP := &icu.RebalanceInput{
+		Scope:      icu.RebalanceScope{StartDate: "2026-06-22", EndDate: "2026-06-28"},
+		Activities: activities, SportSettings: &icu.SportSettings{IndoorFTP: 285},
+	}
+	withoutFTP := &icu.RebalanceInput{
+		Scope:      icu.RebalanceScope{StartDate: "2026-06-22", EndDate: "2026-06-28"},
+		Activities: activities,
+	}
+
+	withReport, _ := icu.BuildRebalanceEnvelope(&regime, withIndoorFTP, 300)
+	withoutReport, _ := icu.BuildRebalanceEnvelope(&regime, withoutFTP, 300)
+
+	if withReport.Completeness <= withoutReport.Completeness {
+		t.Fatalf("completeness with IndoorFTP-only = %v, without FTP = %v, want strictly higher with IndoorFTP configured",
+			withReport.Completeness, withoutReport.Completeness)
+	}
+}

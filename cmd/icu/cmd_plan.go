@@ -20,7 +20,8 @@ func planShowCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "plan show --file PATH --intent-file PATH " +
-			"[--allow-today] [--allow-past] [--now-date DATE] [--type SPORT]",
+			"[--allow-today] [--allow-past] [--now-date DATE] [--type SPORT] " +
+			"[--session-environment indoor|outdoor]",
 		Description: "Build an editable multi-session plan proposal from intent JSON without mutating Intervals.icu.",
 		Schema:      planShowSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
@@ -111,6 +112,13 @@ func planShowSchema() *CommandSchema {
 			{Name: "allow-past", ValueName: "BOOL", Description: "Allow mutating past planned sessions.", Kind: commandFlagBoolean},
 			{Name: "now-date", ValueName: "DATE", Description: "Lock boundary date (YYYY-MM-DD)."},
 			{Name: "type", ValueName: "SPORT", Description: "Sport type for FTP/settings lookup."},
+			{
+				Name: "session-environment", ValueName: "indoor|outdoor",
+				Description: "Explicit FTP environment override for sessions with no per-record signal (D-10c); " +
+					"overrides the intent file's own \"sessionEnvironment\" constraint. Distinct from --indoor on " +
+					"events/ftp/sports: those set a record's own flag, this overrides which FTP number a proposal " +
+					"prices sessions at when the record leaves it ambiguous.",
+			},
 		}, commonAuthFlags()...),
 	}
 }
@@ -153,6 +161,13 @@ func readPlanInput(flags map[string]string, client *icu.Client) (icu.PlanInput, 
 	newest := intent.Newest
 	if oldest == "" || newest == "" {
 		return icu.PlanInput{}, errors.New("intent oldest and newest are required (or provide session dates)")
+	}
+	sessionEnvironment, err := sessionEnvironmentFromFlags(flags)
+	if err != nil {
+		return icu.PlanInput{}, err
+	}
+	if sessionEnvironment != "" {
+		intent.Constraints.SessionEnvironment = sessionEnvironment
 	}
 	activities, err := readRebalanceActivities(client, oldest, newest, flags)
 	if err != nil {

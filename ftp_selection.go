@@ -165,6 +165,8 @@ func ResolveFTP(request FTPRequest) FTPSelection {
 		return FTPSelection{Class: FTPClassNotApplicable}
 	}
 
+	applyExplicitOverride(&classified, request.Explicit)
+
 	watts, inert := selectFTPWatts(request.Settings, classified.indoor)
 
 	selection := FTPSelection{
@@ -190,6 +192,29 @@ func ResolveFTP(request FTPRequest) FTPSelection {
 	selection.ZoneWatts, selection.ZoneSource = zoneWattsFor(request.Settings, watts)
 
 	return selection
+}
+
+// applyExplicitOverride lets --session-environment (D-10c's write-refusal
+// escape hatch) decide the environment for classes that are not structurally
+// fixed. It never touches type_inherent: D-10 is explicit that "this type
+// cannot be otherwise," so no per-invocation override can change what the
+// type already proves. not_applicable and not_a_record never reach here
+// (ResolveFTP returns before classifying an override candidate).
+//
+// Confidence lands at medium, not high: the plan's own tier definition
+// reserves high for type_inherent only, and an operator-level assertion is
+// evidence of the same weight as a per-record flag (flag_asserted), not
+// stronger proof than the type itself.
+func applyExplicitOverride(classified *environmentClassification, explicit *string) {
+	if explicit == nil || classified.class == FTPClassIndoor {
+		return
+	}
+
+	explicitIndoor := *explicit == "indoor"
+	classified.disagreement = classified.indoor != explicitIndoor
+	classified.indoor = explicitIndoor
+	classified.source = FTPSourceExplicit
+	classified.confidence = FTPConfidenceMedium
 }
 
 // environmentClassification is the intermediate result of applying D-10's
@@ -307,4 +332,14 @@ func zoneWattsFor(settings *SportSettings, watts int) ([]int, string) {
 	}
 
 	return zones, ftpZoneSourceSportSettings
+}
+
+// FTPSelectionFromWatts wraps a plain watts value (e.g. an explicit --ftp CLI
+// flag with no Event/Activity context to classify) into an FTPSelection, so
+// call sites outside D-10's classification (raw utility commands, and
+// pre-wave-1b analyses not yet migrated to per-record resolution) can still
+// call EstimatePlannedLoad's FTPSelection-shaped signature without
+// re-implementing D-10.
+func FTPSelectionFromWatts(watts int) FTPSelection {
+	return FTPSelection{Applicable: watts > 0, Watts: watts, Source: FTPSourceExplicit}
 }

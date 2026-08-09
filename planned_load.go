@@ -14,14 +14,20 @@ type PlannedLoadEstimate struct {
 	Warnings        []string `json:"warnings,omitempty"`
 }
 
-func EstimatePlannedLoad(doc *WorkoutDoc, ftp int) PlannedLoadEstimate {
+// EstimatePlannedLoad prices a workout doc at the caller's resolved
+// FTPSelection (T1b.4/D-9/D-11): a session's FTP is a per-session concept
+// now, not a bare int, so the caller must have already run ResolveFTP (or,
+// for call sites with no Event/Activity to classify, wrapped a plain watts
+// value via FTPSelectionFromWatts).
+func EstimatePlannedLoad(doc *WorkoutDoc, selection FTPSelection) PlannedLoadEstimate {
 	var estimate PlannedLoadEstimate
 	estimate.Source = plannedLoadSourceLocalPower
 	if doc == nil {
 		estimate.Warnings = append(estimate.Warnings, "workout doc is missing")
 		return estimate
 	}
-	if ftp <= 0 {
+	ftp := selection.Watts
+	if !selection.Applicable || ftp <= 0 {
 		estimate.DurationSeconds = doc.Duration
 		estimate.Warnings = append(estimate.Warnings, "ftp is missing")
 		return estimate

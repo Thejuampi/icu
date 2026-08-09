@@ -97,6 +97,23 @@ func rescaleWorkoutStepPower(step WorkoutStep, ratio float64) WorkoutStep {
 	return scaled
 }
 
+// appendFTPNote appends an unobtrusive trailing note stating the FTP a
+// generated or rescaled workout description's percentages were computed
+// against (D-11c): "60m 65-70%" is unattributable once FTP varies per
+// session, the way it now can (D-11). The note is free text with no leading
+// "-", so ParseWorkoutDescription's coaching-prose skip leaves round-
+// tripping of the step grammar unaffected. ftpWatts <= 0 (FTP not
+// applicable — a class-4 NOTE/Workout session, or an athlete with no FTP
+// configured at all) leaves description untouched rather than printing a
+// fabricated "FTP 0W".
+func appendFTPNote(description string, ftpWatts int) string {
+	if description == "" || ftpWatts <= 0 {
+		return description
+	}
+
+	return description + fmt.Sprintf("\n(FTP %dW)", ftpWatts)
+}
+
 // RebalanceScaleWorkoutDescription takes an event, extracts or parses its
 // workout structure, scales power targets by the ratio of targetIF to
 // originalIF, and returns the reformatted description. Returns empty string

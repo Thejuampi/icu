@@ -13,7 +13,10 @@ import (
 )
 
 const (
-	RebalanceSchemaVersion = "icu.rebalance.v2"
+	// RebalanceSchemaVersion bumped to v3 in wave-1b (D-7b): per-session FTP
+	// changes what a proposal's prescribed watts mean, a meaning change that
+	// must carry a marker.
+	RebalanceSchemaVersion = "icu.rebalance.v3"
 
 	RebalanceActionCreate = "create"
 	RebalanceActionUpdate = "update"
@@ -74,7 +77,33 @@ type RebalanceProposalFile struct {
 	Envelope         *RebalanceEnvelopeReport   `json:"envelope,omitempty"`
 	Projection       *RebalanceProjectionReport `json:"projection,omitempty"`
 	Approve          *RebalanceApprove          `json:"approve,omitempty"`
+	TimeAccounting   *RebalanceTimeAccounting   `json:"timeAccounting,omitempty"`
 	Notes            []string                   `json:"notes,omitempty"`
+}
+
+// RebalanceTimeAccounting enumerates class-4 (D-10 not_applicable) sessions
+// in the week per D-23: recorded with their minutes so consumption is
+// visible, never priced, never compared against a capacity bound (F-27
+// establishes no per-day minutes bound exists before wave-3). not_a_record
+// contributes nothing and never appears here.
+type RebalanceTimeAccounting struct {
+	Entries []RebalanceTimeAccountingEntry `json:"entries,omitempty"`
+	// LoadAccounting is "partial" whenever UnaccountedSessions > 0: the
+	// weekly load total is knowingly incomplete until wave-2's hr_load
+	// arrives (D-23).
+	LoadAccounting      string `json:"loadAccounting,omitempty"`
+	UnaccountedSessions int    `json:"unaccountedSessions"`
+}
+
+type RebalanceTimeAccountingEntry struct {
+	Date           string `json:"date,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Type           string `json:"type,omitempty"`
+	MovingTimeSecs int    `json:"movingTimeSecs,omitempty"`
+	// LoadSource is "none": a class-4 session's minutes are recorded but
+	// never priced, because FTP does not apply to it (D-10c) and no
+	// alternative load basis exists yet (D-23).
+	LoadSource string `json:"loadSource,omitempty"`
 }
 
 type RebalanceScope struct {
@@ -121,10 +150,19 @@ type RebalanceConstraints struct {
 	Level               string   `json:"level,omitempty"`
 	Mode                string   `json:"mode,omitempty"`
 	Approved            bool     `json:"approved,omitempty"`
+	// SessionEnvironment is --session-environment ("indoor" | "outdoor"),
+	// D-10c's write-refusal escape hatch. It is rejected outright when the
+	// week is mixed (ftpMixedEnvironmentWeek) rather than silently applied.
+	SessionEnvironment string `json:"sessionEnvironment,omitempty"`
 }
 
 type RebalanceContext struct {
+	// FTP is a week-level representative number only (D-11): sessions are
+	// priced individually via each session's own FTPApplied/FTPSource. A
+	// mixed week has no single "the" FTP; this field documents what an
+	// unclassified session of the week's default sport type would use.
 	FTP             int              `json:"ftp,omitempty"`
+	FTPSource       string           `json:"ftpSource,omitempty"`
 	LTHR            int              `json:"lthr,omitempty"`
 	MaxHR           int              `json:"maxHr,omitempty"`
 	WellnessState   string           `json:"wellnessState,omitempty"`
@@ -132,7 +170,27 @@ type RebalanceContext struct {
 	PlanDecision    string           `json:"planDecision,omitempty"`
 	PlanForecast    string           `json:"planForecast,omitempty"`
 	DynamicTargets  RebalanceTargets `json:"dynamicTargets"`
-	Warnings        []string         `json:"warnings,omitempty"`
+	// ZoneBasis is "per-session" (D-11b): zone watt boundaries vary per
+	// session now, so weekly TiZ sums measured against non-identical
+	// boundaries are not comparable to a single-FTP historical aggregate.
+	ZoneBasis string `json:"zoneBasis,omitempty"`
+	// FTPDiscriminatorConflicts keeps D-10's asymmetric flag trust
+	// observable (D-10b) rather than assumed permanent. Only the event-side
+	// count is populated: the activity-side counters need Activity.Trainer,
+	// which is not yet an exposed Go field (F-20's evidence was gathered via
+	// raw HTTP, bypassing this package's types entirely; adding it is
+	// wave-2 scope, not wave-1b's). Omitted rather than reported as a false
+	// zero (D-3/D-5) when there are no events to look at.
+	FTPDiscriminatorConflicts *FTPDiscriminatorConflicts `json:"ftpDiscriminatorConflicts,omitempty"`
+	Warnings                  []string                   `json:"warnings,omitempty"`
+}
+
+// FTPDiscriminatorConflicts is D-10b's self-detecting premise counter.
+type FTPDiscriminatorConflicts struct {
+	// EventFlagAssertedIndoor counts events whose type is ambiguous (D-10
+	// class 3) but whose Indoor flag is explicitly true — the corroborating
+	// evidence side of the 47-wrong/0-counterexample asymmetry (F-20).
+	EventFlagAssertedIndoor int `json:"eventFlagAssertedIndoor"`
 }
 
 type RebalanceTargets struct {
@@ -201,6 +259,16 @@ type RebalanceSession struct {
 	Description          string  `json:"description,omitempty"`
 	SourceHash           string  `json:"sourceHash,omitempty"`
 	Reason               string  `json:"reason,omitempty"`
+	// FTPApplied, FTPSource, FTPDisagreement, Confidence and Indoor are this
+	// session's own ResolveFTP result (D-9/D-10/D-11), attributing
+	// WattsRange to the number that produced it — required once FTP varies
+	// per session (D-11c). Indoor is echoed into the write body's
+	// EventEx.Indoor on update (D-25/T1b.11).
+	FTPApplied      int    `json:"ftpApplied,omitempty"`
+	FTPSource       string `json:"ftpSource,omitempty"`
+	FTPDisagreement bool   `json:"ftpDisagreement,omitempty"`
+	Confidence      string `json:"confidence,omitempty"`
+	Indoor          *bool  `json:"indoor,omitempty"`
 }
 
 type RebalanceOperation struct {
@@ -307,11 +375,53 @@ func BuildRebalanceProposal(input *RebalanceInput) RebalanceProposalFile {
 		Options:          []RebalanceOption{option},
 		SelectedOptionID: option.ID,
 		Operations:       plan.operations,
+		TimeAccounting:   rebalanceTimeAccounting(&working),
 		Notes:            rebalanceNotes(&working),
 	}
 	proposal.Validation = ValidateRebalanceProposal(&proposal)
 
 	return proposal
+}
+
+// rebalanceTimeAccounting enumerates class-4 (D-10 not_applicable) workout
+// events in scope with no priced load, per D-23: recorded so their minutes
+// are visible, never compared against a capacity bound (F-27: no per-day
+// minutes bound exists before wave-3). A class-4 event that already carries
+// a server-computed TrainingLoad is not "unaccounted" — it is priced by that
+// value already, same as any other event (D-23: never treated as zero).
+func rebalanceTimeAccounting(input *RebalanceInput) *RebalanceTimeAccounting {
+	var entries []RebalanceTimeAccountingEntry
+
+	for index := range input.Events {
+		event := &input.Events[index]
+		if !isWorkoutEvent(event) || event.TrainingLoad > 0 {
+			continue
+		}
+
+		date := eventDateOnly(event.StartDateLocal)
+		if date < input.Scope.StartDate || date > input.Scope.EndDate {
+			continue
+		}
+
+		selection := resolveEventFTP(event.Type, event.Indoor, input.SportSettings, input.Constraints.SessionEnvironment)
+		if selection.Class != FTPClassNotApplicable {
+			continue
+		}
+
+		entries = append(entries, RebalanceTimeAccountingEntry{
+			Date: date, Name: event.Name, Type: event.Type,
+			MovingTimeSecs: event.MovingTime, LoadSource: "none",
+		})
+	}
+
+	accounting := &RebalanceTimeAccounting{Entries: entries, UnaccountedSessions: len(entries)}
+	if len(entries) > 0 {
+		accounting.LoadAccounting = "partial"
+	} else {
+		accounting.LoadAccounting = "complete"
+	}
+
+	return accounting
 }
 
 func ValidateRebalanceProposal(proposal *RebalanceProposalFile) RebalanceValidation {
@@ -597,6 +707,11 @@ func buildRebalanceOperation(session *RebalanceSession) RebalanceOperation {
 		TrainingLoad:   session.TargetLoad,
 		MovingTime:     session.DurationSeconds,
 		Target:         sessionTarget(session),
+		// D-25/T1b.11: carry the resolved environment so an UPDATE cannot
+		// wipe the server's indoor flag by building a fresh EventEx{}. nil
+		// and false both map to the omitted key (D-25's truth table) — only
+		// a resolved true survives onto the wire.
+		Indoor: session.Indoor != nil && *session.Indoor,
 	}
 
 	return operation
@@ -624,6 +739,7 @@ func buildRebalanceSession(input *RebalanceInput, slot *rebalanceSlot, load int)
 	classification := classifyGeneratedRebalanceSession(input, duration, intensity)
 	minutes := int(math.Round(float64(duration) / rebalanceSecondsPerMinute))
 	name := fmt.Sprintf("Rebalance %s Z2 %d", slot.date, load)
+	selection := resolveEventFTP(sportType, rebalanceSlotIndoor(slot), input.SportSettings, input.Constraints.SessionEnvironment)
 
 	return RebalanceSession{
 		ID:                   action + "-" + slot.date,
@@ -647,11 +763,27 @@ func buildRebalanceSession(input *RebalanceInput, slot *rebalanceSlot, load int)
 		DurationSource:       rebalanceSessionDurationSource(input),
 		IntensityFactor:      intensity,
 		IntensitySource:      rebalanceSessionIntensitySource(input),
-		WattsRange:           wattsRange(input, intensity),
-		Description:          rebalanceWorkoutDescription(minutes, intensity),
+		WattsRange:           wattsRange(selection, intensity),
+		Description:          rebalanceWorkoutDescription(minutes, intensity, selection.Watts),
 		SourceHash:           sourceHash,
 		Reason:               "target-preserving Z1/Z2 redistribution",
+		FTPApplied:           selection.Watts,
+		FTPSource:            selection.Source,
+		FTPDisagreement:      selection.Disagreement,
+		Confidence:           selection.Confidence,
+		Indoor:               selection.Indoor,
 	}
+}
+
+// rebalanceSlotIndoor returns the matched existing event's Indoor flag, or
+// nil when the slot has no existing event (a not-yet-created session with no
+// per-record signal).
+func rebalanceSlotIndoor(slot *rebalanceSlot) *bool {
+	if slot.event == nil {
+		return nil
+	}
+
+	return slot.event.Indoor
 }
 
 func RebalanceBaseline(input *RebalanceInput) RebalanceEvaluation {
@@ -936,7 +1068,12 @@ func historicalDayWeights(activities []Activity, slots []rebalanceSlot) []float6
 
 func validateRebalanceHeader(proposal *RebalanceProposalFile, validation *RebalanceValidation) {
 	if proposal.SchemaVersion != RebalanceSchemaVersion {
-		validation.Errors = append(validation.Errors, "unsupported schemaVersion")
+		validation.Errors = append(validation.Errors, fmt.Sprintf(
+			"unsupported schemaVersion %q: expected %q — this proposal predates wave-1b's per-session "+
+				"FTP pricing (D-7b) and its prescribed watts cannot be trusted; regenerate it with a fresh "+
+				"'rebalance propose' rather than validating or applying the old file",
+			proposal.SchemaVersion, RebalanceSchemaVersion,
+		))
 	}
 	if proposal.SelectedOptionID == "" {
 		validation.Warnings = append(validation.Warnings, "selectedOptionId is empty")
@@ -1032,8 +1169,49 @@ func rebalanceBlockingReasons(input *RebalanceInput) []string {
 	if input.Constraints.WorkoutTarget == "" && !hasMutableEventTarget(input.Events) {
 		reasons = append(reasons, "workout target requires event context or explicit input")
 	}
+	reasons = append(reasons, rebalanceSessionEnvironmentBlockingReasons(input)...)
 
 	return reasons
+}
+
+// rebalanceSessionEnvironmentBlockingReasons is D-10c's mixed-week refusal
+// (T1b.6): --session-environment is a per-invocation scalar and cannot
+// describe a week containing both a naturally-indoor and a naturally-outdoor
+// session. Rather than silently overriding whichever side contradicts it,
+// the whole request is refused. Shared by both rebalance strategies.
+func rebalanceSessionEnvironmentBlockingReasons(input *RebalanceInput) []string {
+	if input.Constraints.SessionEnvironment == "" {
+		return nil
+	}
+
+	var types []string
+
+	var flags []*bool
+
+	for index := range input.Events {
+		event := &input.Events[index]
+		if !isWorkoutEvent(event) {
+			continue
+		}
+
+		types = append(types, event.Type)
+		flags = append(flags, event.Indoor)
+	}
+
+	if input.Constraints.SportType != "" {
+		types = append(types, input.Constraints.SportType)
+		flags = append(flags, nil)
+	}
+
+	if ftpMixedEnvironmentWeek(types, flags, input.SportSettings) {
+		return []string{
+			"mixed-environment week: sessions imply different environments (e.g. an indoor-type-inherent " +
+				"session alongside an outdoor/ambiguous one); --session-environment cannot describe both — " +
+				"set indoor per event instead",
+		}
+	}
+
+	return nil
 }
 
 func rebalanceRequestBlockingReasons(input *RebalanceInput) []string {
@@ -1060,7 +1238,14 @@ func rebalanceConstraintBlockingReasons(input *RebalanceInput) []string {
 }
 
 func rebalanceContext(input *RebalanceInput, targets *RebalanceTargets, warnings []string) RebalanceContext {
-	context := RebalanceContext{FTP: rebalanceFTP(input), Warnings: warnings}
+	representative := rebalanceRepresentativeFTP(input)
+	context := RebalanceContext{
+		FTP:                       representative.Watts,
+		FTPSource:                 representative.Source,
+		ZoneBasis:                 "per-session",
+		FTPDiscriminatorConflicts: rebalanceFTPDiscriminatorConflicts(input),
+		Warnings:                  warnings,
+	}
 	if targets != nil {
 		context.DynamicTargets = *targets
 	}
@@ -1078,6 +1263,31 @@ func rebalanceContext(input *RebalanceInput, targets *RebalanceTargets, warnings
 	}
 
 	return context
+}
+
+// rebalanceFTPDiscriminatorConflicts keeps D-10's asymmetric flag trust
+// observable (D-10b) over the events actually in scope. Returns nil when
+// there is nothing to count, per D-3/D-5 (absent, not a false zero).
+func rebalanceFTPDiscriminatorConflicts(input *RebalanceInput) *FTPDiscriminatorConflicts {
+	var count int
+
+	for index := range input.Events {
+		event := &input.Events[index]
+		if !isWorkoutEvent(event) {
+			continue
+		}
+
+		selection := resolveEventFTP(event.Type, event.Indoor, input.SportSettings, "")
+		if selection.Class == FTPClassAmbiguous && selection.Source == FTPSourceFlagAsserted && selection.Indoor != nil && *selection.Indoor {
+			count++
+		}
+	}
+
+	if len(input.Events) == 0 {
+		return nil
+	}
+
+	return &FTPDiscriminatorConflicts{EventFlagAssertedIndoor: count}
 }
 
 func rebalanceNotes(input *RebalanceInput) []string {
@@ -1127,11 +1337,16 @@ func isWorkoutEvent(event *Event) bool {
 	return event != nil && strings.EqualFold(event.Category, planWorkoutCategory)
 }
 
+// rebalanceEventLoad estimates an existing event's load from its own
+// WorkoutDoc, priced at that event's own resolved FTP (D-11: per-session,
+// never the week-level representative number) — the event's Type and Indoor
+// flag are exactly the evidence D-10's event partition classifies on.
 func rebalanceEventLoad(event *Event, input *RebalanceInput) int {
 	if event.TrainingLoad > 0 {
 		return event.TrainingLoad
 	}
-	if event.WorkoutDoc == nil || rebalanceFTP(input) == 0 {
+	selection := resolveEventFTP(event.Type, event.Indoor, input.SportSettings, input.Constraints.SessionEnvironment)
+	if event.WorkoutDoc == nil || !selection.Applicable || selection.Watts == 0 {
 		return 0
 	}
 	data, err := json.Marshal(event.WorkoutDoc)
@@ -1143,7 +1358,7 @@ func rebalanceEventLoad(event *Event, input *RebalanceInput) int {
 		return 0
 	}
 
-	return EstimatePlannedLoad(&doc, rebalanceFTP(input)).TrainingLoad
+	return EstimatePlannedLoad(&doc, selection).TrainingLoad
 }
 
 func dateAllowed(input *RebalanceInput, date string) bool {
@@ -1174,12 +1389,20 @@ func effectiveRebalanceIF(input *RebalanceInput) float64 {
 	return constrainedRebalanceIF(input, DynamicRebalanceTargets(input).Z2IF)
 }
 
+// rebalanceRepresentativeFTP resolves a week-level FTP number with no
+// per-record signal (D-11): retained additively for policy-level caps and
+// context display, documented as representative only — it is never used to
+// price an individual session (each session resolves its own FTP).
+func rebalanceRepresentativeFTP(input *RebalanceInput) FTPSelection {
+	return resolveEventFTP(input.Constraints.SportType, nil, input.SportSettings, input.Constraints.SessionEnvironment)
+}
+
 func constrainedRebalanceIF(input *RebalanceInput, base float64) float64 {
 	intensity := base
 	if input.Constraints.MaxIntensity > 0 {
 		intensity = math.Min(intensity, input.Constraints.MaxIntensity)
 	}
-	ftp := rebalanceFTP(input)
+	ftp := rebalanceRepresentativeFTP(input).Watts
 	if input.Constraints.MaxWatts > 0 && ftp > 0 {
 		intensity = math.Min(intensity, float64(input.Constraints.MaxWatts)/float64(ftp))
 	}
@@ -1212,14 +1435,20 @@ func estimateLoadFromDurationIF(duration int, intensity float64) int {
 	return int(math.Round(hours * rebalanceSportZoneDivisor * intensity * intensity))
 }
 
-func rebalanceWorkoutDescription(minutes int, intensity float64) string {
+// rebalanceWorkoutDescription formats the generated step line and, when an
+// FTP actually applied to this session, an unobtrusive trailing note naming
+// it (D-11c, appendFTPNote in rebalance_workout_description.go): "60m
+// 65-70%" is unattributable once FTP varies per session, so the description
+// that will sit on the calendar event carries the watts the percentages
+// were computed against.
+func rebalanceWorkoutDescription(minutes int, intensity float64, ftpWatts int) string {
 	if minutes <= 0 {
 		return ""
 	}
 	percent := int(math.Round(intensity * rebalanceSportZoneDivisor))
 	low := maxInt(1, percent-int(math.Round(rebalanceWattsLowOffset*rebalanceSportZoneDivisor)))
 
-	return fmt.Sprintf("- %dm %d-%d%%", minutes, low, percent)
+	return appendFTPNote(fmt.Sprintf("- %dm %d-%d%%", minutes, low, percent), ftpWatts)
 }
 
 func (session *RebalanceSession) dateTimeLocal() string {
@@ -1360,26 +1589,17 @@ func classifyGeneratedRebalanceSession(input *RebalanceInput, durationSeconds in
 	return rebalanceClassificationDecision{label: unknownState, source: "missing_classification_basis"}
 }
 
-func wattsRange(input *RebalanceInput, intensity float64) string {
-	ftp := rebalanceFTP(input)
-	if ftp == 0 || intensity == 0 {
+// wattsRange takes the session's own FTPSelection (T1b.4/D-9): a second
+// independent FTP pick is not expressible here — ZoneWatts and Watts come
+// from the same ResolveFTP call the caller already made.
+func wattsRange(selection FTPSelection, intensity float64) string {
+	if selection.Watts == 0 || intensity == 0 {
 		return ""
 	}
-	low := int(math.Round(float64(ftp) * math.Max(rebalanceWattsLowFloor, intensity-rebalanceWattsLowOffset)))
-	high := int(math.Round(float64(ftp) * intensity))
+	low := int(math.Round(float64(selection.Watts) * math.Max(rebalanceWattsLowFloor, intensity-rebalanceWattsLowOffset)))
+	high := int(math.Round(float64(selection.Watts) * intensity))
 
 	return fmt.Sprintf("%d-%dw", low, high)
-}
-
-func rebalanceFTP(input *RebalanceInput) int {
-	if input == nil || input.SportSettings == nil {
-		return 0
-	}
-	if input.SportSettings.IndoorFTP > 0 {
-		return input.SportSettings.IndoorFTP
-	}
-
-	return input.SportSettings.FTP
 }
 
 func sportSettingsRebalanceTargets(settings *SportSettings) (RebalanceTargets, bool) {

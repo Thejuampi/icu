@@ -453,6 +453,55 @@ The CLI fetches:
 - The command degrades to session-level comparison when structured plan or
   interval/stream data is unavailable.
 
+### FTP Attribution
+
+The FTP used to compute `execution`'s power zones is resolved per completed
+activity (D-10's **activity** partition — distinct from the **event**
+partition `rebalance`/`plan` use for calendar events; see
+`docs/rebalance.md`). Concretely, `Ride` is a first-class default-outdoor
+class (class 2) here, with `Trainer` deciding otherwise, whereas a `Ride`
+*event* falls into the broader "ambiguous" class 3 alongside every other
+non-inherent cycling type. Do not assume a `Ride` activity and a `Ride` event
+resolve by the same rule; they intentionally do not.
+
+The activity partition is the one partition where confidence can land at
+`low`: an ambiguous cycling type (not `Ride`, which defaults outdoor) with no
+discriminating flag resolves `Source: unknown`, `Confidence: low`. Per D-10c,
+read/analysis paths never refuse on `low` — they proceed and surface it as a
+warning instead, since the direction-of-safety cost of a wrong read-only FTP
+is a wrong number in a report, not a wrong prescribed watt target. `medium`
+confidence (type-default or flag-asserted) also proceeds; it is weaker
+evidence than `high` (type-inherent, "this type cannot be otherwise"), not a
+reason to distrust the number. `ftp_confidence_low` names this `low` case but
+is not a refusal gate at this read-only site — see `docs/rebalance.md` for
+where a `low`-equivalent situation is refused at write time instead (the
+mixed-environment-week gate; the event partition itself never produces
+`low`, so there is nothing to gate here).
+
+`not_a_record` (a STRAVA stub-shaped activity — five keys, `_note` present,
+`source == "STRAVA"`, D-24) is a distinct `ResolveFTP` outcome from
+`Applicable: false` (a type FTP genuinely does not apply to, such as
+`Walk`/`Run`/`WeightTraining`): setting `FTPRequest.StubShape` short-circuits
+classification entirely — before `Type` is even inspected — whereas a
+not-applicable type is classified and then explicitly reported as having no
+FTP-dependent values. Neither case fabricates a zero or a default FTP.
+**Caller note:** detecting the STRAVA-stub shape itself is the caller's job;
+`ResolveFTP` only classifies once told. `analysis workout` does not currently
+set `StubShape` on its `ResolveFTP` call, so a stub-shaped activity passed to
+this command is priced through the ordinary activity partition rather than
+short-circuited to `not_a_record`.
+
+`analysis` command outputs do not currently carry a `schemaVersion` field
+(unlike `rebalance`'s `icu.rebalance.v3` and `plan`'s `icu.plan.v2`); a
+consumer diffing analysis output shape across releases should not assume a
+version marker is present to detect a meaning change.
+
+Cross-period comparison note: like `rebalance`/`plan`'s per-session zone
+watts, this command's FTP is resolved per activity, not fixed for a whole
+history range. A time-in-zone or intensity-distribution comparison across
+activities that resolved different FTPs is comparing against different watt
+boundaries and is not a like-for-like comparison.
+
 ### Current Limitations
 
 - Step matching is best-effort. It uses planned order and detected `WORK`

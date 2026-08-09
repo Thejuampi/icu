@@ -27,7 +27,8 @@ Write a JSON intent (`schemaVersion: icu.plan.intent.v1`):
     "defaultStartTime": "07:00",
     "defaultType": "Ride",
     "defaultCategory": "WORKOUT",
-    "defaultTarget": "POWER"
+    "defaultTarget": "POWER",
+    "sessionEnvironment": ""
   },
   "sessions": [
     {
@@ -39,7 +40,8 @@ Write a JSON intent (`schemaVersion: icu.plan.intent.v1`):
       "desc": "- 60m 70% FTP",
       "descLocal": "- 60m 70%",
       "role": "aerobic",
-      "uid": ""
+      "uid": "",
+      "indoor": null
     }
   ],
   "notes": []
@@ -57,7 +59,17 @@ Field notes:
 - Sessions must include `date` and `name`. Dates outside `oldest`/`newest` are blocking errors (no pending ops).
 - Inverted ranges (`oldest` > `newest`) are blocking.
 - `WORKOUT` sessions require a parseable power description (`descLocal` else `desc`) with calculated `expectedLoad > 0`. Unparseable text or zero load blocks; `NOTE` (and other non-workout categories) may use free text without load.
-- FTP comes from intent `ftp` or `--type` sport settings.
+- FTP comes from intent `ftp` (an outdoor-FTP override only — indoor sessions still price at the athlete's real `IndoorFTP`, not the override) or `--type` sport settings; see FTP Selection below.
+- A session's own `indoor` (when set) takes priority over a matched existing event's `Indoor` flag — the draft describes the session being planned, not the one it might overwrite.
+- `constraints.sessionEnvironment` ("indoor" | "outdoor") is `--session-environment`'s escape hatch for sessions with no per-record signal; the CLI flag overrides whatever the intent file sets. See FTP Selection below.
+
+## FTP Selection (Per Session)
+
+`schemaVersion` is `icu.plan.v2` (`PlanIntentSchemaVersion` stays `icu.plan.intent.v1` — the intent file's added `indoor` field is additive, not a meaning change). The proposal schema bump reflects that this wave changes what a proposal *means*: pre-v2 files priced every session at one FTP number regardless of indoor/outdoor context. `plan preview` and `plan accept` reject an older proposal `schemaVersion` outright with a migration message.
+
+Each resolved `sessions[]` entry carries the same per-session FTP fields as `rebalance` (see `docs/rebalance.md` for the full source/confidence vocabulary and the `ftp_confidence_low` note): `ftpApplied`, `ftpSource`, `ftpDisagreement`, `confidence`, `indoor`. `confidence: medium` still proceeds and prescribes a session — it is weaker evidence than `high`, not a refusal, and is distinct from `low` (a read-path-only tier that the plan/rebalance write path's event partition never produces). `context.zoneBasis` is `"per-session"` for the same reason `rebalance` documents it: zone boundaries vary per session, so cross-period TiZ comparison across this boundary is not valid.
+
+`--session-environment indoor|outdoor` on `plan show` overrides the intent file's own `constraints.sessionEnvironment` for the run; it is distinct from `--indoor` on `events create` / `ftp update` / `sports update`, which set a specific record's own stored flag rather than deciding which FTP number this proposal prices ambiguous sessions at. It appears in `icu plan show --help`.
 
 ## Show (Dry Run)
 
@@ -65,13 +77,14 @@ Field notes:
 icu plan show --file plan.json --intent-file intent.json --now-date 2026-07-27 --type Ride
 ```
 
-`show` fetches activities and events for the intent range (and sport settings when `--type` is set), builds `icu.plan.v1` proposal JSON, and writes it to `--file` with mode `0600`. It does not mutate Intervals.icu.
+`show` fetches activities and events for the intent range (and sport settings when `--type` is set), builds `icu.plan.v2` proposal JSON, and writes it to `--file` with mode `0600`. It does not mutate Intervals.icu.
 
 CLI overrides:
 
 - `--allow-today` / `--allow-past` reopen planned dates locked by default
 - `--now-date DATE` sets the lock boundary used for past/today checks
 - `--type SPORT` loads sport settings FTP when intent omits `ftp`
+- `--session-environment indoor|outdoor` overrides intent `constraints.sessionEnvironment` for this run
 
 The proposal includes:
 
@@ -108,3 +121,4 @@ icu plan accept --file plan.json
 - Past planned dates are locked unless `--allow-past` / intent `allowPast`
 - Today is locked unless `--allow-today` / intent `allowToday`
 - No hidden physiological coach defaults: sessions, times, types, and targets come from intent or explicit flags
+- `update` operation bodies preserve the matched event's existing indoor/outdoor classification (`Indoor`) unless `--session-environment` explicitly overrides it — an update that does not intend an environment change never resets `Indoor` to Go's zero value

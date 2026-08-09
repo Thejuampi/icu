@@ -180,16 +180,30 @@ func AnalyzeWorkoutExecution(inputs WorkoutExecutionInputs, options WorkoutExecu
 	result.Scope.EventID = result.Match.EventID
 
 	settings := inputs.SportSettings
-	var ftp, lthr int
+
+	var lthr int
 	if settings != nil {
-		ftp = settings.FTP
 		lthr = settings.LTHR
-	}
-	if ftp == 0 {
-		ftp = inputs.Activity.FTP
 	}
 	if lthr == 0 {
 		lthr = inputs.Activity.LTHR
+	}
+
+	// D-10/F-1: resolve indoor-vs-outdoor FTP by type instead of always
+	// picking SportSettings.FTP regardless of environment (the bug that made
+	// this disagree with both rebalance and plan). Trainer is intentionally
+	// nil: Activity.Trainer is not yet an exposed Go field (F-20's evidence
+	// was gathered via raw HTTP, bypassing this package's types entirely;
+	// adding it is wave-2 scope, not wave-1b's). D-10 still resolves
+	// type_inherent/type_default correctly without it — only per-record
+	// flag_asserted overrides and Disagreement tracking are unavailable
+	// until then. Activity.FTP (the API's own per-activity number) remains
+	// the fallback when no SportSettings FTP applies at all.
+	selection := ResolveFTP(FTPRequest{Type: inputs.Activity.Type, Entity: FTPEntityActivity, Settings: settings})
+
+	ftp := selection.Watts
+	if ftp == 0 {
+		ftp = inputs.Activity.FTP
 	}
 
 	result.Execution.Micro = AnalyzeActivityMicro(inputs.Activity, inputs.Streams, inputs.Intervals, ftp, lthr)

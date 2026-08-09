@@ -289,3 +289,65 @@ func TestResolveFTPStubShapeShortCircuitsEntityPartition(t *testing.T) {
 		t.Fatalf("ResolveFTP(%+v) = %+v, want %+v", request, got, want)
 	}
 }
+
+func explicitPtr(value string) *string { return &value }
+
+// D-10c / D-9: --session-environment decides ambiguous and type-default
+// classes at medium confidence (the plan's own tier definition reserves high
+// for type_inherent only), but never overrides a type-inherent resolution —
+// "this type cannot be otherwise" outranks a per-invocation scalar.
+func TestResolveFTPExplicitOverride(t *testing.T) {
+	t.Parallel()
+
+	settings := &icu.SportSettings{FTP: 270, IndoorFTP: 285}
+
+	cases := []struct {
+		name    string
+		request icu.FTPRequest
+		want    icu.FTPSelection
+	}{
+		{
+			name: "explicit indoor overrides an ambiguous event with no flag",
+			request: icu.FTPRequest{
+				Type: "Ride", Entity: icu.FTPEntityEvent, Settings: settings, Explicit: explicitPtr("indoor"),
+			},
+			want: icu.FTPSelection{
+				Applicable: true, Watts: 285, Source: icu.FTPSourceExplicit,
+				Class: icu.FTPClassAmbiguous, Confidence: icu.FTPConfidenceMedium,
+				Indoor: trueFlag(), Disagreement: true,
+			},
+		},
+		{
+			name: "explicit outdoor confirms the type-default class with no disagreement",
+			request: icu.FTPRequest{
+				Type: "Ride", Entity: icu.FTPEntityEvent, Settings: settings, Explicit: explicitPtr("outdoor"),
+			},
+			want: icu.FTPSelection{
+				Applicable: true, Watts: 270, Source: icu.FTPSourceExplicit,
+				Class: icu.FTPClassAmbiguous, Confidence: icu.FTPConfidenceMedium,
+				Indoor: falseFlag(),
+			},
+		},
+		{
+			name: "explicit outdoor cannot override a type-inherent VirtualRide",
+			request: icu.FTPRequest{
+				Type: icu.ActivityTypeVirtualRide, Entity: icu.FTPEntityEvent, Settings: settings, Explicit: explicitPtr("outdoor"),
+			},
+			want: icu.FTPSelection{
+				Applicable: true, Watts: 285, Source: icu.FTPSourceTypeInherent,
+				Class: icu.FTPClassIndoor, Confidence: icu.FTPConfidenceHigh, Indoor: trueFlag(),
+			},
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := icu.ResolveFTP(testCase.request)
+			if !reflect.DeepEqual(got, testCase.want) {
+				t.Fatalf("ResolveFTP(%+v) = %+v, want %+v", testCase.request, got, testCase.want)
+			}
+		})
+	}
+}
