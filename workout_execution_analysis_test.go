@@ -30,6 +30,31 @@ func TestMatchWorkoutEventPrefersSameDayWorkout(t *testing.T) {
 	}
 }
 
+func TestMatchWorkoutEventPrefersSameDateOverShorterNextDayEvent(t *testing.T) {
+	t.Parallel()
+
+	activity := icu.Activity{
+		ID: "i173884602", Name: "W32 Sat Z2 Durable + Z3 Spikes", Type: "Ride",
+		StartDateLocal: "2026-08-08T18:04:50", MovingTime: 5637, TrainingLoad: 55,
+	}
+	events := []icu.Event{
+		{
+			ID: 125663242, Category: "WORKOUT", Type: "Ride", Name: "W32 Sat Z2 Durable + Z3 Spikes",
+			StartDateLocal: "2026-08-08T07:00:00", MovingTime: 9495, TrainingLoad: 96,
+		},
+		{
+			ID: 125663243, Category: "WORKOUT", Type: "Ride", Name: "W32 Sun Z2 Cruise + Z3 Spikes",
+			StartDateLocal: "2026-08-09T07:00:00", MovingTime: 4455, TrainingLoad: 44,
+		},
+	}
+
+	got := icu.MatchWorkoutEvent(&activity, events, icu.WorkoutEventMatchOptions{})
+
+	if got.EventID != 125663242 {
+		t.Fatalf("MatchWorkoutEvent = %+v, want same-date event 125663242", got)
+	}
+}
+
 func TestAnalyzeWorkoutExecutionComparesSessionAndReps(t *testing.T) {
 	t.Parallel()
 
