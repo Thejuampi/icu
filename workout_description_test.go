@@ -47,6 +47,75 @@ func TestParseWorkoutDescriptionRejectsAmbiguousText(t *testing.T) {
 	}
 }
 
+func TestParseWorkoutDescriptionSkipsLeadingProse(t *testing.T) {
+	t.Parallel()
+
+	description := "Long Z2 durable 170-180W. HR ~130-140. Skin gate.\n\n- 15m 50-58%\n\n2x\n  - 6m 60-63%\n  - 2m 52-56%"
+
+	doc, err := icu.ParseWorkoutDescription(description)
+
+	if err != nil || len(icu.ExpandWorkoutSteps(doc)) != 5 {
+		t.Fatalf("ParseWorkoutDescription prose = %+v err=%v, want 5 expanded steps", doc, err)
+	}
+}
+
+func TestParseWorkoutDescriptionKeepsProseInDescription(t *testing.T) {
+	t.Parallel()
+
+	description := "Skin gate on long rides.\n- 60m 70%"
+
+	doc, err := icu.ParseWorkoutDescription(description)
+
+	if err != nil || doc.Description != description {
+		t.Fatalf("ParseWorkoutDescription description = %+v err=%v, want the original text", doc, err)
+	}
+}
+
+func TestParseWorkoutDescriptionParsesLeadingKeywordAndUnitSuffix(t *testing.T) {
+	t.Parallel()
+
+	doc, err := icu.ParseWorkoutDescription("- 12m Ramp 50-58% FTP")
+
+	if err != nil || len(doc.Steps) != 1 || !doc.Steps[0].Ramp || doc.Steps[0].Text != "Ramp" {
+		t.Fatalf("ParseWorkoutDescription keyword = %+v err=%v, want one ramp step with text Ramp", doc, err)
+	}
+}
+
+func TestParseWorkoutDescriptionClassifiesLeadingWarmupKeyword(t *testing.T) {
+	t.Parallel()
+
+	doc, err := icu.ParseWorkoutDescription("- 15m Warmup 55-75% FTP")
+
+	if err != nil || icu.ExpandWorkoutSteps(doc)[0].Kind != "warmup" {
+		t.Fatalf("ParseWorkoutDescription leading warmup = %+v err=%v, want warmup kind", doc, err)
+	}
+}
+
+func TestParseWorkoutDescriptionRoundTripsCalendarDescription(t *testing.T) {
+	t.Parallel()
+
+	description := "Long Z2 durable 170-180W. Skin gate.\n\n" +
+		"- 15m Ramp 50-58% FTP\n\n" +
+		"8x\n  - 3m 60-63% FTP\n  - 45s 50-55% FTP\n\n" +
+		"- 12m Ramp 58-50% FTP"
+
+	doc, err := icu.ParseWorkoutDescription(description)
+
+	if err != nil || len(icu.ExpandWorkoutSteps(doc)) != 18 {
+		t.Fatalf("ParseWorkoutDescription calendar text = %+v err=%v, want 18 expanded steps", doc, err)
+	}
+}
+
+func TestParseWorkoutDescriptionStillRejectsMalformedStepLine(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.ParseWorkoutDescription("- 15q 88-92%\n- 60m 70%")
+
+	if !errors.Is(err, icu.ErrWorkoutDescriptionUnsupported) {
+		t.Fatalf("ParseWorkoutDescription malformed step error = %v, want ErrWorkoutDescriptionUnsupported", err)
+	}
+}
+
 func TestParseWorkoutDescriptionPreservesStepText(t *testing.T) {
 	t.Parallel()
 
