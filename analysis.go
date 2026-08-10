@@ -8,6 +8,12 @@ import (
 )
 
 const (
+	// CyclingAnalysisSchemaVersion marks the wire shape of CyclingAnalysis
+	// (D-7): a consumer parsing analysis output needs a version marker to
+	// detect a future meaning change, the same reasoning that already backs
+	// RebalanceSchemaVersion and PlanSchemaVersion.
+	CyclingAnalysisSchemaVersion = "icu.analysis.cycling.v1"
+
 	analysisDateLayout       = "2006-01-02"
 	acuteLoadDays            = 7
 	chronicLoadDays          = 28
@@ -51,18 +57,19 @@ type AnalysisOptions struct {
 }
 
 type CyclingAnalysis struct {
-	Scope        CyclingScope                   `json:"scope"`
-	State        CyclingState                   `json:"state"`
-	Volume       CyclingVolume                  `json:"volume"`
-	PowerAnchors CyclingPowerAnchors            `json:"powerAnchors"`
-	Environment  CyclingEnvironmentContext      `json:"environment"`
-	Load         CyclingLoad                    `json:"load"`
-	Intensity    CyclingIntensity               `json:"intensity"`
-	Durability   CyclingDurability              `json:"durability"`
-	Anaerobic    CyclingAnaerobic               `json:"anaerobic"`
-	Performance  CyclingPerformanceIntelligence `json:"performance"`
-	Sessions     []CyclingSession               `json:"sessions,omitempty"`
-	Warnings     []string                       `json:"warnings,omitempty"`
+	SchemaVersion string                         `json:"schemaVersion"`
+	Scope         CyclingScope                   `json:"scope"`
+	State         CyclingState                   `json:"state"`
+	Volume        CyclingVolume                  `json:"volume"`
+	PowerAnchors  CyclingPowerAnchors            `json:"powerAnchors"`
+	Environment   CyclingEnvironmentContext      `json:"environment"`
+	Load          CyclingLoad                    `json:"load"`
+	Intensity     CyclingIntensity               `json:"intensity"`
+	Durability    CyclingDurability              `json:"durability"`
+	Anaerobic     CyclingAnaerobic               `json:"anaerobic"`
+	Performance   CyclingPerformanceIntelligence `json:"performance"`
+	Sessions      []CyclingSession               `json:"sessions,omitempty"`
+	Warnings      []string                       `json:"warnings,omitempty"`
 }
 
 type CyclingPowerAnchors struct {
@@ -304,6 +311,7 @@ func AnalyzeCyclingActivities(activities []Activity, options AnalysisOptions) Cy
 func newCyclingAnalysisAccumulator(totalActivities int) cyclingAnalysisAccumulator {
 	var accumulator cyclingAnalysisAccumulator
 
+	accumulator.analysis.SchemaVersion = CyclingAnalysisSchemaVersion
 	accumulator.analysis.Scope.Activities = totalActivities
 	accumulator.analysis.Intensity.ZoneSeconds = map[string]int{}
 	accumulator.analysis.Intensity.ZonePercent = map[string]float64{}

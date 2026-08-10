@@ -9,6 +9,12 @@ import (
 )
 
 const (
+	// WorkoutExecutionAnalysisSchemaVersion marks the wire shape of
+	// WorkoutExecutionAnalysis (D-7): a consumer needs a version marker to
+	// detect a future meaning change, the same reasoning that already backs
+	// RebalanceSchemaVersion and PlanSchemaVersion.
+	WorkoutExecutionAnalysisSchemaVersion = "icu.analysis.workout.v1"
+
 	workoutMatchConfidenceHigh     = "high"
 	workoutMatchConfidenceModerate = "moderate"
 	workoutMatchConfidenceLow      = "low"
@@ -52,14 +58,15 @@ type WorkoutExecutionOptions struct {
 }
 
 type WorkoutExecutionAnalysis struct {
-	Scope      WorkoutExecutionScope      `json:"scope"`
-	Activity   CyclingSession             `json:"activity"`
-	Match      WorkoutEventMatch          `json:"match"`
-	Plan       WorkoutPlanSummary         `json:"plan"`
-	Execution  WorkoutExecutionSummary    `json:"execution"`
-	Comparison WorkoutExecutionComparison `json:"comparison"`
-	WBal       *WorkoutWBalAnalysis       `json:"wbal,omitempty"`
-	Warnings   []string                   `json:"warnings,omitempty"`
+	SchemaVersion string                     `json:"schemaVersion"`
+	Scope         WorkoutExecutionScope      `json:"scope"`
+	Activity      CyclingSession             `json:"activity"`
+	Match         WorkoutEventMatch          `json:"match"`
+	Plan          WorkoutPlanSummary         `json:"plan"`
+	Execution     WorkoutExecutionSummary    `json:"execution"`
+	Comparison    WorkoutExecutionComparison `json:"comparison"`
+	WBal          *WorkoutWBalAnalysis       `json:"wbal,omitempty"`
+	Warnings      []string                   `json:"warnings,omitempty"`
 }
 
 type WorkoutWBalAnalysis struct {
@@ -166,6 +173,7 @@ func AnalyzeWorkoutExecution(inputs WorkoutExecutionInputs, options WorkoutExecu
 	}
 
 	var result WorkoutExecutionAnalysis
+	result.SchemaVersion = WorkoutExecutionAnalysisSchemaVersion
 	result.Scope.MatchWindowHours = options.MatchWindowHours
 	if inputs.Activity == nil {
 		result.Match.Confidence = workoutMatchConfidenceNone

@@ -51,6 +51,29 @@ func TestAnalyzeMicrocycleHappyPath(t *testing.T) {
 	}
 }
 
+// TestMicrocycleAnalysisSchemaVersionDidNotDrift pins the literal wire
+// string (D-7), not the constant against itself: a consumer parsing
+// analysis output needs a version marker to detect a future meaning
+// change. Comparing icu.MicrocycleAnalysisSchemaVersion against itself
+// would pass regardless of what the constant holds.
+func TestMicrocycleAnalysisSchemaVersionDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.MicrocycleAnalysisSchemaVersion != "icu.analysis.microcycle.v1" {
+		t.Fatalf("MicrocycleAnalysisSchemaVersion = %q, want icu.analysis.microcycle.v1", icu.MicrocycleAnalysisSchemaVersion)
+	}
+}
+
+func TestAnalyzeMicrocycleEmitsSchemaVersion(t *testing.T) {
+	t.Parallel()
+
+	got := icu.AnalyzeMicrocycle(nil, nil, nil, nil, nil)
+
+	if got.SchemaVersion != "icu.analysis.microcycle.v1" {
+		t.Fatalf("SchemaVersion = %q, want icu.analysis.microcycle.v1", got.SchemaVersion)
+	}
+}
+
 func TestAnalyzeMicrocyclePartialWeek(t *testing.T) {
 	t.Parallel()
 

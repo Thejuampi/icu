@@ -101,6 +101,29 @@ func TestAnalyzeWorkoutExecutionMissingActivityWarns(t *testing.T) {
 	}
 }
 
+// TestWorkoutExecutionAnalysisSchemaVersionDidNotDrift pins the literal
+// wire string (D-7), not the constant against itself: a consumer parsing
+// analysis output needs a version marker to detect a future meaning
+// change. Comparing icu.WorkoutExecutionAnalysisSchemaVersion against
+// itself would pass regardless of what the constant holds.
+func TestWorkoutExecutionAnalysisSchemaVersionDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.WorkoutExecutionAnalysisSchemaVersion != "icu.analysis.workout.v1" {
+		t.Fatalf("WorkoutExecutionAnalysisSchemaVersion = %q, want icu.analysis.workout.v1", icu.WorkoutExecutionAnalysisSchemaVersion)
+	}
+}
+
+func TestAnalyzeWorkoutExecutionEmitsSchemaVersion(t *testing.T) {
+	t.Parallel()
+
+	got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{}, icu.WorkoutExecutionOptions{})
+
+	if got.SchemaVersion != "icu.analysis.workout.v1" {
+		t.Fatalf("SchemaVersion = %q, want icu.analysis.workout.v1", got.SchemaVersion)
+	}
+}
+
 func TestAnalyzeWorkoutExecutionNoMatchReportsWarnings(t *testing.T) {
 	t.Parallel()
 

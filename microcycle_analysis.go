@@ -3,6 +3,12 @@ package icu
 import "time"
 
 const (
+	// MicrocycleAnalysisSchemaVersion marks the wire shape of
+	// MicrocycleAnalysis (D-7): a consumer needs a version marker to detect a
+	// future meaning change, the same reasoning that already backs
+	// RebalanceSchemaVersion and PlanSchemaVersion.
+	MicrocycleAnalysisSchemaVersion = "icu.analysis.microcycle.v1"
+
 	microcycleCommand              = "analysis microcycle"
 	microcycleStatusAvailable      = "available"
 	microcycleStatusMissing        = "missing"
@@ -42,6 +48,7 @@ type MicrocycleOptions struct {
 }
 
 type MicrocycleAnalysis struct {
+	SchemaVersion      string                      `json:"schemaVersion"`
 	Command            string                      `json:"command"`
 	Status             string                      `json:"status"`
 	Microcycle         MicrocycleScope             `json:"microcycle"`
@@ -208,6 +215,7 @@ func AnalyzeMicrocycle(
 	})
 
 	analysis := MicrocycleAnalysis{
+		SchemaVersion:     MicrocycleAnalysisSchemaVersion,
 		Command:           microcycleCommand,
 		Status:            "success",
 		Microcycle:        microcycleScope(options),

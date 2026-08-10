@@ -402,3 +402,26 @@ func TestAnalyzeCyclingActivitiesIncludesTimezoneMetadata(t *testing.T) {
 		t.Fatalf("Scope.TimezoneSource = %q, want %s", got.Scope.TimezoneSource, icu.DefaultAnalysisTimezoneSource)
 	}
 }
+
+// TestCyclingAnalysisSchemaVersionDidNotDrift pins the literal wire string
+// (D-7), not the constant against itself: a consumer parsing analysis
+// output needs a version marker to detect a future meaning change.
+// Comparing icu.CyclingAnalysisSchemaVersion against itself would pass
+// regardless of what the constant holds.
+func TestCyclingAnalysisSchemaVersionDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.CyclingAnalysisSchemaVersion != "icu.analysis.cycling.v1" {
+		t.Fatalf("CyclingAnalysisSchemaVersion = %q, want icu.analysis.cycling.v1", icu.CyclingAnalysisSchemaVersion)
+	}
+}
+
+func TestAnalyzeCyclingActivitiesEmitsSchemaVersion(t *testing.T) {
+	t.Parallel()
+
+	got := icu.AnalyzeCyclingActivities(nil, icu.AnalysisOptions{})
+
+	if got.SchemaVersion != "icu.analysis.cycling.v1" {
+		t.Fatalf("SchemaVersion = %q, want icu.analysis.cycling.v1", got.SchemaVersion)
+	}
+}

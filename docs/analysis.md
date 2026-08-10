@@ -491,10 +491,25 @@ set `StubShape` on its `ResolveFTP` call, so a stub-shaped activity passed to
 this command is priced through the ordinary activity partition rather than
 short-circuited to `not_a_record`.
 
-`analysis` command outputs do not currently carry a `schemaVersion` field
-(unlike `rebalance`'s `icu.rebalance.v3` and `plan`'s `icu.plan.v2`); a
-consumer diffing analysis output shape across releases should not assume a
-version marker is present to detect a meaning change.
+Each `analysis` payload carries its own `schemaVersion` as the first JSON key
+(D-7), the same marker convention as `rebalance`'s `icu.rebalance.v3` and
+`plan`'s `icu.plan.v2`. The four payloads version independently because they
+change independently — a meaning change in one does not imply a bump in the
+others:
+
+| payload | `schemaVersion` |
+| --- | --- |
+| `analysis cycling` (`CyclingAnalysis`) | `icu.analysis.cycling.v1` |
+| `analysis coaching` (`CoachingContext`) | `icu.analysis.coaching.v1` |
+| `analysis microcycle` (`MicrocycleAnalysis`) | `icu.analysis.microcycle.v1` |
+| `analysis workout` (`WorkoutExecutionAnalysis`) | `icu.analysis.workout.v1` |
+
+The field is always populated — never `omitempty` — because an absent
+version is indistinguishable from an old consumer's blind spot, the exact
+ambiguity this marker exists to remove. A consumer should read
+`schemaVersion` before parsing the rest of the payload and refuse (or fall
+back to a compatibility path) on an unrecognized value rather than assume
+today's field shape holds across a version it has not seen.
 
 Cross-period comparison note: like `rebalance`/`plan`'s per-session zone
 watts, this command's FTP is resolved per activity, not fixed for a whole
