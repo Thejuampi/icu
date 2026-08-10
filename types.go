@@ -178,6 +178,29 @@ type Activity struct {
 	IgnorePower bool `json:"icuIgnorePower,omitempty"`
 	IgnoreHR    bool `json:"icuIgnoreHr,omitempty"`
 	IgnoreTime  bool `json:"icuIgnoreTime,omitempty"`
+	// PolarizationIndex, SSCP, SSWPrime, SSPMax, CarbsUsed, CarbsIngested,
+	// RollingFTPDelta, PowerField and HRR are wave-4's emit-only surface
+	// (D-1/A2): present on the wire for a caller with programmatic needs to
+	// read verbatim, but consumed by no aggregate, filter, or decision in
+	// this repository (T4.3 enforces that containment by grep; AGENTS.md's
+	// emit-only rule, T4.4, requires the classification exercise before any
+	// future change may promote one of them into a computed output number).
+	// Each is pointer + omitempty (D-5): absent must not read as measured
+	// zero. On the live corpus (testdata/wave2_live_corpus.json, 230 real
+	// activities), CarbsIngested is non-null on 0 of them and HRR's
+	// AverageWatts member is null on every one of the 49 non-null HRR
+	// records observed — both are typed correctly per the closed schema
+	// but have zero live evidence of ever carrying a non-null value; only a
+	// synthetic fixture can exercise either as present.
+	PolarizationIndex *float64        `json:"polarizationIndex,omitempty"`
+	SSCP              *float64        `json:"ssCp,omitempty"`
+	SSWPrime          *float64        `json:"ssWPrime,omitempty"`
+	SSPMax            *float64        `json:"ssPMax,omitempty"`
+	CarbsUsed         *int            `json:"carbsUsed,omitempty"`
+	CarbsIngested     *int            `json:"carbsIngested,omitempty"`
+	RollingFTPDelta   *int            `json:"icuRollingFtpDelta,omitempty"`
+	PowerField        *string         `json:"powerField,omitempty"`
+	HRR               *HRRMeasurement `json:"icuHrr,omitempty"`
 	// StubShape is D-24's classification of this record as a STRAVA stub
 	// (five raw keys, `_note` present, source == "STRAVA"): not a session,
 	// excluded from every count, load, and pairing. Computed once at
@@ -185,6 +208,28 @@ type Activity struct {
 	// typed struct's own fields cannot reconstruct after the fact. Never
 	// part of the wire contract in either direction.
 	StubShape bool `json:"-"`
+}
+
+// HRRMeasurement is F-24's corrected identity for the live field `icu_hrr`
+// (the field is not named `hrrc`, which does not exist in the schema or the
+// payload): a complete heart-rate-recovery measurement, not an opaque blob,
+// with one closed 8-key shape identical across all 49 non-null records
+// observed in the live corpus. Named distinctly from the existing pure
+// HeartRateRecovery(...) computation in metrics.go, which this type does
+// not wrap or replace. AverageWatts is the only nullable member (D-5) — on
+// the live corpus it is null in all 49 non-null HRR records, so a synthetic
+// fixture is the only way to exercise a populated value. Emit-only
+// (D-1/T4.3): no analysis/rebalance/plan output number depends on any
+// member of this type.
+type HRRMeasurement struct {
+	StartIndex   int  `json:"startIndex"`
+	EndIndex     int  `json:"endIndex"`
+	StartTime    int  `json:"startTime"`
+	EndTime      int  `json:"endTime"`
+	StartBPM     int  `json:"startBpm"`
+	EndBPM       int  `json:"endBpm"`
+	AverageWatts *int `json:"averageWatts,omitempty"`
+	HRR          int  `json:"hrr"`
 }
 
 // ActivityEx represents the request body for updating completed activities.

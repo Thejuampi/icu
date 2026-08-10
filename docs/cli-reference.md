@@ -31,12 +31,12 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 
 - `list`
   Invocation: `icu activities list --oldest DATE --newest DATE [--fields f1,f2] [--limit N] [--route_id ID]`
-  Notes: `--route_id` is supported by the implementation even though it is omitted from help text. Activity JSON includes Intervals load fields such as `icuTrainingLoad`, and when provided by the API also exposes HR-derived `hrLoad`, `hrLoadType`, and `trimp`.
+  Notes: `--route_id` is supported by the implementation even though it is omitted from help text. Activity JSON includes Intervals load fields such as `icuTrainingLoad`, and when provided by the API also exposes HR-derived `hrLoad`, `hrLoadType`, and `trimp`. When `--fields` is omitted, output additionally includes wave-4's nine emit-only fields (`polarizationIndex`, `ssCp`, `ssWPrime`, `ssPMax`, `carbsUsed`, `carbsIngested`, `icuRollingFtpDelta`, `powerField`, `icuHrr`) whenever the API returns them for that activity — see `docs/analysis.md`'s "Emit-Only Activity Fields" section; none of these feed any analysis output.
   Example: `icu activities list --oldest 2026-05-01 --newest 2026-05-31 --limit 50`
 
 - `get`
   Invocation: `icu activities get <id1> [id2 ...]`
-  Notes: multiple IDs are joined into a single request path.
+  Notes: multiple IDs are joined into a single request path. No `--fields` restriction — output includes wave-4's nine emit-only fields (see `list`, above) whenever the API returns them.
   Example: `icu activities get i123 i456`
 
 - `upload`
@@ -56,7 +56,7 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 
 - `search-full`
   Invocation: `icu activities search-full <query> [--limit N]`
-  Notes: returns full activity objects instead of search summaries.
+  Notes: returns full activity objects instead of search summaries. No `--fields` restriction — output includes wave-4's nine emit-only fields (see `list`, above) whenever the API returns them.
   Example: `icu activities search-full "group ride"`
 
 - `interval-search`

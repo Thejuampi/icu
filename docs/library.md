@@ -32,6 +32,37 @@ exported-field type change under Go's own module-versioning convention: no migra
   `"indoor"` key, and only `true` emits it. JSON consumers of this package's HTTP responses see no
   change on the wire.
 
+## New Emit-Only Activity Fields (wave-4/A2)
+
+`Activity` gained nine new exported fields carrying wire data the Intervals.icu API already returned but this package previously dropped on unmarshal. All nine are **emit-only** (see `AGENTS.md`'s "Emit-Only Field Classification"): they round-trip through `Activity`'s JSON marshaling for a caller with programmatic needs to read verbatim, but no function in this package computes anything from them. Each is `nil` when the API omitted or nulled it — pointer + `omitempty`, matching the package's existing convention that an absent optional numeric field must never read as a measured zero.
+
+| Field | Type | JSON tag |
+| --- | --- | --- |
+| `PolarizationIndex` | `*float64` | `polarizationIndex` |
+| `SSCP` | `*float64` | `ssCp` |
+| `SSWPrime` | `*float64` | `ssWPrime` |
+| `SSPMax` | `*float64` | `ssPMax` |
+| `CarbsUsed` | `*int` | `carbsUsed` |
+| `CarbsIngested` | `*int` | `carbsIngested` |
+| `RollingFTPDelta` | `*int` | `icuRollingFtpDelta` |
+| `PowerField` | `*string` | `powerField` |
+| `HRR` | `*HRRMeasurement` | `icuHrr` |
+
+`HRRMeasurement` is a heart-rate-recovery reading with one closed 8-key shape (not an opaque blob, and not the same thing as the package's existing pure `HeartRateRecovery(hr []float64, peakIndex, windowSize int) float64` computation in `metrics.go`, which it neither wraps nor replaces):
+
+| Field | Type | JSON tag |
+| --- | --- | --- |
+| `StartIndex` | `int` | `startIndex` |
+| `EndIndex` | `int` | `endIndex` |
+| `StartTime` | `int` | `startTime` |
+| `EndTime` | `int` | `endTime` |
+| `StartBPM` | `int` | `startBpm` |
+| `EndBPM` | `int` | `endBpm` |
+| `AverageWatts` | `*int` | `averageWatts` (nullable; observed `null` on every non-null `HRR` record in this project's live-corpus fixture — only a synthetic value exercises it as populated) |
+| `HRR` | `int` | `hrr` |
+
+None of these ten fields feed `AnalyzeCyclingActivities`, `AnalyzeMicrocycle`, `BuildRebalanceProposal`, `BuildPlanProposal`, or any other analysis/rebalance/plan entry point — see `docs/analysis.md`'s "Emit-Only Activity Fields" section for the full field table, the dropped-field reasons, and both live-corpus disclosures.
+
 ## What The Package Provides
 
 - `Client`: authenticated HTTP client for the supported Intervals.icu resources

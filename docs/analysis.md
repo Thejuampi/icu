@@ -600,6 +600,38 @@ boundaries and is not a like-for-like comparison.
 - The command is read-only and does not update calendar notes or planned
   workouts.
 
+## Emit-Only Activity Fields (Wave-4/A2)
+
+Wave-4 typed nine fields on `Activity` that intervals.icu's API already returned but this CLI previously dropped silently on the unmarshal/re-marshal round trip. **These fields are emit-only (D-1): they are present on the wire for a caller with programmatic needs to read verbatim, but no `analysis`/`rebalance`/`plan` command consumes any of them, and no command's output number changes as a result of this wave.** They surface only through commands that emit the raw `Activity` JSON directly — `activities list`, `activities get`, `activities search-full` (see `docs/cli-reference.md`) — not through `analysis cycling`'s per-session `sessions` rows or any other analysis output, which deliberately were not extended so the wave-2 golden-corpus regression artifacts (`testdata/wave2_live_corpus_cycling_analysis.golden.json`) stay byte-for-byte unchanged. `AGENTS.md`'s "Emit-Only Field Classification" section governs the exercise required before any future change may promote one of these into a computed output number.
+
+| Field (JSON) | Go field | Type | Non-null on live corpus (230 real activities) |
+| --- | --- | --- | --- |
+| `polarizationIndex` | `PolarizationIndex` | `*float64` | 178/230 |
+| `ssCp` | `SSCP` | `*float64` | 151/230 |
+| `ssWPrime` | `SSWPrime` | `*float64` | 151/230 |
+| `ssPMax` | `SSPMax` | `*float64` | 151/230 |
+| `carbsUsed` | `CarbsUsed` | `*int` | 145/230 |
+| `carbsIngested` | `CarbsIngested` | `*int` | 0/230 |
+| `icuRollingFtpDelta` | `RollingFTPDelta` | `*int` | 155/230 |
+| `powerField` | `PowerField` | `*string` | 151/230 |
+| `icuHrr` | `HRR` (`*HRRMeasurement`, 8-key closed shape) | `*HRRMeasurement` | 49/230 |
+
+**Two disclosures, not silently absorbed:**
+
+1. **`icuHrr.averageWatts` is `null` on all 49 non-null `icuHrr` records in the live corpus — every single one.** The member is correctly typed as a nullable pointer (`*int`) per the schema, but there is currently **zero live evidence it is ever populated**; only a synthetic test fixture can exercise a non-null value (see `TestActivityUnmarshalHRRAverageWattsOnlyExercisedSynthetically`). This is the same shape of claim as wave-2's ignore-flag inertness statement above — say so, do not report a populated `averageWatts` as an observed live effect.
+2. **`carbsIngested` is non-null in 0 of 230 real activities.** Present in the schema and correctly emitted when populated, but this account has never once recorded a value for it. Emitting it is still correct for an emit-only surface; there is simply no live evidence it ever carries a value.
+
+**Dropped, with reasons (not typed):**
+
+| Field | Reason |
+| --- | --- |
+| `pm_battery` | Absent from both the schema and the live payload. |
+| `fitness_load` | Absent from both the schema and the live payload. |
+| `fatigue_load` | Absent from both the schema and the live payload. |
+| `carbs_per_hour` | This is an `Event` **planned target**, not an activity **actual** — a different entity, out of scope for `Activity`'s emit-only surface. |
+
+**Negative `decoupling` constraint.** `Activity.Decoupling` (already existing, not new) takes negative values on the live corpus (49 negative values observed, minimum −43.877388). Any consumer — existing or future — that assumes `decoupling >= 0` is wrong; a negative value is a real, meaningful decoupling reading (HR drifting down relative to power/pace), not an error sentinel.
+
 ## Choosing The Right Analysis Command
 
 - Use `cycling` for completed-work review, intensity distribution, and durability signals.
