@@ -71,6 +71,8 @@ Each resolved `sessions[]` entry carries the same per-session FTP fields as `reb
 
 `--session-environment indoor|outdoor` on `plan show` overrides the intent file's own `constraints.sessionEnvironment` for the run; it is distinct from `--indoor` on `events create` / `ftp update` / `sports update`, which set a specific record's own stored flag rather than deciding which FTP number this proposal prices ambiguous sessions at. It appears in `icu plan show --help`.
 
+**On an `update` operation, `--session-environment outdoor` does change the outgoing request body** — see `docs/rebalance.md`'s `--session-environment` section for the full asymmetry (rebalance and plan share the identical `EventEx.Indoor` write path and the identical bare-`bool`-+-`omitempty` shape). In short: preserving `Indoor: true` marshals `"indoor":true` and is correct regardless of the server's `PUT` clear-vs-merge semantics; overriding to outdoor omits the `indoor` key entirely, a body byte-identical to one that never resolved an environment, so the override's effect on the *stored* record is unverified and will not be verified by this project without writing to Juan's live calendar. `plan_test.go`'s `TestBuildPlanProposalUpdateBodyWirePreservesIndoorTrue` / `TestBuildPlanProposalUpdateBodyWireOverrideOmitsIndoorKey` pin the outgoing bytes for both directions.
+
 ## Show (Dry Run)
 
 ```bash
@@ -121,4 +123,4 @@ icu plan accept --file plan.json
 - Past planned dates are locked unless `--allow-past` / intent `allowPast`
 - Today is locked unless `--allow-today` / intent `allowToday`
 - No hidden physiological coach defaults: sessions, times, types, and targets come from intent or explicit flags
-- `update` operation bodies preserve the matched event's existing indoor/outdoor classification (`Indoor`) unless `--session-environment` explicitly overrides it — an update that does not intend an environment change never resets `Indoor` to Go's zero value
+- `update` operation bodies preserve the matched event's existing indoor/outdoor classification (`Indoor`) unless `--session-environment` explicitly overrides it — an update that does not intend an environment change never resets `Indoor` to Go's zero value. Preserving `Indoor: true` is correct regardless of the server's `PUT` clear-vs-merge semantics; the override-to-outdoor direction's effect on the *stored* record is unverified, because its request body omits `indoor` entirely rather than asserting an explicit `false` (see `--session-environment`, above, and `docs/rebalance.md`'s fuller writeup of the shared `EventEx.Indoor` mechanism)

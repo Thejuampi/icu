@@ -817,8 +817,14 @@ func evaluatePlanWeeklyLoads(input *PlanInput, sessions []PlanResolvedSession, b
 		return nil
 	}
 	completedByWeek := map[string]int{}
-	for index := range input.Activities {
-		activity := &input.Activities[index]
+	// D-24: a STRAVA stub is not a session and must not contribute load, matching
+	// every sibling aggregator's use of ExcludeStubActivities (e.g.
+	// microcycle_analysis.go:216). Currently inert here — a stub carries no
+	// icu_training_load — but this keeps the guarantee structural instead of
+	// incidental if the stub shape ever changes.
+	nonStubActivities := ExcludeStubActivities(input.Activities)
+	for index := range nonStubActivities {
+		activity := &nonStubActivities[index]
 		date := activityDate(activity)
 		if date < input.Intent.Oldest || date > input.Intent.Newest {
 			continue

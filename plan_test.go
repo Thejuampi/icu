@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -242,6 +243,89 @@ func TestBuildPlanProposalUpdateBodySessionEnvironmentOverridesIndoorTrue(t *tes
 	}
 }
 
+// TestBuildPlanProposalUpdateBodyWirePreservesIndoorTrue is F1's wire-level
+// pin, plan's side of W1b-E05: the struct-field assertion above can pass
+// even if the JSON tag regresses. Marshal the actual operation body and
+// require the literal `"indoor":true` bytes an UPDATE with no
+// --session-environment override sends on the wire.
+func TestBuildPlanProposalUpdateBodyWirePreservesIndoorTrue(t *testing.T) {
+	t.Parallel()
+
+	event := icu.Event{
+		ID: 42, Name: "Z2 HR-Control Waves", Category: "WORKOUT", Type: "Ride",
+		StartDateLocal: "2026-07-28T06:30:00", TrainingLoad: 30, MovingTime: 1800, Target: "POWER",
+		Indoor: boolPtr(true),
+	}
+	proposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate: "2026-07-27",
+		Events:  []icu.Event{event},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-07-28",
+			Newest: "2026-07-28",
+			FTP:    300,
+			Constraints: icu.PlanConstraints{
+				AllowUpdate: true, DefaultStartTime: "07:00", DefaultType: "Ride",
+			},
+			Sessions: []icu.PlanSessionDraft{{
+				Date: "2026-07-28", Name: "Z2 HR-Control Waves",
+				Desc: "- 60m 70% FTP", DescLocal: "- 60m 70%",
+			}},
+		},
+	})
+
+	body, err := json.Marshal(proposal.Operations[0].Body)
+	if err != nil {
+		t.Fatalf("marshal operation body: %v", err)
+	}
+
+	if got := string(body); !strings.Contains(got, `"indoor":true`) {
+		t.Fatalf("operation body JSON = %s, want it to contain \"indoor\":true", got)
+	}
+}
+
+// TestBuildPlanProposalUpdateBodyWireOverrideOmitsIndoorKey is F1's
+// wire-level pin, plan's side of W1b-E06: EventEx.Indoor is a bare bool with
+// `omitempty` (LL-17: it must not become a pointer, which would regress the
+// preserve case above), so an override to outdoor marshals to no "indoor"
+// key at all rather than an explicit false — a request body byte-identical
+// to one that never resolved an environment. See docs/rebalance.md for the
+// unverified stored-record caveat this test does not attempt to settle.
+func TestBuildPlanProposalUpdateBodyWireOverrideOmitsIndoorKey(t *testing.T) {
+	t.Parallel()
+
+	event := icu.Event{
+		ID: 42, Name: "Z2 HR-Control Waves", Category: "WORKOUT", Type: "Ride",
+		StartDateLocal: "2026-07-28T06:30:00", TrainingLoad: 30, MovingTime: 1800, Target: "POWER",
+		Indoor: boolPtr(true),
+	}
+	proposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate: "2026-07-27",
+		Events:  []icu.Event{event},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-07-28",
+			Newest: "2026-07-28",
+			FTP:    300,
+			Constraints: icu.PlanConstraints{
+				AllowUpdate: true, DefaultStartTime: "07:00", DefaultType: "Ride",
+				SessionEnvironment: icu.SessionEnvironmentOutdoor,
+			},
+			Sessions: []icu.PlanSessionDraft{{
+				Date: "2026-07-28", Name: "Z2 HR-Control Waves",
+				Desc: "- 60m 70% FTP", DescLocal: "- 60m 70%",
+			}},
+		},
+	})
+
+	body, err := json.Marshal(proposal.Operations[0].Body)
+	if err != nil {
+		t.Fatalf("marshal operation body: %v", err)
+	}
+
+	if got := string(body); strings.Contains(got, `"indoor"`) {
+		t.Fatalf("operation body JSON = %s, want no \"indoor\" key (explicit outdoor override omits, does not send false)", got)
+	}
+}
+
 func TestBuildPlanProposalMatchesEventByUID(t *testing.T) {
 	t.Parallel()
 
@@ -438,6 +522,39 @@ func TestBuildPlanProposalWeeklyTargetWarningNotBlocking(t *testing.T) {
 
 	if proposal.Validation.Blocking || len(proposal.Validation.Warnings) == 0 {
 		t.Fatalf("validation = %+v, want non-blocking weekly target warning", proposal.Validation)
+	}
+}
+
+// TestBuildPlanProposalWeeklyLoadExcludesStubActivity is F2: a D-24 STRAVA
+// stub is not a session and must not contribute to weeklyLoads.completedLoad,
+// matching every sibling aggregator's use of ExcludeStubActivities. The stub
+// here carries a deliberately large TrainingLoad to prove exclusion rather
+// than relying on real stubs never happening to carry one.
+func TestBuildPlanProposalWeeklyLoadExcludesStubActivity(t *testing.T) {
+	t.Parallel()
+
+	proposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate: "2026-07-27",
+		Activities: []icu.Activity{{
+			StartDateLocal: "2026-07-28T00:00:00",
+			TrainingLoad:   500,
+			StubShape:      true,
+		}},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-07-28",
+			Newest: "2026-08-02",
+			FTP:    300,
+			WeeklyTargets: []icu.PlanWeeklyTarget{{
+				WeekStart: "2026-07-27", TargetLoad: 200, Tolerance: 10,
+			}},
+			Constraints: icu.PlanConstraints{
+				AllowCreate: true, DefaultStartTime: "07:00", DefaultType: "Ride", DefaultCategory: "WORKOUT",
+			},
+		},
+	})
+
+	if len(proposal.WeeklyLoads) != 1 || proposal.WeeklyLoads[0].CompletedLoad != 0 {
+		t.Fatalf("weeklyLoads = %+v, want one week with completedLoad 0 (stub excluded despite TrainingLoad 500)", proposal.WeeklyLoads)
 	}
 }
 

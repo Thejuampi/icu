@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -920,7 +921,7 @@ func TestRebalanceBaselineStubActivityDoesNotLockPlannedEvent(t *testing.T) {
 func TestRebalanceUpdateBodyPreservesIndoorTrueWithoutSessionEnvironment(t *testing.T) {
 	t.Parallel()
 
-	input := rebalanceUpdateEnvironmentFixture(true, "")
+	input := rebalanceUpdateEnvironmentFixture("")
 
 	proposal := icu.BuildRebalanceProposal(&input)
 
@@ -935,7 +936,7 @@ func TestRebalanceUpdateBodyPreservesIndoorTrueWithoutSessionEnvironment(t *test
 func TestRebalanceUpdateBodySessionEnvironmentOverridesIndoorTrue(t *testing.T) {
 	t.Parallel()
 
-	input := rebalanceUpdateEnvironmentFixture(true, icu.SessionEnvironmentOutdoor)
+	input := rebalanceUpdateEnvironmentFixture(icu.SessionEnvironmentOutdoor)
 
 	proposal := icu.BuildRebalanceProposal(&input)
 
@@ -944,19 +945,69 @@ func TestRebalanceUpdateBodySessionEnvironmentOverridesIndoorTrue(t *testing.T) 
 	}
 }
 
-// rebalanceUpdateEnvironmentFixture builds a single-event week (no
-// synthetic Constraints.SportType injected, so the D-10c mixed-week gate
-// never fires here) so W1b-E05/E06 can isolate the UPDATE body's Indoor
-// value from the mixed-week refusal path exercised separately by
-// TestRebalanceMixedWeekWithSessionEnvironmentRefuses.
-func rebalanceUpdateEnvironmentFixture(indoor bool, sessionEnvironment string) icu.RebalanceInput {
+// TestRebalanceUpdateBodyWirePreservesIndoorTrue is F1's wire-level pin for
+// W1b-E05: the two prior tests above only assert the in-memory
+// EventEx.Indoor bool, which can pass even if the JSON tag regresses.
+// Marshal the actual operation body and require the literal `"indoor":true`
+// bytes an UPDATE with no --session-environment override sends on the wire.
+func TestRebalanceUpdateBodyWirePreservesIndoorTrue(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceUpdateEnvironmentFixture("")
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	body, err := json.Marshal(proposal.Operations[0].Body)
+	if err != nil {
+		t.Fatalf("marshal operation body: %v", err)
+	}
+
+	if got := string(body); !strings.Contains(got, `"indoor":true`) {
+		t.Fatalf("operation body JSON = %s, want it to contain \"indoor\":true", got)
+	}
+}
+
+// TestRebalanceUpdateBodyWireOverrideOmitsIndoorKey is F1's wire-level pin
+// for W1b-E06: EventEx.Indoor is a bare bool with `omitempty` (LL-17: it
+// must not become a pointer, which would regress
+// TestRebalanceUpdateBodyWirePreservesIndoorTrue's preserve case), so an
+// override to outdoor marshals to no "indoor" key at all rather than an
+// explicit false. That request body is byte-identical to one that never
+// resolved an environment — the override's effect on the *stored* record is
+// unverified (see docs/rebalance.md); this test only pins the outgoing
+// bytes, which is the part this repository can assert without writing to
+// Juan's live calendar.
+func TestRebalanceUpdateBodyWireOverrideOmitsIndoorKey(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceUpdateEnvironmentFixture(icu.SessionEnvironmentOutdoor)
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	body, err := json.Marshal(proposal.Operations[0].Body)
+	if err != nil {
+		t.Fatalf("marshal operation body: %v", err)
+	}
+
+	if got := string(body); strings.Contains(got, `"indoor"`) {
+		t.Fatalf("operation body JSON = %s, want no \"indoor\" key (explicit outdoor override omits, does not send false)", got)
+	}
+}
+
+// rebalanceUpdateEnvironmentFixture builds a single-event week with the
+// event's own Indoor already resolved true (no synthetic
+// Constraints.SportType injected, so the D-10c mixed-week gate never fires
+// here) so W1b-E05/E06 can isolate the UPDATE body's Indoor value from the
+// mixed-week refusal path exercised separately by
+// TestRebalanceMixedWeekWithSessionEnvironmentRefuses. Every call site needs
+// Indoor true — that is the case D-25 protects — so it is fixed here rather
+// than threaded as an always-true parameter.
+func rebalanceUpdateEnvironmentFixture(sessionEnvironment string) icu.RebalanceInput {
 	return icu.RebalanceInput{
 		AthleteID: "i1",
 		NowDate:   "2026-06-24",
 		Events: []icu.Event{
 			{
 				ID: 5, Category: "WORKOUT", Type: "Ride", StartDateLocal: "2026-06-27T00:00:00",
-				Name: "Endurance", TrainingLoad: 100, MovingTime: 5400, Intensity: 0.65, Indoor: boolPtr(indoor),
+				Name: "Endurance", TrainingLoad: 100, MovingTime: 5400, Intensity: 0.65, Indoor: boolPtr(true),
 			},
 		},
 		SportSettings: &icu.SportSettings{FTP: 270, IndoorFTP: 285, PowerZones: []int{55, 75, 90}},
