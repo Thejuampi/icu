@@ -360,6 +360,12 @@ func AnalyzeTrainingPlanWithContext(
 	options TrainingPlanOptions,
 	context TrainingPlanContext,
 ) TrainingPlanAnalysis {
+	// Stage 6 R14: route through the shared choke point (activity_validity.go)
+	// before any of activities is summed into history load/sessions or fed
+	// to the FTP anchors — every other aggregator in this package already
+	// filters here (rebalance.go, plan.go, microcycle_analysis.go); this
+	// function was one of the two that didn't.
+	activities = ExcludeStubActivities(activities)
 	accumulator := newTrainingPlanAccumulator(events, options, context)
 
 	for index := range events {

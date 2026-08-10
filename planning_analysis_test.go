@@ -795,6 +795,36 @@ func plannedTarget(date, name, category string) icu.Event {
 	return event
 }
 
+// TestAnalyzeTrainingPlanExcludesStubActivitiesFromHistory is Stage 6 R14:
+// AnalyzeTrainingPlanWithContext must never let a D-24 STRAVA stub occupy a
+// completed week or a load sum. A real STRAVA stub always carries Type ==
+// "", so IsCyclingActivityType already excludes it incidentally today; this
+// test gives the stub a cycling Type to prove the exclusion is structural
+// (ExcludeStubActivities filtering on StubShape) rather than a side effect
+// of that incidental Type check. Before Stage 6 R14's fix, this stub's load
+// would have been summed into the completed week.
+func TestAnalyzeTrainingPlanExcludesStubActivitiesFromHistory(t *testing.T) {
+	t.Parallel()
+
+	realRide := completedRide("2026-05-05T08:00:00", 440, 36000)
+
+	var stub icu.Activity
+	stub.StubShape = true
+	stub.Type = testRideType
+	stub.StartDateLocal = "2026-05-06T08:00:00"
+	stub.TrainingLoad = 999
+	stub.MovingTime = 99000
+
+	got := icu.AnalyzeTrainingPlan([]icu.Activity{realRide, stub}, nil, icu.TrainingPlanOptions{
+		HistoryStartDate: "2026-05-04",
+		HistoryEndDate:   "2026-05-10",
+	})
+
+	if got.History.AverageWeeklyLoad != 440 {
+		t.Fatalf("History.AverageWeeklyLoad = %v, want 440 (stub's 999 load excluded)", got.History.AverageWeeklyLoad)
+	}
+}
+
 func containsAdjustmentCondition(adjustments []icu.TrainingPlanDayAdjustment, condition string) bool {
 	for index := range adjustments {
 		if adjustments[index].Condition == condition {

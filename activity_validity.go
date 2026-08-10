@@ -76,14 +76,32 @@ func activityIgnoreScope(activity *Activity) string {
 	}
 }
 
-// ExcludeStubActivities is the single shared choke point (T2.3/T2.4) every
-// consumer of a caller-supplied activity slice passes through exactly once:
-// a D-24 STRAVA stub is not a session, so it must never occupy a count, a
-// load aggregate, a "day already has a completed session" check, or a
-// pairing anywhere in the codebase. Centralizing this here means fixing a
-// stub-contamination defect once, instead of re-deriving the predicate at
-// every call site (rebalance baseline, cycling analysis, microcycle
-// analysis, rebalance envelope iterators all call this).
+// ExcludeStubActivities is the intended single shared choke point (T2.3/
+// T2.4) for every consumer of a caller-supplied activity slice: a D-24
+// STRAVA stub is not a session, so it should never occupy a count, a load
+// aggregate, a "day already has a completed session" check, or a pairing
+// anywhere in the codebase. Centralizing the predicate here means fixing a
+// stub-contamination defect once instead of re-deriving it at every call
+// site.
+//
+// Stage 6 R14 correction: the previous version of this comment claimed that
+// property as already true "anywhere in the codebase." It was not — nothing
+// enforces that a consumer actually calls this function, and
+// adaptation_analysis.go/planning_analysis.go silently summed raw activity
+// slices for months without going through it (the same bug, one level out,
+// as Stage 5's F2). This function only implements the predicate; it cannot
+// compel a caller to use it. Known callers today: rebalance.go, plan.go,
+// microcycle_analysis.go, adaptation_analysis.go, planning_analysis.go. The
+// part of this guarantee that is actually enforced is narrower and lives in
+// TestScopeActivitiesInvariantAcrossCommands
+// (scope_activities_invariant_test.go): every command in that test's
+// literal, human-maintained table must report the same scope.activities
+// count for the same window, so a future aggregator that bypasses this
+// function and exposes scope.activities fails a test instead of shipping a
+// silently wrong number. That test does not, and cannot, catch a bypass in
+// a command outside its enumerated table (e.g. a future load-only
+// aggregator with no scope.activities field) — this comment does not
+// overclaim past what is actually checked.
 func ExcludeStubActivities(activities []Activity) []Activity {
 	filtered := make([]Activity, 0, len(activities))
 

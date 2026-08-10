@@ -94,6 +94,13 @@ func AnalyzeCyclingAdaptation(
 	wellness *WellnessAnalysis,
 	options AnalysisOptions,
 ) CyclingAdaptationAnalysis {
+	// Stage 6 R14: route through the shared choke point (activity_validity.go)
+	// before Scope.Activities is counted or any load is summed below. A D-24
+	// STRAVA stub is not a session; every other aggregator in this package
+	// already filters here (rebalance.go, plan.go, microcycle_analysis.go) —
+	// this function was the one that didn't, inflating both the reported
+	// count and (silently) every load sum derived from activities.
+	activities = ExcludeStubActivities(activities)
 	analysis := CyclingAdaptationAnalysis{
 		Scope: AdaptationScope{
 			StartDate:      options.StartDate,
