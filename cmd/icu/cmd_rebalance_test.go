@@ -291,21 +291,26 @@ func TestRebalanceDryRunRejectsMaxHRFlag(t *testing.T) {
 // dead code — the same failure never surfaced because both checks reject.
 // This test pins both halves of the fix: the schema no longer treats
 // --max-hr as unknown, and the specific message still fires once past it.
-func TestRebalanceShowMaxHRFlagReachesSpecificRejection(t *testing.T) {
+func TestRebalanceShowSchemaAcceptsMaxHRFlagAsDeclared(t *testing.T) {
 	t.Parallel()
 
 	cmd := rebalanceDryRunCommand()
 	schemaFlags := map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07", "max-hr": "140"}
 
-	if err := validateCommandInput(cmd, nil, schemaFlags); err != nil {
+	err := validateCommandInput(cmd, nil, schemaFlags)
+	if err != nil {
 		t.Fatalf("validateCommandInput() = %v, want --max-hr accepted as a declared flag", err)
 	}
+}
+
+func TestRebalanceShowMaxHRFlagReachesSpecificRejection(t *testing.T) {
+	t.Parallel()
 
 	_, client := rebalanceTestRegistryClient(t)
 	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
 	flags["max-hr"] = "140"
 
-	err := cmd.Run(nil, flags, client)
+	err := rebalanceDryRunCommand().Run(nil, flags, client)
 
 	if err == nil || !strings.Contains(err.Error(), "max-hr is not supported") {
 		t.Fatalf("err = %v, want the specific max-hr rejection", err)
@@ -361,6 +366,47 @@ func TestRebalanceDryRunRejectsMalformedDate(t *testing.T) {
 
 	if !errors.Is(err, errInvalidValue) {
 		t.Fatalf("err = %v, want errInvalidValue for a malformed date", err)
+	}
+}
+
+// TestRebalanceDryRunRejectsMalformedNowDate is Stage 6 R11:
+// rebalanceDateLockedByTime (rebalance.go) compares NowDate against session
+// dates as a raw string (date < input.NowDate). An unvalidated NowDate that
+// sorts below digit characters (e.g. "!") makes every real date compare as
+// "after now", silently defeating keepCompleted/AllowPast for a genuinely
+// past week and letting create/update operations reach the output file
+// that `rebalance accept` would apply next.
+func TestRebalanceDryRunRejectsMalformedNowDate(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["now-date"] = "!"
+
+	err := rebalanceDryRunCommand().Run(nil, flags, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for a malformed --now-date", err)
+	}
+}
+
+// TestRebalanceDryRunNeverWritesProposalFileForMalformedNowDate is Stage 6
+// R11's observable-consequence half: pin that the proposal file is never
+// written at all when --now-date is malformed, not just that an error is
+// returned, so there is nothing left for a caller to accidentally accept.
+func TestRebalanceDryRunNeverWritesProposalFileForMalformedNowDate(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	file := filepath.Join(t.TempDir(), "rebalance.json")
+	flags := rebalanceDryRunFlags(file)
+	flags["now-date"] = "!"
+
+	_ = rebalanceDryRunCommand().Run(nil, flags, client)
+	_, statErr := os.Stat(file)
+
+	if !os.IsNotExist(statErr) {
+		t.Fatalf("proposal file exists after a rejected --now-date; want no file written (no operations ever produced)")
 	}
 }
 

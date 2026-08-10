@@ -164,6 +164,15 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 	if err := validateAnalysisRange("--oldest", oldest, "--newest", newest); err != nil {
 		return icu.RebalanceInput{}, err
 	}
+	nowDate := icu.StringFlag(flags, "now-date", newest)
+	// Stage 6 R11: rebalanceDateLockedByTime (rebalance.go) compares NowDate
+	// against session dates as a raw string; a malformed value (e.g. one that
+	// sorts below digit characters) makes every real date compare as "after
+	// now", silently defeating keepCompleted/AllowPast for a genuinely past
+	// week. Validate at the boundary rather than trusting the comparison.
+	if _, err := parseAnalysisDate("--now-date", nowDate); err != nil {
+		return icu.RebalanceInput{}, err
+	}
 	if _, ok := flags["max-hr"]; ok {
 		return icu.RebalanceInput{}, errors.New("max-hr is not supported for power rebalance sessions")
 	}
@@ -192,7 +201,7 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 
 	return icu.RebalanceInput{
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
-		NowDate:       icu.StringFlag(flags, "now-date", newest),
+		NowDate:       nowDate,
 		Activities:    activities,
 		Events:        events,
 		SportSettings: sportSettings,

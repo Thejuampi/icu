@@ -389,6 +389,26 @@ func TestReadPlanInputRejectsInvertedIntentDateRange(t *testing.T) {
 	}
 }
 
+// TestReadPlanInputRejectsMalformedNowDate is Stage 6 R11: plan reaches the
+// same NowDate-as-raw-string lock decision rebalance does (dateLockedForPlan
+// -> dateLocked -> rebalanceDateLockedByTime), through --now-date defaulting
+// unvalidated straight into PlanInput.NowDate. Pin the rejection at the same
+// boundary rebalance now has, so plan cannot construct an input carrying an
+// unparseable lock boundary either.
+func TestReadPlanInputRejectsMalformedNowDate(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	intentFile := filepath.Join(t.TempDir(), "intent.json")
+	writePlanTestIntent(t, intentFile, samplePlanIntent())
+
+	_, err := readPlanInput(map[string]string{"intent-file": intentFile, "now-date": "!"}, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for a malformed --now-date", err)
+	}
+}
+
 func TestReadPlanInputSessionEnvironmentFlagOverridesIntentFile(t *testing.T) {
 	t.Parallel()
 

@@ -132,6 +132,68 @@ func TestAnalyzeWorkoutExecutionAmbiguousTypeWarnsFTPConfidenceLow(t *testing.T)
 	}
 }
 
+// TestAnalyzeWorkoutExecutionNoFTPMissingWarningForNotApplicableType is
+// Stage 6 R12: Walk and Run are both D-10 class-4 (FTP genuinely does not
+// apply), so ResolveFTP reports Applicable: false for both. Before this fix,
+// the "ftp is missing" warning was driven by whether the effective ftp
+// variable (which falls back to the raw Activity.FTP/icu_ftp field) happened
+// to be zero -- an artifact of what the upstream record carried, not of
+// applicability -- so the same not-applicable type could warn or not warn
+// depending on incidental API data. Pin that neither Walk nor Run warns,
+// regardless of whether the raw icu_ftp field is populated.
+func TestAnalyzeWorkoutExecutionNoFTPMissingWarningForNotApplicableType(t *testing.T) {
+	t.Parallel()
+
+	settings := &icu.SportSettings{FTP: 270, IndoorFTP: 285}
+	cases := []struct {
+		name        string
+		sportType   string
+		activityFTP int
+	}{
+		{name: "walk with raw icu_ftp present", sportType: "Walk", activityFTP: 150},
+		{name: "run with no raw icu_ftp", sportType: "Run", activityFTP: 0},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			activity := icu.Activity{
+				ID: "a1", Type: testCase.sportType, StartDateLocal: "2026-06-18T18:09:46",
+				MovingTime: 3600, FTP: testCase.activityFTP,
+			}
+
+			got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{
+				Activity:      &activity,
+				SportSettings: settings,
+			}, icu.WorkoutExecutionOptions{})
+
+			if strings.Contains(strings.Join(got.Warnings, "\n"), "ftp is missing") {
+				t.Fatalf("warnings = %v, want no ftp-is-missing warning for a not-applicable type", got.Warnings)
+			}
+		})
+	}
+}
+
+// TestAnalyzeWorkoutExecutionWarnsFTPMissingWhenGenuinelyApplicable is
+// Stage 6 R12's positive half: a Ride (D-10 class 2, Applicable: true) with
+// no SportSettings and no raw Activity.FTP genuinely has no FTP to resolve,
+// so the warning must still fire. The R12 fix narrows the trigger to
+// Applicable && ftp == 0, not remove it.
+func TestAnalyzeWorkoutExecutionWarnsFTPMissingWhenGenuinelyApplicable(t *testing.T) {
+	t.Parallel()
+
+	activity := icu.Activity{ID: "a1", Type: "Ride", StartDateLocal: "2026-06-18T18:09:46", MovingTime: 3600}
+
+	got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{
+		Activity: &activity,
+	}, icu.WorkoutExecutionOptions{})
+
+	if !strings.Contains(strings.Join(got.Warnings, "\n"), "ftp is missing") {
+		t.Fatalf("warnings = %v, want ftp-is-missing warning for an applicable type with no resolvable FTP", got.Warnings)
+	}
+}
+
 func TestAnalyzeWorkoutExecutionMissingActivityWarns(t *testing.T) {
 	t.Parallel()
 

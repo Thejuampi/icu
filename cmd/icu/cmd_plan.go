@@ -165,6 +165,13 @@ func readPlanInput(flags map[string]string, client *icu.Client) (icu.PlanInput, 
 	if err := validateAnalysisRange("intent.oldest", oldest, "intent.newest", newest); err != nil {
 		return icu.PlanInput{}, err
 	}
+	nowDate := icu.StringFlag(flags, "now-date", newest)
+	// Stage 6 R11: plan's lock decision (dateLockedForPlan -> dateLocked ->
+	// rebalanceDateLockedByTime) reaches the same raw string comparison
+	// against NowDate that rebalance does; validate here for the same reason.
+	if _, err := parseAnalysisDate("--now-date", nowDate); err != nil {
+		return icu.PlanInput{}, err
+	}
 	sessionEnvironment, err := sessionEnvironmentFromFlags(flags)
 	if err != nil {
 		return icu.PlanInput{}, err
@@ -188,7 +195,7 @@ func readPlanInput(flags map[string]string, client *icu.Client) (icu.PlanInput, 
 
 	return icu.PlanInput{
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
-		NowDate:       icu.StringFlag(flags, "now-date", newest),
+		NowDate:       nowDate,
 		Activities:    activities,
 		Events:        events,
 		SportSettings: sportSettings,

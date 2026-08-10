@@ -561,9 +561,21 @@ not-applicable type is classified and then explicitly reported as having no
 FTP-dependent values. Neither case fabricates a zero or a default FTP.
 **Caller note:** detecting the STRAVA-stub shape itself is the caller's job;
 `ResolveFTP` only classifies once told. `analysis workout` sets `StubShape:
-inputs.Activity.StubShape` on its `ResolveFTP` call, so a stub-shaped activity
-passed to this command **is** short-circuited to `not_a_record` rather than
-priced through the ordinary activity partition.
+inputs.Activity.StubShape` on its `ResolveFTP` call, so a stub-shaped
+`Activity` value passed into this code path **is** short-circuited to
+`not_a_record` rather than priced through the ordinary activity partition —
+that much is code-accurate. It is not, however, something you can observe
+by running `analysis workout <stub-id>` against a real STRAVA stub (Stage 6
+R13): that command's single-activity fetch (`GET /activity/{id}`) 404s/422s
+upstream before an `Activity` value even exists to classify, so this
+short-circuit never actually executes for that command against real data.
+The D-24 stub classification **is** reachable, and is where the 73-of-303
+split (see **Validity, Ignore Flags, and STRAVA Stubs** above) was actually
+measured: the bulk/list-shaped fetches behind `analysis cycling`
+(`AnalyzeCyclingActivities`'s own `activity.StubShape` filter) and
+`analysis microcycle` (`ExcludeStubActivities`) pull many activities per
+call, and upstream includes stub-shaped records in that bulk response
+without erroring, unlike the single-activity endpoint.
 
 `analysis workout` also emits its resolution's provenance directly:
 `ftpSource` and `ftpConfidence` sit alongside `activity.ftp` at the top level
@@ -573,6 +585,18 @@ one activity per invocation), and a `ftp_confidence_low` entry is added to
 fields are `omitempty`: they are absent, not empty-stringed, when
 `ResolveFTP` reports `Applicable: false` or short-circuits to `not_a_record`,
 since there is no FTP provenance to report in either case.
+
+The `"ftp is missing"` warning (distinct from `ftp_confidence_low` above) is
+gated on that same `Applicable` flag (Stage 6 R12), not on whether the
+command's own effective FTP number happens to be zero: the effective number
+falls back to the activity's raw `icuFtp` field when `ResolveFTP` resolves no
+watts, and upstream populates that raw field inconsistently across
+not-applicable types (e.g. present on some `Walk` records, absent on some
+`Run` records) — an artifact of what a given record happened to carry, not
+of whether FTP applies to the type. `Walk`/`Run`/`WeightTraining`/etc. never
+emit `"ftp is missing"` for this reason, matching the "explicitly reported as
+having no FTP-dependent values" promise above; the warning still fires for
+an applicable type (e.g. `Ride`) that genuinely has no resolvable FTP.
 
 `analysis cycling` emits a single top-level `ftpDiscriminatorConflicts` key
 (`omitempty`, absent when there is nothing to count), mirroring

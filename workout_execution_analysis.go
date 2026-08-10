@@ -264,7 +264,7 @@ func AnalyzeWorkoutExecution(inputs WorkoutExecutionInputs, options WorkoutExecu
 		result.Execution.IntervalsFound = len(inputs.Intervals.Intervals)
 	}
 	result.Execution.StreamsFound = streamKeys(inputs.Streams)
-	result.Warnings = append(result.Warnings, workoutInputWarnings(inputs, ftp, lthr)...)
+	result.Warnings = append(result.Warnings, workoutInputWarnings(inputs, ftp, lthr, selection.Applicable)...)
 
 	event := workoutMatchedEvent(result.Match.EventID, inputs.Events)
 	result.Plan = workoutPlanSummary(event)
@@ -604,7 +604,7 @@ func plannedPowerWatts(target *WorkoutTarget, ftp int) float64 {
 	return value
 }
 
-func workoutInputWarnings(inputs WorkoutExecutionInputs, ftp, lthr int) []string {
+func workoutInputWarnings(inputs WorkoutExecutionInputs, ftp, lthr int, ftpApplicable bool) []string {
 	var warnings []string
 	if len(inputs.Streams) == 0 {
 		warnings = append(warnings, "streams are missing")
@@ -612,7 +612,18 @@ func workoutInputWarnings(inputs WorkoutExecutionInputs, ftp, lthr int) []string
 	if inputs.Intervals == nil || len(inputs.Intervals.Intervals) == 0 {
 		warnings = append(warnings, "intervals are missing")
 	}
-	if ftp == 0 {
+	// Stage 6 R12: gate on the resolver's own Applicable, not on whether the
+	// final effective ftp variable happens to be zero. ftp falls back to
+	// inputs.Activity.FTP (the raw icu_ftp field) when selection.Watts is 0,
+	// and upstream populates that raw field inconsistently across
+	// not-applicable types (e.g. present on some Walk records, absent on
+	// some Run records, or vice versa) -- an artifact of what the API
+	// happened to send, not of whether FTP is applicable to the type. When
+	// FTP genuinely does not apply (Applicable: false), there is nothing
+	// missing to warn about; docs/analysis.md promises a not-applicable type
+	// is reported as having no FTP-dependent values, not a false "missing"
+	// cause.
+	if ftpApplicable && ftp == 0 {
 		warnings = append(warnings, "ftp is missing")
 	}
 	if lthr == 0 {
