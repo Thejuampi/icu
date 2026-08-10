@@ -165,6 +165,102 @@ func TestMatchWorkoutEventRejectsOutsideWindow(t *testing.T) {
 	}
 }
 
+// TestMatchWorkoutEventServerPairingMatchesOutsideHeuristicWindow is W2-P04:
+// paired_event_id is authoritative (D-21) and matches even when the event
+// falls outside MatchWorkoutEvent's own time window.
+func TestMatchWorkoutEventServerPairingMatchesOutsideHeuristicWindow(t *testing.T) {
+	t.Parallel()
+
+	pairedEventID := 999
+	activity := icu.Activity{
+		ID: "a1", Name: "Long Ride", Type: "Ride", StartDateLocal: "2026-06-18T08:00:00",
+		PairedEventID: &pairedEventID,
+	}
+	events := []icu.Event{
+		{ID: 999, Category: "WORKOUT", Type: "Ride", Name: "Planned Long Ride", StartDateLocal: "2026-05-01T08:00:00"},
+	}
+
+	got := icu.MatchWorkoutEvent(&activity, events, icu.WorkoutEventMatchOptions{MatchWindowHours: 1})
+
+	if got.EventID != 999 || got.Source != "server_paired_event_id" {
+		t.Fatalf("MatchWorkoutEvent server-paired = %+v, want event 999 from server_paired_event_id", got)
+	}
+}
+
+// TestMatchWorkoutEventUnpairedComplianceOmitted is W2-N01: an unpaired
+// activity's compliance (0.0 on all 36 live occurrences, F-18) must never
+// surface, but match.source is still emitted so the absence is explicable.
+func TestMatchWorkoutEventUnpairedComplianceOmitted(t *testing.T) {
+	t.Parallel()
+
+	compliance := 0.0
+	activity := icu.Activity{ID: "a1", Name: "Free Ride", Type: "Ride", StartDateLocal: "2026-06-18T08:00:00", Compliance: &compliance}
+
+	got := icu.MatchWorkoutEvent(&activity, nil, icu.WorkoutEventMatchOptions{})
+
+	if got.Compliance != nil || got.Source != "unmatched" {
+		t.Fatalf("MatchWorkoutEvent unpaired = %+v, want nil compliance and source unmatched", got)
+	}
+}
+
+// TestMatchWorkoutEventStubNeverPaired is W2-N03: a STRAVA stub on the same
+// date as a planned event must not be paired on either the server or the
+// heuristic path, and must not carry a compliance value.
+func TestMatchWorkoutEventStubNeverPaired(t *testing.T) {
+	t.Parallel()
+
+	pairedEventID := 42
+	compliance := 0.8
+	stub := icu.Activity{
+		ID: "s1", StartDateLocal: "2026-06-18T08:00:00", Source: "STRAVA",
+		StubShape: true, PairedEventID: &pairedEventID, Compliance: &compliance,
+	}
+	events := []icu.Event{
+		{ID: 42, Category: "WORKOUT", Type: "Ride", Name: "Planned Ride", StartDateLocal: "2026-06-18T08:00:00"},
+	}
+
+	got := icu.MatchWorkoutEvent(&stub, events, icu.WorkoutEventMatchOptions{})
+
+	if got.EventID != 0 || got.Source != "not_a_record" || got.Compliance != nil {
+		t.Fatalf("MatchWorkoutEvent stub = %+v, want no pairing, source not_a_record, no compliance", got)
+	}
+}
+
+// TestMatchWorkoutEventPairedComplianceKeyLackingIsNil is W2-E02: a paired
+// activity whose payload never carried compliance at all must report a nil
+// pointer (key omitted on marshal), not an invented zero.
+func TestMatchWorkoutEventPairedComplianceKeyLackingIsNil(t *testing.T) {
+	t.Parallel()
+
+	pairedEventID := 7
+	activity := icu.Activity{ID: "a1", StartDateLocal: "2026-06-18T08:00:00", PairedEventID: &pairedEventID}
+	events := []icu.Event{{ID: 7, Category: "WORKOUT", Name: "Planned", StartDateLocal: "2026-06-18T08:00:00"}}
+
+	got := icu.MatchWorkoutEvent(&activity, events, icu.WorkoutEventMatchOptions{})
+
+	if got.Compliance != nil {
+		t.Fatalf("MatchWorkoutEvent = %+v, want nil compliance when the activity never carried the field", got)
+	}
+}
+
+// TestMatchWorkoutEventPairedZeroComplianceIsPresent is W2-E03: a paired
+// activity with a genuine 0.0 compliance must surface the key present with
+// 0, distinct from W2-E02's absent case.
+func TestMatchWorkoutEventPairedZeroComplianceIsPresent(t *testing.T) {
+	t.Parallel()
+
+	pairedEventID := 7
+	compliance := 0.0
+	activity := icu.Activity{ID: "a1", StartDateLocal: "2026-06-18T08:00:00", PairedEventID: &pairedEventID, Compliance: &compliance}
+	events := []icu.Event{{ID: 7, Category: "WORKOUT", Name: "Planned", StartDateLocal: "2026-06-18T08:00:00"}}
+
+	got := icu.MatchWorkoutEvent(&activity, events, icu.WorkoutEventMatchOptions{})
+
+	if got.Compliance == nil || *got.Compliance != 0 {
+		t.Fatalf("MatchWorkoutEvent = %+v, want compliance present with 0", got)
+	}
+}
+
 func repeatValue(value float64, count int) []float64 {
 	result := make([]float64, count)
 	for i := range result {

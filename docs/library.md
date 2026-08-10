@@ -287,10 +287,32 @@ and `plan` call it once per calendar event/session (`FTPEntityEvent`) via each p
 
 ```go
 analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
-	StartDate: "2026-05-01",
-	EndDate:   "2026-05-31",
+	StartDate:             "2026-05-01",
+	EndDate:               "2026-05-31",
+	MinIncludedActivities: 0, // D-4: no default; 0 disables the threshold entirely
 })
 ```
+
+`ClassifyActivityValidity` (D-2/D-24) is the single source of two judgements every consumer of an
+`[]Activity` slice must respect, rather than re-deriving them: whether an activity is a D-24
+STRAVA-stub (`Class: not_a_record`, 5 raw keys, `_note` present, `source == "STRAVA"` — not a
+session at all, excluded from every count and pairing) and, for a real activity, which
+`icu_ignore_*` scope (`power`/`hr`/`all`, D-2's per-flag/union rule) it drops out of.
+`ExcludeStubActivities`/`StubActivitiesOnly` (`activity_validity.go`) are the shared choke point
+every stub-sensitive caller passes an activity slice through exactly once — `AnalyzeCyclingActivities`,
+`AnalyzeMicrocycle`, and `rebalance`'s `normalizeRebalanceInput`/`RebalanceBaseline` all call this
+rather than re-deriving the stub predicate independently (DRY).
+
+`CyclingAnalysis.Validity` (D-3) and `CyclingAnalysis.Load.ByChannel`/`.Divergence` (D-23/T2.5) are
+documented field-by-field in `docs/analysis.md`, including the **inertness statement**: ignore-flag
+filtering is implemented and unit-tested, but has been measured `false` on every real activity in
+this project's own live-corpus test fixture (`testdata/wave2_live_corpus.json`) — do not report a
+number change as caused by ignore-flag filtering without checking `Validity.Excluded > 0` for that
+specific analysis.
+
+D-4's structural refusal (a section's `NIncluded == 0`) keeps that section's already-zero fields in
+place and adds a named warning instead of restructuring the output type into pointers (D-6 declined
+restructuring); see `docs/analysis.md` for the exact warning strings.
 
 ### Wellness analysis
 

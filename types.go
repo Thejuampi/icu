@@ -74,50 +74,64 @@ type AthleteTrainingPlanUpdate struct {
 }
 
 type Activity struct {
-	ID                 string     `json:"id,omitempty"`
-	Name               string     `json:"name,omitempty"`
-	Description        string     `json:"description,omitempty"`
-	Type               string     `json:"type,omitempty"`
-	StartDateLocal     string     `json:"startDateLocal,omitempty"`
-	StartDate          string     `json:"startDate,omitempty"`
-	MovingTime         int        `json:"movingTime,omitempty"`
-	ElapsedTime        int        `json:"elapsedTime,omitempty"`
-	Distance           float64    `json:"distance,omitempty"`
-	TotalElevationGain float64    `json:"totalElevationGain,omitempty"`
-	AverageSpeed       float64    `json:"averageSpeed,omitempty"`
-	MaxSpeed           float64    `json:"maxSpeed,omitempty"`
-	HasHeartRate       bool       `json:"hasHeartrate,omitempty"`
-	AverageHeartRate   int        `json:"averageHeartrate,omitempty"`
-	MaxHeartRate       int        `json:"maxHeartrate,omitempty"`
-	AveragePower       int        `json:"icuAverageWatts,omitempty"`
-	WeightedAvgPower   int        `json:"icuWeightedAvgWatts,omitempty"`
-	AverageCadence     float64    `json:"averageCadence,omitempty"`
-	Calories           int        `json:"calories,omitempty"`
-	TrainingLoad       int        `json:"icuTrainingLoad,omitempty"`
-	HRLoad             int        `json:"hrLoad,omitempty"`
-	HRLoadType         string     `json:"hrLoadType,omitempty"`
-	TRIMP              float64    `json:"trimp,omitempty"`
-	Intensity          float64    `json:"icuIntensity,omitempty"`
-	FTP                int        `json:"icuFtp,omitempty"`
-	CriticalPower      int        `json:"icuPmCp,omitempty"`
-	WPrime             int        `json:"icuPmWPrime,omitempty"`
-	PMax               int        `json:"icuPmPMax,omitempty"`
-	FTPWatts           int        `json:"icuPmFtp,omitempty"`
-	RollingFTP         int        `json:"icuRollingFtp,omitempty"`
-	JoulesAboveFTP     int        `json:"icuJoulesAboveFtp,omitempty"`
-	MaxWbalDepletion   int        `json:"icuMaxWbalDepletion,omitempty"`
-	Decoupling         float64    `json:"decoupling,omitempty"`
-	EfficiencyFactor   float64    `json:"icuEfficiencyFactor,omitempty"`
-	VariabilityIndex   float64    `json:"icuVariabilityIndex,omitempty"`
-	PowerHR            float64    `json:"icuPowerHr,omitempty"`
-	PowerHRZ2          float64    `json:"icuPowerHrZ2,omitempty"`
-	PowerHRZ2Mins      int        `json:"icuPowerHrZ2Mins,omitempty"`
-	CadenceZ2          int        `json:"icuCadenceZ2,omitempty"`
-	RPE                int        `json:"icuRpe,omitempty"`
-	Feel               int        `json:"feel,omitempty"`
-	PerceivedExertion  float64    `json:"perceivedExertion,omitempty"`
-	SessionRPE         int        `json:"sessionRpe,omitempty"`
-	Compliance         float64    `json:"compliance,omitempty"`
+	ID                 string  `json:"id,omitempty"`
+	Name               string  `json:"name,omitempty"`
+	Description        string  `json:"description,omitempty"`
+	Type               string  `json:"type,omitempty"`
+	StartDateLocal     string  `json:"startDateLocal,omitempty"`
+	StartDate          string  `json:"startDate,omitempty"`
+	MovingTime         int     `json:"movingTime,omitempty"`
+	ElapsedTime        int     `json:"elapsedTime,omitempty"`
+	Distance           float64 `json:"distance,omitempty"`
+	TotalElevationGain float64 `json:"totalElevationGain,omitempty"`
+	AverageSpeed       float64 `json:"averageSpeed,omitempty"`
+	MaxSpeed           float64 `json:"maxSpeed,omitempty"`
+	HasHeartRate       bool    `json:"hasHeartrate,omitempty"`
+	AverageHeartRate   int     `json:"averageHeartrate,omitempty"`
+	MaxHeartRate       int     `json:"maxHeartrate,omitempty"`
+	AveragePower       int     `json:"icuAverageWatts,omitempty"`
+	WeightedAvgPower   int     `json:"icuWeightedAvgWatts,omitempty"`
+	AverageCadence     float64 `json:"averageCadence,omitempty"`
+	Calories           int     `json:"calories,omitempty"`
+	TrainingLoad       int     `json:"icuTrainingLoad,omitempty"`
+	// HRLoad is pointer + omitempty (D-5): never fetched before wave-2 (F-8),
+	// so it has zero existing consumers and a measured zero (a real,
+	// zero-load HR session) must not read the same as absent.
+	HRLoad     *int   `json:"hrLoad,omitempty"`
+	HRLoadType string `json:"hrLoadType,omitempty"`
+	// PowerLoad and PaceLoad are the other two load channels alongside
+	// TrainingLoad/HRLoad (D-23/T2.5's tri-load byChannel breakdown).
+	PowerLoad         *int    `json:"powerLoad,omitempty"`
+	PaceLoad          *int    `json:"paceLoad,omitempty"`
+	PaceLoadType      string  `json:"paceLoadType,omitempty"`
+	TRIMP             float64 `json:"trimp,omitempty"`
+	Intensity         float64 `json:"icuIntensity,omitempty"`
+	FTP               int     `json:"icuFtp,omitempty"`
+	CriticalPower     int     `json:"icuPmCp,omitempty"`
+	WPrime            int     `json:"icuPmWPrime,omitempty"`
+	PMax              int     `json:"icuPmPMax,omitempty"`
+	FTPWatts          int     `json:"icuPmFtp,omitempty"`
+	RollingFTP        int     `json:"icuRollingFtp,omitempty"`
+	JoulesAboveFTP    int     `json:"icuJoulesAboveFtp,omitempty"`
+	MaxWbalDepletion  int     `json:"icuMaxWbalDepletion,omitempty"`
+	Decoupling        float64 `json:"decoupling,omitempty"`
+	EfficiencyFactor  float64 `json:"icuEfficiencyFactor,omitempty"`
+	VariabilityIndex  float64 `json:"icuVariabilityIndex,omitempty"`
+	PowerHR           float64 `json:"icuPowerHr,omitempty"`
+	PowerHRZ2         float64 `json:"icuPowerHrZ2,omitempty"`
+	PowerHRZ2Mins     int     `json:"icuPowerHrZ2Mins,omitempty"`
+	CadenceZ2         int     `json:"icuCadenceZ2,omitempty"`
+	RPE               int     `json:"icuRpe,omitempty"`
+	Feel              int     `json:"feel,omitempty"`
+	PerceivedExertion float64 `json:"perceivedExertion,omitempty"`
+	SessionRPE        int     `json:"sessionRpe,omitempty"`
+	// Compliance is pointer + omitempty (D-5): never fetched before wave-2
+	// (F-8), so it has zero existing consumers. F-18/D-21: 0.0 means
+	// "unpaired", not "0% adherence" — all 36 live zero-compliance activities
+	// carry a null paired_event_id. Analysis-workout emits this jointly with
+	// a pairing or not at all (D-21); this pointer only guards nil-vs-zero at
+	// the wire, the pairing gate lives in workout_execution_analysis.go.
+	Compliance         *float64   `json:"compliance,omitempty"`
 	AverageTemp        float64    `json:"averageTemp,omitempty"`
 	MinTemp            float64    `json:"minTemp,omitempty"`
 	MaxTemp            float64    `json:"maxTemp,omitempty"`
@@ -153,6 +167,24 @@ type Activity struct {
 	AthleteMaxHR       int        `json:"athleteMaxHr,omitempty"`
 	ATL                float64    `json:"icuAtl,omitempty"`
 	CTL                float64    `json:"icuCtl,omitempty"`
+	// PairedEventID is the server-authoritative planned-event pairing (D-21):
+	// when set, MatchWorkoutEvent trusts it over the date/name heuristic.
+	PairedEventID *int `json:"pairedEventId,omitempty"`
+	// IgnorePower, IgnoreHR and IgnoreTime are the icu_ignore_* per-flag
+	// exclusion signals (D-2). Plain bool + omitempty: false is the ordinary,
+	// unambiguous default and every occurrence is measured false on the live
+	// corpus (F-19's thesis — filtering is declared prevention, never yet
+	// observed to fire), so there is no absent-vs-zero ambiguity to guard.
+	IgnorePower bool `json:"icuIgnorePower,omitempty"`
+	IgnoreHR    bool `json:"icuIgnoreHr,omitempty"`
+	IgnoreTime  bool `json:"icuIgnoreTime,omitempty"`
+	// StubShape is D-24's classification of this record as a STRAVA stub
+	// (five raw keys, `_note` present, source == "STRAVA"): not a session,
+	// excluded from every count, load, and pairing. Computed once at
+	// unmarshal time from the raw key set (activity_json.go), which the
+	// typed struct's own fields cannot reconstruct after the fact. Never
+	// part of the wire contract in either direction.
+	StubShape bool `json:"-"`
 }
 
 // ActivityEx represents the request body for updating completed activities.

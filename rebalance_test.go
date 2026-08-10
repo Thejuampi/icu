@@ -842,6 +842,29 @@ func TestRebalanceWeekWithClassFourSessionIsPartialAccounting(t *testing.T) {
 	}
 }
 
+// TestRebalanceStubActivityEnumeratedInTimeAccounting is T2.8/D-23: a
+// not_a_record (D-24 STRAVA stub) activity in scope must not vanish without
+// a trace merely because ExcludeStubActivities dropped it from every load
+// aggregate — its time stays visible in timeAccounting with loadSource
+// "not_a_record", and it counts toward unaccountedSessions/loadAccounting
+// "partial" the same way a class-4 event does.
+func TestRebalanceStubActivityEnumeratedInTimeAccounting(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.Activities = append(input.Activities, icu.Activity{
+		ID: "stub1", Name: "Manual entry", Type: "Ride",
+		StartDateLocal: "2026-06-25T00:00:00", MovingTime: 1200, StubShape: true,
+	})
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	entry := rebalanceTimeAccountingEntryByName(&proposal, "Manual entry")
+	if entry == nil || entry.LoadSource != "not_a_record" {
+		t.Fatalf("timeAccounting entry = %+v, want an entry with loadSource \"not_a_record\"", entry)
+	}
+}
+
 // TestRebalanceStravaStubActivityConsumesNoTimeOrLoad is W1b-E04: a week
 // containing a STRAVA stub (an Activity record with no type and no
 // metrics — D-24's not_a_record shape) must not change the week's
@@ -862,6 +885,30 @@ func TestRebalanceStravaStubActivityConsumesNoTimeOrLoad(t *testing.T) {
 	if proposalWith.Options[0].Evaluation.CompletedLoad != proposalWithout.Options[0].Evaluation.CompletedLoad {
 		t.Fatalf("completedLoad with stub = %d, want unchanged %d (a STRAVA stub carries zero load and consumes no time)",
 			proposalWith.Options[0].Evaluation.CompletedLoad, proposalWithout.Options[0].Evaluation.CompletedLoad)
+	}
+}
+
+// TestRebalanceBaselineStubActivityDoesNotLockPlannedEvent closes the
+// residual risk TestRebalanceStravaStubActivityConsumesNoTimeOrLoad's own
+// comment names (T2.4): completedRebalanceDates must not let a stub's mere
+// presence on a date mark that date "already completed," which would make
+// isImmutableEvent wrongly lock a planned event's load out of rebalancing.
+func TestRebalanceBaselineStubActivityDoesNotLockPlannedEvent(t *testing.T) {
+	t.Parallel()
+
+	withoutStub := rebalanceFixture()
+	baselineWithout := icu.RebalanceBaseline(&withoutStub)
+
+	withStub := rebalanceFixture()
+	withStub.Activities = append(withStub.Activities, icu.Activity{ID: "stub1", StartDateLocal: "2026-06-25T00:00:00", StubShape: true})
+	baselineWith := icu.RebalanceBaseline(&withStub)
+
+	if baselineWith.MutablePlannedLoad != baselineWithout.MutablePlannedLoad ||
+		baselineWith.LockedPlannedLoad != baselineWithout.LockedPlannedLoad {
+		t.Fatalf("baseline with stub on 2026-06-25 = locked %d/mutable %d, want unchanged from without-stub locked %d/mutable %d "+
+			"(a stub must not mark that date as an already-completed session)",
+			baselineWith.LockedPlannedLoad, baselineWith.MutablePlannedLoad,
+			baselineWithout.LockedPlannedLoad, baselineWithout.MutablePlannedLoad)
 	}
 }
 

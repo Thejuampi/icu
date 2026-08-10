@@ -245,7 +245,8 @@ func rebalanceShowSchema() *CommandSchema {
 					"Distinct from --indoor on events/ftp/sports: those set a record's own flag, this overrides " +
 					"which FTP number a proposal prices sessions at when the record leaves it ambiguous.",
 			},
-			{Name: "activity-fields", ValueName: "CSV", Description: "Activity fields to fetch."},
+			{Name: "activity-fields", ValueName: "CSV", Description: "Deprecated, ignored (D-8): the activity fetch always " +
+				"uses its own fixed field list so wave-2's validity/pairing/compliance fields are never dropped."},
 			{Name: "limit", ValueName: "N", Description: "Activity fetch limit."},
 		}, commonAuthFlags()...),
 	}
@@ -363,7 +364,7 @@ func readRebalanceActivities(client *icu.Client, oldest, newest string, flags ma
 	query := queryFromFlags(flags, "limit")
 	query["oldest"] = oldest
 	query["newest"] = newest
-	query["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+	query["fields"] = analysisActivityFields()
 	var activities []icu.Activity
 	if err := client.Get("activities", nil, query, &activities); err != nil {
 		return nil, wrapCommandError(err)
@@ -502,7 +503,10 @@ func applyApprovedLimits(proposal *icu.RebalanceProposalFile) {
 }
 
 func readRebalanceInputFromScope(client *icu.Client, startDate, endDate string, targetLoad int, level, mode string) (icu.RebalanceInput, error) {
-	activities, err := readRebalanceActivities(client, startDate, endDate, map[string]string{"activity-fields": defaultAnalysisFields, "limit": "100"})
+	// D-8: readRebalanceActivities' own query["fields"] always comes from
+	// analysisActivityFields(), so "activity-fields" here would be dead
+	// input; only "limit" is actually consulted.
+	activities, err := readRebalanceActivities(client, startDate, endDate, map[string]string{"limit": "100"})
 	if err != nil {
 		return icu.RebalanceInput{}, err
 	}

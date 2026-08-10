@@ -189,6 +189,32 @@ func TestReadRebalanceSportSettingsSkipsWhenTypeMissing(t *testing.T) {
 	}
 }
 
+// TestReadRebalanceActivitiesIgnoresFieldsOverride is W2-N02/D-8: the
+// choke point must fetch its own fixed field list regardless of a
+// caller-supplied --activity-fields, so wave-2's validity/pairing fields are
+// never dropped by a narrower request.
+func TestReadRebalanceActivitiesIgnoresFieldsOverride(t *testing.T) {
+	t.Parallel()
+
+	var gotFields string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		gotFields = request.URL.Query().Get("fields")
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	_, err := readRebalanceActivities(client, "2026-06-22", "2026-06-28", map[string]string{"activity-fields": "id,name"})
+	if err != nil {
+		t.Fatalf("read activities: %v", err)
+	}
+
+	if gotFields != defaultAnalysisFields {
+		t.Fatalf("fields = %q, want the unmodified defaultAnalysisFields regardless of the activity-fields override", gotFields)
+	}
+}
+
 func TestReadRebalanceWellnessUsesExplicitLookback(t *testing.T) {
 	t.Parallel()
 

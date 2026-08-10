@@ -55,6 +55,12 @@ type RebalanceInput struct {
 	Scope         RebalanceScope        `json:"scope"`
 	Request       RebalanceRequest      `json:"request"`
 	Constraints   RebalanceConstraints  `json:"constraints"`
+	// ExcludedStubActivities is populated by normalizeRebalanceInput (D-24/T2.8):
+	// Activities above has already had every STRAVA stub stripped out for
+	// pricing purposes, but D-23 requires a not_a_record session's time to
+	// stay visible rather than vanish without a trace, so the discarded set
+	// is carried alongside for rebalanceTimeAccounting to enumerate.
+	ExcludedStubActivities []Activity `json:"-"`
 }
 
 type RebalanceProposalFile struct {
@@ -81,16 +87,21 @@ type RebalanceProposalFile struct {
 	Notes            []string                   `json:"notes,omitempty"`
 }
 
-// RebalanceTimeAccounting enumerates class-4 (D-10 not_applicable) sessions
-// in the week per D-23: recorded with their minutes so consumption is
-// visible, never priced, never compared against a capacity bound (F-27
-// establishes no per-day minutes bound exists before wave-3). not_a_record
-// contributes nothing and never appears here.
+// RebalanceTimeAccounting enumerates two categories of session in the week
+// per D-23, neither of which may ever be priced as a zero-load session:
+// class-4 (D-10 not_applicable) sessions, recorded with their minutes so
+// consumption is visible but never priced (FTP does not apply, D-10c) and
+// never compared against a capacity bound (F-27 establishes no per-day
+// minutes bound exists before wave-3); and not_a_record (D-24 STRAVA stub)
+// activities, recorded so their time stays visible even though
+// ExcludeStubActivities has already stripped them from every load aggregate
+// upstream (T2.8). Wave-1a's "not_a_record never appears here" is
+// superseded by wave-2: an activity that is not a session at all still owns
+// the time slot it occupied, and that must remain auditable.
 type RebalanceTimeAccounting struct {
 	Entries []RebalanceTimeAccountingEntry `json:"entries,omitempty"`
 	// LoadAccounting is "partial" whenever UnaccountedSessions > 0: the
-	// weekly load total is knowingly incomplete until wave-2's hr_load
-	// arrives (D-23).
+	// weekly load total is knowingly incomplete.
 	LoadAccounting      string `json:"loadAccounting,omitempty"`
 	UnaccountedSessions int    `json:"unaccountedSessions"`
 }
@@ -100,9 +111,9 @@ type RebalanceTimeAccountingEntry struct {
 	Name           string `json:"name,omitempty"`
 	Type           string `json:"type,omitempty"`
 	MovingTimeSecs int    `json:"movingTimeSecs,omitempty"`
-	// LoadSource is "none": a class-4 session's minutes are recorded but
-	// never priced, because FTP does not apply to it (D-10c) and no
-	// alternative load basis exists yet (D-23).
+	// LoadSource is "none" for a class-4 session (FTP does not apply, D-10c,
+	// and no alternative load basis exists) or "not_a_record" for a D-24
+	// STRAVA stub (not a session at all, so no load basis can ever exist).
 	LoadSource string `json:"loadSource,omitempty"`
 }
 
@@ -383,13 +394,33 @@ func BuildRebalanceProposal(input *RebalanceInput) RebalanceProposalFile {
 	return proposal
 }
 
-// rebalanceTimeAccounting enumerates class-4 (D-10 not_applicable) workout
-// events in scope with no priced load, per D-23: recorded so their minutes
-// are visible, never compared against a capacity bound (F-27: no per-day
-// minutes bound exists before wave-3). A class-4 event that already carries
-// a server-computed TrainingLoad is not "unaccounted" — it is priced by that
-// value already, same as any other event (D-23: never treated as zero).
+// rebalanceTimeAccounting enumerates two categories of unpriced time in scope
+// per D-23, neither of which may be silently treated as a zero-load session:
+// class-4 (D-10 not_applicable) workout events with no resolvable FTP-backed
+// load, and not_a_record (D-24 STRAVA stub) activities that ExcludeStubActivities
+// has already stripped from every load aggregate upstream. Without the
+// second category here, a stub's minutes would vanish with no visible trace
+// at all, rather than merely going unpriced like a class-4 event does. A
+// class-4 event that already carries a server-computed TrainingLoad is not
+// "unaccounted" — it is priced by that value already, same as any other
+// event.
 func rebalanceTimeAccounting(input *RebalanceInput) *RebalanceTimeAccounting {
+	entries := classFourEventTimeAccountingEntries(input)
+	entries = append(entries, stubActivityTimeAccountingEntries(input)...)
+
+	accounting := &RebalanceTimeAccounting{Entries: entries, UnaccountedSessions: len(entries)}
+	if len(entries) > 0 {
+		accounting.LoadAccounting = "partial"
+	} else {
+		accounting.LoadAccounting = "complete"
+	}
+
+	return accounting
+}
+
+// classFourEventTimeAccountingEntries finds D-10 class-4 workout events in
+// scope with no resolvable FTP-backed load.
+func classFourEventTimeAccountingEntries(input *RebalanceInput) []RebalanceTimeAccountingEntry {
 	var entries []RebalanceTimeAccountingEntry
 
 	for index := range input.Events {
@@ -414,14 +445,29 @@ func rebalanceTimeAccounting(input *RebalanceInput) *RebalanceTimeAccounting {
 		})
 	}
 
-	accounting := &RebalanceTimeAccounting{Entries: entries, UnaccountedSessions: len(entries)}
-	if len(entries) > 0 {
-		accounting.LoadAccounting = "partial"
-	} else {
-		accounting.LoadAccounting = "complete"
+	return entries
+}
+
+// stubActivityTimeAccountingEntries finds D-24 not_a_record activities in
+// scope (already excluded from Input.Activities by normalizeRebalanceInput)
+// so their time stays visible per D-23 instead of vanishing without a trace.
+func stubActivityTimeAccountingEntries(input *RebalanceInput) []RebalanceTimeAccountingEntry {
+	var entries []RebalanceTimeAccountingEntry
+
+	for index := range input.ExcludedStubActivities {
+		activity := &input.ExcludedStubActivities[index]
+		date := activityDate(activity)
+		if date < input.Scope.StartDate || date > input.Scope.EndDate {
+			continue
+		}
+
+		entries = append(entries, RebalanceTimeAccountingEntry{
+			Date: date, Name: activity.Name, Type: activity.Type,
+			MovingTimeSecs: activity.MovingTime, LoadSource: "not_a_record",
+		})
 	}
 
-	return accounting
+	return entries
 }
 
 func ValidateRebalanceProposal(proposal *RebalanceProposalFile) RebalanceValidation {
@@ -517,6 +563,13 @@ func DynamicRebalanceTargets(input *RebalanceInput) RebalanceTargets {
 
 func normalizeRebalanceInput(input *RebalanceInput) RebalanceInput {
 	working := *input
+	// D-24/T2.4: strip STRAVA stubs once, here, so every dynamic-target
+	// heuristic and the adaptive-bidirectional envelope (rebalance_envelope.go,
+	// which reads this same working copy) inherit the exclusion for free
+	// instead of re-deriving it. T2.8: capture the discarded set first so
+	// rebalanceTimeAccounting can still surface their time (D-23).
+	working.ExcludedStubActivities = StubActivitiesOnly(working.Activities)
+	working.Activities = ExcludeStubActivities(working.Activities)
 	defaults := DefaultRebalanceConstraints()
 	mergeRebalanceDefaults(&working.Constraints, &defaults)
 	if working.Request.Strategy == "" {
@@ -787,6 +840,15 @@ func rebalanceSlotIndoor(slot *rebalanceSlot) *bool {
 }
 
 func RebalanceBaseline(input *RebalanceInput) RebalanceEvaluation {
+	// D-24/T2.4: RebalanceBaseline is also called directly by callers that
+	// never go through normalizeRebalanceInput (cmd_rebalance.go's drift
+	// check, plan.go), so it must not rely solely on that upstream filter.
+	// completedRebalanceDates in particular must never let a stub's mere
+	// presence on a date mark a planned event as already-completed.
+	filteredInput := *input
+	filteredInput.Activities = ExcludeStubActivities(input.Activities)
+	input = &filteredInput
+
 	completed := completedRebalanceLoad(input)
 	completedDates := completedRebalanceDates(input)
 	var locked int

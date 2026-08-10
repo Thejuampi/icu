@@ -92,33 +92,83 @@ Summarize recent cycling history into a numeric payload that can be consumed dir
 ### CLI Contract
 
 ```bash
-icu analysis cycling [--oldest DATE --newest DATE | --days N] [--fields CSV] [--limit N]
+icu analysis cycling [--oldest DATE --newest DATE | --days N] [--limit N] [--min-included-activities N]
 ```
 
 Defaults:
 
 - `--days 28`
 - built-in activity field contract from `cmd/icu/cmd_analysis.go`
+- `--min-included-activities` has no default (D-4); the check is skipped entirely when omitted or `0`
 
 ### Upstream Data
 
 The CLI fetches `activities` for the requested date range and passes them to `AnalyzeCyclingActivities`.
-The default activity field contract includes load, power-anchor, durability, weather, altitude, gradient, and lactate-related fields required by the analyzer.
+The activity field contract is fixed (D-8, wave-2) — see **`--fields`/`--activity-fields` is deprecated and ignored** below.
 
 ### Output Sections
 
-- `scope`: analyzed activity counts, date range, and `timezone`/`timezoneSource` metadata
+- `scope`: analyzed activity counts (real activities only — see `validity` below), date range, and `timezone`/`timezoneSource` metadata
+- `validity`: per-activity inclusion accounting (D-2/D-3/D-24) — see **Validity, Ignore Flags, and STRAVA Stubs** below
 - `state`: current load-pressure classification and directive
 - `volume`: time, distance, and elevation totals
 - `powerAnchors`: FTP, CP, W', Pmax, and rolling FTP when available
 - `environment`: temperature, wind, altitude, gradient, and strain context
-- `load`: total load, monotony, strain, acute/chronic view, CTL/ATL/TSB, and daily load series
+- `load`: total load, monotony, strain, acute/chronic view, CTL/ATL/TSB, per-channel breakdown, and daily load series — see **Tri-Load Channels** below
 - `intensity`: weighted intensity and zone totals
 - `durability`: decoupling, efficiency factor, and variability summaries
 - `anaerobic`: work above FTP, W' depletion, and repeatability support metrics
 - `performance`: repeatability, durability, neural-density, and efficiency classifications
 - `sessions`: per-session rollup for qualifying cycling activities
-- `warnings`: gaps such as missing power-anchor comparisons or sparse data
+- `warnings`: gaps such as missing power-anchor comparisons, sparse data, or a **D-4 section refusal** (see below)
+
+### Validity, Ignore Flags, and STRAVA Stubs
+
+`validity` (D-3) is the single source of which activities contributed to which aggregate, and why one did not:
+
+- `validity.evaluated` / `validity.included` / `validity.excluded`: totals over real (non-stub) activities in scope.
+- `validity.exclusionRate`: `excluded / evaluated`, always emitted (even when `0`) so a caller can see the condition before it changes anything.
+- `validity.unavailable.stravaStubs`: how many raw records in the fetch window were D-24 STRAVA stubs (5 keys, `_note` present, `source == "STRAVA"`) — not activities at all, so they never occupy `scope.activities`, a load aggregate, or a pairing anywhere in the codebase.
+- `validity.excludedByFlag` / `validity.excludedByScope` / `validity.excludedActivityIds`: which `icu_ignore_*` flag excluded a given activity, and which scope (`power`/`hr`/`all`) it was dropped from.
+- `validity.zeroSemantics`: **absence is not a measured zero** (D-5) — a channel total of `0` with `nIncluded: 0` means no included activity reported that channel, not that the reported load was zero.
+- `validity.source` / `validity.fieldsGuaranteed`: audit trail — `fieldsGuaranteed: true` records that the activity fetch used the fixed D-8 field contract, so validity/pairing/load fields were never silently dropped by a caller-supplied field list.
+
+Per-flag semantics (D-2), applied per activity, before any aggregate sees it:
+
+| Flag | Scope excluded | Still included in |
+| --- | --- | --- |
+| `icu_ignore_power` | `power` — `load.total`, `load.byChannel.power`/`.trainingLoad`, power-zone `intensity`, `anaerobic`, `powerAnchors` accumulation | `volume`, HR-derived `load`/`intensity` |
+| `icu_ignore_hr` | `hr` — `load.byChannel.hr`, HR-zone `intensity`, HR-derived `durability` | `volume`, power-derived `load`/`intensity` |
+| `icu_ignore_time` | `all` — every aggregate, **including `volume`**, because duration is the denominator every other aggregate divides by | nothing; the activity is fully excluded |
+| 2 or more of the above together | `all` (same as `icu_ignore_time` alone — D-2's union rule) | nothing |
+
+`durability` additionally requires **both** channels trustworthy for an activity to be included (decoupling/efficiency/variability compare power against HR), so an `icu_ignore_power`- or `icu_ignore_hr`-scoped activity is excluded from `durability` even though only one channel was flagged.
+
+**Inertness statement (must be read before relying on ignore-flag filtering):** as of wave-2, every `icu_ignore_power`/`icu_ignore_hr`/`icu_ignore_time` flag has been measured **`false` across all real activities in the live Intervals.icu corpus this feature was built and verified against** (`testdata/wave2_live_corpus.json`, 230 real activities). The per-flag filtering logic above is correct and unit-tested (`W2-P02`/`W2-P03` in `analysis_test.go`), but on that corpus it is **inert** — it changes nothing, because no live activity in it sets any ignore flag. Its only current acceptance evidence is synthetic fixtures constructed in tests. Do not report "ignore-flag filtering fixed activity count N" as an observed live effect; report it as a correct, tested, but so-far-unexercised-in-production code path. The stub-exclusion behavior (D-24) is the opposite: it is measured live and material — 73 of 303 raw records in the same corpus are STRAVA stubs (F-19).
+
+### D-4 Structural Refusal
+
+When a section's `nIncluded` is `0` (every candidate activity was excluded from that section's scope, or there were none), the section's fields are **not restructured or omitted** (D-6 declined restructuring existing output shapes) — they keep their already-zero values, and a named warning is added instead so a caller never mistakes "no included activity" for "measured zero load/intensity/durability":
+
+- `"load section refused: 0 included activities (all excluded by icu_ignore_power/icu_ignore_time)"`
+- `"intensity section refused: 0 included activities (all excluded by icu_ignore_power/icu_ignore_time)"`
+- `"durability section refused: 0 included activities (all excluded by icu_ignore_power/icu_ignore_hr/icu_ignore_time)"`
+
+`--min-included-activities N` is a separate, optional, no-default threshold: it never blocks output by itself, it only adds a named warning (`"included activity count %d is below the configured minimum %d (--min-included-activities)"`) when `validity.included` falls below it — useful for a consumer that wants to flag a thin week without changing the shape of the response.
+
+### Tri-Load Channels
+
+`load.byChannel` (D-23/T2.5) breaks the legacy `load.total` figure into its component channels, each with its own `nIncluded` so a caller can tell how many activities actually contributed to that channel's total, independent of how many contributed to `load.total` overall:
+
+- `load.byChannel.trainingLoad`: the legacy server-computed training load (same numerator as `load.total`).
+- `load.byChannel.hr`: HR-based load (`hrLoad`), only from activities with a trustworthy HR channel.
+- `load.byChannel.power`: power-based load contribution, only from activities with a trustworthy power channel.
+- `load.byChannel.pace`: pace-based load (`paceLoad`), for non-power sports; typically `0`/`nIncluded: 0` for a pure-cycling window, which is **not** a measured zero (see `validity.zeroSemantics`).
+- `load.divergence`: how far `trainingLoad` and the channel-specific estimates disagree on average — a large divergence suggests the server's blended load and one channel's own estimate are telling different stories for this window.
+
+### `--fields`/`--activity-fields` is deprecated and ignored
+
+Wave-1's assumption that a caller-supplied `--fields`/`--activity-fields` override was a meaningful customization point was never true in practice, and became actively dangerous once validity/pairing/load fields were added: a narrower caller-supplied list could silently drop `icu_ignore_*`, `paired_event_id`, `hr_load`, `power_load`, `pace_load`, or `compliance` from the fetch, producing validity/load/pairing output that looked complete but was quietly computed from a data-starved fetch. D-8 removes this risk at a single choke point (`analysisActivityFields()` in `cmd/icu/cmd_analysis.go`): **the analysis activity fetch always uses its own fixed field list; any `--fields`/`--activity-fields` value you pass is accepted for backward CLI compatibility but has no effect.** `validity.fieldsGuaranteed: true` in the output records that this guarantee held for the analysis you are looking at.
 
 ### Interpretation
 
@@ -130,7 +180,7 @@ The default activity field contract includes load, power-anchor, durability, wea
 ### Current Limitations
 
 - Output quality depends on Intervals.icu providing the power, weather, and zone fields requested by the default contract.
-- If you override `--fields`, you are responsible for preserving any inputs needed by downstream sections.
+- `--fields`/`--activity-fields` no longer has any effect on this fetch (D-8); it is accepted only for backward compatibility.
 - The CLI does not currently render alternative output formats for this command.
 
 ## analysis wellness
@@ -303,6 +353,7 @@ It then runs `AnalyzeWellness` and passes the result into `AnalyzeCyclingAdaptat
 - At least two comparable curves are required for `powerCurveDeltas`.
 - If the requested curve windows do not overlap in meaningful durations, the command may return warnings instead of comparisons.
 - Lactate context comes from wellness records only; if wellness coverage is sparse, adaptation context is narrower.
+- Known, not yet fixed: `scope.activities` here is a raw `len(activities)` count and is not yet filtered against D-24 STRAVA stubs the way `analysis cycling`/`analysis microcycle` were in wave-2 (this command never received a `schemaVersion`, D-7, and was out of wave-2's scope). Treat this command's activity count as potentially inflated by stub-shaped records until a future wave addresses it.
 
 ## analysis microcycle
 
@@ -344,6 +395,12 @@ expose a reliable athlete timezone field.
 - Wellness records from `wellness` unless `--no-wellness` is supplied.
 - Sport settings from `sport-settings/<sport-type>` for FTP and zone
   availability.
+
+D-24 STRAVA stubs (5 keys, `_note` present, `source == "STRAVA"`) are stripped
+from the fetched activities before any counting or matching happens (F-19):
+`dataQuality`'s `completedSessions`, `powerAvailability`, and
+`heartRateAvailability` all divide by the real-activity count, never by the
+raw fetch length.
 
 ### Output Sections
 
@@ -432,7 +489,9 @@ The CLI fetches:
 - `scope`: activity ID, matched event ID, and match window.
 - `activity`: completed session rollup using the same `CyclingSession` contract
   as `analysis cycling`.
-- `match`: selected calendar event, confidence, score, reasons, and alternates.
+- `match`: selected calendar event, confidence, score, reasons, alternates,
+  pairing `source`, and `compliance` — see **Pairing and Compliance (D-21)**
+  below.
 - `plan`: matched event summary plus expanded planned workout steps when
   `workoutDoc` is available.
 - `execution`: stream/interval-derived micro-analysis, including warmup,
@@ -441,6 +500,21 @@ The CLI fetches:
   work-rep count, step comparisons, repeatability, and zone alignment.
 - `warnings`: missing or low-confidence sources such as missing plan, streams,
   intervals, FTP, LTHR, or structured workout steps.
+
+### Pairing and Compliance (D-21)
+
+`match.source` names how `match.eventId` was chosen, and is always emitted:
+
+| `source` | Meaning |
+| --- | --- |
+| `server_paired_event_id` | The activity's own `paired_event_id` field (server-authoritative) named this event. Trusted even outside `--match-window-hours` — the server already knows the pairing, so the heuristic's time window does not gate it. |
+| `heuristic` | No server-authoritative pairing was present; the date/name heuristic selected this event. |
+| `not_a_record` | The activity is a D-24 STRAVA stub (5 keys, `_note` present, `source == "STRAVA"`). Pairing is not attempted on either path — a stub is not a session, so no plan-versus-actual comparison is fabricated for it. |
+| `unmatched` | No pairing, server-authoritative or heuristic, was found. |
+
+`match.disagreement` is `true` only when a server-authoritative pairing exists and the independently-run date/name heuristic would have selected a *different* event — a signal that the heuristic's assumptions do not hold for this activity, not an error by itself.
+
+`match.compliance` is a pointer, emitted **jointly with a pairing or not at all** (D-21): it is `nil` whenever `match.eventId` is `0` (`source` is `not_a_record` or `unmatched`), regardless of what the activity's own raw compliance value was. This closes a live-measured defect (F-18): the raw API compliance field reads `0.0` on every unpaired activity, which is indistinguishable from a genuinely poor 0% compliance to a plan — there is no plan to be compliant with when there is no pairing, so the field is omitted rather than reported as a fabricated `0`. When a pairing *does* exist, a genuine `compliance: 0.0` is reported as present (the pointer is non-nil, the JSON key appears with value `0`) — omission means "not applicable," not "zero."
 
 ### Interpretation
 

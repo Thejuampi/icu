@@ -425,3 +425,119 @@ func TestAnalyzeCyclingActivitiesEmitsSchemaVersion(t *testing.T) {
 		t.Fatalf("SchemaVersion = %q, want icu.analysis.cycling.v1", got.SchemaVersion)
 	}
 }
+
+// TestAnalyzeCyclingActivitiesExcludesStubsFromScopeActivities is W2-P01:
+// stubs never occupy a count anywhere (F-19's live defect), so
+// Scope.Activities must equal the real-activity count, not the raw fetch
+// length, and Validity.Unavailable.StravaStubs must report the excluded
+// count separately.
+func TestAnalyzeCyclingActivitiesExcludesStubsFromScopeActivities(t *testing.T) {
+	t.Parallel()
+
+	activities := make([]icu.Activity, 0, 61)
+	for range 41 {
+		activities = append(activities, icu.Activity{ID: "real", Type: "Walk"})
+	}
+
+	for range 20 {
+		activities = append(activities, icu.Activity{ID: "stub", StubShape: true})
+	}
+
+	got := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{})
+
+	if got.Scope.Activities != 41 || got.Validity.Unavailable.StravaStubs != 20 {
+		t.Fatalf("Scope.Activities/Unavailable.StravaStubs = %d/%d, want 41/20",
+			got.Scope.Activities, got.Validity.Unavailable.StravaStubs)
+	}
+}
+
+// TestAnalyzeCyclingActivitiesIgnorePowerExcludesLoadRetainsVolume is
+// W2-P02: icu_ignore_power drops an activity from load (power-derived) but
+// retains it in volume, and its validity scope is reported as "power".
+func TestAnalyzeCyclingActivitiesIgnorePowerExcludesLoadRetainsVolume(t *testing.T) {
+	t.Parallel()
+
+	included := icu.Activity{Type: testRideType, TrainingLoad: 50, MovingTime: 3600}
+	excluded := icu.Activity{Type: testRideType, TrainingLoad: 80, MovingTime: 3600, IgnorePower: true}
+
+	got := icu.AnalyzeCyclingActivities([]icu.Activity{included, excluded}, icu.AnalysisOptions{})
+
+	if got.Load.Total != 50 || got.Volume.MovingTimeSecs != 7200 || got.Validity.ExcludedByScope[icu.ValidityScopePower] != 1 {
+		t.Fatalf("Load.Total/Volume.MovingTimeSecs/excludedByScope[power] = %d/%d/%d, want 50/7200/1",
+			got.Load.Total, got.Volume.MovingTimeSecs, got.Validity.ExcludedByScope[icu.ValidityScopePower])
+	}
+}
+
+// TestAnalyzeCyclingActivitiesIgnoreTimeExcludesVolumeToo is W2-P03:
+// icu_ignore_time is the one flag that also excludes volume, since duration
+// is the denominator every other aggregate divides by (D-2's "all" scope).
+func TestAnalyzeCyclingActivitiesIgnoreTimeExcludesVolumeToo(t *testing.T) {
+	t.Parallel()
+
+	included := icu.Activity{Type: testRideType, TrainingLoad: 50, MovingTime: 3600}
+	excluded := icu.Activity{Type: testRideType, TrainingLoad: 80, MovingTime: 3600, IgnoreTime: true}
+
+	got := icu.AnalyzeCyclingActivities([]icu.Activity{included, excluded}, icu.AnalysisOptions{})
+
+	if got.Volume.MovingTimeSecs != 3600 || got.Validity.ExcludedByScope[icu.ValidityScopeAll] != 1 {
+		t.Fatalf("Volume.MovingTimeSecs/excludedByScope[all] = %d/%d, want 3600/1",
+			got.Volume.MovingTimeSecs, got.Validity.ExcludedByScope[icu.ValidityScopeAll])
+	}
+}
+
+// TestAnalyzeCyclingActivitiesRefusesLoadSectionWhenAllFlagged is W2-E01:
+// when every cycling activity in scope is flag-excluded, the load section
+// (0 included) must carry a named warning rather than silently presenting
+// its zero-valued fields as a measured result.
+func TestAnalyzeCyclingActivitiesRefusesLoadSectionWhenAllFlagged(t *testing.T) {
+	t.Parallel()
+
+	activities := []icu.Activity{
+		{Type: testRideType, TrainingLoad: 50, MovingTime: 3600, IgnorePower: true},
+		{Type: testRideType, TrainingLoad: 80, MovingTime: 3600, IgnorePower: true},
+	}
+
+	got := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{})
+
+	wantWarning := "load section refused: 0 included activities (all excluded by icu_ignore_power/icu_ignore_time)"
+	found := false
+
+	for _, warning := range got.Warnings {
+		if warning == wantWarning {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Fatalf("Warnings = %v, want to contain %q", got.Warnings, wantWarning)
+	}
+}
+
+// TestAnalyzeCyclingActivitiesWarnsBelowMinIncludedActivities is D-4's
+// explicit user constraint: --min-included-activities has no default and
+// never blocks output by itself, but when Included falls below the
+// caller-supplied threshold it must add a named warning identifying both
+// counts and the flag that set the threshold.
+func TestAnalyzeCyclingActivitiesWarnsBelowMinIncludedActivities(t *testing.T) {
+	t.Parallel()
+
+	activities := []icu.Activity{
+		{Type: testRideType, TrainingLoad: 50, MovingTime: 3600},
+		{Type: testRideType, TrainingLoad: 80, MovingTime: 3600},
+	}
+
+	got := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{MinIncludedActivities: 5})
+
+	wantWarning := "included activity count 2 is below the configured minimum 5 (--min-included-activities)"
+	found := false
+
+	for _, warning := range got.Warnings {
+		if warning == wantWarning {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Fatalf("Warnings = %v, want to contain %q", got.Warnings, wantWarning)
+	}
+}

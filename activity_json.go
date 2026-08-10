@@ -56,6 +56,40 @@ func (activity *Activity) applySnakeFields(raw map[string]json.RawMessage) {
 	copyRawIfSet(&activity.CTL, raw, "icu_ctl")
 	copyRawValueIfSet(&activity.ZoneTimes, raw, "icu_zone_times")
 	copyRawValueIfSet(&activity.HRZoneTimes, raw, "icu_hr_zone_times")
+	activity.applyValidityAndLoadSnakeFields(raw)
+	activity.StubShape = isStravaStubShape(raw, activity.Source)
+}
+
+// applyValidityAndLoadSnakeFields carries wave-2's newly-fetched fields
+// (D-2 ignore flags, D-21 pairing, D-23 tri-load channels) across the same
+// snake/camel casing gap every other API field already crosses here.
+func (activity *Activity) applyValidityAndLoadSnakeFields(raw map[string]json.RawMessage) {
+	copyRawIfSet(&activity.PairedEventID, raw, "paired_event_id")
+	copyRawIfSet(&activity.IgnorePower, raw, "icu_ignore_power")
+	copyRawIfSet(&activity.IgnoreHR, raw, "icu_ignore_hr")
+	copyRawIfSet(&activity.IgnoreTime, raw, "icu_ignore_time")
+	copyRawIfSet(&activity.PowerLoad, raw, "power_load")
+	copyRawIfSet(&activity.PaceLoad, raw, "pace_load")
+	copyRawIfSet(&activity.PaceLoadType, raw, "pace_load_type")
+}
+
+// stravaStubKeyCount is D-24's STRAVA-stub shape signature: a raw activity
+// record reduced to exactly this many keys when Strava withheld the full
+// record from the API.
+const stravaStubKeyCount = 5
+
+// isStravaStubShape discriminates on shape (D-24), never on absence of
+// type, so a genuinely typeless-but-real record does not fall in here. The
+// raw key count is not recoverable from the typed Activity after the fact,
+// so this must run at unmarshal time while raw is still in hand.
+func isStravaStubShape(raw map[string]json.RawMessage, source string) bool {
+	if len(raw) != stravaStubKeyCount {
+		return false
+	}
+
+	_, hasNote := raw["_note"]
+
+	return hasNote && source == "STRAVA"
 }
 
 func (activity *Activity) applyEnvironmentSnakeFields(raw map[string]json.RawMessage) {

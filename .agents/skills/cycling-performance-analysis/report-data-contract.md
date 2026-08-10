@@ -87,6 +87,8 @@ Planning output should compare the existing calendar against the athlete's recen
 | Secret leakage during auth debugging | never print raw API keys; use status, length, trim, fingerprint | supported |
 | Intervals snake_case payload not mapped to DTO | add unmarshal tests for raw activity/event/supporting fields before trusting reports | supported for activities/events/weather/curves/sports/custom items |
 | Suspicious zero-valued activity/event fields | spot-check raw API or CLI JSON before writing coaching prose | manual |
+| STRAVA-stub contamination of activity counts (F-19) | `analysis cycling`/`analysis coaching`/`analysis microcycle` exclude stub-shaped records (5 raw keys, `_note` present, `source == "STRAVA"`) from every count and load aggregate before a report is built | fixed (wave-2); `analysis adaptation`'s `scope.activities` is not yet filtered — treat that one command's count as potentially inflated |
+| `icu_ignore_*` filtering reported as an observed effect when it was actually inert | check `validity.excluded > 0` in the specific `analysis cycling` run before crediting a number change to ignore-flag filtering; it is correct and tested but has been measured `false` on every real activity checked so far | supported (verify per run, do not assume) |
 
 ## Timezone and Date Range Contract
 

@@ -52,12 +52,16 @@ The week-level `context.ftp` / `context.ftpSource` remain for backward compatibi
 
 ## Time Accounting (`timeAccounting`)
 
-Sessions whose type is not applicable to FTP pricing at all (D-10 class 4 — `Walk`, `Run`, `VirtualRun`, `WeightTraining`, `Workout`, `NOTE`) are enumerated, not silently dropped and not silently priced:
+Two categories of session are enumerated, not silently dropped and not silently priced at zero (D-23):
 
-- `context.timeAccounting.entries`: one entry per such session, with `date`, `name`, `type`, `movingTimeSecs`, and `loadSource: "none"`.
-- `context.timeAccounting.unaccountedSessions`: how many such sessions exist in the week.
-- `context.timeAccounting.loadAccounting`: `"partial"` whenever `unaccountedSessions > 0`, otherwise `"complete"`. **It resolves** — moves from `"partial"` back to `"complete"` — once every non-FTP-applicable session in the week either leaves the week or gains a load basis of its own (for example a future wave's HR-based load for runs); rebalance does not attempt to price these sessions today (F-27: no per-day capacity bound exists until wave-3), it only makes the gap visible.
-- A STRAVA stub-shaped activity (`Class: not_a_record`, D-24) is excluded entirely: it consumes no time and does not appear as a `timeAccounting` entry or as a session.
+- Sessions whose type is not applicable to FTP pricing at all (D-10 class 4 — `Walk`, `Run`, `VirtualRun`, `WeightTraining`, `Workout`, `NOTE`), each with `loadSource: "none"`.
+- Completed activities in STRAVA-stub shape (`Class: not_a_record`, D-24, wave-2/T2.8). A stub is not a session — it is excluded from every load aggregate and cannot mark a planned event's date as already-completed — but its time still occupied a slot, so it is enumerated here with `loadSource: "not_a_record"` rather than disappearing without a trace.
+
+Fields:
+
+- `timeAccounting.entries`: one entry per such session/activity, with `date`, `name`, `type`, `movingTimeSecs`, and `loadSource`.
+- `timeAccounting.unaccountedSessions`: how many such entries exist in the week (both categories combined).
+- `timeAccounting.loadAccounting`: `"partial"` whenever `unaccountedSessions > 0`, otherwise `"complete"`. **It resolves** — moves from `"partial"` back to `"complete"` — once every class-4 session in the week either leaves the week or gains a load basis of its own (for example a future wave's HR-based load for runs); rebalance does not attempt to price these sessions today (F-27: no per-day capacity bound exists until wave-3), it only makes the gap visible. A `not_a_record` entry can never resolve to priced, because it is not a session at all.
 
 ## Edit
 

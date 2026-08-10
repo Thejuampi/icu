@@ -41,6 +41,13 @@ const (
 	workoutPartialThreshold        = 60
 	workoutHighConfidenceScore     = 75
 	workoutModerateConfidenceScore = 50
+
+	// D-21 match.source values. Always emitted (never omitted) so absence of
+	// a pairing is always explicable, not merely silent.
+	workoutMatchSourceServerPaired = "server_paired_event_id"
+	workoutMatchSourceHeuristic    = "heuristic"
+	workoutMatchSourceNotARecord   = "not_a_record"
+	workoutMatchSourceUnmatched    = "unmatched"
 )
 
 type WorkoutExecutionInputs struct {
@@ -93,10 +100,21 @@ type WorkoutEventMatchOptions struct {
 }
 
 type WorkoutEventMatch struct {
-	EventID     int                     `json:"eventId,omitempty"`
-	Name        string                  `json:"name,omitempty"`
-	Confidence  string                  `json:"confidence"`
-	Score       float64                 `json:"score,omitempty"`
+	EventID    int    `json:"eventId,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Confidence string `json:"confidence"`
+	// Source names how EventID was chosen: server_paired_event_id |
+	// heuristic | not_a_record | unmatched (D-21). Always emitted.
+	Source string  `json:"source"`
+	Score  float64 `json:"score,omitempty"`
+	// Disagreement is true when the server-authoritative pairing and the
+	// date/name heuristic point at two different events (D-21).
+	Disagreement bool `json:"disagreement,omitempty"`
+	// Compliance is emitted jointly with a pairing or not at all (D-21):
+	// nil whenever EventID is 0, regardless of the activity's raw value,
+	// because an unpaired compliance figure has no plan to be compliant
+	// with (F-18: compliance 0.0 on all 36 live unpaired activities).
+	Compliance  *float64                `json:"compliance,omitempty"`
 	Reasons     []string                `json:"reasons,omitempty"`
 	Alternates  []WorkoutEventCandidate `json:"alternates,omitempty"`
 	MatchedDate string                  `json:"matchedDate,omitempty"`
@@ -201,13 +219,20 @@ func AnalyzeWorkoutExecution(inputs WorkoutExecutionInputs, options WorkoutExecu
 	// picking SportSettings.FTP regardless of environment (the bug that made
 	// this disagree with both rebalance and plan). Trainer is intentionally
 	// nil: Activity.Trainer is not yet an exposed Go field (F-20's evidence
-	// was gathered via raw HTTP, bypassing this package's types entirely;
-	// adding it is wave-2 scope, not wave-1b's). D-10 still resolves
+	// was gathered via raw HTTP, bypassing this package's types entirely) and
+	// remains out of wave-2's declared field scope too. D-10 still resolves
 	// type_inherent/type_default correctly without it — only per-record
 	// flag_asserted overrides and Disagreement tracking are unavailable
 	// until then. Activity.FTP (the API's own per-activity number) remains
-	// the fallback when no SportSettings FTP applies at all.
-	selection := ResolveFTP(FTPRequest{Type: inputs.Activity.Type, Entity: FTPEntityActivity, Settings: settings})
+	// the fallback when no SportSettings FTP applies at all. StubShape is
+	// wired (T2.2): a STRAVA-stub activity short-circuits to not_a_record
+	// instead of being priced through the ordinary activity partition.
+	selection := ResolveFTP(FTPRequest{
+		Type:      inputs.Activity.Type,
+		Entity:    FTPEntityActivity,
+		StubShape: inputs.Activity.StubShape,
+		Settings:  settings,
+	})
 
 	ftp := selection.Watts
 	if ftp == 0 {
@@ -283,50 +308,134 @@ func computeWorkoutWBal(inputs WorkoutExecutionInputs, session *CyclingSession) 
 	}
 }
 
+// MatchWorkoutEvent implements D-21: server-authoritative pairing first,
+// the date/name heuristic as fallback, and D-24's not_a_record block before
+// either path runs — a stub-shaped activity is not a session, so no
+// pairing is attempted on its behalf at all (a date-based heuristic match
+// against a stub would fabricate a plan-versus-actual number for a record
+// whose data is by definition unavailable).
 func MatchWorkoutEvent(activity *Activity, events []Event, options WorkoutEventMatchOptions) WorkoutEventMatch {
 	var result WorkoutEventMatch
 	result.Confidence = workoutMatchConfidenceNone
+	result.Source = workoutMatchSourceUnmatched
+
 	if activity == nil {
 		return result
 	}
+
+	if activity.StubShape {
+		result.Source = workoutMatchSourceNotARecord
+
+		return result
+	}
+
 	if options.MatchWindowHours <= 0 {
 		options.MatchWindowHours = workoutDefaultMatchWindowHours
 	}
 
-	var best WorkoutEventCandidate
-	var alternates []WorkoutEventCandidate
+	heuristic := scoreWorkoutEvents(activity, events, options)
+
+	if activity.PairedEventID != nil {
+		applyServerPairedMatch(&result, activity, events, heuristic)
+	} else {
+		applyHeuristicMatch(&result, activity, heuristic)
+	}
+
+	result.Compliance = workoutMatchCompliance(activity, result.EventID)
+
+	return result
+}
+
+// workoutHeuristicMatch is the date/name scoring pass's outcome, computed
+// once and shared by both the server-paired and heuristic-only branches so
+// D-21's disagreement check never re-scores.
+type workoutHeuristicMatch struct {
+	best       WorkoutEventCandidate
+	alternates []WorkoutEventCandidate
+	reasons    []string
+}
+
+func scoreWorkoutEvents(activity *Activity, events []Event, options WorkoutEventMatchOptions) workoutHeuristicMatch {
+	var match workoutHeuristicMatch
+
 	for i := range events {
 		event := events[i]
 		if options.ExplicitEventID > 0 && event.ID != options.ExplicitEventID {
 			continue
 		}
+
 		eventScore := scoreWorkoutEvent(activity, &event, options)
 		if eventScore.score <= 0 {
 			continue
 		}
+
 		candidate := WorkoutEventCandidate{EventID: event.ID, Name: event.Name, Score: round2(eventScore.score)}
-		if candidate.Score > best.Score {
-			if best.EventID != 0 {
-				alternates = append(alternates, best)
+		if candidate.Score > match.best.Score {
+			if match.best.EventID != 0 {
+				match.alternates = append(match.alternates, match.best)
 			}
-			best = candidate
-			result.Reasons = eventScore.reasons
+
+			match.best = candidate
+			match.reasons = eventScore.reasons
 		} else {
-			alternates = append(alternates, candidate)
+			match.alternates = append(match.alternates, candidate)
 		}
 	}
 
-	if best.EventID == 0 {
-		return result
+	return match
+}
+
+// applyServerPairedMatch trusts Activity.PairedEventID over the heuristic
+// (D-21): it matches even outside the heuristic's time window, because the
+// server already knows the pairing. The heuristic still runs (in
+// MatchWorkoutEvent, shared) so a disagreement between the two can be
+// recorded rather than silently discarded.
+func applyServerPairedMatch(result *WorkoutEventMatch, activity *Activity, events []Event, heuristic workoutHeuristicMatch) {
+	result.EventID = *activity.PairedEventID
+	result.Confidence = workoutMatchConfidenceHigh
+	result.Source = workoutMatchSourceServerPaired
+	result.Reasons = []string{"server_paired_event_id"}
+	result.MatchedDate = activityLocalDate(activity)
+
+	if paired := workoutMatchedEvent(result.EventID, events); paired != nil {
+		result.Name = paired.Name
 	}
 
-	result.EventID = best.EventID
-	result.Name = best.Name
-	result.Score = best.Score
-	result.Confidence = workoutConfidence(best.Score)
-	result.Alternates = alternates
+	if heuristic.best.EventID != 0 && heuristic.best.EventID != result.EventID {
+		result.Disagreement = true
+		result.Alternates = append(result.Alternates, heuristic.best)
+	}
+
+	result.Alternates = append(result.Alternates, heuristic.alternates...)
+}
+
+// applyHeuristicMatch is the fallback path (D-21) used only when the server
+// has recorded no pairing for this activity.
+func applyHeuristicMatch(result *WorkoutEventMatch, activity *Activity, heuristic workoutHeuristicMatch) {
+	if heuristic.best.EventID == 0 {
+		return
+	}
+
+	result.EventID = heuristic.best.EventID
+	result.Name = heuristic.best.Name
+	result.Score = heuristic.best.Score
+	result.Confidence = workoutConfidence(heuristic.best.Score)
+	result.Source = workoutMatchSourceHeuristic
+	result.Reasons = heuristic.reasons
+	result.Alternates = heuristic.alternates
 	result.MatchedDate = activityLocalDate(activity)
-	return result
+}
+
+// workoutMatchCompliance implements D-21's joint-emission rule: compliance
+// is surfaced only when a pairing exists to give it meaning, regardless of
+// the raw value (F-18: 0.0 means "unpaired" on every one of the 36 live
+// occurrences, never "0% adherence").
+func workoutMatchCompliance(activity *Activity, matchedEventID int) *float64 {
+	if matchedEventID == 0 {
+		return nil
+	}
+
+	return activity.Compliance
 }
 
 func scoreWorkoutEvent(activity *Activity, event *Event, options WorkoutEventMatchOptions) workoutEventScore {

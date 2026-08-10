@@ -208,6 +208,12 @@ func AnalyzeMicrocycle(
 	}
 	options = &local
 
+	// D-24/F-19/T2.3: strip STRAVA stubs once, here, before any of
+	// microcycleDataQuality/microcyclePlannedVsActual/microcycleLoad's
+	// activity-count denominators (CompletedSessions, powerAvailability,
+	// heartRateAvailability, ...) see the slice — a stub is not a session
+	// and must not inflate any of them.
+	activities = ExcludeStubActivities(activities)
 	selectedActivities := filterActivitiesByDate(activities, options.StartDate, options.EndDate)
 	cycling := AnalyzeCyclingActivities(selectedActivities, AnalysisOptions{
 		StartDate: options.StartDate,

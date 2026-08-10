@@ -192,6 +192,9 @@ For the expanded field-by-field contract, use [report-data-contract.md](./report
 - Use `LatestForm = CTL - ATL` as TSB-style form when latest CTL/ATL are available.
 - Use `acuteChronicWorkRatio` from `icu analysis cycling` as ACWR unless a better Intervals-native value is added.
 - Do not call a field authoritative if it is derived locally; label it as local or heuristic where relevant.
+- `analysis cycling`/`analysis coaching`/`analysis microcycle` already exclude STRAVA-stub records (5 raw keys, `_note` present, `source == "STRAVA"`) from every activity count and load aggregate — never subtract or re-filter these yourself, and never explain a low `scope.activities` number as a bug; it is the real-activity count, not the raw fetch length.
+- `analysis cycling`'s `validity.excluded*` fields (`icu_ignore_power`/`icu_ignore_hr`/`icu_ignore_time`) are correct and tested, but have been measured `false` on every real activity in the accounts this feature has been checked against so far. Do not claim in a report that ignore-flag filtering changed a number unless `validity.excluded > 0` for that specific run — check the field, do not assume either way.
+- `analysis workout`'s `match.compliance` is `nil`/absent whenever `match.eventId` is `0` (`match.source` is `not_a_record` or `unmatched`) — never read a missing `compliance` as "0% compliant"; it means no plan pairing exists to be compliant with.
 
 ## Planning Policy
 

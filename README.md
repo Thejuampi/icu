@@ -250,6 +250,8 @@ Details: [docs/cli-reference.md](docs/cli-reference.md), [docs/library.md](docs/
 - `analysis microcycle` emits an experimental, LLM-ready diagnostic contract for the current or selected training microcycle. `analysis micro` is its short alias.
 - `analysis workout` compares one completed activity against its planned workout event, structured workout steps, intervals, and streams.
 
+`analysis cycling`, `analysis coaching`, and `analysis microcycle` exclude STRAVA-stub records (5 raw keys, `_note` present, `source == "STRAVA"`) from every activity count and load aggregate, and `analysis cycling` reports a `validity` block naming which activities were excluded and why (`icu_ignore_power`/`icu_ignore_hr`/`icu_ignore_time`, D-2). That ignore-flag filtering is correct and tested, but has been measured `false` on every real activity checked against a live account so far — see [docs/analysis.md](docs/analysis.md) for the inertness statement before crediting it with a reported number change.
+
 See [docs/analysis.md](docs/analysis.md) for defaults, inputs, output sections, and current limitations.
 
 ## Development

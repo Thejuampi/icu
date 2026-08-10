@@ -398,6 +398,30 @@ func TestAnalyzeMicrocycleNilOptions(t *testing.T) {
 	}
 }
 
+// TestAnalyzeMicrocycleExcludesStubActivitiesFromCompletedSessions is
+// F-19/T2.3: CompletedSessions used to be a bare len(activities), so a
+// D-24 STRAVA stub landing in the window would inflate it as a fake
+// completed session; ExcludeStubActivities must strip it before any
+// activity-count denominator in this payload sees it.
+func TestAnalyzeMicrocycleExcludesStubActivitiesFromCompletedSessions(t *testing.T) {
+	t.Parallel()
+
+	settings := icu.SportSettings{FTP: 285}
+	activities := []icu.Activity{
+		microcycleActivity("i1", "2026-06-08T07:00:00", 60, 0.72),
+		{ID: "stub1", StartDateLocal: "2026-06-09T00:00:00", StubShape: true},
+	}
+
+	got := icu.AnalyzeMicrocycle(activities, nil, nil, &settings, &icu.MicrocycleOptions{
+		StartDate: "2026-06-08", EndDate: "2026-06-14",
+		Now: time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC),
+	})
+
+	if got.PlannedVsActual.CompletedSessions != 1 {
+		t.Fatalf("CompletedSessions = %d, want 1 (the stub must not count as a completed session)", got.PlannedVsActual.CompletedSessions)
+	}
+}
+
 func microcycleActivity(id, date string, load int, intensity float64) icu.Activity {
 	return icu.Activity{
 		ID:               id,
