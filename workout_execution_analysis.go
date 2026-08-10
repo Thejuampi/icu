@@ -65,9 +65,18 @@ type WorkoutExecutionOptions struct {
 }
 
 type WorkoutExecutionAnalysis struct {
-	SchemaVersion string                     `json:"schemaVersion"`
-	Scope         WorkoutExecutionScope      `json:"scope"`
-	Activity      CyclingSession             `json:"activity"`
+	SchemaVersion string                `json:"schemaVersion"`
+	Scope         WorkoutExecutionScope `json:"scope"`
+	Activity      CyclingSession        `json:"activity"`
+	// FTPSource and FTPConfidence are D-10c/T1b.5's read-path provenance for
+	// the FTP this analysis priced Activity against (ResolveFTP's Source and
+	// Confidence, next to Activity.FTP): the write path (plan.go, rebalance.go)
+	// has emitted this since wave-1b; the read path discarded it until R1.
+	// Both are omitted (not a stray zero value) when FTP does not apply at all
+	// (not_applicable/not_a_record — D-10c's third row gates neither value nor
+	// warning).
+	FTPSource     string                     `json:"ftpSource,omitempty"`
+	FTPConfidence string                     `json:"ftpConfidence,omitempty"`
 	Match         WorkoutEventMatch          `json:"match"`
 	Plan          WorkoutPlanSummary         `json:"plan"`
 	Execution     WorkoutExecutionSummary    `json:"execution"`
@@ -237,6 +246,17 @@ func AnalyzeWorkoutExecution(inputs WorkoutExecutionInputs, options WorkoutExecu
 	ftp := selection.Watts
 	if ftp == 0 {
 		ftp = inputs.Activity.FTP
+	}
+
+	// R1/D-10c: surface the resolved FTP's provenance on the read path
+	// (proceed + warn, never refuse) rather than discarding it the way the
+	// pre-R1 code did. Selection.Source/Confidence are the empty string when
+	// !Applicable, which correctly omits both keys instead of reporting a
+	// stray zero value for not_applicable/not_a_record activities.
+	result.FTPSource = selection.Source
+	result.FTPConfidence = selection.Confidence
+	if selection.Confidence == FTPConfidenceLow {
+		result.Warnings = append(result.Warnings, "ftp_confidence_low")
 	}
 
 	result.Execution.Micro = AnalyzeActivityMicro(inputs.Activity, inputs.Streams, inputs.Intervals, ftp, lthr)

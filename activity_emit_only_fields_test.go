@@ -138,6 +138,49 @@ func TestActivityUnmarshalHRRAverageWattsOnlyExercisedSynthetically(t *testing.T
 	}
 }
 
+// TestActivityUnmarshalStubNoteCarriesThrough is Stage 6 R5: a D-24 STRAVA
+// stub's `_note` explains why the record was excluded ("STRAVA activities
+// are not available via the API"); the exclusion counts were always correct
+// without it, but dropping the one field that answers "why don't these
+// records count?" left a caller with a bare, unexplained object. Same
+// emit-only shape as wave-4's nine fields: transported verbatim, computed
+// from nowhere else.
+func TestActivityUnmarshalStubNoteCarriesThrough(t *testing.T) {
+	t.Parallel()
+
+	var activity icu.Activity
+
+	data := []byte(`{"id":"16634106216","icu_athlete_id":"i445643",` +
+		`"start_date_local":"2025-12-02T18:37:27","source":"STRAVA",` +
+		`"_note":"STRAVA activities are not available via the API"}`)
+
+	if err := json.Unmarshal(data, &activity); err != nil {
+		t.Fatalf("json.Unmarshal Activity: %v", err)
+	}
+
+	if !activity.StubShape || derefString(activity.Note) != "STRAVA activities are not available via the API" {
+		t.Fatalf("Activity.StubShape/Note = %v/%v, want stub-shaped with the upstream note carried through",
+			activity.StubShape, activity.Note)
+	}
+}
+
+// TestActivityUnmarshalNoteAbsentForRealActivity is D-5's absent-field
+// fixture for Note: a real (non-stub) activity must leave Note nil, not a
+// fabricated empty string.
+func TestActivityUnmarshalNoteAbsentForRealActivity(t *testing.T) {
+	t.Parallel()
+
+	var activity icu.Activity
+
+	if err := json.Unmarshal([]byte(`{"name":"a real ride","type":"Ride"}`), &activity); err != nil {
+		t.Fatalf("json.Unmarshal Activity: %v", err)
+	}
+
+	if activity.Note != nil {
+		t.Fatalf("Activity.Note = %v, want nil for a real activity with no _note key", activity.Note)
+	}
+}
+
 func derefFloat(value *float64) float64 {
 	if value == nil {
 		return 0

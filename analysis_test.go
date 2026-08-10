@@ -1,7 +1,9 @@
 package icu_test
 
 import (
+	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	icu "github.com/Thejuampi/icu"
@@ -448,6 +450,32 @@ func TestAnalyzeCyclingActivitiesExcludesStubsFromScopeActivities(t *testing.T) 
 	if got.Scope.Activities != 41 || got.Validity.Unavailable.StravaStubs != 20 {
 		t.Fatalf("Scope.Activities/Unavailable.StravaStubs = %d/%d, want 41/20",
 			got.Scope.Activities, got.Validity.Unavailable.StravaStubs)
+	}
+}
+
+// TestAnalyzeCyclingActivitiesFTPDiscriminatorConflictsAbsentFromWire is R1:
+// ftpDiscriminatorConflicts must be top-level only (never a per-session key,
+// so the wave-2 golden's Sessions rows stay untouched) and omitted, not a
+// stray zero, when there is nothing to report. Activity.Trainer is not yet
+// an exposed Go field, so even an ambiguous cycling type with no
+// discriminating flag can never populate this counter today — this test
+// pins that absence at the JSON level and will fail loudly the day Trainer
+// is wired and this needs a real positive-case test alongside it.
+func TestAnalyzeCyclingActivitiesFTPDiscriminatorConflictsAbsentFromWire(t *testing.T) {
+	t.Parallel()
+
+	ambiguous := icu.Activity{Type: "GravelRide", TrainingLoad: 50, MovingTime: 3600}
+
+	got := icu.AnalyzeCyclingActivities([]icu.Activity{ambiguous}, icu.AnalysisOptions{})
+
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal analysis: %v", err)
+	}
+
+	if got.FTPDiscriminatorConflicts != nil || strings.Contains(string(data), "ftpDiscriminatorConflicts") {
+		t.Fatalf("FTPDiscriminatorConflicts = %+v, JSON contains key = %v, want nil/absent",
+			got.FTPDiscriminatorConflicts, strings.Contains(string(data), "ftpDiscriminatorConflicts"))
 	}
 }
 

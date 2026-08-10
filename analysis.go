@@ -76,8 +76,15 @@ type CyclingAnalysis struct {
 	Durability    CyclingDurability              `json:"durability"`
 	Anaerobic     CyclingAnaerobic               `json:"anaerobic"`
 	Performance   CyclingPerformanceIntelligence `json:"performance"`
-	Sessions      []CyclingSession               `json:"sessions,omitempty"`
-	Warnings      []string                       `json:"warnings,omitempty"`
+	// FTPDiscriminatorConflicts is T1b.5/R1's read-path mirror of
+	// rebalance.go's FTPDiscriminatorConflicts, at analysis level only — no
+	// per-session key (the wave-2 golden's Sessions rows must stay
+	// untouched). Top-level and omitempty: absent when there is no conflict
+	// to report, not a false zero (D-3/D-5). See
+	// CyclingFTPDiscriminatorConflicts for why it is currently always absent.
+	FTPDiscriminatorConflicts *CyclingFTPDiscriminatorConflicts `json:"ftpDiscriminatorConflicts,omitempty"`
+	Sessions                  []CyclingSession                  `json:"sessions,omitempty"`
+	Warnings                  []string                          `json:"warnings,omitempty"`
 }
 
 // cyclingValidityZeroSemantics documents D-5's absence-vs-zero rule for the
@@ -266,6 +273,30 @@ type CyclingAnaerobic struct {
 	MeanWBalDepletionPercent float64 `json:"meanWbalDepletionPercent,omitempty"`
 }
 
+// CyclingFTPDiscriminatorConflicts mirrors D-10b's asymmetric flag-trust
+// counter (FTPDiscriminatorConflicts, rebalance.go/plan.go) for the
+// analysis/read path's activity partition (T1b.5/R1).
+//
+// AmbiguousTypeFlagAssertedIndoor counts activities of an ambiguous cycling
+// type (D-10 class 3) whose environment flag was explicitly asserted indoor
+// (ResolveFTP Source: flag_asserted) — the activity-partition twin of
+// FTPDiscriminatorConflicts.EventFlagAssertedIndoor.
+//
+// It is currently and structurally always 0, unlike its event-side sibling:
+// Activity.Trainer is not yet an exposed Go field (rebalance.go's own
+// rebalanceFTPDiscriminatorConflicts documents the identical gap; wiring
+// Trainer was explicitly deferred past wave-2 and remains out of this
+// remediation's declared scope), so every activity-side ResolveFTP call in
+// this file passes Trainer: nil and can never classify Source as
+// flag_asserted. The counter is wired now, honestly inert, so it starts
+// working the day Trainer is exposed instead of silently never having
+// existed — the same "mechanism now, disclosed inertness" shape already
+// used for icu_ignore_* filtering (CyclingValidity) and wave-4's
+// carbsIngested.
+type CyclingFTPDiscriminatorConflicts struct {
+	AmbiguousTypeFlagAssertedIndoor int `json:"ambiguousTypeFlagAssertedIndoor"`
+}
+
 type CyclingSession struct {
 	ID                 string     `json:"id,omitempty"`
 	Date               string     `json:"date,omitempty"`
@@ -349,39 +380,40 @@ type CyclingEfficiencySignal struct {
 }
 
 type cyclingAnalysisAccumulator struct {
-	analysis                CyclingAnalysis
-	dailyLoads              map[string]int
-	intensityWeightedSum    float64
-	powerMovingTimeSecs     int
-	intensity               numericAccumulator
-	decoupling              numericAccumulator
-	efficiency              numericAccumulator
-	variability             numericAccumulator
-	wbalDepletion           numericAccumulator
-	wbalDepletionPercent    numericAccumulator
-	maxWbalDepletionPercent float64
-	loadDivergence          numericAccumulator
-	temp                    numericAccumulator
-	weatherTemp             numericAccumulator
-	feelsLike               numericAccumulator
-	windSpeed               numericAccumulator
-	headwind                numericAccumulator
-	tailwind                numericAccumulator
-	altitude                numericAccumulator
-	gradient                numericAccumulator
-	yaw                     numericAccumulator
-	strain                  numericAccumulator
-	environmentSamples      int
-	maxTemp                 float64
-	maxWindGust             float64
-	maxAltitude             float64
-	hotSessions             int
-	windAffectedSessions    int
-	climbingSessions        int
-	maxDecoupling           float64
-	longEndurance           int
-	latestLoadDate          string
-	latestAnchorDate        string
+	analysis                       CyclingAnalysis
+	dailyLoads                     map[string]int
+	intensityWeightedSum           float64
+	powerMovingTimeSecs            int
+	intensity                      numericAccumulator
+	decoupling                     numericAccumulator
+	efficiency                     numericAccumulator
+	variability                    numericAccumulator
+	wbalDepletion                  numericAccumulator
+	wbalDepletionPercent           numericAccumulator
+	maxWbalDepletionPercent        float64
+	loadDivergence                 numericAccumulator
+	temp                           numericAccumulator
+	weatherTemp                    numericAccumulator
+	feelsLike                      numericAccumulator
+	windSpeed                      numericAccumulator
+	headwind                       numericAccumulator
+	tailwind                       numericAccumulator
+	altitude                       numericAccumulator
+	gradient                       numericAccumulator
+	yaw                            numericAccumulator
+	strain                         numericAccumulator
+	environmentSamples             int
+	maxTemp                        float64
+	maxWindGust                    float64
+	maxAltitude                    float64
+	hotSessions                    int
+	windAffectedSessions           int
+	climbingSessions               int
+	maxDecoupling                  float64
+	longEndurance                  int
+	latestLoadDate                 string
+	latestAnchorDate               string
+	ftpAmbiguousFlagAssertedIndoor int
 }
 
 type numericAccumulator struct {
@@ -484,6 +516,19 @@ func (accumulator *cyclingAnalysisAccumulator) add(activity *Activity) {
 
 	accumulator.addDate(activity, includePower)
 	accumulator.addSession(activity)
+	accumulator.addFTPDiscriminator(activity)
+}
+
+// addFTPDiscriminator counts CyclingFTPDiscriminatorConflicts'
+// AmbiguousTypeFlagAssertedIndoor signal (T1b.5/R1). See that type's doc
+// comment for why this can never currently increment.
+func (accumulator *cyclingAnalysisAccumulator) addFTPDiscriminator(activity *Activity) {
+	selection := ResolveFTP(FTPRequest{Type: activity.Type, Entity: FTPEntityActivity})
+
+	if selection.Class == FTPClassAmbiguous && selection.Source == FTPSourceFlagAsserted &&
+		selection.Indoor != nil && *selection.Indoor {
+		accumulator.ftpAmbiguousFlagAssertedIndoor++
+	}
 }
 
 // recordValidity is D-3's single source of the validity block's counters:
@@ -783,9 +828,23 @@ func (accumulator *cyclingAnalysisAccumulator) finish(options AnalysisOptions) C
 	accumulator.finishEnvironment()
 	accumulator.finishState()
 	accumulator.finishPerformance()
+	accumulator.finishFTPDiscriminatorConflicts()
 	accumulator.finishSectionRefusalWarnings(options)
 
 	return accumulator.analysis
+}
+
+// finishFTPDiscriminatorConflicts sets CyclingAnalysis.FTPDiscriminatorConflicts
+// only when there is a conflict to report (D-3/D-5: absent, not a false
+// zero) — currently never, per CyclingFTPDiscriminatorConflicts' doc comment.
+func (accumulator *cyclingAnalysisAccumulator) finishFTPDiscriminatorConflicts() {
+	if accumulator.ftpAmbiguousFlagAssertedIndoor == 0 {
+		return
+	}
+
+	accumulator.analysis.FTPDiscriminatorConflicts = &CyclingFTPDiscriminatorConflicts{
+		AmbiguousTypeFlagAssertedIndoor: accumulator.ftpAmbiguousFlagAssertedIndoor,
+	}
 }
 
 // finishValidity closes out D-3's validity block (T2.3): computed here

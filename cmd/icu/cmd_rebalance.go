@@ -161,6 +161,9 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 	if newest == "" {
 		return icu.RebalanceInput{}, errMissing("newest")
 	}
+	if err := validateAnalysisRange("--oldest", oldest, "--newest", newest); err != nil {
+		return icu.RebalanceInput{}, err
+	}
 	if _, ok := flags["max-hr"]; ok {
 		return icu.RebalanceInput{}, errors.New("max-hr is not supported for power rebalance sessions")
 	}
@@ -221,6 +224,7 @@ func rebalanceShowSchema() *CommandSchema {
 			{Name: "target-tolerance", ValueName: "N", Description: "Allowed load delta from target."},
 			{Name: "type", ValueName: "SPORT", Description: "Sport type for settings/history."},
 			{Name: "target", ValueName: "TARGET", Description: "Workout target type (POWER)."},
+			{Name: "max-hr", ValueName: "BPM", Description: "Not supported: rebalance sessions are priced from POWER, not heart rate; see --target."},
 			{Name: "start-time", ValueName: "HH:MM", Description: "Default session start time."},
 			{Name: "min-session-minutes", ValueName: "N", Description: "Minimum generated session duration."},
 			{Name: "duration-step-minutes", ValueName: "N", Description: "Duration rounding step."},

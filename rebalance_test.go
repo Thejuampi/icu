@@ -800,6 +800,29 @@ func TestRebalanceMixedWeekWithSessionEnvironmentRefuses(t *testing.T) {
 	}
 }
 
+// TestRebalanceMixedWeekWithSessionEnvironmentIsValidationBlocking is Stage 6
+// R2: docs/rebalance.md:56 promises the mixed-environment-week refusal makes
+// "the whole proposal ... blocking". Asserting on Operations count (as
+// TestRebalanceMixedWeekWithSessionEnvironmentRefuses does above) pins an
+// incidental consequence, not the documented contract — a `plan.Validation`
+// re-derivation from the serialized proposal cannot recover this condition
+// from Constraints alone, since it depends on input.Events. This test pins
+// the actual field the docs name.
+func TestRebalanceMixedWeekWithSessionEnvironmentIsValidationBlocking(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.Constraints.SessionEnvironment = icu.SessionEnvironmentOutdoor
+	input.Events[1].Type = icu.ActivityTypeVirtualRide
+	input.Events[2].Type = "Ride"
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	if !proposal.Validation.Blocking || !strings.Contains(strings.Join(proposal.Validation.Errors, "\n"), "mixed-environment week") {
+		t.Fatalf("validation = %+v, want blocking=true with a named mixed-week error", proposal.Validation)
+	}
+}
+
 // TestRebalanceClassFourSessionEnumeratedWithNoLoadSource is W1b-E01: a
 // class-4 (D-10 not_applicable) session in the week is enumerated in
 // timeAccounting with loadSource "none" — recorded so its minutes are

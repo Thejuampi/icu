@@ -681,6 +681,41 @@ func TestBuildPlanProposalFTPFromSportSettings(t *testing.T) {
 	}
 }
 
+// TestBuildPlanProposalNoPhantomFTPWarningWithoutDefaultType is Stage 6 R4:
+// context.ftp/ftpSource are a week-level representative only (D-11) that
+// requires Constraints.DefaultType to resolve; each session is still priced
+// individually from its own Type. Previously, an intent with FTP set but no
+// DefaultType (a realistic shape when every session names its own Type) got
+// a false "ftp is missing" context warning even though the session itself
+// resolved and priced correctly, because the warning did not distinguish
+// "the representative type is not applicable" from "the athlete has no FTP".
+func TestBuildPlanProposalNoPhantomFTPWarningWithoutDefaultType(t *testing.T) {
+	t.Parallel()
+
+	proposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate:       "2026-07-27",
+		SportSettings: &icu.SportSettings{FTP: 270},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-07-28", Newest: "2026-07-28",
+			FTP: 270,
+			Constraints: icu.PlanConstraints{
+				AllowCreate: true, DefaultStartTime: "07:00", DefaultCategory: "WORKOUT",
+				// DefaultType intentionally left unset: sessions name their own Type.
+			},
+			Sessions: []icu.PlanSessionDraft{{
+				Date: "2026-07-28", Name: "Z2", Type: "Ride", DescLocal: "- 60m 70%", Desc: "- 60m 70%",
+			}},
+		},
+	})
+
+	if len(proposal.Context.Warnings) != 0 {
+		t.Fatalf("context.warnings = %v, want none (session prices its own type)", proposal.Context.Warnings)
+	}
+	if len(proposal.Operations) != 1 || proposal.Operations[0].ExpectedLoad != 49 {
+		t.Fatalf("operations = %+v, want one create priced from the session's own type", proposal.Operations)
+	}
+}
+
 func TestBuildPlanProposalDerivesScopeFromSessions(t *testing.T) {
 	t.Parallel()
 
@@ -715,8 +750,16 @@ func TestBuildPlanProposalBlocksCreateWithoutType(t *testing.T) {
 		},
 	})
 
-	if len(proposal.Operations) != 0 || len(proposal.Validation.Warnings) == 0 {
-		t.Fatalf("ops=%d warnings=%v, want create blocked without type", len(proposal.Operations), proposal.Validation.Warnings)
+	// Stage 6 R4: this used to assert on Warnings, which passed only
+	// incidentally — a since-fixed phantom "ftp is missing" context warning
+	// (unrelated to this test's actual scenario) always populated Warnings
+	// regardless of whether create-without-type genuinely blocked anything.
+	// The real signal is Validation.Blocking/Errors: without a type, the
+	// session's workout description cannot resolve an FTP to price against,
+	// so expectedLoad stays 0 and ValidatePlanProposal blocks on it.
+	if len(proposal.Operations) != 0 || !proposal.Validation.Blocking || len(proposal.Validation.Errors) == 0 {
+		t.Fatalf("ops=%d blocking=%v errors=%v, want create blocked without type",
+			len(proposal.Operations), proposal.Validation.Blocking, proposal.Validation.Errors)
 	}
 }
 

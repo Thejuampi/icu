@@ -835,10 +835,10 @@ func positiveIntFlag(flags map[string]string, name string, defaultValue int) (in
 
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, fmt.Errorf("%w: --%s must be an integer", errMissingRequired, name)
+		return 0, fmt.Errorf("%w: --%s must be an integer", errInvalidValue, name)
 	}
 	if parsed <= 0 {
-		return 0, fmt.Errorf("%w: --%s must be greater than 0", errMissingRequired, name)
+		return 0, fmt.Errorf("%w: --%s must be greater than 0", errInvalidValue, name)
 	}
 
 	return parsed, nil
@@ -854,7 +854,7 @@ func validateAnalysisRange(oldestName, oldest, newestName, newest string) error 
 		return err
 	}
 	if oldestDate.After(newestDate) {
-		return fmt.Errorf("%w: %s must be on or before %s", errMissingRequired, oldestName, newestName)
+		return fmt.Errorf("%w: %s must be on or before %s", errInvalidValue, oldestName, newestName)
 	}
 
 	return nil
@@ -865,7 +865,7 @@ func parseAnalysisDate(name, value string) (time.Time, error) {
 
 	parsed, err := time.Parse(layout, value)
 	if err != nil || parsed.Format(layout) != value {
-		return time.Time{}, fmt.Errorf("%w: %s must use YYYY-MM-DD", errMissingRequired, name)
+		return time.Time{}, fmt.Errorf("%w: %s must use YYYY-MM-DD", errInvalidValue, name)
 	}
 
 	return parsed, nil
@@ -1103,7 +1103,7 @@ func microcycleLocation(flags map[string]string) (*time.Location, error) {
 
 	location, err := time.LoadLocation(name)
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid --timezone %s", errMissingRequired, name)
+		return nil, fmt.Errorf("%w: invalid --timezone %s", errInvalidValue, name)
 	}
 
 	return location, nil
@@ -1120,7 +1120,7 @@ func microcycleTimezoneSource(flags map[string]string) string {
 func isoWeekRange(date string, location *time.Location) (analysisRange, *time.Location, error) {
 	parsed, err := time.ParseInLocation("2006-01-02", date, location)
 	if err != nil {
-		return analysisRange{}, nil, fmt.Errorf("%w: invalid date %s", errMissingRequired, date)
+		return analysisRange{}, nil, fmt.Errorf("%w: invalid date %s", errInvalidValue, date)
 	}
 
 	weekday := int(parsed.Weekday())
@@ -1137,13 +1137,13 @@ func validateDateRange(from, to string) error {
 	start, startErr := time.Parse("2006-01-02", from)
 	end, endErr := time.Parse("2006-01-02", to)
 	if startErr != nil {
-		return fmt.Errorf("%w: invalid --from %s", errMissingRequired, from)
+		return fmt.Errorf("%w: invalid --from %s", errInvalidValue, from)
 	}
 	if endErr != nil {
-		return fmt.Errorf("%w: invalid --to %s", errMissingRequired, to)
+		return fmt.Errorf("%w: invalid --to %s", errInvalidValue, to)
 	}
 	if end.Before(start) {
-		return fmt.Errorf("%w: --from must be on or before --to", errMissingRequired)
+		return fmt.Errorf("%w: --from must be on or before --to", errInvalidValue)
 	}
 
 	return nil
@@ -1152,7 +1152,7 @@ func validateDateRange(from, to string) error {
 func addDays(date string, days int) (string, error) {
 	parsed, err := time.Parse("2006-01-02", date)
 	if err != nil {
-		return "", fmt.Errorf("%w: invalid date %s", errMissingRequired, date)
+		return "", fmt.Errorf("%w: invalid date %s", errInvalidValue, date)
 	}
 
 	return parsed.AddDate(0, 0, days).Format("2006-01-02"), nil

@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"strings"
 	"testing"
 
 	icu "github.com/Thejuampi/icu"
@@ -88,6 +89,46 @@ func TestAnalyzeWorkoutExecutionComparesSessionAndReps(t *testing.T) {
 
 	if got.Comparison.RepCount.Planned != 3 || got.Comparison.RepCount.Executed != 2 {
 		t.Fatalf("rep count = %+v, want planned 3 executed 2", got.Comparison.RepCount)
+	}
+}
+
+// TestAnalyzeWorkoutExecutionEmitsFTPSourceAndConfidence is R1: the read
+// path must surface ResolveFTP's provenance next to Activity.FTP instead of
+// discarding it. A VirtualRide is type_inherent/high, so no
+// ftp_confidence_low warning should appear either.
+func TestAnalyzeWorkoutExecutionEmitsFTPSourceAndConfidence(t *testing.T) {
+	t.Parallel()
+
+	activity := icu.Activity{ID: "a1", Type: "VirtualRide", StartDateLocal: "2026-06-18T18:09:46", MovingTime: 3600}
+
+	got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{
+		Activity:      &activity,
+		SportSettings: &icu.SportSettings{FTP: 270, IndoorFTP: 285},
+	}, icu.WorkoutExecutionOptions{})
+
+	if got.FTPSource != "type_inherent" || got.FTPConfidence != "high" ||
+		strings.Contains(strings.Join(got.Warnings, "\n"), "ftp_confidence_low") {
+		t.Fatalf("ftpSource/ftpConfidence = %q/%q, warnings = %v, want type_inherent/high and no ftp_confidence_low",
+			got.FTPSource, got.FTPConfidence, got.Warnings)
+	}
+}
+
+// TestAnalyzeWorkoutExecutionAmbiguousTypeWarnsFTPConfidenceLow is R1's
+// warning half: D-10c requires the read path to proceed and warn on `low`
+// confidence, never refuse. GravelRide with no discriminating flag (Activity
+// exposes no Trainer field yet) resolves unknown/low.
+func TestAnalyzeWorkoutExecutionAmbiguousTypeWarnsFTPConfidenceLow(t *testing.T) {
+	t.Parallel()
+
+	activity := icu.Activity{ID: "a1", Type: "GravelRide", StartDateLocal: "2026-06-18T18:09:46", MovingTime: 3600}
+
+	got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{
+		Activity:      &activity,
+		SportSettings: &icu.SportSettings{FTP: 270, IndoorFTP: 285},
+	}, icu.WorkoutExecutionOptions{})
+
+	if got.FTPConfidence != "low" || !strings.Contains(strings.Join(got.Warnings, "\n"), "ftp_confidence_low") {
+		t.Fatalf("ftpConfidence = %q, warnings = %v, want low with ftp_confidence_low warning", got.FTPConfidence, got.Warnings)
 	}
 }
 

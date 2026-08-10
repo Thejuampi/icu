@@ -108,7 +108,7 @@ The activity field contract is fixed (D-8, wave-2) — see **`--fields`/`--activ
 
 ### Output Sections
 
-- `scope`: analyzed activity counts (real activities only — see `validity` below), date range, and `timezone`/`timezoneSource` metadata
+- `scope`: analyzed activity counts (real activities only — see `validity` below), date range, and `timezone`/`timezoneSource` metadata. `scope.startDate`/`scope.endDate` are the **observed span of the matched activities' own dates**, not the requested `--oldest`/`--newest` window — e.g. `--oldest 2026-05-01 --newest 2026-05-31` narrows to `2026-05-02`..`2026-05-30` when that is where the actual activities fall. When zero activities match, both keys are **entirely absent** (`omitempty`), not present with a null or empty-string value — do not assume the shape has these two keys unconditionally.
 - `validity`: per-activity inclusion accounting (D-2/D-3/D-24) — see **Validity, Ignore Flags, and STRAVA Stubs** below
 - `state`: current load-pressure classification and directive
 - `volume`: time, distance, and elevation totals
@@ -560,10 +560,33 @@ classification entirely — before `Type` is even inspected — whereas a
 not-applicable type is classified and then explicitly reported as having no
 FTP-dependent values. Neither case fabricates a zero or a default FTP.
 **Caller note:** detecting the STRAVA-stub shape itself is the caller's job;
-`ResolveFTP` only classifies once told. `analysis workout` does not currently
-set `StubShape` on its `ResolveFTP` call, so a stub-shaped activity passed to
-this command is priced through the ordinary activity partition rather than
-short-circuited to `not_a_record`.
+`ResolveFTP` only classifies once told. `analysis workout` sets `StubShape:
+inputs.Activity.StubShape` on its `ResolveFTP` call, so a stub-shaped activity
+passed to this command **is** short-circuited to `not_a_record` rather than
+priced through the ordinary activity partition.
+
+`analysis workout` also emits its resolution's provenance directly:
+`ftpSource` and `ftpConfidence` sit alongside `activity.ftp` at the top level
+of the payload (`WorkoutExecutionAnalysis`, not per-session — there is only
+one activity per invocation), and a `ftp_confidence_low` entry is added to
+`warnings` whenever `ftpConfidence` resolves to `low` (D-10c/T1b.5). Both
+fields are `omitempty`: they are absent, not empty-stringed, when
+`ResolveFTP` reports `Applicable: false` or short-circuits to `not_a_record`,
+since there is no FTP provenance to report in either case.
+
+`analysis cycling` emits a single top-level `ftpDiscriminatorConflicts` key
+(`omitempty`, absent when there is nothing to count), mirroring
+`rebalance`/`plan`'s event-side `ftpDiscriminatorConflicts` but counting
+**activity**-side ambiguous-type-with-flag-asserted-indoor conflicts instead
+of event-side ones — it never adds a per-session key, since `CyclingSession`
+is shared by four different output shapes and a field there would leak into
+all of them. As of this writing the count is **structurally**, not just
+empirically, always zero: `Activity.Trainer` is not an exposed Go field
+anywhere in this codebase, so an activity-side `ResolveFTP` call can never
+observe a `flag_asserted` source (unlike the event partition, where
+`Event.Indoor` is exposed and genuinely drives `flag_asserted` sometimes).
+The mechanism is implemented and tested against that day; exposing
+`Activity.Trainer` is a separate, larger change than this fix.
 
 Each `analysis` payload carries its own `schemaVersion` as the first JSON key
 (D-7), the same marker convention as `rebalance`'s `icu.rebalance.v3` and

@@ -389,6 +389,14 @@ func BuildRebalanceProposal(input *RebalanceInput) RebalanceProposalFile {
 		TimeAccounting:   rebalanceTimeAccounting(&working),
 		Notes:            rebalanceNotes(&working),
 	}
+	// Seed the mixed-environment-week refusal into Validation.Errors before
+	// re-deriving validation from the serialized proposal: ValidateRebalanceProposal
+	// re-derives errors from proposal fields (e.g. Constraints), which carry no
+	// Events, so this condition can never be recovered there. Without seeding it,
+	// validation.Blocking stays false "by coincidence" (buildRebalancePlan already
+	// returned zero operations) rather than by construction. Mirrors the same
+	// seeding rebalanceV2 already performs at rebalance_v2.go:206.
+	proposal.Validation.Errors = appendUniqueStrings(proposal.Validation.Errors, rebalanceSessionEnvironmentBlockingReasons(&working)...)
 	proposal.Validation = ValidateRebalanceProposal(&proposal)
 
 	return proposal

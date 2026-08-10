@@ -365,7 +365,17 @@ func planContext(input *PlanInput) PlanContext {
 		ZoneBasis:                 "per-session",
 		FTPDiscriminatorConflicts: planFTPDiscriminatorConflicts(input),
 	}
-	if representative.Watts <= 0 {
+	// Stage 6 R4: gate on Applicable, not just Watts <= 0. When
+	// Constraints.DefaultType is empty (or otherwise not-applicable), this
+	// week-level representative resolves to FTPClassNotApplicable —
+	// Applicable: false, Watts: 0 — regardless of whether the athlete has an
+	// FTP configured at all. That is not "ftp is missing": each session is
+	// still priced individually from its own Type via
+	// resolvePlanSessionFTP/FTPApplied/FTPSource (D-11), so emitting this
+	// message here falsely told a caller planned load would not be
+	// calculated when it, per session, still was. Only warn when the
+	// representative class was applicable and genuinely has no watts.
+	if representative.Applicable && representative.Watts <= 0 {
 		context.Warnings = append(context.Warnings, "ftp is missing; planned load will not be calculated from workout descriptions")
 	}
 

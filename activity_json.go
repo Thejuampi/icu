@@ -59,6 +59,7 @@ func (activity *Activity) applySnakeFields(raw map[string]json.RawMessage) {
 	activity.applyValidityAndLoadSnakeFields(raw)
 	activity.applyEmitOnlySnakeFields(raw)
 	activity.StubShape = isStravaStubShape(raw, activity.Source)
+	copyRawIfSet(&activity.Note, raw, "_note")
 }
 
 // applyEmitOnlySnakeFields carries wave-4's nine emit-only fields (D-1/A2)

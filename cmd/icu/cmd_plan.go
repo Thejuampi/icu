@@ -162,6 +162,9 @@ func readPlanInput(flags map[string]string, client *icu.Client) (icu.PlanInput, 
 	if oldest == "" || newest == "" {
 		return icu.PlanInput{}, errors.New("intent oldest and newest are required (or provide session dates)")
 	}
+	if err := validateAnalysisRange("intent.oldest", oldest, "intent.newest", newest); err != nil {
+		return icu.PlanInput{}, err
+	}
 	sessionEnvironment, err := sessionEnvironmentFromFlags(flags)
 	if err != nil {
 		return icu.PlanInput{}, err

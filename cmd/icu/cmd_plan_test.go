@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -364,6 +365,27 @@ func TestReadPlanInputRejectsInvalidSessionEnvironmentFlag(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("err = nil, want rejection of invalid session-environment value")
+	}
+}
+
+// TestReadPlanInputRejectsInvertedIntentDateRange is Stage 6 R3: the CLI-level
+// check that rebalance now has (validateAnalysisRange) was also missing on
+// plan's read path; only the proposal-validation layer caught an inverted
+// window there, a third, inconsistent answer across three commands.
+func TestReadPlanInputRejectsInvertedIntentDateRange(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	intent := samplePlanIntent()
+	intent.Oldest = "2026-07-28"
+	intent.Newest = "2026-07-20"
+	intentFile := filepath.Join(t.TempDir(), "intent.json")
+	writePlanTestIntent(t, intentFile, intent)
+
+	_, err := readPlanInput(map[string]string{"intent-file": intentFile}, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for an inverted intent date range", err)
 	}
 }
 

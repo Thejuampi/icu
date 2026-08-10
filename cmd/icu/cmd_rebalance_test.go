@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -278,8 +279,36 @@ func TestRebalanceDryRunRejectsMaxHRFlag(t *testing.T) {
 
 	_, err := readRebalanceInput(flags, client)
 
-	if err == nil {
-		t.Fatalf("err = nil, want unsupported max-hr")
+	if err == nil || !strings.Contains(err.Error(), "max-hr is not supported") {
+		t.Fatalf("err = %v, want the specific max-hr rejection", err)
+	}
+}
+
+// TestRebalanceShowMaxHRFlagReachesSpecificRejection is Stage 6 R9:
+// rebalanceShowSchema previously never declared --max-hr, so
+// validateCommandInput's generic "unknown flag" check always fired first and
+// readRebalanceInput's specific rejection message (below) was unreachable
+// dead code — the same failure never surfaced because both checks reject.
+// This test pins both halves of the fix: the schema no longer treats
+// --max-hr as unknown, and the specific message still fires once past it.
+func TestRebalanceShowMaxHRFlagReachesSpecificRejection(t *testing.T) {
+	t.Parallel()
+
+	cmd := rebalanceDryRunCommand()
+	schemaFlags := map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07", "max-hr": "140"}
+
+	if err := validateCommandInput(cmd, nil, schemaFlags); err != nil {
+		t.Fatalf("validateCommandInput() = %v, want --max-hr accepted as a declared flag", err)
+	}
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["max-hr"] = "140"
+
+	err := cmd.Run(nil, flags, client)
+
+	if err == nil || !strings.Contains(err.Error(), "max-hr is not supported") {
+		t.Fatalf("err = %v, want the specific max-hr rejection", err)
 	}
 }
 
@@ -294,6 +323,44 @@ func TestRebalanceDryRunRejectsInvalidSessionEnvironmentFlag(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("err = nil, want rejection of invalid session-environment value")
+	}
+}
+
+// TestRebalanceDryRunRejectsInvertedDateRange is Stage 6 R3: rebalance had no
+// local date validation at all, unlike its `analysis` siblings — an inverted
+// window silently wrote a proposal with scope.startDate > scope.endDate
+// instead of failing fast. Reuses validateAnalysisRange (DRY), which already
+// serves four analysis call sites.
+func TestRebalanceDryRunRejectsInvertedDateRange(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["oldest"] = "2026-06-07"
+	flags["newest"] = "2026-06-01"
+
+	_, err := readRebalanceInput(flags, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for an inverted date range", err)
+	}
+}
+
+// TestRebalanceDryRunRejectsMalformedDate is Stage 6 R6: a malformed date
+// value is a wrong-shape input, not an absent one — routing it through
+// errMissingRequired mislabelled the category while the explanation text
+// stayed accurate.
+func TestRebalanceDryRunRejectsMalformedDate(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["oldest"] = "2026-13-45"
+
+	_, err := readRebalanceInput(flags, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for a malformed date", err)
 	}
 }
 

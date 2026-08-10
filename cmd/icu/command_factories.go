@@ -9,6 +9,14 @@ import (
 
 var errMissingRequired = errors.New("missing required argument")
 
+// errInvalidValue is Stage 6 R6: errMissingRequired previously labelled both
+// "the argument is absent" and "the argument is present but malformed/out of
+// order" as "missing required argument", which lies about the second case
+// (e.g. `--oldest 2026-13-45`, an inverted range, `--days abc`). The
+// explanation text after the sentinel was always accurate; only the category
+// was wrong. Parse and ordering failures route here instead.
+var errInvalidValue = errors.New("invalid value")
+
 func errMissing(what string) error {
 	return fmt.Errorf("%w: %s", errMissingRequired, what)
 }

@@ -208,6 +208,16 @@ type Activity struct {
 	// typed struct's own fields cannot reconstruct after the fact. Never
 	// part of the wire contract in either direction.
 	StubShape bool `json:"-"`
+	// Note carries the STRAVA stub's `_note` key verbatim (Stage 6 R5),
+	// e.g. "STRAVA activities are not available via the API". It is
+	// emit-only, same shape as wave-4's nine fields: upstream sends it on
+	// every stub (all five stub keys, this one included), and the exclusion
+	// counts (validity.unavailable.stravaStubs) are correct without it, but
+	// dropping it left a caller asking "why don't these records count?"
+	// with no explanation in the object that answers them. Pointer +
+	// omitempty (D-5): absent on every non-stub record, never a fabricated
+	// empty string.
+	Note *string `json:"note,omitempty"`
 }
 
 // HRRMeasurement is F-24's corrected identity for the live field `icu_hrr`
