@@ -10,6 +10,4 @@ Read these from the CLI for the configured athlete.
 3. Timezone from the athlete profile. Use it for `YYYY-MM-DD` dates.
 4. Note language: existing NOTE events, then athlete locale, then chat language.
 
-Write session targets as %FTP. If notes or recent durable rides set a tighter HR ceiling than the chart, use that.
-
 `icu workouts calculate --ftp` uses the live FTP for that environment.

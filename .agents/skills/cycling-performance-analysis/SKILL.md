@@ -12,6 +12,8 @@ metadata:
 
 Prefer measured `icu` data over model inference. Read calendar NOTE events before coaching. Preserve the existing plan until it is actually wrong.
 
+Power targets are **%FTP**. Read outdoor `ftp` and indoor `indoorFtp` from Ride sport settings. HR caps come from those zones, or a tighter ceiling on the calendar notes / recent durable rides.
+
 Do not invent a missing metric. Name it, mark the section unavailable, and add CLI support only when the user asks to build it.
 
 ## Companion files
@@ -81,7 +83,7 @@ Prefer updating the week NOTE over stacking a same-day NOTE. A duplicate of an e
 
 When a new block is approved, create compact notes only: (a) one block-overview, (b) weekly focus, (c) short ALT notes if the decision tree is long. Intervals NOTE events are all-day; long descriptions can fail with HTTP 500.
 
-When writing workouts, load [session-library.md](./session-library.md) and the **intervals-icu** desc / `plan` / `rebalance` rules. Calculate local load with `icu workouts calculate` before any write that changes weekly TSS. Targets are %FTP, using live outdoor `ftp` or indoor `indoorFtp`.
+When writing workouts, load [session-library.md](./session-library.md) and the **intervals-icu** desc / `plan` / `rebalance` rules. Calculate local load with `icu workouts calculate` before any write that changes weekly TSS.
 
 ## Output shape
 
