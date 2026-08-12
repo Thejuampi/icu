@@ -4,7 +4,7 @@ Source of truth for planned WORKOUT shapes. Load this file only when writing or 
 
 Pick a template by role, scale duration/reps/IF to the week's load target, run `icu workouts calculate` with the FTP for that environment, then write the calendar with the Intervals-friendly desc. Desc parser, dual local/Intervals format, and `plan` / `rebalance` live in the **intervals-icu** skill.
 
-Resolve live FTP, zones, and language with [athlete.md](./athlete.md). Do not put watt numbers or one athlete's FTP in this file.
+FTP and zones: [athlete.md](./athlete.md).
 
 **Not** a dump of every historical ride. Prefer these models; invent free-form structure only when no template fits.
 

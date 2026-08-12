@@ -81,7 +81,7 @@ Prefer updating the week NOTE over stacking a same-day NOTE. A duplicate of an e
 
 When a new block is approved, create compact notes only: (a) one block-overview, (b) weekly focus, (c) short ALT notes if the decision tree is long. Intervals NOTE events are all-day; long descriptions can fail with HTTP 500.
 
-When writing workouts, load [session-library.md](./session-library.md) and the **intervals-icu** desc / `plan` / `rebalance` rules. Calculate local load with `icu workouts calculate` before any write that changes weekly TSS. Use live outdoor vs indoor FTP from sport settings. Write targets as %FTP, never as watts.
+When writing workouts, load [session-library.md](./session-library.md) and the **intervals-icu** desc / `plan` / `rebalance` rules. Calculate local load with `icu workouts calculate` before any write that changes weekly TSS. Targets are %FTP, using live outdoor `ftp` or indoor `indoorFtp`.
 
 ## Output shape
 
@@ -130,6 +130,5 @@ A coaching question is not permission to start a CLI change.
 | "This touches the plan, so pull 12 weeks" | Daily decisions use the today row of the router. |
 | "High Z1 / low Z2 is the easy option" | On a disruption week the calendar HR cap is the session. |
 | "I should write a NOTE so the next agent sees this" | Write only if the decision changes the week or a gate needs a new fact. |
-| "I'll put watts in the note so it is concrete" | Write %FTP. Read `ftp` / `indoorFtp` from sport settings. |
 | "UTC in scope means I used the wrong timezone" | Explicit calendar dates + `timezoneSource: explicit` is correct. |
 | "The metric would help, I'll add it while coaching" | Mark unavailable. Build it only when asked. |
