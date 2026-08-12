@@ -1,48 +1,35 @@
-# Athlete profile — Thejuampi (`i445643`)
+# Athlete context
 
-These are athlete constraints from Ride sport settings and recent durable rides. They are not model defaults and not Intervals zone-chart ceilings.
+This skill is shared. Do not store one person's FTP, zones, ID, watt targets, or standing medical notes here.
 
-Read this file before scaling templates or talking about Z1/Z2. Do not copy these numbers into other skill files.
+Resolve live values from the `icu` CLI at the start of the job. Personal limits live on that athlete's calendar notes and recent sessions.
 
-## Anchors
+## Resolve from the CLI
 
-| Anchor | Value | Source |
-|--------|-------|--------|
-| Outdoor FTP | 270 W | Ride sport settings `ftp` |
-| Indoor FTP | 285 W | Ride sport settings `indoorFtp` |
-| LTHR | 178 bpm | Ride sport settings |
-| Max HR | 198 bpm | Ride sport settings |
-| Ride HR Z1 (chart) | ≤143 bpm | Intervals Ride zones |
-| Ride HR Z2 (chart) | 144–158 bpm | Intervals Ride zones |
-| True easy | ≤125 bpm | Recent recovery / easy work |
-| Durable Z2 HR ceiling | ≤140 bpm | Recent durable rides |
-| Default Z2 template | `z2_hr_control_waves` | Athlete preference |
-| Favorite VO2 | 30/15 | Athlete preference; overload up to 4×13 when healthy |
-| Timezone | America/New_York | Athlete profile |
-| Calendar NOTE language | Spanish | Existing NOTE events |
-| Chat language | Match the user | Session |
+1. `icu config show` for the default `athlete_id`. Use it unless the user names another athlete.
+2. Ride sport settings (`icu sports get Ride`, or `sportSettings` on `icu analysis coaching`):
+   - Outdoor FTP: `ftp`
+   - Indoor FTP: `indoorFtp` when set, otherwise `ftp`
+   - LTHR, max HR, HR zones, power zones
+3. Timezone: athlete profile `timezone`. Use it for explicit `YYYY-MM-DD` dates.
+4. Locale / note language: match existing calendar NOTE events, then the athlete profile locale, then the user's chat language.
 
-## FTP application
+If a field is missing, say so. Do not invent a substitute watt number.
 
-- Outdoor `Ride`: 270 W.
-- `VirtualRide` / indoor: 285 W.
-- Do not use 285 W for outdoor load calc.
-- `ftpApplied` `confidence: medium` is usable. Mention it only when the session environment looks wrong.
+## Power is relative
 
-## Zone intent (this athlete)
+- Prescribe and write sessions in **%FTP** (and HR when the session is HR-capped).
+- Never hardcode watts in this skill, in a template, or as a standing calendar target.
+- Outdoor `Ride` uses `ftp`. `VirtualRide` / indoor uses `indoorFtp` when set.
+- `icu workouts calculate --ftp FTP` takes the live FTP for that environment.
+- If the athlete asks "how many watts is that?", multiply the %FTP by the live FTP and name the source. Do not persist the product in the skill or as the written target.
 
-Intervals Ride Z2 goes to 158 bpm. That is not the long-ride target.
+## Personal ceilings
 
-- True easy: ≤125 bpm, conversational whisper.
-- Durable Z2: cruise about 130–140 bpm. Cut a valley before chasing 150+.
-- High-Z2 / chart-top Z2: 140–150 bpm, short caps only.
+Intervals Ride Z2 is often wider than useful durable work.
 
-Templates and %FTP bands live in [session-library.md](./session-library.md).
+- Default to sport-settings zones.
+- If calendar notes or recent durable rides set a tighter HR ceiling than the chart, use that ceiling for this athlete and say it came from notes or history.
+- Do not copy that ceiling into this file.
 
-## Standing constraints
-
-- Saddle-skin recurrence is a real limiter. Off-saddle weeks are tissue healing, not a deload.
-- Clinical instructions (dentist, physician) beat training notes.
-- Bike return needs an explicit gate already on the calendar. The date is negotiable; the gate conditions are not.
-
-Do not encode a one-off clinical cap (for example a post-extraction HR number) here. That cap lives on the calendar note for that week.
+Clinical, skin, and return-to-bike rules also live on the calendar. See SKILL.md → Disruption week.

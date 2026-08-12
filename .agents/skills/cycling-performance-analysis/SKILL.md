@@ -20,7 +20,7 @@ Load a file only when the job needs it. Do not load the whole pack for a daily d
 
 | File | Load when |
 |------|-----------|
-| [athlete.md](./athlete.md) | Any coaching for this athlete |
+| [athlete.md](./athlete.md) | How to resolve FTP, zones, timezone, and language from the CLI |
 | [session-library.md](./session-library.md) | Writing or rewriting workouts |
 | [report-data-contract.md](./report-data-contract.md) | Full weekly or 4-week report |
 | **intervals-icu** skill | Auth diagnose, event writes, desc parser, `plan` / `rebalance`, power-fill, load repair |
@@ -81,7 +81,7 @@ Prefer updating the week NOTE over stacking a same-day NOTE. A duplicate of an e
 
 When a new block is approved, create compact notes only: (a) one block-overview, (b) weekly focus, (c) short ALT notes if the decision tree is long. Intervals NOTE events are all-day; long descriptions can fail with HTTP 500.
 
-When writing workouts, load [session-library.md](./session-library.md) and the **intervals-icu** desc / `plan` / `rebalance` rules. Calculate local load with `icu workouts calculate` before any write that changes weekly TSS. Use outdoor vs indoor FTP from [athlete.md](./athlete.md).
+When writing workouts, load [session-library.md](./session-library.md) and the **intervals-icu** desc / `plan` / `rebalance` rules. Calculate local load with `icu workouts calculate` before any write that changes weekly TSS. Use live outdoor vs indoor FTP from sport settings. Write targets as %FTP, never as watts.
 
 ## Output shape
 
@@ -91,7 +91,7 @@ Match the question. Do not dump the full report on a daily call.
 
 **Weekly / 4-week:** load [report-data-contract.md](./report-data-contract.md). Use REPORT CONTEXT, TRAINING LOAD, PHYSIOLOGY, PERFORMANCE SIGNALS, ADAPTATION (if requested), PLANNED BLOCK, DECISION GUIDANCE. Separate raw metrics from interpretation. Check `dataQuality.missing` and `dataQuality.warnings` first.
 
-Chat language follows the user. Calendar NOTE language follows [athlete.md](./athlete.md).
+Chat language follows the user. Calendar NOTE language follows existing notes, then the athlete locale.
 
 ## Physiology and load
 
@@ -130,6 +130,6 @@ A coaching question is not permission to start a CLI change.
 | "This touches the plan, so pull 12 weeks" | Daily decisions use the today row of the router. |
 | "High Z1 / low Z2 is the easy option" | On a disruption week the calendar HR cap is the session. |
 | "I should write a NOTE so the next agent sees this" | Write only if the decision changes the week or a gate needs a new fact. |
-| "Library default FTP is 285" | Outdoor FTP and indoor FTP are different. Read [athlete.md](./athlete.md). |
+| "I'll put watts in the note so it is concrete" | Write %FTP. Read `ftp` / `indoorFtp` from sport settings. |
 | "UTC in scope means I used the wrong timezone" | Explicit calendar dates + `timezoneSource: explicit` is correct. |
 | "The metric would help, I'll add it while coaching" | Mark unavailable. Build it only when asked. |
