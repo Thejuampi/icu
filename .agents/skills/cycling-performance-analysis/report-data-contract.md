@@ -1,5 +1,7 @@
 # Cycling Report Data Contract
 
+Load this file only for a full weekly report or a 4-week plan dry run. Daily decisions do not need it.
+
 This contract tracks the data needed to render expanded cycling reports like:
 
 - `full physiology overview`
@@ -73,7 +75,7 @@ Support status meanings:
 | Block phase and week roles | build/recovery/maintenance plus reentry/build/overload/deload roles | `icu analysis plan` | supported |
 | Representative workout titles | device-friendly titles from interval pattern, duration, and session class | `icu analysis plan` | supported |
 | Device cue messages | preview, work, encouragement, restraint, finish messages by session class | `icu analysis plan` | supported |
-| Session Structure Norm | multi-phase default for all planned rides (waves, cruise-float, rotate, ladder, durable story, HI openers); flat warmup→constant main→cooldown banned as default | planning skill / calendar write path | supported (process norm; not a separate CLI field) |
+| Session Structure Norm | multi-phase default for planned rides (waves, cruise-float, rotate, ladder, durable story, HI openers); flat warmup→constant main→cooldown banned as default; disruption/clinical-rest days are exempt | session-library.md / SKILL.md Disruption week | supported (process norm; not a separate CLI field) |
 | CTL/ATL/TSB forecast | future planned load impulse model | `icu analysis plan` forecast | supported |
 | Day-level adjustment rules | HRV/sleep/RHR/TSB/decoupling/heat gates | `icu analysis plan` deterministic day adjustments | supported |
 
@@ -87,12 +89,16 @@ Planning output should compare the existing calendar against the athlete's recen
 | Secret leakage during auth debugging | never print raw API keys; use status, length, trim, fingerprint | supported |
 | Intervals snake_case payload not mapped to DTO | add unmarshal tests for raw activity/event/supporting fields before trusting reports | supported for activities/events/weather/curves/sports/custom items |
 | Suspicious zero-valued activity/event fields | spot-check raw API or CLI JSON before writing coaching prose | manual |
+| STRAVA-stub contamination of activity counts | `analysis cycling` / `analysis coaching` / `analysis microcycle` exclude stub-shaped records (5 raw keys, `_note` present, `source == "STRAVA"`) from every count and load aggregate | fixed for those commands; `analysis adaptation` `scope.activities` is not yet filtered |
+| `icu_ignore_*` reported as an observed effect when it was inert | check `validity.excluded > 0` in that `analysis cycling` run before crediting a number change to ignore-flag filtering | supported (verify per run) |
+| Missing `analysis workout` compliance read as 0% | `match.compliance` is absent when `match.eventId` is 0 | supported (means no pairing) |
 
 ## Timezone and Date Range Contract
 
 | Concern | Current behavior | Recommendation |
 | --- | --- | --- |
 | Default analysis date range | Calculated in **UTC** (`timezone: "UTC"`, `timezoneSource: "default_utc"` in scope output) | Use explicit `--oldest`/`--newest` dates in the athlete's local timezone for daily-accurate reports. |
+| Explicit dates still show `timezone: UTC` | `timezoneSource: explicit` with `timezone: UTC` after you passed `YYYY-MM-DD` | Those dates are athlete-local calendar days. Do not re-fetch. |
 | API timestamps | `startDateLocal` and related fields are returned by Intervals.icu in the athlete's configured timezone; `icu` does not convert them. | Treat API timestamps as athlete-local unless the output scope says otherwise. |
 | Wellness "latest" value | Uses the newest record inside the requested date range; if today's wellness has not synced, the latest value will be from yesterday. | Spot-check `icu wellness get YYYY-MM-DD` when a value looks stale. |
 | Preferred recovery score source | `icu analysis wellness` prefers Zepp HybridCharge/BioCharge when Zepp auth is configured, otherwise falls back to Intervals wellness `sleepScore`. | Check `sleep.scoreName`, `sleep.fallbackScoreName`, and `warnings` before assuming Zepp-backed recovery context. |

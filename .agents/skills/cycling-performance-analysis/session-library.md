@@ -1,43 +1,53 @@
 # Session Library (canonical templates)
 
-Source of truth for planned WORKOUT shapes. The agent picks a template by role, scales duration/reps/IF to the week's load target, runs `icu workouts calculate`, then writes the calendar with Intervals-friendly desc formatting (see skill: dual description format + Session Structure Norm).
+Source of truth for planned WORKOUT shapes. Load this file only when writing or rewriting workouts.
+
+Pick a template by role, scale duration/reps/IF to the week's load target, run `icu workouts calculate` with the FTP for that environment, then write the calendar with the Intervals-friendly desc. Desc parser, dual local/Intervals format, and `plan` / `rebalance` live in the **intervals-icu** skill.
+
+Athlete FTP, HR ceilings, and language live in [athlete.md](./athlete.md). Do not copy those numbers here.
 
 **Not** a dump of every historical ride. Prefer these models; invent free-form structure only when no template fits.
 
-Athlete anchors used when personalizing (Thejuampi / defaults from sport settings unless overridden):
+Disruption / clinical-rest days do not use this library. Follow the calendar note. See SKILL.md → Disruption week.
 
-| Anchor | Typical | Notes |
-|--------|---------|--------|
-| FTP | 285 W | power targets are %FTP |
-| LTHR | ~178 bpm | |
-| max HR | 198 bpm | |
-| Intervals HR Z2 ceiling | ~158 bpm | lab/zone chart upper Z2 |
-| **Long-Z2 HR ceiling (athlete)** | **≤140 bpm** | preferred durable aerobic |
-| **Athlete Z1** | **≤125 bpm** | true easy |
-| Favorite VO2 | 30/15 | overload dose up to 4×13 when healthy |
+## Session Structure Norm
+
+Norm for planned rides, not for disruption-week movement.
+
+Banned default shape: warmup → one constant main block → cooldown.
+
+Required shape (every WORKOUT unless the athlete asked for a continuous free-ride, or the day is disruption/clinical rest):
+
+1. At least two distinct work phases after openers, or one repeat block that alternates targets inside the session's band.
+2. Phase changes every ~8–20 min on endurance rides longer than ~45 min.
+3. HI / tempo / VO2 / over-under: openers, main sets, controlled spin-down.
+4. Variety must not sneak intensity up a zone. Easy stays easy. Z2 peaks stay ≤ high-Z2. Valleys are HR-control floats, not full Z1 naps unless the session is recovery.
+5. Name the pattern in the event title.
+6. ALTs follow the same norm.
+7. Build the varied desc, then calculate load. Do not flatten structure to hit TSS.
 
 ## Zone intent (coaching, not Intervals chart alone)
 
-Intervals HR zones for Ride are wide. **Do not treat “Z2 up to 158” as the long-ride target.**
+Intervals Ride Z2 is wide. Do not treat the chart ceiling as the long-ride target. Bpm ceilings are in [athlete.md](./athlete.md).
 
-| Intent | Power band (%FTP) | HR guidance (this athlete) | Role |
-|--------|-------------------|----------------------------|------|
-| Recovery Z1 | 45–58% | ≤125, conversational whisper | reset |
-| **Durable Z2 (preferred)** | 60–72% with floats | **cruise ~130–140; cut valley before chasing 150+** | most volume |
-| High-Z2 / top chart Z2 | 72–75% | 140–150, short caps only | spice inside endurance |
-| Tempo / SS (Z3) | 85–92% | often >LTHR-20; not all-day | controlled quality |
-| Threshold / O-U (Z4) | 95–100% / 80–85% unders | near LTHR | threshold economy |
-| VO2 (Z5) | 110–120% (30/15 ~112–115%) | will spike; limit weekly dose | 1×/week typical |
-| Anaerobic Z6 | 120–150%, 20–60s | rare | punch blocks only |
-| Neuromuscular Z7 | max, 5–15s | rare | sprints / event prep |
+| Intent | Power band (%FTP) | Role |
+|--------|-------------------|------|
+| Recovery Z1 | 45–58% | reset |
+| **Durable Z2 (preferred)** | 60–72% with floats | most volume |
+| High-Z2 / top chart Z2 | 72–75% | spice inside endurance |
+| Tempo / SS (Z3) | 85–92% | controlled quality |
+| Threshold / O-U (Z4) | 95–100% / 80–85% unders | threshold economy |
+| VO2 (Z5) | 110–120% (30/15 ~112–115%) | 1×/week typical |
+| Anaerobic Z6 | 120–150%, 20–60s | punch blocks only |
+| Neuromuscular Z7 | max, 5–15s | sprints / event prep |
 
 ### Primary Z2 pattern (athlete preference) — `z2_hr_control_waves`
 
 **Norm for this athlete’s aerobic work** unless they ask otherwise:
 
 1. Ride **2–3 min** at mid→high Z2 power (enough that HR drifts up).
-2. When HR approaches the top of *useful* Z2 (toward ~145–150, or subjectively “pushing into Z3 feel”), **drop 30–40 s** to Z1 / very low Z2 power.
-3. Repeat. Goal is **hours with HR mostly ≤140**, not sitting at 155 because the chart allows it.
+2. When HR approaches the top of useful Z2 (high-Z2 band in [athlete.md](./athlete.md), or subjectively “pushing into Z3 feel”), **drop 30–40 s** to Z1 / very low Z2 power.
+3. Repeat. Goal is hours with HR mostly at or under the durable ceiling in [athlete.md](./athlete.md), not sitting at the chart-top because the zone allows it.
 
 Power sketch (local calc format):
 
@@ -141,7 +151,7 @@ Copy `local_desc` / `intervals_desc` and scale; do not flatten to a single const
 - 10m Ramp 62-50% FTP
 ```
 
-**Execution cue:** watch HR; if still climbing through the valley, lengthen valley to 45–50s or lower work to 68–72%. If HR never approaches 140, work may be too easy — nudge work to 72–74% before adding junk tempo.
+**Execution cue:** watch HR; if still climbing through the valley, lengthen valley to 45–50s or lower work to 68–72%. If HR never approaches the durable ceiling in [athlete.md](./athlete.md), work may be too easy — nudge work to 72–74% before adding junk tempo.
 
 #### `z2_cruise_float`
 
@@ -218,7 +228,7 @@ Copy `local_desc` / `intervals_desc` and scale; do not flatten to a single const
 - 15m 62-52%
 ```
 
-**Long-ride HR rule:** average HR for pure durable days should trend **~130–140**, not mid-150s. If decoupling climbs and HR is stuck high, more/longer valleys.
+**Long-ride HR rule:** average HR for pure durable days should sit in the durable band in [athlete.md](./athlete.md), not mid-150s. If decoupling climbs and HR is stuck high, more/longer valleys.
 
 #### `z2_strict_absorb`
 
@@ -444,6 +454,7 @@ Not core for current blocks. Use when event demands punch or once every 10–14 
 
 | Week role | Typical picks |
 |-----------|----------------|
+| Disruption / clinical rest | Do not pick a library ride. Follow the calendar note. |
 | Health / absorb | `z1_*`, `z2_strict_absorb`, `z2_hr_control_waves` short |
 | Reentry | waves + cruise-float + short durable story; no overload VO2 |
 | Build | durable story + `z5_vo2_3015_std` or `z3_*` + waves |
@@ -455,8 +466,8 @@ Not core for current blocks. Use when event demands punch or once every 10–14 
 ## Scaling + rebalance
 
 1. Pick template → scale duration/reps to session TSS budget.
-2. `icu workouts calculate --ftp FTP --desc LOCAL`.
-3. Write event with Intervals desc + moving_time/training_load (or dual-format workflow in skill).
+2. `icu workouts calculate --ftp FTP --desc LOCAL` using outdoor or indoor FTP from [athlete.md](./athlete.md).
+3. Write the event with the Intervals desc plus `moving_time` / `training_load` (see **intervals-icu** dual-format / `--calculate-load` rules).
 4. If the **week** is off target but sessions already structured: `icu rebalance` with preserve-structure rather than rewriting patterns from scratch.
 5. ALTs use the same library (`z2_hr_control_waves` as default ALT for skipped HI).
 
