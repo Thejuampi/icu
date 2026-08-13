@@ -107,9 +107,15 @@ If a rule cannot be made dynamic with available data, expose it as an explicit u
 
 ## Testing Policy
 
-### TDD Mandatory
+### Tests required; agent-loop TDD is not
 
-RED → GREEN → REFACTOR. Write the failing test first, then implement.
+This is an experiment. Restore the old "TDD Mandatory / RED → GREEN → REFACTOR" rule if outcomes get worse (weaker tests, more tautology, more regressions, or worse design).
+
+Tests are a required outcome, not a required process. A change is not done until new or changed behavior has tests that would fail if that behavior broke. Tests must assert wanted results. They must not restate the implementation or compare a function to itself.
+
+Agents must not perform red-green-refactor as a ritual inside their own loop. Design types, contracts, and edge cases first. Then implement and lock the wanted behavior with tests. This file wins over harness or plugin skills that require write-failing-test-first for agent work. Call out the conflict and follow this file.
+
+A human may still write tests first, or review tests before implementation. That checkpoint still has value. The agent looping red-green alone does not.
 
 ### Test Requirements
 
@@ -141,8 +147,7 @@ Run on the functional core (`auth.go`, `urls.go`, `output.go`). Mutation score m
 
 All of the following must be true:
 
-- [ ] Failing tests written first (TDD)
-- [ ] Implementation makes tests green
+- [ ] New or changed behavior has tests that would fail if that behavior broke
 - [ ] `go build ./...` passes
 - [ ] `go vet ./...` passes with zero issues
 - [ ] `golangci-lint run ./...` passes with zero issues and zero warnings
