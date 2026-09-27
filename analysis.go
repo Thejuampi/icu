@@ -1,6 +1,7 @@
 package icu
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -8,6 +9,12 @@ import (
 )
 
 const (
+	// CyclingAnalysisSchemaVersion marks the wire shape of CyclingAnalysis
+	// (D-7): a consumer parsing analysis output needs a version marker to
+	// detect a future meaning change, the same reasoning that already backs
+	// RebalanceSchemaVersion and PlanSchemaVersion.
+	CyclingAnalysisSchemaVersion = "icu.analysis.cycling.v1"
+
 	analysisDateLayout       = "2006-01-02"
 	acuteLoadDays            = 7
 	chronicLoadDays          = 28
@@ -48,21 +55,78 @@ type AnalysisOptions struct {
 	EndDate        string `json:"endDate,omitempty"`
 	Timezone       string `json:"timezone,omitempty"`
 	TimezoneSource string `json:"timezoneSource,omitempty"`
+	// MinIncludedActivities is D-4's optional structural-refusal threshold,
+	// wired to --min-included-activities: zero means disabled (the flag has
+	// no default), any positive value adds a named warning when
+	// Validity.Included falls below it. Input-only: never part of the
+	// analysis wire contract.
+	MinIncludedActivities int `json:"-"`
 }
 
 type CyclingAnalysis struct {
-	Scope        CyclingScope                   `json:"scope"`
-	State        CyclingState                   `json:"state"`
-	Volume       CyclingVolume                  `json:"volume"`
-	PowerAnchors CyclingPowerAnchors            `json:"powerAnchors"`
-	Environment  CyclingEnvironmentContext      `json:"environment"`
-	Load         CyclingLoad                    `json:"load"`
-	Intensity    CyclingIntensity               `json:"intensity"`
-	Durability   CyclingDurability              `json:"durability"`
-	Anaerobic    CyclingAnaerobic               `json:"anaerobic"`
-	Performance  CyclingPerformanceIntelligence `json:"performance"`
-	Sessions     []CyclingSession               `json:"sessions,omitempty"`
-	Warnings     []string                       `json:"warnings,omitempty"`
+	SchemaVersion string                         `json:"schemaVersion"`
+	Scope         CyclingScope                   `json:"scope"`
+	Validity      CyclingValidity                `json:"validity"`
+	State         CyclingState                   `json:"state"`
+	Volume        CyclingVolume                  `json:"volume"`
+	PowerAnchors  CyclingPowerAnchors            `json:"powerAnchors"`
+	Environment   CyclingEnvironmentContext      `json:"environment"`
+	Load          CyclingLoad                    `json:"load"`
+	Intensity     CyclingIntensity               `json:"intensity"`
+	Durability    CyclingDurability              `json:"durability"`
+	Anaerobic     CyclingAnaerobic               `json:"anaerobic"`
+	Performance   CyclingPerformanceIntelligence `json:"performance"`
+	// FTPDiscriminatorConflicts is T1b.5/R1's read-path mirror of
+	// rebalance.go's FTPDiscriminatorConflicts, at analysis level only — no
+	// per-session key (the wave-2 golden's Sessions rows must stay
+	// untouched). Top-level and omitempty: absent when there is no conflict
+	// to report, not a false zero (D-3/D-5). See
+	// CyclingFTPDiscriminatorConflicts for why it is currently always absent.
+	FTPDiscriminatorConflicts *CyclingFTPDiscriminatorConflicts `json:"ftpDiscriminatorConflicts,omitempty"`
+	Sessions                  []CyclingSession                  `json:"sessions,omitempty"`
+	Warnings                  []string                          `json:"warnings,omitempty"`
+}
+
+// cyclingValidityZeroSemantics documents D-5's absence-vs-zero rule for the
+// new tri-load channels (T2.5): a channel total of 0 with that channel's
+// NIncluded also 0 means no session in scope reported the field at all, not
+// a measured zero-load session.
+var cyclingValidityZeroSemantics = []string{ //nolint:gochecknoglobals // read-only lookup table, same shape as existing type-set constants in this package
+	"load.byChannel.hr/power/pace total 0 with nIncluded 0 means no session in scope reported that channel, not a measured zero-load session",
+}
+
+// CyclingValidity is D-2/D-3/D-24's per-analysis accounting of which
+// activities fed the aggregates below and why any did not (F-19: stub
+// contamination was the live defect; icu_ignore_* filtering is declared
+// prevention that is measured false on every real activity fetched so far).
+type CyclingValidity struct {
+	// Evaluated/Included/Excluded describe only the cycling-typed, non-stub
+	// population (Unavailable.StravaStubs is the separate whole-scope stub
+	// count; a stub never reaches this classification because it carries no
+	// activity type and is dropped before cycling-type filtering).
+	Evaluated       int                        `json:"evaluated"`
+	Included        int                        `json:"included"`
+	Excluded        int                        `json:"excluded"`
+	ExclusionRate   float64                    `json:"exclusionRate"`
+	Unavailable     CyclingValidityUnavailable `json:"unavailable"`
+	ExcludedByFlag  map[string]int             `json:"excludedByFlag,omitempty"`
+	ExcludedByScope map[string]int             `json:"excludedByScope,omitempty"`
+	// ExcludedActivityIDs lists the flag-excluded (not stub) activity IDs,
+	// so a caller can inspect exactly which sessions were dropped from which
+	// aggregates without re-deriving D-2's scoping rule.
+	ExcludedActivityIDs []string `json:"excludedActivityIds,omitempty"`
+	ZeroSemantics       []string `json:"zeroSemantics,omitempty"`
+	Source              string   `json:"source,omitempty"`
+	// FieldsGuaranteed records that D-8's single choke point fetches the
+	// fields this validity block depends on regardless of any caller-supplied
+	// --fields/--activity-fields override.
+	FieldsGuaranteed bool `json:"fieldsGuaranteed"`
+}
+
+// CyclingValidityUnavailable is D-24's stub accounting: activities present
+// in the raw fetch that are not sessions at all (STRAVA withheld the record).
+type CyclingValidityUnavailable struct {
+	StravaStubs int `json:"stravaStubs"`
 }
 
 type CyclingPowerAnchors struct {
@@ -122,18 +186,52 @@ type CyclingVolume struct {
 }
 
 type CyclingLoad struct {
-	Total                 int                 `json:"total"`
-	AveragePerActivity    float64             `json:"averagePerActivity"`
-	PerHour               float64             `json:"perHour"`
-	Monotony              float64             `json:"monotony"`
-	Strain                float64             `json:"strain"`
-	Acute7                int                 `json:"acute7"`
-	Chronic28             int                 `json:"chronic28"`
-	AcuteChronicWorkRatio float64             `json:"acuteChronicWorkRatio"`
-	LatestCTL             float64             `json:"latestCtl,omitempty"`
-	LatestATL             float64             `json:"latestAtl,omitempty"`
-	LatestForm            float64             `json:"latestForm,omitempty"`
-	Daily                 []DailyTrainingLoad `json:"daily"`
+	Total                 int     `json:"total"`
+	AveragePerActivity    float64 `json:"averagePerActivity"`
+	PerHour               float64 `json:"perHour"`
+	Monotony              float64 `json:"monotony"`
+	Strain                float64 `json:"strain"`
+	Acute7                int     `json:"acute7"`
+	Chronic28             int     `json:"chronic28"`
+	AcuteChronicWorkRatio float64 `json:"acuteChronicWorkRatio"`
+	LatestCTL             float64 `json:"latestCtl,omitempty"`
+	LatestATL             float64 `json:"latestAtl,omitempty"`
+	LatestForm            float64 `json:"latestForm,omitempty"`
+	// NIncluded is D-3's per-section inclusion count (T2.3): AveragePerActivity
+	// and PerHour divide by this, not by Scope.CyclingActivities, so an
+	// icu_ignore_power/icu_ignore_time exclusion never silently dilutes the
+	// average by counting an activity that contributed zero to Total.
+	NIncluded int `json:"nIncluded"`
+	// ByChannel is T2.5's tri-load breakdown: TrainingLoad is the pre-existing
+	// composite total (unchanged, D-6), HR/Power/Pace are the newly-fetched
+	// per-channel loads, each with its own NIncluded since a channel is only
+	// "included" when the field is actually present on the activity.
+	ByChannel CyclingLoadByChannel `json:"byChannel"`
+	// Divergence is the mean |hr-power|/max(hr,power) across sessions
+	// carrying both channels (0 when no session has both): a large value
+	// flags sessions where the HR-based and power-based load estimates
+	// disagree, independent of which channel wave-1's Total represents.
+	Divergence float64             `json:"divergence,omitempty"`
+	Daily      []DailyTrainingLoad `json:"daily"`
+}
+
+// CyclingLoadByChannel is T2.5's tri-load breakdown (D-23's precursor:
+// wave-3 enforces a capacity bound per channel, this wave only surfaces the
+// numbers safely, never conflating a channel's absence with a measured zero).
+type CyclingLoadByChannel struct {
+	TrainingLoad CyclingLoadChannel `json:"trainingLoad"`
+	HR           CyclingLoadChannel `json:"hr"`
+	Power        CyclingLoadChannel `json:"power"`
+	Pace         CyclingLoadChannel `json:"pace"`
+}
+
+// CyclingLoadChannel pairs a channel's summed value with the count of
+// sessions that actually carried it, so a 0 total with 0 NIncluded ("never
+// reported") never reads the same as a 0 total with a positive NIncluded
+// ("measured, genuinely zero").
+type CyclingLoadChannel struct {
+	Total     int `json:"total"`
+	NIncluded int `json:"nIncluded"`
 }
 
 type DailyTrainingLoad struct {
@@ -147,6 +245,11 @@ type CyclingIntensity struct {
 	ZoneSeconds              map[string]int     `json:"zoneSeconds,omitempty"`
 	ZonePercent              map[string]float64 `json:"zonePercent,omitempty"`
 	HRZoneSeconds            []int              `json:"hrZoneSeconds,omitempty"`
+	// NIncluded is D-3's per-section inclusion count (T2.3): counts
+	// activities contributing to the power-derived fields above
+	// (icu_ignore_power/icu_ignore_time excludes; HRZoneSeconds has its own
+	// implicit hr-scope population and is not covered by this count).
+	NIncluded int `json:"nIncluded"`
 }
 
 type CyclingDurability struct {
@@ -154,6 +257,11 @@ type CyclingDurability struct {
 	HighDecouplingActivities int     `json:"highDecouplingActivities"`
 	AverageEfficiencyFactor  float64 `json:"averageEfficiencyFactor"`
 	AverageVariabilityIndex  float64 `json:"averageVariabilityIndex"`
+	// NIncluded is D-3's per-section inclusion count (T2.3): decoupling and
+	// efficiency both compare power against heart rate, so either
+	// icu_ignore_power or icu_ignore_hr (or icu_ignore_time) excludes an
+	// activity from this section — only a fully-included activity counts.
+	NIncluded int `json:"nIncluded"`
 }
 
 type CyclingAnaerobic struct {
@@ -163,6 +271,30 @@ type CyclingAnaerobic struct {
 	WPrimeCapacity           int     `json:"wPrimeCapacity,omitempty"`
 	MaxWBalDepletionPercent  float64 `json:"maxWbalDepletionPercent,omitempty"`
 	MeanWBalDepletionPercent float64 `json:"meanWbalDepletionPercent,omitempty"`
+}
+
+// CyclingFTPDiscriminatorConflicts mirrors D-10b's asymmetric flag-trust
+// counter (FTPDiscriminatorConflicts, rebalance.go/plan.go) for the
+// analysis/read path's activity partition (T1b.5/R1).
+//
+// AmbiguousTypeFlagAssertedIndoor counts activities of an ambiguous cycling
+// type (D-10 class 3) whose environment flag was explicitly asserted indoor
+// (ResolveFTP Source: flag_asserted) — the activity-partition twin of
+// FTPDiscriminatorConflicts.EventFlagAssertedIndoor.
+//
+// It is currently and structurally always 0, unlike its event-side sibling:
+// Activity.Trainer is not yet an exposed Go field (rebalance.go's own
+// rebalanceFTPDiscriminatorConflicts documents the identical gap; wiring
+// Trainer was explicitly deferred past wave-2 and remains out of this
+// remediation's declared scope), so every activity-side ResolveFTP call in
+// this file passes Trainer: nil and can never classify Source as
+// flag_asserted. The counter is wired now, honestly inert, so it starts
+// working the day Trainer is exposed instead of silently never having
+// existed — the same "mechanism now, disclosed inertness" shape already
+// used for icu_ignore_* filtering (CyclingValidity) and wave-4's
+// carbsIngested.
+type CyclingFTPDiscriminatorConflicts struct {
+	AmbiguousTypeFlagAssertedIndoor int `json:"ambiguousTypeFlagAssertedIndoor"`
 }
 
 type CyclingSession struct {
@@ -248,37 +380,40 @@ type CyclingEfficiencySignal struct {
 }
 
 type cyclingAnalysisAccumulator struct {
-	analysis                CyclingAnalysis
-	dailyLoads              map[string]int
-	intensityWeightedSum    float64
-	intensity               numericAccumulator
-	decoupling              numericAccumulator
-	efficiency              numericAccumulator
-	variability             numericAccumulator
-	wbalDepletion           numericAccumulator
-	wbalDepletionPercent    numericAccumulator
-	maxWbalDepletionPercent float64
-	temp                    numericAccumulator
-	weatherTemp             numericAccumulator
-	feelsLike               numericAccumulator
-	windSpeed               numericAccumulator
-	headwind                numericAccumulator
-	tailwind                numericAccumulator
-	altitude                numericAccumulator
-	gradient                numericAccumulator
-	yaw                     numericAccumulator
-	strain                  numericAccumulator
-	environmentSamples      int
-	maxTemp                 float64
-	maxWindGust             float64
-	maxAltitude             float64
-	hotSessions             int
-	windAffectedSessions    int
-	climbingSessions        int
-	maxDecoupling           float64
-	longEndurance           int
-	latestLoadDate          string
-	latestAnchorDate        string
+	analysis                       CyclingAnalysis
+	dailyLoads                     map[string]int
+	intensityWeightedSum           float64
+	powerMovingTimeSecs            int
+	intensity                      numericAccumulator
+	decoupling                     numericAccumulator
+	efficiency                     numericAccumulator
+	variability                    numericAccumulator
+	wbalDepletion                  numericAccumulator
+	wbalDepletionPercent           numericAccumulator
+	maxWbalDepletionPercent        float64
+	loadDivergence                 numericAccumulator
+	temp                           numericAccumulator
+	weatherTemp                    numericAccumulator
+	feelsLike                      numericAccumulator
+	windSpeed                      numericAccumulator
+	headwind                       numericAccumulator
+	tailwind                       numericAccumulator
+	altitude                       numericAccumulator
+	gradient                       numericAccumulator
+	yaw                            numericAccumulator
+	strain                         numericAccumulator
+	environmentSamples             int
+	maxTemp                        float64
+	maxWindGust                    float64
+	maxAltitude                    float64
+	hotSessions                    int
+	windAffectedSessions           int
+	climbingSessions               int
+	maxDecoupling                  float64
+	longEndurance                  int
+	latestLoadDate                 string
+	latestAnchorDate               string
+	ftpAmbiguousFlagAssertedIndoor int
 }
 
 type numericAccumulator struct {
@@ -287,11 +422,13 @@ type numericAccumulator struct {
 }
 
 func AnalyzeCyclingActivities(activities []Activity, options AnalysisOptions) CyclingAnalysis {
-	accumulator := newCyclingAnalysisAccumulator(len(activities))
+	stubCount := countStubActivities(activities)
+	accumulator := newCyclingAnalysisAccumulator(len(activities) - stubCount)
+	accumulator.analysis.Validity.Unavailable.StravaStubs = stubCount
 
 	for index := range activities {
 		activity := &activities[index]
-		if !IsCyclingActivityType(activity.Type) {
+		if activity.StubShape || !IsCyclingActivityType(activity.Type) {
 			continue
 		}
 
@@ -301,9 +438,28 @@ func AnalyzeCyclingActivities(activities []Activity, options AnalysisOptions) Cy
 	return accumulator.finish(options)
 }
 
+// countStubActivities is F-19/D-24's fix at the source: a D-24 STRAVA stub
+// carries no activity type, so it never reaches cycling-type filtering, but
+// it must still be subtracted from Scope.Activities (the whole-fetch count,
+// not the cycling-only one) and reported in Validity.Unavailable.StravaStubs
+// — otherwise every consumer dividing by Scope.Activities inherits the
+// ~one-third inflation this wave exists to close.
+func countStubActivities(activities []Activity) int {
+	count := 0
+
+	for index := range activities {
+		if activities[index].StubShape {
+			count++
+		}
+	}
+
+	return count
+}
+
 func newCyclingAnalysisAccumulator(totalActivities int) cyclingAnalysisAccumulator {
 	var accumulator cyclingAnalysisAccumulator
 
+	accumulator.analysis.SchemaVersion = CyclingAnalysisSchemaVersion
 	accumulator.analysis.Scope.Activities = totalActivities
 	accumulator.analysis.Intensity.ZoneSeconds = map[string]int{}
 	accumulator.analysis.Intensity.ZonePercent = map[string]float64{}
@@ -312,17 +468,108 @@ func newCyclingAnalysisAccumulator(totalActivities int) cyclingAnalysisAccumulat
 	return accumulator
 }
 
+// add applies D-2's per-flag scoping (T2.3): icu_ignore_time (or two-or-more
+// flags together) drops an activity from every aggregate including volume;
+// icu_ignore_power/icu_ignore_hr each drop only their own derived aggregates.
+// Durability (decoupling, efficiency, variability index) compares power
+// against heart rate, so it requires full inclusion — either flag alone
+// disqualifies it. Sessions are raw per-activity rows, not aggregates, and
+// are recorded for every non-stub cycling activity regardless of scope.
 func (accumulator *cyclingAnalysisAccumulator) add(activity *Activity) {
+	validity := ClassifyActivityValidity(activity)
+	accumulator.recordValidity(activity, validity)
 	accumulator.analysis.Scope.CyclingActivities++
-	accumulator.addVolume(activity)
-	accumulator.addLoad(activity)
-	accumulator.addIntensity(activity)
-	accumulator.addDurability(activity)
-	accumulator.addPowerAnchors(activity)
-	accumulator.addAnaerobic(activity)
-	accumulator.addEnvironment(activity)
-	accumulator.addDate(activity)
+
+	includeVolume := validity.Scope != ValidityScopeAll
+	includePower := validity.Scope != ValidityScopePower && validity.Scope != ValidityScopeAll
+	includeHR := validity.Scope != ValidityScopeHR && validity.Scope != ValidityScopeAll
+	includeDurability := validity.Class == ActivityValidityIncluded
+
+	if includeVolume {
+		accumulator.addVolume(activity)
+		accumulator.addPaceLoad(activity)
+		accumulator.addEnvironment(activity)
+	}
+
+	if includePower {
+		accumulator.addLoad(activity)
+		accumulator.addPowerAnchors(activity)
+		accumulator.addAnaerobic(activity)
+		accumulator.addPowerIntensity(activity)
+		accumulator.analysis.Load.NIncluded++
+		accumulator.analysis.Intensity.NIncluded++
+	}
+
+	if includeHR {
+		accumulator.addHRIntensity(activity)
+		accumulator.addHRLoad(activity)
+	}
+
+	if includePower && includeHR {
+		accumulator.addLoadDivergence(activity)
+	}
+
+	if includeDurability {
+		accumulator.addDurability(activity)
+		accumulator.analysis.Durability.NIncluded++
+	}
+
+	accumulator.addDate(activity, includePower)
 	accumulator.addSession(activity)
+	accumulator.addFTPDiscriminator(activity)
+}
+
+// addFTPDiscriminator counts CyclingFTPDiscriminatorConflicts'
+// AmbiguousTypeFlagAssertedIndoor signal (T1b.5/R1). See that type's doc
+// comment for why this can never currently increment.
+func (accumulator *cyclingAnalysisAccumulator) addFTPDiscriminator(activity *Activity) {
+	selection := ResolveFTP(FTPRequest{Type: activity.Type, Entity: FTPEntityActivity})
+
+	if selection.Class == FTPClassAmbiguous && selection.Source == FTPSourceFlagAsserted &&
+		selection.Indoor != nil && *selection.Indoor {
+		accumulator.ftpAmbiguousFlagAssertedIndoor++
+	}
+}
+
+// recordValidity is D-3's single source of the validity block's counters:
+// no other code path increments Evaluated/Included/Excluded so every
+// consumer of CyclingAnalysis reads the same accounting this wave computes.
+func (accumulator *cyclingAnalysisAccumulator) recordValidity(activity *Activity, validity ActivityValidity) {
+	accumulator.analysis.Validity.Evaluated++
+
+	if validity.Class == ActivityValidityIncluded {
+		accumulator.analysis.Validity.Included++
+
+		return
+	}
+
+	accumulator.analysis.Validity.Excluded++
+
+	if accumulator.analysis.Validity.ExcludedByScope == nil {
+		accumulator.analysis.Validity.ExcludedByScope = map[string]int{}
+	}
+
+	accumulator.analysis.Validity.ExcludedByScope[validity.Scope]++
+	accumulator.recordExcludedFlags(activity)
+	accumulator.analysis.Validity.ExcludedActivityIDs = append(accumulator.analysis.Validity.ExcludedActivityIDs, activity.ID)
+}
+
+func (accumulator *cyclingAnalysisAccumulator) recordExcludedFlags(activity *Activity) {
+	if accumulator.analysis.Validity.ExcludedByFlag == nil {
+		accumulator.analysis.Validity.ExcludedByFlag = map[string]int{}
+	}
+
+	if activity.IgnorePower {
+		accumulator.analysis.Validity.ExcludedByFlag["icu_ignore_power"]++
+	}
+
+	if activity.IgnoreHR {
+		accumulator.analysis.Validity.ExcludedByFlag["icu_ignore_hr"]++
+	}
+
+	if activity.IgnoreTime {
+		accumulator.analysis.Validity.ExcludedByFlag["icu_ignore_time"]++
+	}
 }
 
 func (accumulator *cyclingAnalysisAccumulator) addVolume(activity *Activity) {
@@ -337,9 +584,50 @@ func (accumulator *cyclingAnalysisAccumulator) addVolume(activity *Activity) {
 
 func (accumulator *cyclingAnalysisAccumulator) addLoad(activity *Activity) {
 	accumulator.analysis.Load.Total += activity.TrainingLoad
+	accumulator.analysis.Load.ByChannel.TrainingLoad.Total += activity.TrainingLoad
+	accumulator.analysis.Load.ByChannel.TrainingLoad.NIncluded++
+	accumulator.powerMovingTimeSecs += activity.MovingTime
+
+	if activity.PowerLoad != nil {
+		accumulator.analysis.Load.ByChannel.Power.Total += *activity.PowerLoad
+		accumulator.analysis.Load.ByChannel.Power.NIncluded++
+	}
 }
 
-func (accumulator *cyclingAnalysisAccumulator) addIntensity(activity *Activity) {
+func (accumulator *cyclingAnalysisAccumulator) addHRLoad(activity *Activity) {
+	if activity.HRLoad != nil {
+		accumulator.analysis.Load.ByChannel.HR.Total += *activity.HRLoad
+		accumulator.analysis.Load.ByChannel.HR.NIncluded++
+	}
+}
+
+func (accumulator *cyclingAnalysisAccumulator) addPaceLoad(activity *Activity) {
+	if activity.PaceLoad != nil {
+		accumulator.analysis.Load.ByChannel.Pace.Total += *activity.PaceLoad
+		accumulator.analysis.Load.ByChannel.Pace.NIncluded++
+	}
+}
+
+// addLoadDivergence is T2.5's disagreement signal: only meaningful when a
+// session reports both channels, so it is computed independently of
+// addLoad/addHRLoad's own per-channel NIncluded counts.
+func (accumulator *cyclingAnalysisAccumulator) addLoadDivergence(activity *Activity) {
+	if activity.HRLoad == nil || activity.PowerLoad == nil {
+		return
+	}
+
+	hrLoad := float64(*activity.HRLoad)
+	powerLoad := float64(*activity.PowerLoad)
+	maxLoad := math.Max(hrLoad, powerLoad)
+
+	if maxLoad == 0 {
+		return
+	}
+
+	accumulator.loadDivergence.add(math.Abs(hrLoad-powerLoad) / maxLoad)
+}
+
+func (accumulator *cyclingAnalysisAccumulator) addPowerIntensity(activity *Activity) {
 	accumulator.intensityWeightedSum += activity.Intensity * float64(activity.MovingTime)
 
 	if activity.Intensity != 0 {
@@ -353,7 +641,12 @@ func (accumulator *cyclingAnalysisAccumulator) addIntensity(activity *Activity) 
 	for _, zone := range activity.ZoneTimes {
 		accumulator.analysis.Intensity.ZoneSeconds[zone.ID] += zone.Secs
 	}
+}
 
+// addHRIntensity is HR-derived (D-2): icu_ignore_hr excludes it while
+// leaving power-derived intensity fields untouched, the mirror of
+// addPowerIntensity.
+func (accumulator *cyclingAnalysisAccumulator) addHRIntensity(activity *Activity) {
 	mergeHRZoneSeconds(&accumulator.analysis.Intensity.HRZoneSeconds, activity.HRZoneTimes)
 }
 
@@ -472,13 +765,21 @@ func activityHasEnvironment(activity *Activity) bool {
 		activity.AverageGradient != 0 || activity.StrainScore != 0
 }
 
-func (accumulator *cyclingAnalysisAccumulator) addDate(activity *Activity) {
+// addDate always tracks the scope's date range (informational, not an
+// aggregate a flag can distort), but the daily-load bucket that feeds
+// Acute7/Chronic28/Monotony/Strain is TrainingLoad-based (power-derived), so
+// it only accumulates when includeLoadDay (icu_ignore_power/icu_ignore_time
+// did not exclude this activity from the load channel).
+func (accumulator *cyclingAnalysisAccumulator) addDate(activity *Activity, includeLoadDay bool) {
 	date := activityDate(activity)
 	if date == "" {
 		return
 	}
 
-	accumulator.dailyLoads[date] += activity.TrainingLoad
+	if includeLoadDay {
+		accumulator.dailyLoads[date] += activity.TrainingLoad
+	}
+
 	accumulator.analysis.Scope.StartDate = minDateString(accumulator.analysis.Scope.StartDate, date)
 	accumulator.analysis.Scope.EndDate = maxDateString(accumulator.analysis.Scope.EndDate, date)
 	accumulator.updateLatestLoad(activity, date)
@@ -511,6 +812,7 @@ func (accumulator *cyclingAnalysisAccumulator) updateLatestLoad(activity *Activi
 func (accumulator *cyclingAnalysisAccumulator) finish(options AnalysisOptions) CyclingAnalysis {
 	accumulator.analysis.Scope.Timezone = options.Timezone
 	accumulator.analysis.Scope.TimezoneSource = options.TimezoneSource
+	accumulator.finishValidity()
 	accumulator.finishVolume()
 
 	if accumulator.analysis.Scope.CyclingActivities == 0 {
@@ -526,8 +828,71 @@ func (accumulator *cyclingAnalysisAccumulator) finish(options AnalysisOptions) C
 	accumulator.finishEnvironment()
 	accumulator.finishState()
 	accumulator.finishPerformance()
+	accumulator.finishFTPDiscriminatorConflicts()
+	accumulator.finishSectionRefusalWarnings(options)
 
 	return accumulator.analysis
+}
+
+// finishFTPDiscriminatorConflicts sets CyclingAnalysis.FTPDiscriminatorConflicts
+// only when there is a conflict to report (D-3/D-5: absent, not a false
+// zero) — currently never, per CyclingFTPDiscriminatorConflicts' doc comment.
+func (accumulator *cyclingAnalysisAccumulator) finishFTPDiscriminatorConflicts() {
+	if accumulator.ftpAmbiguousFlagAssertedIndoor == 0 {
+		return
+	}
+
+	accumulator.analysis.FTPDiscriminatorConflicts = &CyclingFTPDiscriminatorConflicts{
+		AmbiguousTypeFlagAssertedIndoor: accumulator.ftpAmbiguousFlagAssertedIndoor,
+	}
+}
+
+// finishValidity closes out D-3's validity block (T2.3): computed here
+// (rather than incrementally) because ExclusionRate needs the final
+// Evaluated/Excluded totals and the static fields (Source, ZeroSemantics,
+// FieldsGuaranteed) do not depend on any per-activity accumulation.
+func (accumulator *cyclingAnalysisAccumulator) finishValidity() {
+	validity := &accumulator.analysis.Validity
+	validity.Source = "activity_icu_ignore_flags_and_strava_stub_shape"
+	validity.FieldsGuaranteed = true
+	validity.ZeroSemantics = cyclingValidityZeroSemantics
+
+	if validity.Evaluated > 0 {
+		validity.ExclusionRate = round2(float64(validity.Excluded) / float64(validity.Evaluated))
+	}
+}
+
+// finishSectionRefusalWarnings is D-4's structural refusal: rather than
+// restructuring Load/Intensity/Durability into pointers to support JSON-key
+// omission (D-6 declines restructuring existing output shapes), a section
+// whose NIncluded is 0 keeps its already-zero-valued fields and gets a named
+// warning explaining why, so a caller never mistakes "no included activity"
+// for "measured zero." --min-included-activities is a separate, optional
+// threshold (no default) that never blocks output, only annotates it.
+func (accumulator *cyclingAnalysisAccumulator) finishSectionRefusalWarnings(options AnalysisOptions) {
+	analysis := &accumulator.analysis
+
+	if analysis.Load.NIncluded == 0 {
+		analysis.Warnings = appendUniqueWarning(analysis.Warnings,
+			"load section refused: 0 included activities (all excluded by icu_ignore_power/icu_ignore_time)")
+	}
+
+	if analysis.Intensity.NIncluded == 0 {
+		analysis.Warnings = appendUniqueWarning(analysis.Warnings,
+			"intensity section refused: 0 included activities (all excluded by icu_ignore_power/icu_ignore_time)")
+	}
+
+	if analysis.Durability.NIncluded == 0 {
+		analysis.Warnings = appendUniqueWarning(analysis.Warnings,
+			"durability section refused: 0 included activities (all excluded by icu_ignore_power/icu_ignore_hr/icu_ignore_time)")
+	}
+
+	if options.MinIncludedActivities > 0 && analysis.Validity.Included < options.MinIncludedActivities {
+		analysis.Warnings = appendUniqueWarning(analysis.Warnings, fmt.Sprintf(
+			"included activity count %d is below the configured minimum %d (--min-included-activities)",
+			analysis.Validity.Included, options.MinIncludedActivities,
+		))
+	}
 }
 
 func (accumulator *cyclingAnalysisAccumulator) finishAnaerobic() {
@@ -569,10 +934,14 @@ func (accumulator *cyclingAnalysisAccumulator) finishVolume() {
 }
 
 func (accumulator *cyclingAnalysisAccumulator) finishLoad(options AnalysisOptions) {
-	averagePerActivity := float64(accumulator.analysis.Load.Total) /
-		float64(accumulator.analysis.Scope.CyclingActivities)
+	// D-4/T2.3: divide by NIncluded, not Scope.CyclingActivities — an
+	// icu_ignore_power/icu_ignore_time exclusion contributes 0 to Total but
+	// must not also dilute the average by inflating the denominator.
+	if accumulator.analysis.Load.NIncluded > 0 {
+		averagePerActivity := float64(accumulator.analysis.Load.Total) / float64(accumulator.analysis.Load.NIncluded)
+		accumulator.analysis.Load.AveragePerActivity = round2(averagePerActivity)
+	}
 
-	accumulator.analysis.Load.AveragePerActivity = round2(averagePerActivity)
 	accumulator.analysis.Load.Daily = buildDailyTrainingLoads(accumulator.dailyLoads, options)
 	accumulator.analysis.Load.Acute7 = sumLastLoads(accumulator.analysis.Load.Daily, acuteLoadDays)
 	accumulator.analysis.Load.Chronic28 = sumLastLoads(accumulator.analysis.Load.Daily, chronicLoadDays)
@@ -582,14 +951,18 @@ func (accumulator *cyclingAnalysisAccumulator) finishLoad(options AnalysisOption
 	)
 	accumulator.analysis.Load.Monotony = round2(trainingMonotony(accumulator.analysis.Load.Daily))
 	accumulator.analysis.Load.Strain = round2(float64(accumulator.analysis.Load.Total) * accumulator.analysis.Load.Monotony)
+	accumulator.analysis.Load.Divergence = round2(accumulator.loadDivergence.average())
 }
 
 func (accumulator *cyclingAnalysisAccumulator) finishIntensity() {
-	if accumulator.analysis.Volume.MovingTimeSecs > 0 {
-		movingHours := float64(accumulator.analysis.Volume.MovingTimeSecs) / secondsPerHour
+	// D-4/T2.3: the power-included population's own moving time is the
+	// correct denominator for load-per-hour and weighted intensity — using
+	// Volume.MovingTimeSecs (which includes icu_ignore_power-excluded
+	// activities' time, since volume retains them) would dilute both.
+	if accumulator.powerMovingTimeSecs > 0 {
+		movingHours := float64(accumulator.powerMovingTimeSecs) / secondsPerHour
 		loadPerHour := float64(accumulator.analysis.Load.Total) / movingHours
-		weightedIntensity := accumulator.intensityWeightedSum /
-			float64(accumulator.analysis.Volume.MovingTimeSecs)
+		weightedIntensity := accumulator.intensityWeightedSum / float64(accumulator.powerMovingTimeSecs)
 
 		accumulator.analysis.Load.PerHour = round2(loadPerHour)
 		accumulator.analysis.Intensity.WeightedAverageIntensity = round3(weightedIntensity)

@@ -53,6 +53,32 @@ func TestDefaultAnalysisFieldsIncludeReportContractInputs(t *testing.T) {
 	}
 }
 
+// TestDefaultAnalysisFieldsIncludeWave2ValidityPairingLoadFields pins D-8's
+// choke point content: F-19/D-2/D-21/D-23's validity, pairing, compliance
+// and tri-load fields must always be fetched, since analysisActivityFields
+// no longer allows a caller to narrow this list.
+func TestDefaultAnalysisFieldsIncludeWave2ValidityPairingLoadFields(t *testing.T) {
+	t.Parallel()
+
+	required := []string{
+		"source", "paired_event_id", "compliance",
+		"hr_load", "hr_load_type", "power_load", "pace_load", "pace_load_type",
+		"icu_ignore_power", "icu_ignore_hr", "icu_ignore_time",
+	}
+
+	var missing []string
+
+	for _, field := range required {
+		if !strings.Contains(defaultAnalysisFields, field) {
+			missing = append(missing, field)
+		}
+	}
+
+	if len(missing) > 0 {
+		t.Fatalf("defaultAnalysisFields missing %v", missing)
+	}
+}
+
 func TestAnalysisDateRangeUsesExplicitDates(t *testing.T) {
 	t.Parallel()
 
@@ -133,6 +159,115 @@ func TestAnalysisCommandsRejectInvalidDayFlagsBeforeHTTP(t *testing.T) {
 				t.Fatal("Run error = nil, want invalid day error before client use")
 			}
 		})
+	}
+}
+
+// TestAnalysisCyclingCommandWiresMinIncludedActivitiesFlag is D-4's explicit
+// user constraint reaching the CLI: --min-included-activities must flow
+// through to AnalysisOptions.MinIncludedActivities, surfacing as a named
+// warning when the fetched activity count is below the threshold.
+//
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisCyclingCommandWiresMinIncludedActivitiesFlag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`[{"type":"Ride","icu_training_load":50,"moving_time":3600}]`))
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func() error {
+		return analysisCyclingCommand().Run(nil, map[string]string{
+			"oldest":                  "2026-06-01",
+			"newest":                  "2026-06-07",
+			"min-included-activities": "5",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.CyclingAnalysis
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+
+	wantWarning := "included activity count 1 is below the configured minimum 5 (--min-included-activities)"
+	found := false
+
+	for _, warning := range got.Warnings {
+		if warning == wantWarning {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Fatalf("Warnings = %v, want to contain %q", got.Warnings, wantWarning)
+	}
+}
+
+// analysisCyclingCommandWithFieldsOverride runs analysisCyclingCommand with
+// a caller-supplied --fields override and captures both the query string
+// the upstream fetch actually received and the decoded response, shared by
+// the two W2-N02/D-8 assertions below so the httptest fixture is not
+// duplicated.
+func analysisCyclingCommandWithFieldsOverride(t *testing.T) (string, icu.CyclingAnalysis) {
+	t.Helper()
+
+	var gotFields string
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		gotFields = request.URL.Query().Get("fields")
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func() error {
+		return analysisCyclingCommand().Run(nil, map[string]string{
+			"oldest": "2026-06-01",
+			"newest": "2026-06-07",
+			"fields": "id,name",
+		}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.CyclingAnalysis
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+
+	return gotFields, got
+}
+
+// TestAnalysisCyclingCommandIgnoresFieldsOverride is W2-N02/D-8: a
+// caller-supplied `--fields id,name` must not narrow the activity fetch —
+// the analysis choke point (analysisActivityFields) always requests its own
+// fixed field list, so validity/pairing/load fields are never dropped.
+//
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisCyclingCommandIgnoresFieldsOverride(t *testing.T) {
+	gotFields, _ := analysisCyclingCommandWithFieldsOverride(t)
+
+	if gotFields != defaultAnalysisFields {
+		t.Fatalf("fields = %q, want the unmodified defaultAnalysisFields regardless of the --fields override", gotFields)
+	}
+}
+
+// TestAnalysisCyclingCommandReportsFieldsGuaranteedDespiteOverride is the
+// companion half of W2-N02: the output itself must record that the D-8
+// guarantee held for this specific analysis, not just that the upstream
+// query was correct.
+//
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisCyclingCommandReportsFieldsGuaranteedDespiteOverride(t *testing.T) {
+	_, got := analysisCyclingCommandWithFieldsOverride(t)
+
+	if !got.Validity.FieldsGuaranteed {
+		t.Fatalf("Validity.FieldsGuaranteed = false, want true")
 	}
 }
 

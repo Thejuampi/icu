@@ -19,7 +19,8 @@ var (
 	// keyword sits between the duration and the target, and the unit may be
 	// repeated after the percent sign.
 	stepLinePattern = regexp.MustCompile(
-		`^-\s*(\d+(?:\.\d+)?)([hms])\s+(?:([A-Za-z]+)\s+)?(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?%\s*(.*)$`)
+		`^-\s*(\d+(?:\.\d+)?)([hms])\s+(?:([A-Za-z]+)\s+)?(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?%\s*(.*)$`,
+	)
 )
 
 func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {

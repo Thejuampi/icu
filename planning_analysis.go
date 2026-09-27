@@ -360,6 +360,12 @@ func AnalyzeTrainingPlanWithContext(
 	options TrainingPlanOptions,
 	context TrainingPlanContext,
 ) TrainingPlanAnalysis {
+	// Stage 6 R14: route through the shared choke point (activity_validity.go)
+	// before any of activities is summed into history load/sessions or fed
+	// to the FTP anchors — every other aggregator in this package already
+	// filters here (rebalance.go, plan.go, microcycle_analysis.go); this
+	// function was one of the two that didn't.
+	activities = ExcludeStubActivities(activities)
 	accumulator := newTrainingPlanAccumulator(events, options, context)
 
 	for index := range events {
@@ -534,7 +540,11 @@ func trainingPlanEventWithDerivedLoad(event *Event, ftp int) Event {
 	if err != nil {
 		return plannedEvent
 	}
-	estimate := EstimatePlannedLoad(doc, ftp)
+	// planning_analysis.go is out of wave-1b's scope; this is a mechanical,
+	// behavior-preserving adaptation to EstimatePlannedLoad's new
+	// FTPSelection-shaped signature (T1b.4), not a D-10 classification —
+	// ftp is already a single week-level int here, unchanged.
+	estimate := EstimatePlannedLoad(doc, FTPSelectionFromWatts(ftp))
 	if estimate.TrainingLoad <= 0 || len(estimate.Warnings) > 0 {
 		return plannedEvent
 	}

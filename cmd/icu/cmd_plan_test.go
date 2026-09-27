@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -347,6 +348,87 @@ func TestPlanShowRequiresIntentFile(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("err = nil, want missing intent-file")
+	}
+}
+
+func TestReadPlanInputRejectsInvalidSessionEnvironmentFlag(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	intentFile := filepath.Join(t.TempDir(), "intent.json")
+	writePlanTestIntent(t, intentFile, samplePlanIntent())
+
+	_, err := readPlanInput(map[string]string{
+		"intent-file":         intentFile,
+		"session-environment": "sideways",
+	}, client)
+
+	if err == nil {
+		t.Fatalf("err = nil, want rejection of invalid session-environment value")
+	}
+}
+
+// TestReadPlanInputRejectsInvertedIntentDateRange is Stage 6 R3: the CLI-level
+// check that rebalance now has (validateAnalysisRange) was also missing on
+// plan's read path; only the proposal-validation layer caught an inverted
+// window there, a third, inconsistent answer across three commands.
+func TestReadPlanInputRejectsInvertedIntentDateRange(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	intent := samplePlanIntent()
+	intent.Oldest = "2026-07-28"
+	intent.Newest = "2026-07-20"
+	intentFile := filepath.Join(t.TempDir(), "intent.json")
+	writePlanTestIntent(t, intentFile, intent)
+
+	_, err := readPlanInput(map[string]string{"intent-file": intentFile}, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for an inverted intent date range", err)
+	}
+}
+
+// TestReadPlanInputRejectsMalformedNowDate is Stage 6 R11: plan reaches the
+// same NowDate-as-raw-string lock decision rebalance does (dateLockedForPlan
+// -> dateLocked -> rebalanceDateLockedByTime), through --now-date defaulting
+// unvalidated straight into PlanInput.NowDate. Pin the rejection at the same
+// boundary rebalance now has, so plan cannot construct an input carrying an
+// unparseable lock boundary either.
+func TestReadPlanInputRejectsMalformedNowDate(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	intentFile := filepath.Join(t.TempDir(), "intent.json")
+	writePlanTestIntent(t, intentFile, samplePlanIntent())
+
+	_, err := readPlanInput(map[string]string{"intent-file": intentFile, "now-date": "!"}, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for a malformed --now-date", err)
+	}
+}
+
+func TestReadPlanInputSessionEnvironmentFlagOverridesIntentFile(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	intent := samplePlanIntent()
+	intent.Constraints.SessionEnvironment = icu.SessionEnvironmentIndoor
+	intentFile := filepath.Join(t.TempDir(), "intent.json")
+	writePlanTestIntent(t, intentFile, intent)
+
+	input, err := readPlanInput(map[string]string{
+		"intent-file":         intentFile,
+		"session-environment": "outdoor",
+	}, client)
+	if err != nil {
+		t.Fatalf("read plan input: %v", err)
+	}
+
+	if input.Intent.Constraints.SessionEnvironment != icu.SessionEnvironmentOutdoor {
+		t.Fatalf("session environment = %q, want outdoor (flag overrides intent file)",
+			input.Intent.Constraints.SessionEnvironment)
 	}
 }
 

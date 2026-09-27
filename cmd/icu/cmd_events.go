@@ -174,7 +174,7 @@ func applyCalculatedEventLoad(flags map[string]string, body *icu.EventEx) (calcu
 		return request, fmt.Errorf("parse workout description: %w", err)
 	}
 
-	estimate := icu.EstimatePlannedLoad(doc, IntFlag(flags, "ftp", 0))
+	estimate := icu.EstimatePlannedLoad(doc, icu.FTPSelectionFromWatts(IntFlag(flags, "ftp", 0)))
 	if len(estimate.Warnings) > 0 {
 		return request, fmt.Errorf("calculate event load: %s", estimate.Warnings[0])
 	}

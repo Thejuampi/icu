@@ -331,6 +331,26 @@ func TestRebalanceV2CPWPrimeLimitAtLevelOne(t *testing.T) {
 	}
 }
 
+// TestRebalanceV2OutdoorSessionPricedAtOutdoorFTP is T1b.9's
+// rebalance_v2.go fixture and the v2-strategy sibling of W1b-R01:
+// FTP:270, IndoorFTP:285, an outdoor (no per-record indoor signal, plain
+// "Ride") session must price at 270 through the adaptive-bidirectional
+// path too — the CP/W'/PMax duration-power cap and FTPApplied must both
+// use the per-session resolved FTP, never the athlete's IndoorFTP number.
+func TestRebalanceV2OutdoorSessionPricedAtOutdoorFTP(t *testing.T) {
+	t.Parallel()
+
+	input := v2Fixture("1", "preserve-structure")
+	input.SportSettings.FTP = 270
+	input.SportSettings.IndoorFTP = 285
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	if len(proposal.Options[0].Sessions) == 0 || proposal.Options[0].Sessions[0].FTPApplied != 270 {
+		t.Fatalf("sessions = %+v, want FTPApplied 270 (outdoor default)", proposal.Options[0].Sessions)
+	}
+}
+
 func TestRebalanceV2CompensatedResidue(t *testing.T) {
 	t.Parallel()
 

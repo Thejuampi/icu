@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"strings"
 	"testing"
 
 	icu "github.com/Thejuampi/icu"
@@ -91,6 +92,108 @@ func TestAnalyzeWorkoutExecutionComparesSessionAndReps(t *testing.T) {
 	}
 }
 
+// TestAnalyzeWorkoutExecutionEmitsFTPSourceAndConfidence is R1: the read
+// path must surface ResolveFTP's provenance next to Activity.FTP instead of
+// discarding it. A VirtualRide is type_inherent/high, so no
+// ftp_confidence_low warning should appear either.
+func TestAnalyzeWorkoutExecutionEmitsFTPSourceAndConfidence(t *testing.T) {
+	t.Parallel()
+
+	activity := icu.Activity{ID: "a1", Type: "VirtualRide", StartDateLocal: "2026-06-18T18:09:46", MovingTime: 3600}
+
+	got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{
+		Activity:      &activity,
+		SportSettings: &icu.SportSettings{FTP: 270, IndoorFTP: 285},
+	}, icu.WorkoutExecutionOptions{})
+
+	if got.FTPSource != "type_inherent" || got.FTPConfidence != "high" ||
+		strings.Contains(strings.Join(got.Warnings, "\n"), "ftp_confidence_low") {
+		t.Fatalf("ftpSource/ftpConfidence = %q/%q, warnings = %v, want type_inherent/high and no ftp_confidence_low",
+			got.FTPSource, got.FTPConfidence, got.Warnings)
+	}
+}
+
+// TestAnalyzeWorkoutExecutionAmbiguousTypeWarnsFTPConfidenceLow is R1's
+// warning half: D-10c requires the read path to proceed and warn on `low`
+// confidence, never refuse. GravelRide with no discriminating flag (Activity
+// exposes no Trainer field yet) resolves unknown/low.
+func TestAnalyzeWorkoutExecutionAmbiguousTypeWarnsFTPConfidenceLow(t *testing.T) {
+	t.Parallel()
+
+	activity := icu.Activity{ID: "a1", Type: "GravelRide", StartDateLocal: "2026-06-18T18:09:46", MovingTime: 3600}
+
+	got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{
+		Activity:      &activity,
+		SportSettings: &icu.SportSettings{FTP: 270, IndoorFTP: 285},
+	}, icu.WorkoutExecutionOptions{})
+
+	if got.FTPConfidence != "low" || !strings.Contains(strings.Join(got.Warnings, "\n"), "ftp_confidence_low") {
+		t.Fatalf("ftpConfidence = %q, warnings = %v, want low with ftp_confidence_low warning", got.FTPConfidence, got.Warnings)
+	}
+}
+
+// TestAnalyzeWorkoutExecutionNoFTPMissingWarningForNotApplicableType is
+// Stage 6 R12: Walk and Run are both D-10 class-4 (FTP genuinely does not
+// apply), so ResolveFTP reports Applicable: false for both. Before this fix,
+// the "ftp is missing" warning was driven by whether the effective ftp
+// variable (which falls back to the raw Activity.FTP/icu_ftp field) happened
+// to be zero -- an artifact of what the upstream record carried, not of
+// applicability -- so the same not-applicable type could warn or not warn
+// depending on incidental API data. Pin that neither Walk nor Run warns,
+// regardless of whether the raw icu_ftp field is populated.
+func TestAnalyzeWorkoutExecutionNoFTPMissingWarningForNotApplicableType(t *testing.T) {
+	t.Parallel()
+
+	settings := &icu.SportSettings{FTP: 270, IndoorFTP: 285}
+	cases := []struct {
+		name        string
+		sportType   string
+		activityFTP int
+	}{
+		{name: "walk with raw icu_ftp present", sportType: "Walk", activityFTP: 150},
+		{name: "run with no raw icu_ftp", sportType: "Run", activityFTP: 0},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			activity := icu.Activity{
+				ID: "a1", Type: testCase.sportType, StartDateLocal: "2026-06-18T18:09:46",
+				MovingTime: 3600, FTP: testCase.activityFTP,
+			}
+
+			got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{
+				Activity:      &activity,
+				SportSettings: settings,
+			}, icu.WorkoutExecutionOptions{})
+
+			if strings.Contains(strings.Join(got.Warnings, "\n"), "ftp is missing") {
+				t.Fatalf("warnings = %v, want no ftp-is-missing warning for a not-applicable type", got.Warnings)
+			}
+		})
+	}
+}
+
+// TestAnalyzeWorkoutExecutionWarnsFTPMissingWhenGenuinelyApplicable is
+// Stage 6 R12's positive half: a Ride (D-10 class 2, Applicable: true) with
+// no SportSettings and no raw Activity.FTP genuinely has no FTP to resolve,
+// so the warning must still fire. The R12 fix narrows the trigger to
+// Applicable && ftp == 0, not remove it.
+func TestAnalyzeWorkoutExecutionWarnsFTPMissingWhenGenuinelyApplicable(t *testing.T) {
+	t.Parallel()
+
+	activity := icu.Activity{ID: "a1", Type: "Ride", StartDateLocal: "2026-06-18T18:09:46", MovingTime: 3600}
+
+	got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{
+		Activity: &activity,
+	}, icu.WorkoutExecutionOptions{})
+
+	if !strings.Contains(strings.Join(got.Warnings, "\n"), "ftp is missing") {
+		t.Fatalf("warnings = %v, want ftp-is-missing warning for an applicable type with no resolvable FTP", got.Warnings)
+	}
+}
+
 func TestAnalyzeWorkoutExecutionMissingActivityWarns(t *testing.T) {
 	t.Parallel()
 
@@ -98,6 +201,29 @@ func TestAnalyzeWorkoutExecutionMissingActivityWarns(t *testing.T) {
 
 	if got.Comparison.Completion != "plan_missing" || len(got.Warnings) == 0 {
 		t.Fatalf("AnalyzeWorkoutExecution missing = %+v, want plan_missing warning", got)
+	}
+}
+
+// TestWorkoutExecutionAnalysisSchemaVersionDidNotDrift pins the literal
+// wire string (D-7), not the constant against itself: a consumer parsing
+// analysis output needs a version marker to detect a future meaning
+// change. Comparing icu.WorkoutExecutionAnalysisSchemaVersion against
+// itself would pass regardless of what the constant holds.
+func TestWorkoutExecutionAnalysisSchemaVersionDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.WorkoutExecutionAnalysisSchemaVersion != "icu.analysis.workout.v1" {
+		t.Fatalf("WorkoutExecutionAnalysisSchemaVersion = %q, want icu.analysis.workout.v1", icu.WorkoutExecutionAnalysisSchemaVersion)
+	}
+}
+
+func TestAnalyzeWorkoutExecutionEmitsSchemaVersion(t *testing.T) {
+	t.Parallel()
+
+	got := icu.AnalyzeWorkoutExecution(icu.WorkoutExecutionInputs{}, icu.WorkoutExecutionOptions{})
+
+	if got.SchemaVersion != "icu.analysis.workout.v1" {
+		t.Fatalf("SchemaVersion = %q, want icu.analysis.workout.v1", got.SchemaVersion)
 	}
 }
 
@@ -139,6 +265,102 @@ func TestMatchWorkoutEventRejectsOutsideWindow(t *testing.T) {
 
 	if got.Confidence != testWorkoutConfidenceNone {
 		t.Fatalf("MatchWorkoutEvent outside = %+v, want none", got)
+	}
+}
+
+// TestMatchWorkoutEventServerPairingMatchesOutsideHeuristicWindow is W2-P04:
+// paired_event_id is authoritative (D-21) and matches even when the event
+// falls outside MatchWorkoutEvent's own time window.
+func TestMatchWorkoutEventServerPairingMatchesOutsideHeuristicWindow(t *testing.T) {
+	t.Parallel()
+
+	pairedEventID := 999
+	activity := icu.Activity{
+		ID: "a1", Name: "Long Ride", Type: "Ride", StartDateLocal: "2026-06-18T08:00:00",
+		PairedEventID: &pairedEventID,
+	}
+	events := []icu.Event{
+		{ID: 999, Category: "WORKOUT", Type: "Ride", Name: "Planned Long Ride", StartDateLocal: "2026-05-01T08:00:00"},
+	}
+
+	got := icu.MatchWorkoutEvent(&activity, events, icu.WorkoutEventMatchOptions{MatchWindowHours: 1})
+
+	if got.EventID != 999 || got.Source != "server_paired_event_id" {
+		t.Fatalf("MatchWorkoutEvent server-paired = %+v, want event 999 from server_paired_event_id", got)
+	}
+}
+
+// TestMatchWorkoutEventUnpairedComplianceOmitted is W2-N01: an unpaired
+// activity's compliance (0.0 on all 36 live occurrences, F-18) must never
+// surface, but match.source is still emitted so the absence is explicable.
+func TestMatchWorkoutEventUnpairedComplianceOmitted(t *testing.T) {
+	t.Parallel()
+
+	compliance := 0.0
+	activity := icu.Activity{ID: "a1", Name: "Free Ride", Type: "Ride", StartDateLocal: "2026-06-18T08:00:00", Compliance: &compliance}
+
+	got := icu.MatchWorkoutEvent(&activity, nil, icu.WorkoutEventMatchOptions{})
+
+	if got.Compliance != nil || got.Source != "unmatched" {
+		t.Fatalf("MatchWorkoutEvent unpaired = %+v, want nil compliance and source unmatched", got)
+	}
+}
+
+// TestMatchWorkoutEventStubNeverPaired is W2-N03: a STRAVA stub on the same
+// date as a planned event must not be paired on either the server or the
+// heuristic path, and must not carry a compliance value.
+func TestMatchWorkoutEventStubNeverPaired(t *testing.T) {
+	t.Parallel()
+
+	pairedEventID := 42
+	compliance := 0.8
+	stub := icu.Activity{
+		ID: "s1", StartDateLocal: "2026-06-18T08:00:00", Source: "STRAVA",
+		StubShape: true, PairedEventID: &pairedEventID, Compliance: &compliance,
+	}
+	events := []icu.Event{
+		{ID: 42, Category: "WORKOUT", Type: "Ride", Name: "Planned Ride", StartDateLocal: "2026-06-18T08:00:00"},
+	}
+
+	got := icu.MatchWorkoutEvent(&stub, events, icu.WorkoutEventMatchOptions{})
+
+	if got.EventID != 0 || got.Source != "not_a_record" || got.Compliance != nil {
+		t.Fatalf("MatchWorkoutEvent stub = %+v, want no pairing, source not_a_record, no compliance", got)
+	}
+}
+
+// TestMatchWorkoutEventPairedComplianceKeyLackingIsNil is W2-E02: a paired
+// activity whose payload never carried compliance at all must report a nil
+// pointer (key omitted on marshal), not an invented zero.
+func TestMatchWorkoutEventPairedComplianceKeyLackingIsNil(t *testing.T) {
+	t.Parallel()
+
+	pairedEventID := 7
+	activity := icu.Activity{ID: "a1", StartDateLocal: "2026-06-18T08:00:00", PairedEventID: &pairedEventID}
+	events := []icu.Event{{ID: 7, Category: "WORKOUT", Name: "Planned", StartDateLocal: "2026-06-18T08:00:00"}}
+
+	got := icu.MatchWorkoutEvent(&activity, events, icu.WorkoutEventMatchOptions{})
+
+	if got.Compliance != nil {
+		t.Fatalf("MatchWorkoutEvent = %+v, want nil compliance when the activity never carried the field", got)
+	}
+}
+
+// TestMatchWorkoutEventPairedZeroComplianceIsPresent is W2-E03: a paired
+// activity with a genuine 0.0 compliance must surface the key present with
+// 0, distinct from W2-E02's absent case.
+func TestMatchWorkoutEventPairedZeroComplianceIsPresent(t *testing.T) {
+	t.Parallel()
+
+	pairedEventID := 7
+	compliance := 0.0
+	activity := icu.Activity{ID: "a1", StartDateLocal: "2026-06-18T08:00:00", PairedEventID: &pairedEventID, Compliance: &compliance}
+	events := []icu.Event{{ID: 7, Category: "WORKOUT", Name: "Planned", StartDateLocal: "2026-06-18T08:00:00"}}
+
+	got := icu.MatchWorkoutEvent(&activity, events, icu.WorkoutEventMatchOptions{})
+
+	if got.Compliance == nil || *got.Compliance != 0 {
+		t.Fatalf("MatchWorkoutEvent = %+v, want compliance present with 0", got)
 	}
 }
 

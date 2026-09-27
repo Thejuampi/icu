@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -621,6 +622,22 @@ func TestValidateRebalanceProposalRejectsNil(t *testing.T) {
 	}
 }
 
+// TestValidateRebalanceProposalRejectsOldSchemaVersionWithMigrationMessage
+// is W1b-E02: a proposal file still at the pre-1b schema version is
+// rejected loudly, and the message names both the old and expected
+// versions plus the remedy (regenerate), not a bare "unsupported" string a
+// caller cannot act on.
+func TestValidateRebalanceProposalRejectsOldSchemaVersionWithMigrationMessage(t *testing.T) {
+	t.Parallel()
+
+	validation := icu.ValidateRebalanceProposal(&icu.RebalanceProposalFile{SchemaVersion: "icu.rebalance.v2"})
+
+	if !validation.Blocking || !strings.Contains(strings.Join(validation.Errors, "\n"), "icu.rebalance.v2") ||
+		!strings.Contains(strings.Join(validation.Errors, "\n"), "regenerate") {
+		t.Fatalf("validation = %+v, want blocking with a migration message naming icu.rebalance.v2 and regenerate", validation)
+	}
+}
+
 func TestValidateRebalanceProposalRejectsUnsupportedAction(t *testing.T) {
 	t.Parallel()
 
@@ -684,6 +701,371 @@ func TestDynamicRebalanceTargetsFallbackIsLabeled(t *testing.T) {
 	if targets.Source != "missing_intensity_basis" {
 		t.Fatalf("source = %q, want missing intensity basis", targets.Source)
 	}
+}
+
+// TestRebalanceSchemaVersionDidNotDrift pins the literal wire string
+// (T1b.7, D-7b), not the constant against itself: per-session FTP changes
+// what a proposal's prescribed watts mean, a meaning change that must carry
+// a version bump a reader can grep for. Comparing icu.RebalanceSchemaVersion
+// against itself would pass regardless of what the constant holds.
+func TestRebalanceSchemaVersionDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.RebalanceSchemaVersion != "icu.rebalance.v3" {
+		t.Fatalf("RebalanceSchemaVersion = %q, want icu.rebalance.v3", icu.RebalanceSchemaVersion)
+	}
+}
+
+// TestRebalanceOutdoorSessionPricedAtOutdoorFTP is W1b-R01: FTP:270,
+// IndoorFTP:285, an outdoor (no per-record indoor signal, plain "Ride")
+// session must price at the outdoor number, 270 — not the athlete's
+// IndoorFTP. Pre-1b's week-level rebalanceFTP unconditionally preferred
+// IndoorFTP whenever it was set, mispricing every outdoor session in a week
+// where the athlete has both numbers configured (confirmed failing on the
+// wave-1a merge SHA 4a7f3caeacdbbfedb4c823b41c6bacba69ce1270 via a
+// throwaway worktree test: rebalanceFTP returned 285, not 270).
+func TestRebalanceOutdoorSessionPricedAtOutdoorFTP(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.SportSettings = &icu.SportSettings{FTP: 270, IndoorFTP: 285, PowerZones: []int{55, 75, 90}}
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	session := rebalanceSessionByEventID(&proposal, 2)
+	if session == nil || session.FTPApplied != 270 {
+		t.Fatalf("session for event 2 = %+v, want FTPApplied 270 (outdoor default)", session)
+	}
+}
+
+// TestRebalanceEqualFTPsAreInertNoGateNoWarning is W1b-R02: FTP:285,
+// IndoorFTP:285 (equal) is the D-10 inertness guard's trigger — there is no
+// real number to discriminate indoor from outdoor, so resolution proceeds
+// unchanged from pre-1b with Source: athlete_default, no mixed-week gate,
+// and no confidence warning.
+func TestRebalanceEqualFTPsAreInertNoGateNoWarning(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture() // FTP:285, IndoorFTP:285 already
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	session := rebalanceSessionByEventID(&proposal, 2)
+	if session == nil || session.FTPSource != icu.FTPSourceAthleteDefault {
+		t.Fatalf("session for event 2 = %+v, want FTPSource %q (inertness guard)", session, icu.FTPSourceAthleteDefault)
+	}
+}
+
+// TestRebalanceWeekWithIndoorAndOutdoorSessionsYieldsTwoFTPApplied is
+// W1b-P01: a week with one indoor (type_inherent VirtualRide) and one
+// outdoor (type_default Ride) mutable event must carry two different
+// ftpApplied values in the same proposal (D-11) — a single week-level FTP
+// field cannot represent this week honestly.
+func TestRebalanceWeekWithIndoorAndOutdoorSessionsYieldsTwoFTPApplied(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.SportSettings = &icu.SportSettings{FTP: 270, IndoorFTP: 285, PowerZones: []int{55, 75, 90}}
+	input.Events[1].Type = icu.ActivityTypeVirtualRide // event 2: indoor, type_inherent
+	input.Events[2].Type = "Ride"                      // event 3: outdoor, type_default
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	indoorSession := rebalanceSessionByEventID(&proposal, 2)
+	outdoorSession := rebalanceSessionByEventID(&proposal, 3)
+	if indoorSession == nil || outdoorSession == nil || indoorSession.FTPApplied == outdoorSession.FTPApplied {
+		t.Fatalf("indoor/outdoor FTPApplied = %+v/%+v, want two different values", indoorSession, outdoorSession)
+	}
+}
+
+// TestRebalanceMixedWeekWithSessionEnvironmentRefuses is W1b-N01: a mixed-
+// environment week (one type-inherent indoor session, one type-default
+// outdoor session) with no per-record signal and only --session-environment
+// given must refuse — a single scalar cannot describe both sessions
+// honestly (D-10c). Refusal here means zero operations are produced and the
+// mixed week is named in the warnings.
+func TestRebalanceMixedWeekWithSessionEnvironmentRefuses(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.Constraints.SessionEnvironment = icu.SessionEnvironmentOutdoor
+	input.Events[1].Type = icu.ActivityTypeVirtualRide
+	input.Events[2].Type = "Ride"
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	if len(proposal.Operations) != 0 || !strings.Contains(strings.Join(proposal.Options[0].Warnings, "\n"), "mixed-environment week") {
+		t.Fatalf("operations = %d, warnings = %v, want zero operations and a named mixed-week refusal",
+			len(proposal.Operations), proposal.Options[0].Warnings)
+	}
+}
+
+// TestRebalanceMixedWeekWithSessionEnvironmentIsValidationBlocking is Stage 6
+// R2: docs/rebalance.md:56 promises the mixed-environment-week refusal makes
+// "the whole proposal ... blocking". Asserting on Operations count (as
+// TestRebalanceMixedWeekWithSessionEnvironmentRefuses does above) pins an
+// incidental consequence, not the documented contract — a `plan.Validation`
+// re-derivation from the serialized proposal cannot recover this condition
+// from Constraints alone, since it depends on input.Events. This test pins
+// the actual field the docs name.
+func TestRebalanceMixedWeekWithSessionEnvironmentIsValidationBlocking(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.Constraints.SessionEnvironment = icu.SessionEnvironmentOutdoor
+	input.Events[1].Type = icu.ActivityTypeVirtualRide
+	input.Events[2].Type = "Ride"
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	if !proposal.Validation.Blocking || !strings.Contains(strings.Join(proposal.Validation.Errors, "\n"), "mixed-environment week") {
+		t.Fatalf("validation = %+v, want blocking=true with a named mixed-week error", proposal.Validation)
+	}
+}
+
+// TestRebalanceClassFourSessionEnumeratedWithNoLoadSource is W1b-E01: a
+// class-4 (D-10 not_applicable) session in the week is enumerated in
+// timeAccounting with loadSource "none" — recorded so its minutes are
+// visible, never priced (D-23), and never compared against a capacity
+// bound: F-27 establishes no per-day minutes bound exists before wave-3, so
+// this test does not attempt one.
+func TestRebalanceClassFourSessionEnumeratedWithNoLoadSource(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.Events = append(input.Events, icu.Event{
+		ID: 4, Category: "WORKOUT", Type: "Run",
+		StartDateLocal: "2026-06-26T00:00:00", Name: "Easy jog", MovingTime: 1800,
+	})
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	entry := rebalanceTimeAccountingEntryByName(&proposal, "Easy jog")
+	if entry == nil || entry.LoadSource != "none" {
+		t.Fatalf("timeAccounting entry = %+v, want an entry with loadSource \"none\"", entry)
+	}
+}
+
+// TestRebalanceWeekWithClassFourSessionIsPartialAccounting is W1b-E03: a
+// week containing one class-4 session has loadAccounting "partial" and
+// unaccountedSessions 1 — the weekly load total is knowingly incomplete
+// until wave-2's hr_load arrives (D-23).
+func TestRebalanceWeekWithClassFourSessionIsPartialAccounting(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.Events = append(input.Events, icu.Event{
+		ID: 4, Category: "WORKOUT", Type: "Run",
+		StartDateLocal: "2026-06-26T00:00:00", Name: "Easy jog", MovingTime: 1800,
+	})
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	if proposal.TimeAccounting == nil || proposal.TimeAccounting.LoadAccounting != "partial" || proposal.TimeAccounting.UnaccountedSessions != 1 {
+		t.Fatalf("timeAccounting = %+v, want loadAccounting \"partial\" and unaccountedSessions 1", proposal.TimeAccounting)
+	}
+}
+
+// TestRebalanceStubActivityEnumeratedInTimeAccounting is T2.8/D-23: a
+// not_a_record (D-24 STRAVA stub) activity in scope must not vanish without
+// a trace merely because ExcludeStubActivities dropped it from every load
+// aggregate — its time stays visible in timeAccounting with loadSource
+// "not_a_record", and it counts toward unaccountedSessions/loadAccounting
+// "partial" the same way a class-4 event does.
+func TestRebalanceStubActivityEnumeratedInTimeAccounting(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceFixture()
+	input.Activities = append(input.Activities, icu.Activity{
+		ID: "stub1", Name: "Manual entry", Type: "Ride",
+		StartDateLocal: "2026-06-25T00:00:00", MovingTime: 1200, StubShape: true,
+	})
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	entry := rebalanceTimeAccountingEntryByName(&proposal, "Manual entry")
+	if entry == nil || entry.LoadSource != "not_a_record" {
+		t.Fatalf("timeAccounting entry = %+v, want an entry with loadSource \"not_a_record\"", entry)
+	}
+}
+
+// TestRebalanceStravaStubActivityConsumesNoTimeOrLoad is W1b-E04: a week
+// containing a STRAVA stub (an Activity record with no type and no
+// metrics — D-24's not_a_record shape) must not change the week's
+// completed load. Sessions are built from Events, never from Activities,
+// so a stub activity structurally cannot "appear as a session"; the
+// residual risk this test pins is completedRebalanceDates silently
+// counting the stub's mere presence on a date as a real completed session.
+func TestRebalanceStravaStubActivityConsumesNoTimeOrLoad(t *testing.T) {
+	t.Parallel()
+
+	withoutStub := rebalanceFixture()
+	proposalWithout := icu.BuildRebalanceProposal(&withoutStub)
+
+	withStub := rebalanceFixture()
+	withStub.Activities = append(withStub.Activities, icu.Activity{ID: "stub1", StartDateLocal: "2026-06-26T00:00:00"})
+	proposalWith := icu.BuildRebalanceProposal(&withStub)
+
+	if proposalWith.Options[0].Evaluation.CompletedLoad != proposalWithout.Options[0].Evaluation.CompletedLoad {
+		t.Fatalf("completedLoad with stub = %d, want unchanged %d (a STRAVA stub carries zero load and consumes no time)",
+			proposalWith.Options[0].Evaluation.CompletedLoad, proposalWithout.Options[0].Evaluation.CompletedLoad)
+	}
+}
+
+// TestRebalanceBaselineStubActivityDoesNotLockPlannedEvent closes the
+// residual risk TestRebalanceStravaStubActivityConsumesNoTimeOrLoad's own
+// comment names (T2.4): completedRebalanceDates must not let a stub's mere
+// presence on a date mark that date "already completed," which would make
+// isImmutableEvent wrongly lock a planned event's load out of rebalancing.
+func TestRebalanceBaselineStubActivityDoesNotLockPlannedEvent(t *testing.T) {
+	t.Parallel()
+
+	withoutStub := rebalanceFixture()
+	baselineWithout := icu.RebalanceBaseline(&withoutStub)
+
+	withStub := rebalanceFixture()
+	withStub.Activities = append(withStub.Activities, icu.Activity{ID: "stub1", StartDateLocal: "2026-06-25T00:00:00", StubShape: true})
+	baselineWith := icu.RebalanceBaseline(&withStub)
+
+	if baselineWith.MutablePlannedLoad != baselineWithout.MutablePlannedLoad ||
+		baselineWith.LockedPlannedLoad != baselineWithout.LockedPlannedLoad {
+		t.Fatalf("baseline with stub on 2026-06-25 = locked %d/mutable %d, want unchanged from without-stub locked %d/mutable %d "+
+			"(a stub must not mark that date as an already-completed session)",
+			baselineWith.LockedPlannedLoad, baselineWith.MutablePlannedLoad,
+			baselineWithout.LockedPlannedLoad, baselineWithout.MutablePlannedLoad)
+	}
+}
+
+// TestRebalanceUpdateBodyPreservesIndoorTrueWithoutSessionEnvironment is
+// W1b-E05: an UPDATE on an event with Indoor: true, with no
+// --session-environment override intending a change, must carry
+// Indoor: true on the operation body — not silently drop back to Go's
+// zero value (D-25/T1b.11).
+func TestRebalanceUpdateBodyPreservesIndoorTrueWithoutSessionEnvironment(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceUpdateEnvironmentFixture("")
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	if len(proposal.Operations) != 1 || !proposal.Operations[0].Body.Indoor {
+		t.Fatalf("operations = %+v, want exactly one operation with body.Indoor true", proposal.Operations)
+	}
+}
+
+// TestRebalanceUpdateBodySessionEnvironmentOverridesIndoorTrue is W1b-E06:
+// --session-environment outdoor on an event with Indoor: true still wins —
+// an explicit operator assertion overrides the event's own stored flag.
+func TestRebalanceUpdateBodySessionEnvironmentOverridesIndoorTrue(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceUpdateEnvironmentFixture(icu.SessionEnvironmentOutdoor)
+
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	if len(proposal.Operations) != 1 || proposal.Operations[0].Body.Indoor {
+		t.Fatalf("operations = %+v, want exactly one operation with body.Indoor false (explicit outdoor override)", proposal.Operations)
+	}
+}
+
+// TestRebalanceUpdateBodyWirePreservesIndoorTrue is F1's wire-level pin for
+// W1b-E05: the two prior tests above only assert the in-memory
+// EventEx.Indoor bool, which can pass even if the JSON tag regresses.
+// Marshal the actual operation body and require the literal `"indoor":true`
+// bytes an UPDATE with no --session-environment override sends on the wire.
+func TestRebalanceUpdateBodyWirePreservesIndoorTrue(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceUpdateEnvironmentFixture("")
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	body, err := json.Marshal(proposal.Operations[0].Body)
+	if err != nil {
+		t.Fatalf("marshal operation body: %v", err)
+	}
+
+	if got := string(body); !strings.Contains(got, `"indoor":true`) {
+		t.Fatalf("operation body JSON = %s, want it to contain \"indoor\":true", got)
+	}
+}
+
+// TestRebalanceUpdateBodyWireOverrideOmitsIndoorKey is F1's wire-level pin
+// for W1b-E06: EventEx.Indoor is a bare bool with `omitempty` (LL-17: it
+// must not become a pointer, which would regress
+// TestRebalanceUpdateBodyWirePreservesIndoorTrue's preserve case), so an
+// override to outdoor marshals to no "indoor" key at all rather than an
+// explicit false. That request body is byte-identical to one that never
+// resolved an environment — the override's effect on the *stored* record is
+// unverified (see docs/rebalance.md); this test only pins the outgoing
+// bytes, which is the part this repository can assert without writing to
+// Juan's live calendar.
+func TestRebalanceUpdateBodyWireOverrideOmitsIndoorKey(t *testing.T) {
+	t.Parallel()
+
+	input := rebalanceUpdateEnvironmentFixture(icu.SessionEnvironmentOutdoor)
+	proposal := icu.BuildRebalanceProposal(&input)
+
+	body, err := json.Marshal(proposal.Operations[0].Body)
+	if err != nil {
+		t.Fatalf("marshal operation body: %v", err)
+	}
+
+	if got := string(body); strings.Contains(got, `"indoor"`) {
+		t.Fatalf("operation body JSON = %s, want no \"indoor\" key (explicit outdoor override omits, does not send false)", got)
+	}
+}
+
+// rebalanceUpdateEnvironmentFixture builds a single-event week with the
+// event's own Indoor already resolved true (no synthetic
+// Constraints.SportType injected, so the D-10c mixed-week gate never fires
+// here) so W1b-E05/E06 can isolate the UPDATE body's Indoor value from the
+// mixed-week refusal path exercised separately by
+// TestRebalanceMixedWeekWithSessionEnvironmentRefuses. Every call site needs
+// Indoor true — that is the case D-25 protects — so it is fixed here rather
+// than threaded as an always-true parameter.
+func rebalanceUpdateEnvironmentFixture(sessionEnvironment string) icu.RebalanceInput {
+	return icu.RebalanceInput{
+		AthleteID: "i1",
+		NowDate:   "2026-06-24",
+		Events: []icu.Event{
+			{
+				ID: 5, Category: "WORKOUT", Type: "Ride", StartDateLocal: "2026-06-27T00:00:00",
+				Name: "Endurance", TrainingLoad: 100, MovingTime: 5400, Intensity: 0.65, Indoor: boolPtr(true),
+			},
+		},
+		SportSettings: &icu.SportSettings{FTP: 270, IndoorFTP: 285, PowerZones: []int{55, 75, 90}},
+		Scope:         icu.RebalanceScope{StartDate: "2026-06-24", EndDate: "2026-06-28", Week: "2026-W26"},
+		Constraints: icu.RebalanceConstraints{
+			TargetLoad: 100, TargetTolerance: 20,
+			AllowUpdate: true, WorkoutTarget: "POWER", StartTime: "07:00",
+			MinSessionMinutes: 20, DurationStepMinutes: 5,
+			SessionEnvironment: sessionEnvironment,
+		},
+	}
+}
+
+func rebalanceTimeAccountingEntryByName(proposal *icu.RebalanceProposalFile, name string) *icu.RebalanceTimeAccountingEntry {
+	if proposal.TimeAccounting == nil {
+		return nil
+	}
+
+	for index := range proposal.TimeAccounting.Entries {
+		if proposal.TimeAccounting.Entries[index].Name == name {
+			return &proposal.TimeAccounting.Entries[index]
+		}
+	}
+
+	return nil
+}
+
+func rebalanceSessionByEventID(proposal *icu.RebalanceProposalFile, eventID int) *icu.RebalanceSession {
+	for index := range proposal.Options[0].Sessions {
+		if proposal.Options[0].Sessions[index].EventID == eventID {
+			return &proposal.Options[0].Sessions[index]
+		}
+	}
+
+	return nil
 }
 
 func rebalanceFixture() icu.RebalanceInput {

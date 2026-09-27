@@ -59,6 +59,29 @@ func TestBuildCoachingContextSupportsNilOptionsAndUnavailableAdaptation(t *testi
 	}
 }
 
+// TestCoachingContextSchemaVersionDidNotDrift pins the literal wire string
+// (D-7), not the constant against itself: a consumer parsing analysis
+// output needs a version marker to detect a future meaning change.
+// Comparing icu.CoachingContextSchemaVersion against itself would pass
+// regardless of what the constant holds.
+func TestCoachingContextSchemaVersionDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.CoachingContextSchemaVersion != "icu.analysis.coaching.v1" {
+		t.Fatalf("CoachingContextSchemaVersion = %q, want icu.analysis.coaching.v1", icu.CoachingContextSchemaVersion)
+	}
+}
+
+func TestBuildCoachingContextEmitsSchemaVersion(t *testing.T) {
+	t.Parallel()
+
+	context := icu.BuildCoachingContext(icu.CoachingContextInputs{}, nil)
+
+	if context.SchemaVersion != "icu.analysis.coaching.v1" {
+		t.Fatalf("SchemaVersion = %q, want icu.analysis.coaching.v1", context.SchemaVersion)
+	}
+}
+
 func TestBuildCoachingContextIncludesSideEffectDeclaration(t *testing.T) {
 	t.Parallel()
 

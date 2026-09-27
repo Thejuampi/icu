@@ -56,6 +56,91 @@ func (activity *Activity) applySnakeFields(raw map[string]json.RawMessage) {
 	copyRawIfSet(&activity.CTL, raw, "icu_ctl")
 	copyRawValueIfSet(&activity.ZoneTimes, raw, "icu_zone_times")
 	copyRawValueIfSet(&activity.HRZoneTimes, raw, "icu_hr_zone_times")
+	activity.applyValidityAndLoadSnakeFields(raw)
+	activity.applyEmitOnlySnakeFields(raw)
+	activity.StubShape = isStravaStubShape(raw, activity.Source)
+	copyRawIfSet(&activity.Note, raw, "_note")
+}
+
+// applyEmitOnlySnakeFields carries wave-4's nine emit-only fields (D-1/A2)
+// across the same snake/camel casing gap every other API field already
+// crosses here. This wiring is plumbing only — it transports a raw value
+// into its typed field and computes nothing from it; T4.3's containment
+// check treats this file as part of Activity's own type definition, not as
+// a consumer.
+func (activity *Activity) applyEmitOnlySnakeFields(raw map[string]json.RawMessage) {
+	copyRawIfSet(&activity.PolarizationIndex, raw, "polarization_index")
+	copyRawIfSet(&activity.SSCP, raw, "ss_cp")
+	copyRawIfSet(&activity.SSWPrime, raw, "ss_w_prime")
+	copyRawIfSet(&activity.SSPMax, raw, "ss_p_max")
+	copyRawIfSet(&activity.CarbsUsed, raw, "carbs_used")
+	copyRawIfSet(&activity.CarbsIngested, raw, "carbs_ingested")
+	copyRawIfSet(&activity.RollingFTPDelta, raw, "icu_rolling_ftp_delta")
+	copyRawIfSet(&activity.PowerField, raw, "power_field")
+	activity.HRR = decodeHRRMeasurement(raw, "icu_hrr")
+}
+
+// decodeHRRMeasurement parses icu_hrr's nested object with the same
+// snake-to-camel overlay Activity itself uses at the top level (F-24):
+// HRRMeasurement's own JSON tags are camelCase to match this package's
+// outward contract, so a direct json.Unmarshal of the raw (snake_case)
+// object would only ever populate the one member whose tag happens to be
+// spelled identically in both casings ("hrr"). Returns nil when the key is
+// absent or explicitly null, matching every other nullable object field.
+func decodeHRRMeasurement(raw map[string]json.RawMessage, key string) *HRRMeasurement {
+	value, ok := raw[key]
+	if !ok || string(value) == "null" {
+		return nil
+	}
+
+	var nested map[string]json.RawMessage
+	if err := json.Unmarshal(value, &nested); err != nil {
+		return nil
+	}
+
+	measurement := &HRRMeasurement{}
+	copyRawIfSet(&measurement.StartIndex, nested, "start_index")
+	copyRawIfSet(&measurement.EndIndex, nested, "end_index")
+	copyRawIfSet(&measurement.StartTime, nested, "start_time")
+	copyRawIfSet(&measurement.EndTime, nested, "end_time")
+	copyRawIfSet(&measurement.StartBPM, nested, "start_bpm")
+	copyRawIfSet(&measurement.EndBPM, nested, "end_bpm")
+	copyRawIfSet(&measurement.AverageWatts, nested, "average_watts")
+	copyRawIfSet(&measurement.HRR, nested, "hrr")
+
+	return measurement
+}
+
+// applyValidityAndLoadSnakeFields carries wave-2's newly-fetched fields
+// (D-2 ignore flags, D-21 pairing, D-23 tri-load channels) across the same
+// snake/camel casing gap every other API field already crosses here.
+func (activity *Activity) applyValidityAndLoadSnakeFields(raw map[string]json.RawMessage) {
+	copyRawIfSet(&activity.PairedEventID, raw, "paired_event_id")
+	copyRawIfSet(&activity.IgnorePower, raw, "icu_ignore_power")
+	copyRawIfSet(&activity.IgnoreHR, raw, "icu_ignore_hr")
+	copyRawIfSet(&activity.IgnoreTime, raw, "icu_ignore_time")
+	copyRawIfSet(&activity.PowerLoad, raw, "power_load")
+	copyRawIfSet(&activity.PaceLoad, raw, "pace_load")
+	copyRawIfSet(&activity.PaceLoadType, raw, "pace_load_type")
+}
+
+// stravaStubKeyCount is D-24's STRAVA-stub shape signature: a raw activity
+// record reduced to exactly this many keys when Strava withheld the full
+// record from the API.
+const stravaStubKeyCount = 5
+
+// isStravaStubShape discriminates on shape (D-24), never on absence of
+// type, so a genuinely typeless-but-real record does not fall in here. The
+// raw key count is not recoverable from the typed Activity after the fact,
+// so this must run at unmarshal time while raw is still in hand.
+func isStravaStubShape(raw map[string]json.RawMessage, source string) bool {
+	if len(raw) != stravaStubKeyCount {
+		return false
+	}
+
+	_, hasNote := raw["_note"]
+
+	return hasNote && source == "STRAVA"
 }
 
 func (activity *Activity) applyEnvironmentSnakeFields(raw map[string]json.RawMessage) {

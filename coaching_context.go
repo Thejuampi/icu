@@ -3,6 +3,12 @@ package icu
 import "strings"
 
 const (
+	// CoachingContextSchemaVersion marks the wire shape of CoachingContext
+	// (D-7): a consumer needs a version marker to detect a future meaning
+	// change, the same reasoning that already backs RebalanceSchemaVersion
+	// and PlanSchemaVersion.
+	CoachingContextSchemaVersion = "icu.analysis.coaching.v1"
+
 	coachingCommand         = "analysis coaching"
 	coachingNoteCategory    = "NOTE"
 	coachingSourceAthlete   = "athlete"
@@ -43,6 +49,7 @@ type CoachingContextOptions struct {
 }
 
 type CoachingContext struct {
+	SchemaVersion string                     `json:"schemaVersion"`
 	Scope         CoachingContextScope       `json:"scope"`
 	Athlete       *Athlete                   `json:"athlete,omitempty"`
 	SportSettings *SportSettings             `json:"sportSettings,omitempty"`
@@ -102,6 +109,7 @@ func BuildCoachingContext(inputs CoachingContextInputs, options *CoachingContext
 	}
 
 	context := CoachingContext{
+		SchemaVersion: CoachingContextSchemaVersion,
 		Scope: CoachingContextScope{
 			Command:          coachingCommand,
 			SportType:        options.SportType,

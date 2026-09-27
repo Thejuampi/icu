@@ -89,6 +89,19 @@ If the same URL pattern, flag parsing, or error handling appears twice, extract 
 - Every flag and command must map to an actual intervals.icu API endpoint.
 - No speculative features.
 
+### Emit-Only Field Classification
+
+Every field added to a wire-facing type (`Activity`, `Event`, etc.) is exactly one of two categories: (1) it drives a computed output number consumed by an existing aggregate, filter, or decision path, or (2) it is emit-only — present on the wire for a caller with programmatic needs to read verbatim, consumed by no code path in this repository. A field never straddles both, and moving a field from category 2 to category 1 is never a drive-by edit.
+
+Before any change makes an emit-only field participate in a sum, average, filter, gate, or decision, that change must:
+
+- name the field(s) being promoted and cite this rule;
+- state which existing (or new) output number will now depend on the field, and why;
+- add or update tests proving the new dependency, including an absent-value case (a wire field missing on some records must not silently coerce to a measured zero — see the pointer + `omitempty` convention already used for optional numeric fields in `types.go`);
+- update the field's classification note at its declaration site so the next reader does not have to rediscover which category it is in.
+
+Fields currently governed by this rule: `Activity.PolarizationIndex`, `Activity.SSCP`, `Activity.SSWPrime`, `Activity.SSPMax`, `Activity.CarbsUsed`, `Activity.CarbsIngested`, `Activity.RollingFTPDelta`, `Activity.PowerField`, `Activity.HRR` (wave-4/A2's emit-only metric surface). Do not add consumption of any of these without completing the exercise above.
+
 ### Dynamic Decision Rules
 
 Hardcoded physiological, readiness, training-load, workout-intensity, ramp-rate, durability, or planning thresholds are not allowed as decision rules. Fixed numbers are only acceptable when they are protocol constants, unit conversions, documented external API contracts, or explicit user-provided constraints for a single run.

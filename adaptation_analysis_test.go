@@ -280,3 +280,26 @@ func TestAnalyzeCyclingAdaptationIncludesTimezoneMetadata(t *testing.T) {
 		t.Fatalf("Scope.TimezoneSource = %q, want %s", got.Scope.TimezoneSource, icu.DefaultAnalysisTimezoneSource)
 	}
 }
+
+// TestAnalyzeCyclingAdaptationExcludesStubActivitiesFromScope is Stage 6
+// R14: a D-24 STRAVA stub is not a session and must never occupy
+// scope.activities. Before this fix, AnalyzeCyclingAdaptation summed
+// len(activities) directly with no stub filter, so a window with more
+// stubs than real activities reported a count larger than the real
+// activity count instead of smaller.
+func TestAnalyzeCyclingAdaptationExcludesStubActivitiesFromScope(t *testing.T) {
+	t.Parallel()
+
+	stubNote := "STRAVA activities are not available via the API"
+	activities := []icu.Activity{
+		{ID: "real1", Type: "Ride", StartDateLocal: "2026-06-01T08:00:00", TrainingLoad: 50},
+		{ID: "stub1", StubShape: true, Note: &stubNote},
+		{ID: "stub2", StubShape: true, Note: &stubNote},
+	}
+
+	got := icu.AnalyzeCyclingAdaptation(nil, icu.PowerModel{}, nil, activities, nil, icu.AnalysisOptions{})
+
+	if got.Scope.Activities != 1 {
+		t.Fatalf("Scope.Activities = %d, want 1 (2 STRAVA stubs excluded)", got.Scope.Activities)
+	}
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -189,6 +190,32 @@ func TestReadRebalanceSportSettingsSkipsWhenTypeMissing(t *testing.T) {
 	}
 }
 
+// TestReadRebalanceActivitiesIgnoresFieldsOverride is W2-N02/D-8: the
+// choke point must fetch its own fixed field list regardless of a
+// caller-supplied --activity-fields, so wave-2's validity/pairing fields are
+// never dropped by a narrower request.
+func TestReadRebalanceActivitiesIgnoresFieldsOverride(t *testing.T) {
+	t.Parallel()
+
+	var gotFields string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		gotFields = request.URL.Query().Get("fields")
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	_, err := readRebalanceActivities(client, "2026-06-22", "2026-06-28", map[string]string{"activity-fields": "id,name"})
+	if err != nil {
+		t.Fatalf("read activities: %v", err)
+	}
+
+	if gotFields != defaultAnalysisFields {
+		t.Fatalf("fields = %q, want the unmodified defaultAnalysisFields regardless of the activity-fields override", gotFields)
+	}
+}
+
 func TestReadRebalanceWellnessUsesExplicitLookback(t *testing.T) {
 	t.Parallel()
 
@@ -252,8 +279,144 @@ func TestRebalanceDryRunRejectsMaxHRFlag(t *testing.T) {
 
 	_, err := readRebalanceInput(flags, client)
 
+	if err == nil || !strings.Contains(err.Error(), "max-hr is not supported") {
+		t.Fatalf("err = %v, want the specific max-hr rejection", err)
+	}
+}
+
+// TestRebalanceShowMaxHRFlagReachesSpecificRejection is Stage 6 R9:
+// rebalanceShowSchema previously never declared --max-hr, so
+// validateCommandInput's generic "unknown flag" check always fired first and
+// readRebalanceInput's specific rejection message (below) was unreachable
+// dead code — the same failure never surfaced because both checks reject.
+// This test pins both halves of the fix: the schema no longer treats
+// --max-hr as unknown, and the specific message still fires once past it.
+func TestRebalanceShowSchemaAcceptsMaxHRFlagAsDeclared(t *testing.T) {
+	t.Parallel()
+
+	cmd := rebalanceDryRunCommand()
+	schemaFlags := map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07", "max-hr": "140"}
+
+	err := validateCommandInput(cmd, nil, schemaFlags)
+	if err != nil {
+		t.Fatalf("validateCommandInput() = %v, want --max-hr accepted as a declared flag", err)
+	}
+}
+
+func TestRebalanceShowMaxHRFlagReachesSpecificRejection(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["max-hr"] = "140"
+
+	err := rebalanceDryRunCommand().Run(nil, flags, client)
+
+	if err == nil || !strings.Contains(err.Error(), "max-hr is not supported") {
+		t.Fatalf("err = %v, want the specific max-hr rejection", err)
+	}
+}
+
+func TestRebalanceDryRunRejectsInvalidSessionEnvironmentFlag(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["session-environment"] = "sideways"
+
+	_, err := readRebalanceInput(flags, client)
+
 	if err == nil {
-		t.Fatalf("err = nil, want unsupported max-hr")
+		t.Fatalf("err = nil, want rejection of invalid session-environment value")
+	}
+}
+
+// TestRebalanceDryRunRejectsInvertedDateRange is Stage 6 R3: rebalance had no
+// local date validation at all, unlike its `analysis` siblings — an inverted
+// window silently wrote a proposal with scope.startDate > scope.endDate
+// instead of failing fast. Reuses validateAnalysisRange (DRY), which already
+// serves four analysis call sites.
+func TestRebalanceDryRunRejectsInvertedDateRange(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["oldest"] = "2026-06-07"
+	flags["newest"] = "2026-06-01"
+
+	_, err := readRebalanceInput(flags, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for an inverted date range", err)
+	}
+}
+
+// TestRebalanceDryRunRejectsMalformedDate is Stage 6 R6: a malformed date
+// value is a wrong-shape input, not an absent one — routing it through
+// errMissingRequired mislabelled the category while the explanation text
+// stayed accurate.
+func TestRebalanceDryRunRejectsMalformedDate(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["oldest"] = "2026-13-45"
+
+	_, err := readRebalanceInput(flags, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for a malformed date", err)
+	}
+}
+
+// TestRebalanceDryRunRejectsMalformedNowDate is Stage 6 R11:
+// rebalanceDateLockedByTime (rebalance.go) compares NowDate against session
+// dates as a raw string (date < input.NowDate). An unvalidated NowDate that
+// sorts below digit characters (e.g. "!") makes every real date compare as
+// "after now", silently defeating keepCompleted/AllowPast for a genuinely
+// past week and letting create/update operations reach the output file
+// that `rebalance accept` would apply next.
+func TestRebalanceDryRunRejectsMalformedNowDate(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
+	flags["now-date"] = "!"
+
+	err := rebalanceDryRunCommand().Run(nil, flags, client)
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue for a malformed --now-date", err)
+	}
+}
+
+// TestRebalanceDryRunNeverWritesProposalFileForMalformedNowDate is Stage 6
+// R11's observable-consequence half: pin that the proposal file is never
+// written at all when --now-date is malformed, not just that an error is
+// returned, so there is nothing left for a caller to accidentally accept.
+func TestRebalanceDryRunNeverWritesProposalFileForMalformedNowDate(t *testing.T) {
+	t.Parallel()
+
+	_, client := rebalanceTestRegistryClient(t)
+	file := filepath.Join(t.TempDir(), "rebalance.json")
+	flags := rebalanceDryRunFlags(file)
+	flags["now-date"] = "!"
+
+	_ = rebalanceDryRunCommand().Run(nil, flags, client)
+	_, statErr := os.Stat(file)
+
+	if !os.IsNotExist(statErr) {
+		t.Fatalf("proposal file exists after a rejected --now-date; want no file written (no operations ever produced)")
+	}
+}
+
+func TestRebalanceConstraintsFromFlagsCarriesSessionEnvironment(t *testing.T) {
+	t.Parallel()
+
+	constraints := rebalanceConstraintsFromFlags(map[string]string{"session-environment": "outdoor"})
+
+	if constraints.SessionEnvironment != "outdoor" {
+		t.Fatalf("session environment = %q, want outdoor", constraints.SessionEnvironment)
 	}
 }
 

@@ -51,6 +51,29 @@ func TestAnalyzeMicrocycleHappyPath(t *testing.T) {
 	}
 }
 
+// TestMicrocycleAnalysisSchemaVersionDidNotDrift pins the literal wire
+// string (D-7), not the constant against itself: a consumer parsing
+// analysis output needs a version marker to detect a future meaning
+// change. Comparing icu.MicrocycleAnalysisSchemaVersion against itself
+// would pass regardless of what the constant holds.
+func TestMicrocycleAnalysisSchemaVersionDidNotDrift(t *testing.T) {
+	t.Parallel()
+
+	if icu.MicrocycleAnalysisSchemaVersion != "icu.analysis.microcycle.v1" {
+		t.Fatalf("MicrocycleAnalysisSchemaVersion = %q, want icu.analysis.microcycle.v1", icu.MicrocycleAnalysisSchemaVersion)
+	}
+}
+
+func TestAnalyzeMicrocycleEmitsSchemaVersion(t *testing.T) {
+	t.Parallel()
+
+	got := icu.AnalyzeMicrocycle(nil, nil, nil, nil, nil)
+
+	if got.SchemaVersion != "icu.analysis.microcycle.v1" {
+		t.Fatalf("SchemaVersion = %q, want icu.analysis.microcycle.v1", got.SchemaVersion)
+	}
+}
+
 func TestAnalyzeMicrocyclePartialWeek(t *testing.T) {
 	t.Parallel()
 
@@ -372,6 +395,30 @@ func TestAnalyzeMicrocycleNilOptions(t *testing.T) {
 
 	if got.Command != "analysis microcycle" {
 		t.Fatalf("command = %s, want analysis microcycle", got.Command)
+	}
+}
+
+// TestAnalyzeMicrocycleExcludesStubActivitiesFromCompletedSessions is
+// F-19/T2.3: CompletedSessions used to be a bare len(activities), so a
+// D-24 STRAVA stub landing in the window would inflate it as a fake
+// completed session; ExcludeStubActivities must strip it before any
+// activity-count denominator in this payload sees it.
+func TestAnalyzeMicrocycleExcludesStubActivitiesFromCompletedSessions(t *testing.T) {
+	t.Parallel()
+
+	settings := icu.SportSettings{FTP: 285}
+	activities := []icu.Activity{
+		microcycleActivity("i1", "2026-06-08T07:00:00", 60, 0.72),
+		{ID: "stub1", StartDateLocal: "2026-06-09T00:00:00", StubShape: true},
+	}
+
+	got := icu.AnalyzeMicrocycle(activities, nil, nil, &settings, &icu.MicrocycleOptions{
+		StartDate: "2026-06-08", EndDate: "2026-06-14",
+		Now: time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC),
+	})
+
+	if got.PlannedVsActual.CompletedSessions != 1 {
+		t.Fatalf("CompletedSessions = %d, want 1 (the stub must not count as a completed session)", got.PlannedVsActual.CompletedSessions)
 	}
 }
 

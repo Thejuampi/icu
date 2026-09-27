@@ -152,7 +152,7 @@ func rebalanceMetricIntensityHasData(input *RebalanceInput) (float64, bool) {
 }
 
 func rebalanceMetricZoneDistributionHasData(input *RebalanceInput) (float64, bool) {
-	if input == nil || rebalanceFTP(input) == 0 {
+	if input == nil || !athleteHasFTP(input.SportSettings) {
 		return 1.0, false
 	}
 	for i := range input.Activities {
@@ -284,7 +284,7 @@ func rebalanceMetricIntensity(input *RebalanceInput) float64 {
 // rebalanceMetricZoneDistribution evaluates the zone distribution modifier.
 // Higher proportion of time above Z2 (>75% FTP) contracts the envelope.
 func rebalanceMetricZoneDistribution(input *RebalanceInput) float64 {
-	if input == nil || rebalanceFTP(input) == 0 {
+	if input == nil || !athleteHasFTP(input.SportSettings) {
 		return 1.0
 	}
 	var totalSecs float64

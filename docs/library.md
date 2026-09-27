@@ -9,6 +9,60 @@ It is intended for applications that want direct access to the Intervals.icu API
 go get github.com/Thejuampi/icu@latest
 ```
 
+## Breaking Changes
+
+**`Event.Indoor` changed from `bool` to `*bool` (wave-1a, icu-web-parity).** `nil` and `false` both
+mean "not asserted indoor" — the pre-existing zero-value semantics are preserved; only a non-nil
+pointer to `true` means the event is confirmed indoor. This lets the FTP resolver (see
+[FTP Selection](#ftp-selection) below) distinguish "we don't know" from "the API said false" — the
+Intervals.icu API frequently omits or nulls this field (151 of 253 planned events in one measured
+account carry `indoor: null`).
+
+The module has never been tagged (`git tag -l` is empty), so it is pre-1.0 and this is a sanctioned
+exported-field type change under Go's own module-versioning convention: no migration section and no
+`/v2` module path bump. Effects:
+
+- Code that read `Event.Indoor` as a bare `bool` will fail to compile and must add a nil check
+  (`ev.Indoor != nil && *ev.Indoor`). No production call site in this repository did so before this
+  change; if you vendor this package, check your own call sites.
+- `EventEx.Indoor` (the write-path struct used by `events create`/`events update` and by
+  `rebalance`/`plan` operation bodies) is **unaffected** and stays `bool`; this change does not touch
+  any write payload.
+- `Event.MarshalJSON` reproduces the old wire form byte-for-byte: `nil` and `false` both omit the
+  `"indoor"` key, and only `true` emits it. JSON consumers of this package's HTTP responses see no
+  change on the wire.
+
+## New Emit-Only Activity Fields (wave-4/A2)
+
+`Activity` gained nine new exported fields carrying wire data the Intervals.icu API already returned but this package previously dropped on unmarshal. All nine are **emit-only** (see `AGENTS.md`'s "Emit-Only Field Classification"): they round-trip through `Activity`'s JSON marshaling for a caller with programmatic needs to read verbatim, but no function in this package computes anything from them. Each is `nil` when the API omitted or nulled it — pointer + `omitempty`, matching the package's existing convention that an absent optional numeric field must never read as a measured zero.
+
+| Field | Type | JSON tag |
+| --- | --- | --- |
+| `PolarizationIndex` | `*float64` | `polarizationIndex` |
+| `SSCP` | `*float64` | `ssCp` |
+| `SSWPrime` | `*float64` | `ssWPrime` |
+| `SSPMax` | `*float64` | `ssPMax` |
+| `CarbsUsed` | `*int` | `carbsUsed` |
+| `CarbsIngested` | `*int` | `carbsIngested` |
+| `RollingFTPDelta` | `*int` | `icuRollingFtpDelta` |
+| `PowerField` | `*string` | `powerField` |
+| `HRR` | `*HRRMeasurement` | `icuHrr` |
+
+`HRRMeasurement` is a heart-rate-recovery reading with one closed 8-key shape (not an opaque blob, and not the same thing as the package's existing pure `HeartRateRecovery(hr []float64, peakIndex, windowSize int) float64` computation in `metrics.go`, which it neither wraps nor replaces):
+
+| Field | Type | JSON tag |
+| --- | --- | --- |
+| `StartIndex` | `int` | `startIndex` |
+| `EndIndex` | `int` | `endIndex` |
+| `StartTime` | `int` | `startTime` |
+| `EndTime` | `int` | `endTime` |
+| `StartBPM` | `int` | `startBpm` |
+| `EndBPM` | `int` | `endBpm` |
+| `AverageWatts` | `*int` | `averageWatts` (nullable; observed `null` on every non-null `HRR` record in this project's live-corpus fixture — only a synthetic value exercises it as populated) |
+| `HRR` | `int` | `hrr` |
+
+None of these ten fields feed `AnalyzeCyclingActivities`, `AnalyzeMicrocycle`, `BuildRebalanceProposal`, `BuildPlanProposal`, or any other analysis/rebalance/plan entry point — see `docs/analysis.md`'s "Emit-Only Activity Fields" section for the full field table, the dropped-field reasons, and both live-corpus disclosures.
+
 ## What The Package Provides
 
 - `Client`: authenticated HTTP client for the supported Intervals.icu resources
@@ -194,14 +248,102 @@ fmt.Println(estimate.TrainingLoad)
 
 The parser intentionally supports the explicit line-oriented grammar used by the CLI planning workflow: single steps like `- 10m 55-75%`, steady targets like `- 5m 90%`, and repeat blocks like `3x` with indented child steps. Unsupported text returns `ErrWorkoutDescriptionUnsupported` instead of guessing.
 
+### FTP Selection
+
+`ResolveFTP` is the single rule for choosing a session's indoor-vs-outdoor FTP, replacing three
+rules that used to disagree on the same activity. It is pure and does no I/O.
+
+```go
+selection := icu.ResolveFTP(icu.FTPRequest{
+	Type:     "VirtualRide",
+	Entity:   icu.FTPEntityActivity, // or icu.FTPEntityEvent
+	Trainer:  nil,                   // *bool; nil means "no flag evidence"
+	Settings: &sportSettings,
+})
+
+fmt.Println(selection.Watts, selection.Source, selection.Confidence)
+```
+
+`FTPEntity` selects which of two resolution tables applies. `Ride` resolves differently by entity:
+it is an outdoor-default class for a completed activity, but a flag-decided ambiguous class for a
+planned event. The two tables are deliberately not merged into one — do not assume a rule that holds
+for activities also describes events, or vice versa.
+
+`FTPRequest.Trainer` (activity) and `FTPRequest.EventIndoor` (event) are the two environment flags —
+evidence, never the sole discriminator for a type-inherent class. `FTPRequest.StubShape` marks a
+record with the STRAVA-stub shape (five keys, `_note` present, `source == "STRAVA"`); when set, it
+short-circuits both partitions to `not_a_record` before `Type` is even inspected.
+
+`FTPClass` is total over five values:
+
+| Value | Meaning |
+| --- | --- |
+| `indoor` | Type is inherently indoor (`VirtualRide`, `IndoorCycling` — see `icu.IndoorCyclingTypes`). A `false`/absent flag is ignored; only an explicit `true` can raise `Disagreement`. |
+| `outdoor` | Activity-only: `Ride` defaults to outdoor unless `Trainer` is explicitly `true`. |
+| `ambiguous` | Any other cycling type. The flag decides when present; on the activity partition an absent flag resolves `unknown`/`low` confidence, but on the event partition an absent flag still resolves confidently (`type_default`/`medium`), never `low`. |
+| `not_applicable` | A non-cycling type (`Walk`, `Run`, `VirtualRun`, `WeightTraining`, `Workout`, plus `NOTE` for events) or an empty type string. No FTP-backed value applies; `Applicable` is `false`. |
+| `not_a_record` | The record is a STRAVA stub (five keys, `_note` present, `source == "STRAVA"`) — not a real activity. Gets no load, no time, no slot, and no pairing. `Applicable` is `false`, same as `not_applicable`, but the two are distinct classes: one means "this type doesn't use FTP," the other means "this isn't a session at all." |
+
+`Confidence` is a three-tier contract, not a bare bool — the two are not equally trustworthy:
+
+| Tier | When | Operational meaning |
+| --- | --- | --- |
+| `high` | `Source: type_inherent` only | This type cannot be otherwise (a `VirtualRide` is never really outdoors). |
+| `medium` | `Source: type_default` or `flag_asserted` | **Interpretation:** proceeds and prescribes/reports at this FTP — it is weaker evidence than `high`, not a reason to distrust the number, and it is a different thing from `low`. `type_default` means the type alone decided (no per-record flag exists or was needed); `flag_asserted` means a per-record `Trainer`/`EventIndoor` flag (or `--session-environment`) decided an otherwise-ambiguous type — evidence of the same weight as the type default, not stronger proof. |
+| `low` | `Source: unknown` | No type default and no flag — only reachable on the **activity** partition's `ambiguous` class; the **event** partition (what `rebalance`/`plan` resolve) never produces `low` (an ambiguous event with no flag resolves `type_default`/`medium` instead). `Warning` is populated. Per D-10c: read/analysis call sites proceed and warn; write/prescription call sites would refuse with `ftp_confidence_low` or require `--session-environment` — but since the event partition never reaches `low`, this refusal has no live trigger in `rebalance`/`plan` today. |
+
+`FTPSelection.Disagreement` is `true` exactly when a flag contradicts its class's own default
+direction (a `false` flag on an `indoor`-class type, or a `true` flag on outdoor-default `Ride`). It
+is always `false` for `ambiguous`, which has no default to contradict — the flag decides outright.
+
+`FTPSelection.ZoneWatts` is returned by the same call that yields `Watts`, derived from
+`SportSettings.PowerZones` (percentages) and the selected watts. There is no separate zone lookup:
+the API's zone table is one array of percentages shared by whichever FTP applies.
+
+`FTPRequest.Explicit` carries `--session-environment` (`"indoor"` | `"outdoor"`, `nil`/`""` means no
+override). It decides the environment for the `ambiguous`/`type_default` classes at `medium`
+confidence, and never overrides a `type_inherent` resolution — "this type cannot be otherwise"
+outranks a per-invocation scalar. `rebalance`/`plan` refuse outright, naming the mixed week, rather
+than apply `Explicit` to a week whose sessions already imply different environments by type (a
+`VirtualRide` alongside a `Ride`): a single scalar cannot describe both, and applying it anyway would
+reintroduce the one-FTP-per-week assumption this rule removes.
+
+`ResolveFTP` is wired into `rebalance`, `plan`, and the `analysis workout` command output: `rebalance`
+and `plan` call it once per calendar event/session (`FTPEntityEvent`) via each proposal's own
+`resolveEventFTP` helper, and `analysis workout` calls it once per completed activity
+(`FTPEntityActivity`). See `docs/rebalance.md` and `docs/plan.md` for the per-session `ftpApplied`/
+`ftpSource`/`confidence` output fields, and `docs/analysis.md` for the read-path equivalents.
+
 ### Cycling analysis
 
 ```go
 analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
-	StartDate: "2026-05-01",
-	EndDate:   "2026-05-31",
+	StartDate:             "2026-05-01",
+	EndDate:               "2026-05-31",
+	MinIncludedActivities: 0, // D-4: no default; 0 disables the threshold entirely
 })
 ```
+
+`ClassifyActivityValidity` (D-2/D-24) is the single source of two judgements every consumer of an
+`[]Activity` slice must respect, rather than re-deriving them: whether an activity is a D-24
+STRAVA-stub (`Class: not_a_record`, 5 raw keys, `_note` present, `source == "STRAVA"` — not a
+session at all, excluded from every count and pairing) and, for a real activity, which
+`icu_ignore_*` scope (`power`/`hr`/`all`, D-2's per-flag/union rule) it drops out of.
+`ExcludeStubActivities`/`StubActivitiesOnly` (`activity_validity.go`) are the shared choke point
+every stub-sensitive caller passes an activity slice through exactly once — `AnalyzeCyclingActivities`,
+`AnalyzeMicrocycle`, and `rebalance`'s `normalizeRebalanceInput`/`RebalanceBaseline` all call this
+rather than re-deriving the stub predicate independently (DRY).
+
+`CyclingAnalysis.Validity` (D-3) and `CyclingAnalysis.Load.ByChannel`/`.Divergence` (D-23/T2.5) are
+documented field-by-field in `docs/analysis.md`, including the **inertness statement**: ignore-flag
+filtering is implemented and unit-tested, but has been measured `false` on every real activity in
+this project's own live-corpus test fixture (`testdata/wave2_live_corpus.json`) — do not report a
+number change as caused by ignore-flag filtering without checking `Validity.Excluded > 0` for that
+specific analysis.
+
+D-4's structural refusal (a section's `NIncluded == 0`) keeps that section's already-zero fields in
+place and adds a named warning instead of restructuring the output type into pointers (D-6 declined
+restructuring); see `docs/analysis.md` for the exact warning strings.
 
 ### Wellness analysis
 
@@ -307,6 +449,8 @@ Generated sessions in the proposal expose decision-source fields so consumers ca
 `BuildRebalanceProposal` is pure and returns an editable JSON-friendly proposal. `DynamicRebalanceTargets` derives Z1/Z2 and capacity context from sport settings or recent cycling history with robust outlier filtering. Use `MarshalRebalanceProposal` to write pretty JSON for review before applying operations through the CLI.
 
 `PreviewCalendarOperations` summarizes pending create/update/cancel ops shared by rebalance and plan proposals. `EventSourceHash` fingerprints an event for drift detection on update/cancel.
+
+`RebalanceContext.TimeAccounting` enumerates sessions whose type does not use FTP at all (D-10 `not_applicable`, e.g. `Run`/`Walk`/`WeightTraining`) with their moving time, so they are visible but never priced (`loadSource: "none"`); `LoadAccounting` is `"partial"` whenever such a session exists in the week, `"complete"` otherwise. No capacity comparison is attempted — there is no per-day time budget in this release.
 
 ### Plan proposals
 

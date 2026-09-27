@@ -120,6 +120,21 @@ func IntFlag(args map[string]string, name string, defaultVal int) int {
 	return n
 }
 
+// sessionEnvironmentFromFlags reads --session-environment (D-10c's
+// per-invocation escape hatch). Validated at this CLI boundary, not inside
+// ResolveFTP: the resolver treats any non-"indoor" string as outdoor, so a
+// typo here would silently resolve as a confident "outdoor" override instead
+// of failing loudly.
+func sessionEnvironmentFromFlags(flags map[string]string) (string, error) {
+	value := icu.StringFlag(flags, "session-environment", "")
+	if value != "" && value != icu.SessionEnvironmentIndoor && value != icu.SessionEnvironmentOutdoor {
+		return "", fmt.Errorf("session-environment must be %q or %q, got %q",
+			icu.SessionEnvironmentIndoor, icu.SessionEnvironmentOutdoor, value)
+	}
+
+	return value, nil
+}
+
 func stringFlagAlias(flags map[string]string, primary, fallback string) string {
 	if v, ok := flags[primary]; ok && v != "" {
 		return v

@@ -9,6 +9,11 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
+// defaultAnalysisFields is D-8's single choke point: every analysis/rebalance
+// command that fetches activities uses exactly this field list, never a
+// caller-supplied override (see analysisActivityFields below), so wave-2's
+// validity/pairing/compliance/tri-load fields (F-19, D-2, D-21, D-23) are
+// always present regardless of --fields/--activity-fields.
 const defaultAnalysisFields = "id,name,start_date_local,type,moving_time,distance,total_elevation_gain," +
 	"average_heartrate,max_heartrate,icu_weighted_avg_watts,icu_training_load,icu_intensity," +
 	"icu_ftp,icu_pm_cp,icu_pm_w_prime,icu_pm_p_max,icu_pm_ftp,icu_rolling_ftp," +
@@ -18,7 +23,17 @@ const defaultAnalysisFields = "id,name,start_date_local,type,moving_time,distanc
 	"average_feels_like,average_wind_speed,average_wind_gust,prevailing_wind_deg," +
 	"headwind_percent,tailwind_percent,average_altitude,min_altitude,max_altitude," +
 	"average_gradient,average_lactate,min_lactate,max_lactate,average_yaw,route_id,strain_score," +
-	"icu_ctl,icu_atl"
+	"icu_ctl,icu_atl,source,paired_event_id,compliance,hr_load,hr_load_type," +
+	"power_load,pace_load,pace_load_type,icu_ignore_power,icu_ignore_hr,icu_ignore_time"
+
+// analysisActivityFields is D-8's choke point function: the wave's own
+// evidence (F-19) is that --fields/--activity-fields have never once
+// changed what a live request needed, so this ignores any CLI-supplied
+// value outright rather than unioning it in. CyclingValidity.FieldsGuaranteed
+// records that this guarantee held for the analysis that consumed it.
+func analysisActivityFields() string {
+	return defaultAnalysisFields
+}
 
 const (
 	defaultAnalysisDays      = 28
@@ -123,7 +138,8 @@ func analysisCoachingSchema() *CommandSchema {
 			{Name: "sport-type", ValueName: "TYPE", Description: "Intervals.icu sport type.", Default: "Ride"},
 			{Name: "calendar-id", ValueName: "ID", Description: "Calendar ID."},
 			{Name: "resolve", ValueName: "BOOL", Description: "Resolve calendar event references.", Kind: commandFlagBoolean},
-			{Name: "activity-fields", ValueName: "CSV", Description: "Activity fields fetched for analysis."},
+			{Name: "activity-fields", ValueName: "CSV", Description: "Deprecated, ignored (D-8): the analysis fetch always " +
+				"uses its own fixed field list so wave-2's validity/pairing/compliance fields are never dropped."},
 			{Name: "limit", ValueName: "N", Description: "Maximum history activities fetched.", Kind: commandFlagPositiveInteger},
 			{Name: "include-adaptation", ValueName: "BOOL", Description: "Include adaptation analysis.", Kind: commandFlagBoolean},
 			{Name: "adaptation-curves", ValueName: "CSV", Description: "Power curves used by adaptation.", Default: "42d,365d"},
@@ -219,7 +235,7 @@ func readCoachingActivities(client *icu.Client, flags map[string]string, dateRan
 	query := queryFromFlags(flags, "limit")
 	query["oldest"] = dateRange.Oldest
 	query["newest"] = dateRange.Newest
-	query["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+	query["fields"] = analysisActivityFields()
 
 	var activities []icu.Activity
 	if err := client.Get("activities", nil, query, &activities); err != nil {
@@ -296,9 +312,11 @@ func readCoachingAdaptation(
 func analysisCyclingCommand() *Command {
 	return &Command{
 		Name:  "",
-		Usage: "analysis cycling [--oldest DATE --newest DATE | --days N]",
+		Usage: "analysis cycling [--oldest DATE --newest DATE | --days N] [--min-included-activities N]",
 		Description: "Compute numeric cycling analysis from completed activities. " +
-			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
+			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries. " +
+			"--min-included-activities has no default (D-4): when set and validity.included falls below it, " +
+			"load/intensity/durability refuse with a named warning instead of reporting on too few sessions.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
@@ -308,7 +326,7 @@ func analysisCyclingCommand() *Command {
 			query := queryFromFlags(flags, "limit")
 			query["oldest"] = dateRange.Oldest
 			query["newest"] = dateRange.Newest
-			query["fields"] = icu.StringFlag(flags, "fields", defaultAnalysisFields)
+			query["fields"] = analysisActivityFields()
 
 			var activities []icu.Activity
 			if err := client.Get("activities", nil, query, &activities); err != nil {
@@ -317,10 +335,11 @@ func analysisCyclingCommand() *Command {
 
 			tzInfo := analysisTimezone(explicit)
 			analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
-				StartDate:      dateRange.Oldest,
-				EndDate:        dateRange.Newest,
-				Timezone:       tzInfo.timezone,
-				TimezoneSource: tzInfo.source,
+				StartDate:             dateRange.Oldest,
+				EndDate:               dateRange.Newest,
+				Timezone:              tzInfo.timezone,
+				TimezoneSource:        tzInfo.source,
+				MinIncludedActivities: IntFlag(flags, "min-included-activities", 0),
 			})
 
 			return writeJSON(analysis)
@@ -344,7 +363,7 @@ func analysisPlanCommand() *Command {
 			activityQuery := queryFromFlags(flags, "limit")
 			activityQuery["oldest"] = dateRanges.History.Oldest
 			activityQuery["newest"] = dateRanges.History.Newest
-			activityQuery["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+			activityQuery["fields"] = analysisActivityFields()
 
 			var activities []icu.Activity
 			if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
@@ -584,7 +603,7 @@ func analysisAdaptationCommand() *Command {
 			activityQuery := queryFromFlags(flags, "limit")
 			activityQuery["oldest"] = dateRange.Oldest
 			activityQuery["newest"] = dateRange.Newest
-			activityQuery["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+			activityQuery["fields"] = analysisActivityFields()
 
 			var activities []icu.Activity
 			if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
@@ -816,10 +835,10 @@ func positiveIntFlag(flags map[string]string, name string, defaultValue int) (in
 
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, fmt.Errorf("%w: --%s must be an integer", errMissingRequired, name)
+		return 0, fmt.Errorf("%w: --%s must be an integer", errInvalidValue, name)
 	}
 	if parsed <= 0 {
-		return 0, fmt.Errorf("%w: --%s must be greater than 0", errMissingRequired, name)
+		return 0, fmt.Errorf("%w: --%s must be greater than 0", errInvalidValue, name)
 	}
 
 	return parsed, nil
@@ -835,7 +854,7 @@ func validateAnalysisRange(oldestName, oldest, newestName, newest string) error 
 		return err
 	}
 	if oldestDate.After(newestDate) {
-		return fmt.Errorf("%w: %s must be on or before %s", errMissingRequired, oldestName, newestName)
+		return fmt.Errorf("%w: %s must be on or before %s", errInvalidValue, oldestName, newestName)
 	}
 
 	return nil
@@ -846,7 +865,7 @@ func parseAnalysisDate(name, value string) (time.Time, error) {
 
 	parsed, err := time.Parse(layout, value)
 	if err != nil || parsed.Format(layout) != value {
-		return time.Time{}, fmt.Errorf("%w: %s must use YYYY-MM-DD", errMissingRequired, name)
+		return time.Time{}, fmt.Errorf("%w: %s must use YYYY-MM-DD", errInvalidValue, name)
 	}
 
 	return parsed, nil
@@ -988,7 +1007,7 @@ func readMicrocycleActivities(
 	activityQuery := queryFromFlags(flags, "limit")
 	activityQuery["oldest"] = lookbackStart
 	activityQuery["newest"] = dateRange.Newest
-	activityQuery["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+	activityQuery["fields"] = analysisActivityFields()
 
 	var activities []icu.Activity
 	if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
@@ -1084,7 +1103,7 @@ func microcycleLocation(flags map[string]string) (*time.Location, error) {
 
 	location, err := time.LoadLocation(name)
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid --timezone %s", errMissingRequired, name)
+		return nil, fmt.Errorf("%w: invalid --timezone %s", errInvalidValue, name)
 	}
 
 	return location, nil
@@ -1101,7 +1120,7 @@ func microcycleTimezoneSource(flags map[string]string) string {
 func isoWeekRange(date string, location *time.Location) (analysisRange, *time.Location, error) {
 	parsed, err := time.ParseInLocation("2006-01-02", date, location)
 	if err != nil {
-		return analysisRange{}, nil, fmt.Errorf("%w: invalid date %s", errMissingRequired, date)
+		return analysisRange{}, nil, fmt.Errorf("%w: invalid date %s", errInvalidValue, date)
 	}
 
 	weekday := int(parsed.Weekday())
@@ -1118,13 +1137,13 @@ func validateDateRange(from, to string) error {
 	start, startErr := time.Parse("2006-01-02", from)
 	end, endErr := time.Parse("2006-01-02", to)
 	if startErr != nil {
-		return fmt.Errorf("%w: invalid --from %s", errMissingRequired, from)
+		return fmt.Errorf("%w: invalid --from %s", errInvalidValue, from)
 	}
 	if endErr != nil {
-		return fmt.Errorf("%w: invalid --to %s", errMissingRequired, to)
+		return fmt.Errorf("%w: invalid --to %s", errInvalidValue, to)
 	}
 	if end.Before(start) {
-		return fmt.Errorf("%w: --from must be on or before --to", errMissingRequired)
+		return fmt.Errorf("%w: --from must be on or before --to", errInvalidValue)
 	}
 
 	return nil
@@ -1133,7 +1152,7 @@ func validateDateRange(from, to string) error {
 func addDays(date string, days int) (string, error) {
 	parsed, err := time.Parse("2006-01-02", date)
 	if err != nil {
-		return "", fmt.Errorf("%w: invalid date %s", errMissingRequired, date)
+		return "", fmt.Errorf("%w: invalid date %s", errInvalidValue, date)
 	}
 
 	return parsed.AddDate(0, 0, days).Format("2006-01-02"), nil

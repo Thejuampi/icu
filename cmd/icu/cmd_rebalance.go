@@ -27,7 +27,8 @@ func rebalanceDryRunCommand() *Command {
 			"[--target-load N] [--target-tolerance N] [--type SPORT] [--target TARGET] " +
 			"[--start-time HH:MM] [--min-session-minutes N] [--duration-step-minutes N] " +
 			"[--allocation-basis explicit_equal] [--allow-today] [--allow-past] " +
-			"[--wellness-lookback-days N] [--now-date DATE] [--max-intensity IF] [--max-watts WATTS]",
+			"[--wellness-lookback-days N] [--now-date DATE] [--max-intensity IF] [--max-watts WATTS] " +
+			"[--session-environment indoor|outdoor]",
 		Description: "Write an editable weekly load rebalance proposal without mutating Intervals.icu.",
 		Schema:      rebalanceShowSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
@@ -160,11 +161,26 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 	if newest == "" {
 		return icu.RebalanceInput{}, errMissing("newest")
 	}
+	if err := validateAnalysisRange("--oldest", oldest, "--newest", newest); err != nil {
+		return icu.RebalanceInput{}, err
+	}
+	nowDate := icu.StringFlag(flags, "now-date", newest)
+	// Stage 6 R11: rebalanceDateLockedByTime (rebalance.go) compares NowDate
+	// against session dates as a raw string; a malformed value (e.g. one that
+	// sorts below digit characters) makes every real date compare as "after
+	// now", silently defeating keepCompleted/AllowPast for a genuinely past
+	// week. Validate at the boundary rather than trusting the comparison.
+	if _, err := parseAnalysisDate("--now-date", nowDate); err != nil {
+		return icu.RebalanceInput{}, err
+	}
 	if _, ok := flags["max-hr"]; ok {
 		return icu.RebalanceInput{}, errors.New("max-hr is not supported for power rebalance sessions")
 	}
 	if target := icu.StringFlag(flags, "target", ""); target != "" && target != "POWER" {
 		return icu.RebalanceInput{}, fmt.Errorf("target %q is not supported for rebalance sessions; use POWER", target)
+	}
+	if _, err := sessionEnvironmentFromFlags(flags); err != nil {
+		return icu.RebalanceInput{}, err
 	}
 	activities, err := readRebalanceActivities(client, oldest, newest, flags)
 	if err != nil {
@@ -185,7 +201,7 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 
 	return icu.RebalanceInput{
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
-		NowDate:       icu.StringFlag(flags, "now-date", newest),
+		NowDate:       nowDate,
 		Activities:    activities,
 		Events:        events,
 		SportSettings: sportSettings,
@@ -217,6 +233,7 @@ func rebalanceShowSchema() *CommandSchema {
 			{Name: "target-tolerance", ValueName: "N", Description: "Allowed load delta from target."},
 			{Name: "type", ValueName: "SPORT", Description: "Sport type for settings/history."},
 			{Name: "target", ValueName: "TARGET", Description: "Workout target type (POWER)."},
+			{Name: "max-hr", ValueName: "BPM", Description: "Not supported: rebalance sessions are priced from POWER, not heart rate; see --target."},
 			{Name: "start-time", ValueName: "HH:MM", Description: "Default session start time."},
 			{Name: "min-session-minutes", ValueName: "N", Description: "Minimum generated session duration."},
 			{Name: "duration-step-minutes", ValueName: "N", Description: "Duration rounding step."},
@@ -235,7 +252,14 @@ func rebalanceShowSchema() *CommandSchema {
 			{Name: "mode", ValueName: "MODE", Description: "Rebalance mode."},
 			{Name: "week", ValueName: "LABEL", Description: "Optional week label."},
 			{Name: "strategy", ValueName: "NAME", Description: "Rebalance strategy."},
-			{Name: "activity-fields", ValueName: "CSV", Description: "Activity fields to fetch."},
+			{
+				Name: "session-environment", ValueName: "indoor|outdoor",
+				Description: "Explicit FTP environment override for sessions with no per-record signal (D-10c). " +
+					"Distinct from --indoor on events/ftp/sports: those set a record's own flag, this overrides " +
+					"which FTP number a proposal prices sessions at when the record leaves it ambiguous.",
+			},
+			{Name: "activity-fields", ValueName: "CSV", Description: "Deprecated, ignored (D-8): the activity fetch always " +
+				"uses its own fixed field list so wave-2's validity/pairing/compliance fields are never dropped."},
 			{Name: "limit", ValueName: "N", Description: "Activity fetch limit."},
 		}, commonAuthFlags()...),
 	}
@@ -353,7 +377,7 @@ func readRebalanceActivities(client *icu.Client, oldest, newest string, flags ma
 	query := queryFromFlags(flags, "limit")
 	query["oldest"] = oldest
 	query["newest"] = newest
-	query["fields"] = icu.StringFlag(flags, "activity-fields", defaultAnalysisFields)
+	query["fields"] = analysisActivityFields()
 	var activities []icu.Activity
 	if err := client.Get("activities", nil, query, &activities); err != nil {
 		return nil, wrapCommandError(err)
@@ -421,6 +445,8 @@ func rebalanceConstraintsFromFlags(flags map[string]string) icu.RebalanceConstra
 	constraints.Note = icu.StringFlag(flags, "note", "")
 	constraints.Level = icu.StringFlag(flags, "level", "")
 	constraints.Mode = icu.StringFlag(flags, "mode", "")
+	// Validated in readRebalanceInput before this constructor runs.
+	constraints.SessionEnvironment, _ = sessionEnvironmentFromFlags(flags)
 
 	return constraints
 }
@@ -490,7 +516,10 @@ func applyApprovedLimits(proposal *icu.RebalanceProposalFile) {
 }
 
 func readRebalanceInputFromScope(client *icu.Client, startDate, endDate string, targetLoad int, level, mode string) (icu.RebalanceInput, error) {
-	activities, err := readRebalanceActivities(client, startDate, endDate, map[string]string{"activity-fields": defaultAnalysisFields, "limit": "100"})
+	// D-8: readRebalanceActivities' own query["fields"] always comes from
+	// analysisActivityFields(), so "activity-fields" here would be dead
+	// input; only "limit" is actually consulted.
+	activities, err := readRebalanceActivities(client, startDate, endDate, map[string]string{"limit": "100"})
 	if err != nil {
 		return icu.RebalanceInput{}, err
 	}

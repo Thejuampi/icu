@@ -22,7 +22,7 @@ func TestActivityUnmarshalSnakeCaseFields(t *testing.T) {
 	}
 
 	if activity.StartDateLocal != "2026-05-30T09:53:54" || activity.MovingTime != 8355 ||
-		activity.TrainingLoad != 124 || activity.Intensity != 0.73 || activity.HRLoad != 139 ||
+		activity.TrainingLoad != 124 || activity.Intensity != 0.73 || activity.HRLoad == nil || *activity.HRLoad != 139 ||
 		activity.HRLoadType != "HRSS" || activity.TRIMP != 215.5 {
 		t.Fatalf("Activity = %+v, want snake-case fields and normalized intensity", activity)
 	}
@@ -39,7 +39,7 @@ func TestActivityUnmarshalCamelCaseHRLoadFields(t *testing.T) {
 		t.Fatalf("json.Unmarshal Activity: %v", err)
 	}
 
-	if activity.HRLoad != 145 || activity.HRLoadType != "HRSS" || activity.TRIMP != 233.91678 {
+	if activity.HRLoad == nil || *activity.HRLoad != 145 || activity.HRLoadType != "HRSS" || activity.TRIMP != 233.91678 {
 		t.Fatalf("Activity = %+v, want camel-case HR load fields", activity)
 	}
 }
