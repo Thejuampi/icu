@@ -550,17 +550,15 @@ coverage for continuous best-effort windows. Time in a configured power zone
 does not measure time at VO2max. Local calculations and reconstructed phases
 must state their sources, time basis, coverage, and methods.
 
-Anchor evidence is scoped to athlete, session or explicitly named period,
-sport/environment, and analysis purpose. Keep recording time, evidence time,
-and any known effective period distinct. A session-specific instruction does
-not become a permanent FTP or device-status rule; a stated standing constraint
-retains its explicit scope. Current configuration cannot silently rewrite an
-old ride, and a later source update does not by itself invalidate an earlier
-attribution. Unresolved historical attribution remains provisional or
-unavailable. An explicit common-reference comparison is labeled separately
-from historical execution. Re-evaluate applicability when the context or
-relevant evidence changes, without a fixed expiry interval or automatic
-"newest wins" rule.
+Anchor resolution applies the repository's
+[durable rules and scoped evidence policy](../AGENTS.md#durable-rules-and-scoped-evidence).
+Its domain scope includes athlete, activity or explicitly named period,
+sport/environment, and analysis purpose. Record the selected FTP reference,
+source/version, evidence date, and known effective period alongside derived
+results. Unresolved historical attribution leaves %FTP/zone conclusions
+provisional or unavailable. Label a deliberate common-reference comparison
+separately from historical execution; a reference change does not alter
+recorded watts or absolute-power best windows.
 
 This is a read-only skill workflow using existing downloads, not a new analysis
 command or output schema. It can deliver a sample CSV and an interactive

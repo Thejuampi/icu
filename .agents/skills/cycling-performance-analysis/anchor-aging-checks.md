@@ -1,12 +1,12 @@
 # Anchor aging checks
 
-Use when changing anchor guidance or checking whether a remembered statement still applies. This is a scenario-based review of skill instructions, not an automated model evaluation or a second implementation of the CLI FTP resolver. Run each case against the written rule and explain the selected basis, scope, uncertainty, and invariant raw evidence. Go test coverage does not prove an agent will follow the policy.
+Use when changing anchor guidance or checking whether a remembered statement still applies. These domain scenarios exercise [AGENTS.md's durable rules and scoped evidence policy](../../../AGENTS.md#durable-rules-and-scoped-evidence). This is a scenario-based review of skill instructions, not an automated model evaluation or a second implementation of the CLI FTP resolver. Run each case against the written rule and explain the selected basis, scope, uncertainty, and invariant raw evidence. Go test coverage does not prove an agent will follow the policy.
 
 ## Review method
 
 1. Identify athlete, activity/local date or requested period, sport/environment, and purpose from the case. Separate recording time, evidence time, and effective period.
 2. Read the case's evidence without adding a hidden history, physiological estimate, permanent preference, or expiry period.
-3. Apply [the anchor rule](./completed-session.md#resolve-the-training-anchor), then compare the proposed response with the independently stated wanted result below.
+3. Apply the repository policy and [its anchor-specific application](./completed-session.md#resolve-the-training-anchor), then compare the proposed response with the independently stated wanted result below.
 4. Mark a case failed if its response changes another scope, claims missing validity, reasks a settled instruction, discards conflicting evidence, or changes recorded watts. State whether it was a review judgment or an executed numerical/artifact check; do not report a scenario table as an automated behavioral test.
 
 All numbers below are fictional fixture inputs, not athlete data, physiological thresholds, or model defaults. Each case starts fresh unless it explicitly references another step in the replay. Dates are athlete-local; a named session is a specific activity identity, not every ride on that date.

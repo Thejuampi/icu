@@ -13,4 +13,4 @@ Read these from the CLI for the configured athlete.
 
 `icu workouts calculate --ftp N` calculates with the supplied value; it does not fetch live FTP or establish when that value applies. Resolve `N` for the session's environment and purpose before calling it.
 
-Retain the athlete, session/date range, sport/environment, purpose, and evidence date with any athlete-supplied override. An instruction about one ride does not become a standing FTP preference. An explicitly stated standing constraint retains its stated scope until revised; report it as a constraint rather than a fitness measurement. A device value rejected for one recording remains a snapshot to assess separately for other recordings.
+Apply [the repository evidence policy](../../../AGENTS.md#durable-rules-and-scoped-evidence) to athlete context. Retain athlete, session/date range, sport/environment, purpose, and evidence/effective dates with any FTP override. Report a prescribed reference as a constraint rather than a fitness measurement; assess each recording's device snapshot within its own context.

@@ -14,7 +14,7 @@ Prefer measured `icu` data over model inference. Read calendar NOTE events befor
 
 For completed sessions, reconstruct execution from the original recording and full time series. Intervals-detected intervals and the execution context derived from them are not coaching evidence; do not fetch or consume them in this workflow. Intent comes from the athlete and the planned WORKOUT / NOTE events. Device laps are recorded boundaries, not proof of intended work/recovery steps.
 
-Power targets are **%FTP**. For current prescriptions, read outdoor `ftp` and indoor `indoorFtp` from Ride sport settings and apply explicitly scoped athlete constraints. Completed-session attribution uses the anchor applicable to that session's date and environment; follow [completed-session.md](./completed-session.md#resolve-the-training-anchor). A past confirmation is dated evidence, not a permanent current FTP or device-status rule. HR caps come from applicable zones, or a tighter ceiling on the calendar notes / recent durable rides.
+Power targets are **%FTP**. For current prescriptions, read outdoor `ftp` and indoor `indoorFtp` from Ride sport settings and apply explicitly scoped athlete constraints. Completed-session attribution uses the anchor applicable to that session's date and environment; follow [completed-session.md](./completed-session.md#resolve-the-training-anchor), which applies the repository's [durable rules and scoped evidence policy](../../../AGENTS.md#durable-rules-and-scoped-evidence). HR caps come from applicable zones, or a tighter ceiling on the calendar notes / recent durable rides.
 
 Do not invent a missing metric. Name it, mark the section unavailable, and add CLI support only when the user asks to build it.
 
