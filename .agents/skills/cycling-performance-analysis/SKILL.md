@@ -14,7 +14,7 @@ Prefer measured `icu` data over model inference. Read calendar NOTE events befor
 
 For completed sessions, reconstruct execution from the original recording and full time series. Intervals-detected intervals and the execution context derived from them are not coaching evidence; do not fetch or consume them in this workflow. Intent comes from the athlete and the planned WORKOUT / NOTE events. Device laps are recorded boundaries, not proof of intended work/recovery steps.
 
-Power targets are **%FTP**. Read outdoor `ftp` and indoor `indoorFtp` from Ride sport settings. HR caps come from those zones, or a tighter ceiling on the calendar notes / recent durable rides.
+Power targets are **%FTP**. For current prescriptions, read outdoor `ftp` and indoor `indoorFtp` from Ride sport settings and apply explicitly scoped athlete constraints. Completed-session attribution uses the anchor applicable to that session's date and environment; follow [completed-session.md](./completed-session.md#resolve-the-training-anchor). A past confirmation is dated evidence, not a permanent current FTP or device-status rule. HR caps come from applicable zones, or a tighter ceiling on the calendar notes / recent durable rides.
 
 Do not invent a missing metric. Name it, mark the section unavailable, and add CLI support only when the user asks to build it.
 
@@ -26,6 +26,7 @@ Load a file only when the job needs it. Do not load the whole pack for a daily d
 |------|-----------|
 | [athlete.md](./athlete.md) | How to resolve FTP, zones, timezone, and language from the CLI |
 | [completed-session.md](./completed-session.md) | Any completed-ride review, full recording, or sample-by-sample execution analysis |
+| [anchor-aging-checks.md](./anchor-aging-checks.md) | Editing anchor guidance or checking reused evidence across dates, sessions, environments, or source updates |
 | [session-library.md](./session-library.md) | Writing or rewriting workouts |
 | [report-data-contract.md](./report-data-contract.md) | Full weekly or 4-week report |
 | **intervals-icu** skill | Original-file / stream downloads, auth diagnose, event writes, desc parser, `plan` / `rebalance`, power-fill, load repair |
@@ -105,7 +106,7 @@ Chat language follows the user. Calendar NOTE language follows existing notes, t
 - HRV: use `recentMean`, `baselineMean`, `baselineMad`, `zScore`, `zScoreSource`. Treat raw `ratio` as context, not a stop/go rule.
 - Recovery score: `analyses.wellness.sleep.scoreName` is the source of truth. Prefer Zepp BioCharge / `zepp_hybridcharge`. Intervals `sleepScore` is fallback. Read `fallbackScoreName` and `warnings`.
 - Today's empty wellness record means "not logged yet," not a red flag. Use the latest complete day and say so.
-- `ftpApplied` `confidence: medium` is usable. Mention it only when the session environment looks wrong. `confidence: high` needs no mention.
+- `ftpApplied` provenance/confidence describes that resolver result's scope, not measured fitness or validity for another date/environment. `confidence: medium` is usable with applicable evidence. Disclose material scope/source disagreements even with `confidence: high`; completed-session reviews report their chosen anchor and basis.
 - When `context.timeAccounting.loadAccounting` is `partial`, say the weekly load excludes the enumerated non-cycling sessions. Do not present that total as complete.
 
 ## Metric policy
@@ -143,3 +144,4 @@ A coaching question is not permission to start a CLI change.
 | "Detected intervals provide useful execution context" | Reconstruct from the recording. Athlete intent and planned notes provide context; detected boundaries and labels do not. |
 | "No intervals were detected, so there was no quality work" | Inspect the complete power, HR, cadence, timestamps, and device laps. |
 | "Time in Z5 proves time at VO2max" | A power-zone count is not an oxygen-consumption measurement. |
+| "The athlete once rejected that device FTP, so keep using the replacement" | Check the confirmation's session, date/period, athlete, environment, and purpose. Preserve old attribution and resolve each new context. |
