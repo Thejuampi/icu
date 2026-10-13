@@ -14,6 +14,17 @@ Keep `AGENTS.md` focused on project-wide contributor policy: architecture, quali
 
 Treat this file as mandatory workspace guidance. If a user request, prior agent response, or local convenience conflicts with these instructions, follow this file and call out the conflict.
 
+## Durable Rules and Scoped Evidence
+
+Apply this policy when turning findings into reusable guidance, decision rules, documentation, or saved context. Generalize the reasoning and applicability conditions, not an incident's temporary value or status. Domain-specific applications belong in the relevant skill.
+
+- Preserve the source and relevant scope: subject, record or period, environment, version, and purpose. Separate when an event occurred, when evidence was supplied/retrieved, and when it applies. Unknown validity stays unknown; retrieval order does not establish it.
+- Distinguish observations and configuration snapshots from estimates, goals, and user constraints. A rejected candidate does not establish a replacement or permanently invalidate its source or value.
+- Apply explicit instructions within their stated scope. An answer about one case does not become a standing preference; an explicit standing instruction retains its scope until revised or its stated condition ends. Scope checks must not repeatedly reopen a settled instruction.
+- Reassess applicability when relevant context or evidence changes. A later state does not silently rewrite an earlier result. Preserve historical provenance; label retrospective corrections and deliberate comparisons separately.
+- Resolve conflicts by applicability, source meaning, and evidence. Do not invent a universal source ranking, an arbitrary expiry, or a rule that the newest, largest, or smallest value always wins. Preserve unresolved uncertainty in dependent conclusions.
+- Before accepting a reusable rule, review wanted outcomes across future and historical use, changed subjects/environments/versions/purposes, missing or conflicting evidence, and explicit instruction changes. Include recovery or return to a previously rejected state where relevant. Document applicable scenarios and counterexamples in the skill or tests; distinguish manual scenario review from executed behavioral tests.
+
 ## Mandatory Quality Gates
 
 Every change must pass ALL of these before being considered done:
@@ -50,7 +61,7 @@ Public changes are not done until the matching documentation is updated in the s
 - `docs/plan.md`: intent → show/preview/accept workflow for explicit multi-session calendar writes
 - `docs/library.md`: usage-oriented guide for the reusable Go package
 - `docs/api/README.md`: OpenAPI snapshot role, provenance, and when to use it
-- `AGENTS.md`: contributor policy, quality gates, and documentation expectations
+- `AGENTS.md`: contributor policy, durable rules and scoped evidence, quality gates, and documentation expectations
 
 ### Required Documentation Practice
 
@@ -169,6 +180,7 @@ All of the following must be true:
 - [ ] `gofumpt -w .` applied
 - [ ] Relevant docs updated in the same change
 - [ ] Documented examples verified against current CLI behavior
+- [ ] Reusable rules reviewed for scope changes and temporal validity; relevant scenarios recorded
 - [ ] Dynamic decision rules avoid hidden hardcoded thresholds and include backtesting/edge-case coverage
 - [ ] Explicit note added when a change truly has no documentation impact
 - [ ] No API keys, tokens, or secrets in commits
