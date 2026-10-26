@@ -183,3 +183,22 @@ func TestParseWorkoutDescriptionNativeRepeatSyntax(t *testing.T) {
 		})
 	}
 }
+
+func TestParseWorkoutDescriptionAcceptsCompoundDurations(t *testing.T) {
+	t.Parallel()
+
+	doc, err := icu.ParseWorkoutDescription("- 2m30s 80%\n- 1h30m 60%\n- 1h0m5s 50%")
+	if err != nil {
+		t.Fatalf("ParseWorkoutDescription error = %v", err)
+	}
+	if len(doc.Steps) != 3 || doc.Steps[0].Duration != 150 || doc.Steps[1].Duration != 5400 ||
+		doc.Steps[2].Duration != 3605 {
+		t.Fatalf("steps = %+v, want 150s, 5400s, 3605s", doc.Steps)
+	}
+
+	for _, bad := range []string{"- 30s2m 80%", "- 2m2m 80%", "- 0m0s 80%"} {
+		if _, err := icu.ParseWorkoutDescription(bad); !errors.Is(err, icu.ErrWorkoutDescriptionUnsupported) {
+			t.Fatalf("ParseWorkoutDescription(%q) error = %v, want unsupported", bad, err)
+		}
+	}
+}

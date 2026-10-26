@@ -17,9 +17,11 @@ var (
 	repeatLinePattern = regexp.MustCompile(`^(\d+)x$`)
 	// Intervals.icu writes steps as "- 12m Ramp 50-58% FTP": an optional
 	// keyword sits between the duration and the target, and the unit may be
-	// repeated after the percent sign.
-	stepLinePattern = regexp.MustCompile(
-		`^-\s*(\d+(?:\.\d+)?)([hms])\s+(?:([A-Za-z]+)\s+)?(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?%\s*(.*)$`,
+	// repeated after the percent sign. Durations may be compound ("1h30m",
+	// "2m30s"), as intervals.icu accepts them.
+	durationPartPattern = regexp.MustCompile(`(\d+(?:\.\d+)?)([hms])`)
+	stepLinePattern     = regexp.MustCompile(
+		`^-\s*((?:\d+(?:\.\d+)?[hms])+)\s+(?:([A-Za-z]+)\s+)?(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?%\s*(.*)$`,
 	)
 )
 
@@ -136,24 +138,24 @@ func parseWorkoutDescriptionStep(line string) (WorkoutStep, error) {
 		return WorkoutStep{}, fmt.Errorf("%w: %q", ErrWorkoutDescriptionUnsupported, line)
 	}
 
-	duration, err := parseWorkoutDuration(matches[1], matches[2])
+	duration, err := parseWorkoutDuration(matches[1])
 	if err != nil {
 		return WorkoutStep{}, err
 	}
 
-	start, err := strconv.ParseFloat(matches[4], 64)
+	start, err := strconv.ParseFloat(matches[3], 64)
 	if err != nil {
 		return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
 	}
 
 	step := WorkoutStep{
 		Duration: duration,
-		Text:     workoutStepText(matches[3], matches[6]),
+		Text:     workoutStepText(matches[2], matches[5]),
 		Power:    &WorkoutTarget{Units: "%ftp"},
 	}
 
-	if matches[5] != "" {
-		end, parseErr := strconv.ParseFloat(matches[5], 64)
+	if matches[4] != "" {
+		end, parseErr := strconv.ParseFloat(matches[4], 64)
 		if parseErr != nil {
 			return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
 		}
@@ -183,21 +185,48 @@ func workoutStepText(keyword, trailing string) string {
 	return strings.Join(parts, " ")
 }
 
-func parseWorkoutDuration(value, unit string) (int, error) {
+// parseWorkoutDuration sums a duration token made of one or more
+// number+unit parts ("10m", "1h30m", "2m30s"). Each unit may appear once and
+// units must run from larger to smaller, matching intervals.icu.
+func parseWorkoutDuration(token string) (int, error) {
+	parts := durationPartPattern.FindAllStringSubmatch(token, -1)
+	if len(parts) == 0 {
+		return 0, fmt.Errorf("%w: invalid duration %q", ErrWorkoutDescriptionUnsupported, token)
+	}
+
+	total := 0
+	lastRank := 0
+	for _, part := range parts {
+		rank, seconds, err := workoutDurationPart(part[1], part[2])
+		if err != nil {
+			return 0, fmt.Errorf("%w (in %q)", err, token)
+		}
+		if rank <= lastRank {
+			return 0, fmt.Errorf("%w: invalid duration order %q", ErrWorkoutDescriptionUnsupported, token)
+		}
+		lastRank = rank
+		total += seconds
+	}
+	if total <= 0 {
+		return 0, fmt.Errorf("%w: invalid duration %q", ErrWorkoutDescriptionUnsupported, token)
+	}
+
+	return total, nil
+}
+
+func workoutDurationPart(value, unit string) (int, int, error) {
 	number, err := strconv.ParseFloat(value, 64)
-	if err != nil || number <= 0 {
-		return 0, fmt.Errorf("%w: invalid duration %q%s", ErrWorkoutDescriptionUnsupported, value, unit)
+	if err != nil || number < 0 {
+		return 0, 0, fmt.Errorf("%w: invalid duration %q%s", ErrWorkoutDescriptionUnsupported, value, unit)
 	}
 
 	switch unit {
 	case "h":
-		return int(math.Round(number * float64(secondsPerHour))), nil
+		return 1, int(math.Round(number * float64(secondsPerHour))), nil
 	case "m":
-		return int(math.Round(number * float64(secondsPerMinute))), nil
-	case "s":
-		return int(math.Round(number)), nil
+		return 2, int(math.Round(number * float64(secondsPerMinute))), nil
 	default:
-		return 0, fmt.Errorf("%w: invalid duration unit %q", ErrWorkoutDescriptionUnsupported, unit)
+		return 3, int(math.Round(number)), nil
 	}
 }
 
