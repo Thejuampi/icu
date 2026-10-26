@@ -405,8 +405,13 @@ func readRebalanceSportSettings(client *icu.Client, flags map[string]string) (*i
 	if err := client.Get("sport-settings", []string{sport}, nil, &settings); err != nil {
 		return nil, wrapCommandError(err)
 	}
+	profile, err := loadTrainingProfile()
+	if err != nil {
+		return nil, err
+	}
+	merged, _ := icu.MergeProfileFTP(&settings, profile)
 
-	return &settings, nil
+	return merged, nil
 }
 
 func readRebalanceWellness(client *icu.Client, oldest, newest string, flags map[string]string) (*icu.WellnessAnalysis, error) {

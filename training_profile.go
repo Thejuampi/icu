@@ -218,3 +218,36 @@ func z2StepSeconds(steps []WorkoutStep, low, high float64) int {
 
 	return total
 }
+
+// MergeProfileFTP fills FTP numbers Intervals.icu does not have from the
+// local profile. Intervals.icu stays the source of truth: a configured
+// profile value never overrides a non-zero API value, it only produces a
+// warning when the two disagree. Returns a copy; settings is not modified.
+func MergeProfileFTP(settings *SportSettings, profile *TrainingProfile) (*SportSettings, []string) {
+	merged := SportSettings{}
+	if settings != nil {
+		merged = *settings
+	}
+	if profile == nil {
+		return &merged, nil
+	}
+	var warnings []string
+	fill := func(label string, api *int, local int) {
+		switch {
+		case local <= 0:
+		case *api == 0:
+			*api = local
+			warnings = append(warnings, fmt.Sprintf(
+				"ftp: %s FTP %d W taken from the local profile (not set in Intervals.icu)", label, local,
+			))
+		case *api != local:
+			warnings = append(warnings, fmt.Sprintf(
+				"ftp: Intervals.icu %s FTP %d W differs from profile %d W; using Intervals.icu", label, *api, local,
+			))
+		}
+	}
+	fill("outdoor", &merged.FTP, profile.OutdoorFTP)
+	fill("indoor", &merged.IndoorFTP, profile.IndoorFTP)
+
+	return &merged, warnings
+}

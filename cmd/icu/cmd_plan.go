@@ -197,7 +197,7 @@ func readPlanInput(flags map[string]string, client *icu.Client) (icu.PlanInput, 
 		return icu.PlanInput{}, err
 	}
 	sportType := icu.StringFlag(flags, "type", intent.Constraints.DefaultType)
-	sportSettings, err := readPlanSportSettings(client, sportType)
+	sportSettings, ftpWarnings, err := readPlanSportSettings(client, sportType)
 	if err != nil {
 		return icu.PlanInput{}, err
 	}
@@ -208,22 +208,27 @@ func readPlanInput(flags map[string]string, client *icu.Client) (icu.PlanInput, 
 		Activities:    activities,
 		Events:        events,
 		SportSettings: sportSettings,
+		Warnings:      ftpWarnings,
 		Intent:        intent,
 		AllowToday:    BoolFlag(flags, "allow-today"),
 		AllowPast:     BoolFlag(flags, "allow-past"),
 	}, nil
 }
 
-func readPlanSportSettings(client *icu.Client, sportType string) (*icu.SportSettings, error) {
-	if sportType == "" {
-		return &icu.SportSettings{}, nil
+func readPlanSportSettings(client *icu.Client, sportType string) (*icu.SportSettings, []string, error) {
+	settings := &icu.SportSettings{}
+	if sportType != "" {
+		if err := client.Get("sport-settings", []string{sportType}, nil, settings); err != nil {
+			return nil, nil, wrapCommandError(err)
+		}
 	}
-	var settings icu.SportSettings
-	if err := client.Get("sport-settings", []string{sportType}, nil, &settings); err != nil {
-		return nil, wrapCommandError(err)
+	profile, err := loadTrainingProfile()
+	if err != nil {
+		return nil, nil, err
 	}
+	merged, warnings := icu.MergeProfileFTP(settings, profile)
 
-	return &settings, nil
+	return merged, warnings, nil
 }
 
 func readPlanIntent(flags map[string]string) (icu.PlanIntent, error) {

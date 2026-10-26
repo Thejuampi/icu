@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -81,5 +83,28 @@ func TestPlanProfileWarningsIncludeMonotonyWithoutProfile(t *testing.T) {
 	}}, nil)
 	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], "monotony:") {
 		t.Fatalf("warnings = %v", warnings)
+	}
+}
+
+//nolint:paralleltest // swaps the process-wide config store.
+func TestReadPlanSportSettingsFillsIndoorFTPFromProfile(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	if err := icu.SaveConfig(&icu.Config{Profile: &icu.TrainingProfile{IndoorFTP: 250}}); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		_, _ = response.Write([]byte(`{"ftp":266,"types":["Ride","VirtualRide"]}`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	settings, warnings, err := readPlanSportSettings(client, "Ride")
+	if err != nil || settings.FTP != 266 || settings.IndoorFTP != 250 || len(warnings) != 1 {
+		t.Fatalf("settings = %+v, warnings = %v, err = %v", settings, warnings, err)
+	}
+	rebalance, err := readRebalanceSportSettings(client, map[string]string{"type": "Ride"})
+	if err != nil || rebalance.IndoorFTP != 250 {
+		t.Fatalf("rebalance settings = %+v, %v", rebalance, err)
 	}
 }

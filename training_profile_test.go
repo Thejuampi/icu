@@ -94,3 +94,55 @@ func TestValidatePlanAgainstProfile(t *testing.T) {
 		t.Fatal("nil profile should not warn")
 	}
 }
+
+func TestMergeProfileFTPFillsGapsOnly(t *testing.T) {
+	t.Parallel()
+
+	api := &icu.SportSettings{FTP: 266}
+	merged, warnings := icu.MergeProfileFTP(api, &icu.TrainingProfile{OutdoorFTP: 270, IndoorFTP: 250})
+	if merged.FTP != 266 || merged.IndoorFTP != 250 || api.IndoorFTP != 0 {
+		t.Fatalf("merged = %+v, api = %+v", merged, api)
+	}
+	joined := strings.Join(warnings, "\n")
+	if !strings.Contains(joined, "indoor FTP 250 W taken from the local profile") ||
+		!strings.Contains(joined, "outdoor FTP 266 W differs from profile 270 W") {
+		t.Fatalf("warnings = %v", warnings)
+	}
+
+	if got, warnings := icu.MergeProfileFTP(nil, nil); got == nil || got.FTP != 0 || warnings != nil {
+		t.Fatalf("nil merge = %+v %v", got, warnings)
+	}
+}
+
+func TestPlanPricesIndoorSessionsAtProfileIndoorFTP(t *testing.T) {
+	t.Parallel()
+
+	settings, _ := icu.MergeProfileFTP(&icu.SportSettings{FTP: 266, Types: []string{"Ride", "VirtualRide"}},
+		&icu.TrainingProfile{IndoorFTP: 250})
+	indoor := true
+	proposal := icu.BuildPlanProposal(&icu.PlanInput{
+		NowDate:       "2026-11-01",
+		SportSettings: settings,
+		Warnings:      []string{"ftp: note"},
+		Intent: icu.PlanIntent{
+			Oldest: "2026-11-02", Newest: "2026-11-08",
+			Constraints: icu.PlanConstraints{AllowCreate: true, DefaultType: "Ride", DefaultStartTime: "07:00"},
+			Sessions: []icu.PlanSessionDraft{
+				{Date: "2026-11-02", Name: "Trainer", Type: "Ride", Indoor: &indoor, Desc: "- 60m 70%"},
+				{Date: "2026-11-03", Name: "Zwift", Type: "VirtualRide", Desc: "- 60m 70%"},
+				{Date: "2026-11-04", Name: "Road", Type: "Ride", Desc: "- 60m 70%"},
+			},
+		},
+	})
+
+	applied := map[string]int{}
+	for _, session := range proposal.Sessions {
+		applied[session.Name] = session.FTPApplied
+	}
+	if applied["Trainer"] != 250 || applied["Zwift"] != 250 || applied["Road"] != 266 {
+		t.Fatalf("ftpApplied = %v, want indoor 250 and outdoor 266 (%+v)", applied, proposal.Validation)
+	}
+	if !strings.Contains(strings.Join(proposal.Validation.Warnings, "\n"), "ftp: note") {
+		t.Fatalf("warnings = %v", proposal.Validation.Warnings)
+	}
+}
