@@ -22,6 +22,15 @@ Use this skill when the task is about reading, changing, importing, exporting, o
 - Never print, store, or invent API keys. Use `icu config diagnose` for safe credential checks.
 - For destructive or broad writes, confirm intent unless the user already gave explicit instructions.
 
+## Validate Numbers And Challenge Requests
+
+- Treat CLI analysis output as derived data. Before you state a number that drives a decision (FTP, CTL/ATL/TSB, ramp, weekly load, decoupling, power-curve deltas), check it against the raw API values: `icu sports get Ride` for `ftp`/`indoor_ftp`, `icu wellness list --oldest D --newest D` for daily `ctl`/`atl`, and `icu activities list` / `icu events get <id>` for per-session load. Say which source each number comes from and its date. If the derived and raw numbers disagree, report both and do not guess.
+- Use today's wellness for current fitness, not the last activity. Ignore projected future wellness rows.
+- Price each session at the right FTP: indoor (`VirtualRide` or `"indoor": true` in the intent) at indoor FTP, outdoor at outdoor FTP. If Intervals.icu has no `indoor_ftp`, the CLI uses the local profile (`icu profile show`) and says so in an `ftp:` warning.
+- Challenge athlete requests that do not make sense before you write anything. Examples: a weekly CTL ramp above the athlete's `maxRampPerWeek`, intensity stacked on consecutive days while TSB is already very negative, an intent FTP above the current or target FTP, several identical sessions in one week (`monotony:` warnings), sessions outside the athlete's usual days/times, or a week below their Z2 floor. Explain the concern with the numbers, propose an alternative, and only proceed when the athlete confirms.
+- Do not invent thresholds. Use the athlete's profile (`icu profile set ...`) and Intervals.icu settings; when a cap is not configured, say so instead of assuming one.
+- Before writing, run `icu plan preview --file plan.json` and read `projection` (end-of-period CTL/ATL/TSB, weekly ramp) and every warning. `plan accept` and `events update` save a local backup of each changed event; if a change was wrong, `icu events revert --id ID --dry-run` and then without `--dry-run` restore it.
+
 ## Setup And Diagnostics
 
 ```bash
