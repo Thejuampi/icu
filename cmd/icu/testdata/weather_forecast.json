@@ -1,0 +1,137 @@
+{
+  "forecasts": [
+    {
+      "id": 0,
+      "provider": "OPEN_WEATHER",
+      "location": "New York, US",
+      "label": "Home",
+      "lat": 40.7,
+      "lon": -73.9,
+      "error": null,
+      "daily": [
+        {
+          "id": "2026-10-26",
+          "pressure": 1023.0,
+          "humidity": 46.0,
+          "dew_point": 9.656666,
+          "clouds": 9.0,
+          "wind_speed": 2.23,
+          "wind_deg": 254.0,
+          "wind_gust": 4.58,
+          "rain": 0.0,
+          "snow": 0.0,
+          "weather": [
+            {
+              "id": 800,
+              "main": null,
+              "description": "sky is clear",
+              "icon": "01d"
+            }
+          ],
+          "sunrise": "07:19",
+          "sunset": "18:00",
+          "moon_phase": 0.0,
+          "temp": {
+            "day": 19.61,
+            "night": 17.01,
+            "eve": 19.83,
+            "morn": 8.49,
+            "min": 8.3,
+            "max": 21.78
+          },
+          "feels_like": {
+            "day": 18.83,
+            "night": 16.52,
+            "eve": 19.02,
+            "morn": 7.68
+          }
+        },
+        {
+          "id": "2026-10-27",
+          "pressure": 1029.0,
+          "humidity": 44.0,
+          "dew_point": 4.328959,
+          "clouds": 0.0,
+          "wind_speed": 3.44,
+          "wind_deg": 20.0,
+          "wind_gust": 8.12,
+          "rain": 0.0,
+          "snow": 0.0,
+          "weather": [
+            {
+              "id": 800,
+              "main": null,
+              "description": "sky is clear",
+              "icon": "01d"
+            }
+          ],
+          "sunrise": "07:20",
+          "sunset": "17:58",
+          "moon_phase": 0.0,
+          "temp": {
+            "day": 14.97,
+            "night": 11.69,
+            "eve": 12.75,
+            "morn": 11.87,
+            "min": 10.82,
+            "max": 16.62
+          },
+          "feels_like": {
+            "day": 13.67,
+            "night": 10.77,
+            "eve": 11.39,
+            "morn": 10.97
+          }
+        }
+      ],
+      "hourly": [
+        {
+          "id": "2026-10-26 17:00",
+          "pressure": 1021.0,
+          "humidity": 39.0,
+          "dew_point": 6.662925,
+          "clouds": 13.0,
+          "wind_speed": 1.73,
+          "wind_deg": 265.0,
+          "wind_gust": 3.72,
+          "rain": 0.0,
+          "snow": 0.0,
+          "weather": [
+            {
+              "id": 801,
+              "main": null,
+              "description": "few clouds",
+              "icon": "02d"
+            }
+          ],
+          "temp": 21.15,
+          "feels_like": 20.34,
+          "mins": 180
+        },
+        {
+          "id": "2026-10-26 20:00",
+          "pressure": 1021.0,
+          "humidity": 52.0,
+          "dew_point": 8.51466,
+          "clouds": 7.0,
+          "wind_speed": 2.23,
+          "wind_deg": 268.0,
+          "wind_gust": 4.58,
+          "rain": 0.0,
+          "snow": 0.0,
+          "weather": [
+            {
+              "id": 800,
+              "main": null,
+              "description": "clear sky",
+              "icon": "01n"
+            }
+          ],
+          "temp": 18.55,
+          "feels_like": 17.82,
+          "mins": 180
+        }
+      ]
+    }
+  ]
+}

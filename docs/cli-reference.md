@@ -526,13 +526,15 @@ Invoke these commands as `icu activity <id> <action>`.
 ## weather
 
 - `config`
-  Invocation: `icu weather config` or `icu weather config update --lat LAT --lon LON [--label NAME] [--location NAME] [--provider NAME] [--enabled true|false]`
-  Notes: update mode is triggered by any of `--lat`, `--lon`, `--label`, `--location`, `--provider`, or `--enabled`. The current forecast is fetched first and merged with the supplied flags, so `--enabled false` works without re-specifying coordinates.
+  Invocation: `icu weather config` or `icu weather config update [--id ID] [--lat LAT --lon LON] [--label NAME] [--location NAME] [--provider NAME] [--enabled true|false]`
+  Notes: update mode is triggered by any of `--id`, `--lat`, `--lon`, `--label`, `--location`, `--provider`, or `--enabled`. The full forecast list is fetched first; only the selected entry is changed and every other location is sent back unchanged. The entry is chosen by `--id`, or is the only entry when exactly one exists (with several entries `--id` is required). An empty config or an `--id` that does not exist creates a new entry, which requires `--lat` and `--lon` and defaults to `--provider OPEN_WEATHER` and `--enabled true`. Coordinates must be numeric within ±90/±180. The command fails if the update response contains no forecasts.
   Example: `icu weather config --lat -34.60 --lon -58.38 --label "Buenos Aires" --enabled true`
   Example: `icu weather config --enabled false`
+  Example: `icu weather config --id 1 --label Work`
 
 - `forecast`
   Invocation: `icu weather forecast`
+  Notes: Returns each configured location (`id`, `provider`, `label`, `location`, `lat`, `lon`) with the provider's `daily` (about 14 days) and `hourly` (about 40 rows) forecast arrays passed through verbatim, plus `error` when the provider reported one. These arrays are not in the OpenAPI snapshot.
   Example: `icu weather forecast`
 
 ## wellness
