@@ -21,6 +21,8 @@ Use this skill when the task is about reading, changing, importing, exporting, o
 - Prefer narrow reads with date ranges, `--fields`, and resource-specific filters.
 - Never print, store, or invent API keys. Use `icu config diagnose` for safe credential checks.
 - For destructive or broad writes, confirm intent unless the user already gave explicit instructions.
+- After every write (`events create/update/delete/revert`, `plan accept`, `rebalance accept`, `sports update`, `wellness update`, `activity update`, ...), re-read what you wrote (`icu events get <id>`, `icu events list --oldest D --newest D`, `icu sports get TYPE`, ...) and verify type, date, name, description line breaks, `moving_time` and `icu_training_load` match what you intended. Intervals.icu may recalculate or normalize fields. Report any mismatch; do not assume a write succeeded as sent.
+- Put multi-line descriptions in a file and pass `--desc-file PATH`. The CLI rejects literal `\n`, `\r`, `\t` sequences in descriptions. For non-cycling workouts (`WeightTraining`, `Run`, ...) set `--type` and give `--moving-time`/`--training-load`; `--calculate-load` is FTP-based and cycling-only.
 
 ## Validate Numbers And Challenge Requests
 
@@ -216,7 +218,7 @@ Useful wellness fields: `id`, `weight`, `restingHR`, `hrv`, `hrvSDNN`, `sleepSec
 ```bash
 icu events list --oldest 2026-05-20 --newest 2026-05-31
 icu events list --oldest 2026-05-20 --newest 2026-05-31 --category WORKOUT
-icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc "- 15m Ramp 55-72% FTP\n- 4x8m 105% FTP\n- 10m Ramp 55-50% FTP"
+icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc $'- 15m Ramp 55-72% FTP\n- 4x8m 105% FTP\n- 10m Ramp 55-50% FTP'
 ```
 
 **Prefer `icu plan` for multi-session calendar writes.** Build an intent JSON with explicit sessions, then:
@@ -281,10 +283,10 @@ When planning day-by-day decisions based on recovery markers (HRV, resting HR, s
 
 ```bash
 # Primary session: contributes to projected load
-icu events create --category WORKOUT --type Ride --name "4x5 VO2Max" --start-date "2026-06-16T07:00:00" --moving-time 4380 --training-load 91 --desc "- 15m Ramp 55-72% FTP\n4x\n  - 5m 112-115% FTP\n  - 4m 60% FTP\n- 22m Ramp 68-55% FTP"
+icu events create --category WORKOUT --type Ride --name "4x5 VO2Max" --start-date "2026-06-16T07:00:00" --moving-time 4380 --training-load 91 --desc $'- 15m Ramp 55-72% FTP\n4x\n  - 5m 112-115% FTP\n  - 4m 60% FTP\n- 22m Ramp 68-55% FTP'
 
 # Alternative session: does NOT contribute to projected load
-# Note: the CLI treats the two characters '\n' literally. Use your shell's real newline mechanism
+# Note: the CLI rejects the two characters '\n' in descriptions. Use --desc-file or your shell's real newline mechanism
 # (e.g. PowerShell backtick-n: `n, bash $'...\n...') so the description renders with line breaks.
 icu events create --category NOTE --type Ride --name "ALT B — 90m Z2" --start-date "2026-06-16T07:00:00" --desc "Do if HRV <= baseline, resting HR elevated, or legs flat.`n- 15m 55-70%`n- 60m 68-72%`n- 15m 55-60%"
 ```

@@ -16,6 +16,8 @@ Use this skill when the task is about reading, changing, importing, exporting, o
 - Prefer narrow reads with date ranges, `--fields`, and resource-specific filters.
 - Never print, store, or invent API keys. Use `icu config diagnose` for safe credential checks.
 - For destructive or broad writes, confirm intent unless the user already gave explicit instructions.
+- After every write (`events create/update/delete/revert`, `plan accept`, `rebalance accept`, `sports update`, `wellness update`, `activity update`, ...), re-read what you wrote (`icu events get <id>`, `icu events list --oldest D --newest D`, `icu sports get TYPE`, ...) and verify type, date, name, description line breaks, `moving_time` and `icu_training_load` match what you intended. Intervals.icu may recalculate or normalize fields. Report any mismatch; do not assume a write succeeded as sent.
+- Put multi-line descriptions in a file and pass `--desc-file PATH`. The CLI rejects literal `\n`, `\r`, `\t` sequences in descriptions. For non-cycling workouts (`WeightTraining`, `Run`, ...) set `--type` and give `--moving-time`/`--training-load`; `--calculate-load` is FTP-based and cycling-only.
 
 ## Validate Numbers And Challenge Requests
 
@@ -103,7 +105,7 @@ Useful wellness fields: `id`, `weight`, `restingHR`, `hrv`, `hrvSDNN`, `sleepSec
 ```bash
 icu events list --oldest 2026-05-20 --newest 2026-05-31
 icu events list --oldest 2026-05-20 --newest 2026-05-31 --category WORKOUT
-icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc "- 20m 60% Z2\n- 4x8m 105%\n- 10m 55% cooldown"
+icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc $'- 20m 60% Z2\n- 4x8m 105%\n- 10m 55% cooldown'
 ```
 
 Common event categories: `WORKOUT`, `RACE_A`, `RACE_B`, `RACE_C`, `NOTE`, `PLAN`, `HOLIDAY`, `SICK`, `INJURED`, `SET_EFTP`, `FITNESS_DAYS`, `SEASON_START`, `TARGET`, `SET_FITNESS`.
