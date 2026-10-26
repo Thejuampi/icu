@@ -916,7 +916,7 @@ func TestMicrocycleDateRangeUsesExplicitRange(t *testing.T) {
 	got, _, err := microcycleDateRange(map[string]string{
 		"from": "2026-06-08",
 		"to":   "2026-06-14",
-	}, now)
+	}, now, time.UTC)
 
 	if err != nil || got.Oldest != microcycleTestWeekStart || got.Newest != microcycleTestWeekEnd {
 		t.Fatalf("microcycleDateRange explicit = %+v %v, want 2026-06-08 2026-06-14 nil", got, err)
@@ -930,7 +930,7 @@ func TestMicrocycleDateRangeRejectsConflicts(t *testing.T) {
 		"week": "2026-06-08",
 		"from": "2026-06-08",
 		"to":   "2026-06-14",
-	}, time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC))
+	}, time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC), time.UTC)
 
 	if err == nil {
 		t.Fatal("expected conflicting date selector error, got nil")
@@ -946,11 +946,10 @@ func TestMicrocycleDateRangeRejectsInvalidInputs(t *testing.T) {
 		{"from": "2026-06-15", "to": "2026-06-14"},
 		{"date": "not-a-date"},
 		{"week": "2026-06-08", "date": "2026-06-09"},
-		{"timezone": "Invalid/Zone"},
 	}
 
 	for _, flags := range cases {
-		_, _, err := microcycleDateRange(flags, now)
+		_, _, err := microcycleDateRange(flags, now, time.UTC)
 		if err == nil {
 			t.Fatalf("microcycleDateRange(%v) error = nil, want error", flags)
 		}
@@ -961,7 +960,7 @@ func TestMicrocycleDateRangeSelectsDateWeek(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC)
-	got, _, err := microcycleDateRange(map[string]string{"date": "2026-06-12", "timezone": "UTC"}, now)
+	got, _, err := microcycleDateRange(map[string]string{"date": "2026-06-12"}, now, time.UTC)
 	if err != nil || got.Oldest != microcycleTestWeekStart || got.Newest != microcycleTestWeekEnd {
 		t.Fatalf("microcycleDateRange date = %+v %v, want 2026-06-08 2026-06-14 nil", got, err)
 	}
@@ -970,9 +969,6 @@ func TestMicrocycleDateRangeSelectsDateWeek(t *testing.T) {
 func TestMicrocycleSmallHelpers(t *testing.T) {
 	t.Parallel()
 
-	if got := microcycleTimezoneSource(map[string]string{"timezone": "UTC"}); got != "flag" {
-		t.Fatalf("timezone source = %s, want flag", got)
-	}
 	if _, err := addDays("bad-date", 1); err == nil {
 		t.Fatal("addDays error = nil, want error")
 	}
@@ -988,7 +984,7 @@ func TestMicrocycleDateRangeDefaultsToISOWeek(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC)
-	got, _, err := microcycleDateRange(map[string]string{}, now)
+	got, _, err := microcycleDateRange(map[string]string{}, now, time.UTC)
 
 	if err != nil || got.Oldest != microcycleTestWeekStart || got.Newest != microcycleTestWeekEnd {
 		t.Fatalf("microcycleDateRange default = %+v %v, want 2026-06-08 2026-06-14 nil", got, err)
@@ -1512,6 +1508,7 @@ func TestReadMicrocycleInputsReturnsSourceErrors(t *testing.T) {
 				tc.includeWell,
 				"UTC",
 				"flag",
+				"2026-06-07",
 			)
 			if err == nil {
 				t.Fatal("readMicrocycleInputs error = nil, want source error")
@@ -1605,6 +1602,7 @@ func TestReadMicrocycleInputsAllowsMissingSportSettings(t *testing.T) {
 		false,
 		"UTC",
 		"flag",
+		"2026-06-07",
 	)
 	if err != nil {
 		t.Fatalf("readMicrocycleInputs error = %v, want nil on 404 sport-settings", err)
@@ -1643,4 +1641,91 @@ func TestWriteMicrocycleHuman(t *testing.T) {
 	if !strings.Contains(out, "Classification: on_track") {
 		t.Fatalf("human output = %q, want classification", out)
 	}
+}
+
+func TestMicrocycleLocationPrecedence(t *testing.T) {
+	t.Parallel()
+
+	system := time.FixedZone("SYS", 0)
+	cases := []struct {
+		name, flag, athlete, wantZone, wantSource string
+	}{
+		{"flag wins over athlete", "UTC", "America/New_York", "UTC", "flag"},
+		{"athlete when no flag", "", "America/New_York", "America/New_York", "athlete"},
+		{"system when athlete empty", "", "", "SYS", "system"},
+		{"system when athlete invalid", "", "Not/AZone", "SYS", "system"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			location, source, err := microcycleLocation(tc.flag, tc.athlete, system)
+			if err != nil || location.String() != tc.wantZone || source != tc.wantSource {
+				t.Fatalf("got %v %s %v, want %s %s", location, source, err, tc.wantZone, tc.wantSource)
+			}
+		})
+	}
+}
+
+func TestMicrocycleLocationRejectsInvalidFlag(t *testing.T) {
+	t.Parallel()
+
+	if _, _, err := microcycleLocation("Invalid/Zone", "", time.UTC); err == nil {
+		t.Fatal("error = nil, want invalid --timezone error")
+	}
+}
+
+func TestClampDateToToday(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 26, 23, 0, 0, 0, time.UTC)
+	cases := map[string]string{"2026-11-01": "2026-10-26", "2026-10-20": "2026-10-20", "2026-10-26": "2026-10-26"}
+	for in, want := range cases {
+		if got := clampDateToToday(in, now); got != want {
+			t.Fatalf("clampDateToToday(%s) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisMicrocycleCommandUsesAthleteTimezoneAndClampsWellness(t *testing.T) {
+	var wellnessNewest string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/wellness"):
+			wellnessNewest = request.URL.Query().Get("newest")
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		default:
+			_, _ = response.Write([]byte(`{"id":"0","timezone":"Pacific/Auckland"}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func() error {
+		return analysisMicrocycleCommand().Run(nil, map[string]string{"from": "2020-01-01", "to": "2999-12-31", "json": "true"}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	today := time.Now().In(mustLoadLocation(t, "Pacific/Auckland")).Format("2006-01-02")
+	if !strings.Contains(out, `"Pacific/Auckland"`) || !strings.Contains(out, `"athlete"`) || wellnessNewest != today {
+		t.Fatalf("wellness newest=%s want %s; output=%s", wellnessNewest, today, out)
+	}
+}
+
+func mustLoadLocation(t *testing.T, name string) *time.Location {
+	t.Helper()
+	location, err := time.LoadLocation(name)
+	if err != nil {
+		t.Fatalf("LoadLocation(%s): %v", name, err)
+	}
+
+	return location
 }

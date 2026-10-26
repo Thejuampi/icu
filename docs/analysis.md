@@ -382,9 +382,13 @@ microcycle. `--date` and `--week` select the ISO week containing the supplied
 date. `--from` and `--to` select an explicit custom range and must be supplied
 together. Conflicting date selectors and inverted ranges are rejected.
 
-If `--timezone` is omitted, the CLI uses the system timezone and emits a
-data-quality warning because the current config and athlete types do not
-expose a reliable athlete timezone field.
+Timezone precedence is `--timezone`, then the athlete profile `timezone`
+(`timezoneSource: "athlete"`), then the system timezone. Only the system
+fallback emits the "missing athlete timezone" data-quality warning.
+
+Wellness is read only up to today (in the resolved timezone), never up to the
+end of the selected week: Intervals.icu returns projected CTL/ATL rows for
+future dates, and the latest row drives the readiness state.
 
 ### Upstream Data
 
@@ -443,8 +447,7 @@ decide how to present coaching guidance.
   before this is treated as a stable contract.
 - Planned-vs-actual matching is date-level in the MVP; it does not deeply
   compare workout structure.
-- Timezone comes from `--timezone` or system fallback because no reliable
-  athlete timezone source exists in the current local types/config.
+- Timezone comes from `--timezone`, the athlete profile, or system fallback.
 - The command reads API data but does not sync external services or read
   local caches.
 - Missing plan, wellness, FTP, zones, HR, or power data lowers confidence
