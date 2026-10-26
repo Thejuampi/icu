@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -286,7 +287,7 @@ func sameEventJSON(left, right json.RawMessage) bool {
 	leftJSON, leftErr := json.Marshal(leftValue)
 	rightJSON, rightErr := json.Marshal(rightValue)
 
-	return leftErr == nil && rightErr == nil && string(leftJSON) == string(rightJSON)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
 }
 
 func eventsDeleteCommand() *Command {
