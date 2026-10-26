@@ -3,10 +3,13 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -547,4 +550,67 @@ func readPlanTestProposal(t *testing.T, file string) icu.PlanProposalFile {
 	}
 
 	return proposal
+}
+
+//nolint:paralleltest // swaps the process-wide config store.
+func TestPlanLoadProjectionStartsFromWellness(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	if err := icu.SaveConfig(&icu.Config{Profile: &icu.TrainingProfile{MaxRampPerWeek: 50}}); err != nil {
+		t.Fatal(err)
+	}
+
+	var methods []string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		methods = append(methods, request.Method)
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-10-25","ctl":40,"atl":45},` +
+				`{"id":"2026-10-26","ctl":41,"atl":47},{"id":"2026-11-01","ctl":30,"atl":10}]`))
+		case strings.HasSuffix(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[{"id":9,"category":"WORKOUT","start_date_local":"2026-10-28T07:00:00",` +
+				`"icu_training_load":70}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	proposal := &icu.PlanProposalFile{
+		Scope: icu.PlanScope{EndDate: "2026-11-01"},
+		Operations: []icu.CalendarOperation{{
+			Action: icu.CalendarActionCreate, ExpectedLoad: 300,
+			Body: icu.EventEx{StartDateLocal: "2026-10-27T07:00:00"},
+		}},
+	}
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+
+	got, err := planLoadProjection(client, proposal, map[string]string{}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StartDate != "2026-10-26" || got.StartCTL != 41 || got.StartSource != "wellness" ||
+		got.EndDate != "2026-11-01" || got.MaxRampPerWeek != 50 || len(got.Warnings) != 0 {
+		t.Fatalf("projection = %+v", got)
+	}
+	capped, err := planLoadProjection(client, proposal, map[string]string{"max-ramp": "2"}, now)
+	if err != nil || len(capped.Warnings) != 1 || !strings.Contains(capped.Warnings[0], "exceeds the 2.00/week cap") {
+		t.Fatalf("capped = %+v, %v", capped, err)
+	}
+	for _, method := range methods {
+		if method != http.MethodGet {
+			t.Fatalf("projection issued %s", method)
+		}
+	}
+
+	empty := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		_, _ = response.Write([]byte(`[]`))
+	}))
+	t.Cleanup(empty.Close)
+	emptyClient := icu.NewClient("k", "i1", icu.WithHTTPClient(empty.Client()), icu.WithBaseURL(empty.URL))
+	if _, err := planLoadProjection(emptyClient, proposal, nil, now); err == nil {
+		t.Fatal("projection without wellness succeeded")
+	}
 }

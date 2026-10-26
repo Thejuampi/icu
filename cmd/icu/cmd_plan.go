@@ -41,7 +41,7 @@ func planShowCommand() *Command {
 func planPreviewCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "plan preview --file PATH [--no-live-check]",
+		Usage:       "plan preview --file PATH [--no-live-check] [--max-ramp CTL/WEEK]",
 		Description: "Validate a plan proposal and print a non-mutating operation preview.",
 		Schema:      planPreviewSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
@@ -56,19 +56,24 @@ func planPreviewCommand() *Command {
 				blockingErr = fmt.Errorf("validate plan proposal: %s", validation.Errors[0])
 			}
 
-			return runCalendarOpsPreview(
+			return runCalendarOpsPreviewWith(
 				flags,
 				proposal.Operations,
 				calendarValidationFromPlan(validation),
 				validation.Blocking,
 				blockingErr,
-				func() []string {
+				func(preview *icu.CalendarOpsPreview) []string {
 					warnings := liveCheckCalendarOperations(client, proposal.Operations)
 					if err := checkPlanBaselineDrift(client, &proposal, flags); err != nil {
 						warnings = append(warnings, err.Error())
 					}
+					projection, err := planLoadProjection(client, &proposal, flags, time.Now())
+					if err != nil {
+						return append(warnings, "projection: "+err.Error())
+					}
+					preview.Projection = projection
 
-					return warnings
+					return append(warnings, projection.Warnings...)
 				},
 			)
 		},
@@ -131,7 +136,8 @@ func planPreviewSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
-			{Name: "no-live-check", ValueName: "BOOL", Description: "Skip live source-hash and baseline drift checks.", Kind: commandFlagBoolean},
+			{Name: "no-live-check", ValueName: "BOOL", Description: "Skip live source-hash, baseline drift and load projection.", Kind: commandFlagBoolean},
+			{Name: "max-ramp", ValueName: "CTL/WEEK", Description: "Projected CTL ramp cap; overrides profile maxRampPerWeek."},
 		}, commonAuthFlags()...),
 	}
 }
@@ -318,4 +324,45 @@ func planProfileWarnings(proposal *icu.PlanProposalFile, settings *icu.SportSett
 	}
 
 	return icu.ValidatePlanAgainstProfile(proposal, profile, settings)
+}
+
+// planLoadProjection projects CTL/ATL/TSB from today's wellness through the
+// proposal's end date using existing calendar workouts plus pending
+// operations. The ramp cap comes from --max-ramp, else the profile; with no
+// cap configured the ramp is reported but never flagged.
+func planLoadProjection(
+	client *icu.Client, proposal *icu.PlanProposalFile, flags map[string]string, now time.Time,
+) (*icu.LoadProjection, error) {
+	today := now.Format("2006-01-02")
+	records, asOf := readCurrentWellnessFitness(client, analysisRange{Oldest: today, Newest: today})
+	start, ok := icu.LatestWellnessFitness(records, asOf)
+	if !ok {
+		return nil, fmt.Errorf("no wellness CTL/ATL on or before %s", asOf)
+	}
+	end := proposal.Scope.EndDate
+	if end == "" || end < start.ID {
+		end = start.ID
+	}
+	events, err := readRebalanceEvents(client, start.ID, end)
+	if err != nil {
+		return nil, err
+	}
+	profile, err := loadTrainingProfile()
+	if err != nil {
+		return nil, err
+	}
+	if profile == nil {
+		profile = &icu.TrainingProfile{}
+	}
+	maxRamp := floatFlagVal(flags, "max-ramp", profile.MaxRampPerWeek)
+	projection, err := icu.ProjectLoad(&icu.LoadProjectionInput{
+		StartDate: start.ID, StartSource: "wellness", StartCTL: start.CTL, StartATL: start.ATL,
+		EndDate: end, DailyLoads: icu.PlanProjectedDailyLoads(proposal.Operations, events),
+		CTLDays: profile.CTLDays, ATLDays: profile.ATLDays, MaxRampPerWeek: maxRamp,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("project load: %w", err)
+	}
+
+	return &projection, nil
 }

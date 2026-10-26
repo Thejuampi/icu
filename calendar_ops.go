@@ -34,6 +34,8 @@ type CalendarOpsPreview struct {
 	Operations             []CalendarOpsPreviewItem `json:"operations,omitempty"`
 	Warnings               []string                 `json:"warnings,omitempty"`
 	Validation             *CalendarOpsValidation   `json:"validation,omitempty"`
+	// Projection is filled by plan preview's live check only.
+	Projection *LoadProjection `json:"projection,omitempty"`
 }
 
 type CalendarOpsValidation struct {

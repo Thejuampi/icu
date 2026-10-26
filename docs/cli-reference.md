@@ -232,9 +232,9 @@ Invoke these commands as `icu activity <id> <action>`.
   Example: `icu plan show --file plan.json --intent-file intent.json --now-date 2026-07-27 --type Ride`
 
 - `preview`
-  Invocation: `icu plan preview --file PATH [--no-live-check]`
-  Notes: Validates the proposal and prints a non-mutating calendar operation preview (pending create/update/cancel counts, expected load, and `validation` blocking/errors/warnings). Exits non-zero when validation is blocking. Live-checks source hashes and baseline drift only when non-blocking, unless `--no-live-check` is set. Unknown flags are rejected.
-  Example: `icu plan preview --file plan.json`
+  Invocation: `icu plan preview --file PATH [--no-live-check] [--max-ramp CTL/WEEK]`
+  Notes: Validates the proposal and prints a non-mutating calendar operation preview (pending create/update/cancel counts, expected load, and `validation` blocking/errors/warnings). Exits non-zero when validation is blocking. Live-checks source hashes and baseline drift only when non-blocking, unless `--no-live-check` is set. The live check also adds `projection`: CTL/ATL/TSB projected day by day (`x += (load - x) / days`, 42/7 days unless the profile sets `ctlDays`/`atlDays`) from the latest wellness row on or before today (never the last activity) through the proposal end date. Daily load is existing calendar workouts not replaced by an operation plus pending create/update loads. `projection.weeks` lists each ISO week's CTL ramp, scaled to 7 days for partial weeks; a week above `--max-ramp` (else the profile's `maxRampPerWeek`) is flagged `overCap` and warned. With no cap configured the ramp is reported but never flagged. All reads are GETs. Unknown flags are rejected.
+  Example: `icu plan preview --file plan.json --max-ramp 5`
 
 - `accept`
   Invocation: `icu plan accept --file PATH`

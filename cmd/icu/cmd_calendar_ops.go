@@ -126,13 +126,33 @@ func runCalendarOpsPreview(
 	blockingErr error,
 	liveCheck func() []string,
 ) error {
+	return runCalendarOpsPreviewWith(flags, operations, validation, blocking, blockingErr,
+		func(*icu.CalendarOpsPreview) []string {
+			if liveCheck == nil {
+				return nil
+			}
+
+			return liveCheck()
+		})
+}
+
+// runCalendarOpsPreviewWith is runCalendarOpsPreview with a live check that
+// can also attach data (such as a load projection) to the preview.
+func runCalendarOpsPreviewWith(
+	flags map[string]string,
+	operations []icu.CalendarOperation,
+	validation *icu.CalendarOpsValidation,
+	blocking bool,
+	blockingErr error,
+	liveCheck func(*icu.CalendarOpsPreview) []string,
+) error {
 	preview := icu.PreviewCalendarOperations(operations)
 	preview.Validation = validation
 	if validation != nil {
 		preview.Warnings = appendUniquePreviewWarnings(preview.Warnings, validation.Warnings...)
 	}
 	if !blocking && !BoolFlag(flags, "no-live-check") && liveCheck != nil {
-		preview.Warnings = append(preview.Warnings, liveCheck()...)
+		preview.Warnings = append(preview.Warnings, liveCheck(&preview)...)
 	}
 	if err := writeJSON(preview); err != nil {
 		return err
