@@ -17,3 +17,13 @@ func TestSanitizePlanIDCollapsesSeparators(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanOperationDoesNotWriteUIDIntoExternalID(t *testing.T) {
+	t.Parallel()
+
+	session := PlanResolvedSession{UID: "plan-uid-1", Action: CalendarActionUpdate, Date: "2026-10-27"}
+	operation := planOperationFromSession(&session)
+	if operation.Body.ExternalID != "" {
+		t.Fatalf("ExternalID = %q, want empty", operation.Body.ExternalID)
+	}
+}
