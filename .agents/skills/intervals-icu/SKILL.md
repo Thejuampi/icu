@@ -293,7 +293,7 @@ icu events create --category NOTE --type Ride --name "ALT B — 90m Z2" --start-
 
 Decision rules commonly used:
 - HRV below personal baseline or resting HR elevated → choose the NOTE alternative.
-- Sleep score < 70 or high subjective fatigue → choose the NOTE alternative or take the OFF day.
+- Sleep below its own baseline (`analysis wellness` sleep level WATCH/RED) or high subjective fatigue → choose the NOTE alternative or take the OFF day.
 - If the alternative is chosen consistently for several days, consider converting it into the new WORKOUT and deleting/re-scheduling the harder primary session rather than accumulating skipped workouts.
 
 This keeps projected fitness/fatigue curves clean while preserving fallback options in the calendar.
