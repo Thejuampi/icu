@@ -1729,3 +1729,41 @@ func mustLoadLocation(t *testing.T, name string) *time.Location {
 
 	return location
 }
+
+//nolint:paralleltest // captureStdout redirects process-wide stdout.
+func TestAnalysisAdaptationCommandDefaultsToNonOverlappingCurves(t *testing.T) {
+	var curves []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/power-curves"):
+			curves = append(curves, request.URL.Query().Get("curves"))
+			_, _ = response.Write([]byte(`{"list":[]}`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		case strings.Contains(request.URL.Path, "/mmp-model"):
+			_, _ = response.Write([]byte(`{}`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	for _, flagSet := range []map[string]string{
+		{"oldest": "2026-04-06", "newest": "2026-06-28"},
+		{"oldest": "2026-04-06", "newest": "2026-06-28", "curves": "42d,365d"},
+	} {
+		if _, err := captureStdout(t, func() error {
+			return analysisAdaptationCommand().Run(nil, flagSet, client)
+		}); err != nil {
+			t.Fatalf("Run error = %v", err)
+		}
+	}
+
+	want := []string{"r.2026-04-06.2026-06-28,r.2026-01-12.2026-04-05", "42d,365d"}
+	if strings.Join(curves, "|") != strings.Join(want, "|") {
+		t.Fatalf("curves = %v, want %v", curves, want)
+	}
+}

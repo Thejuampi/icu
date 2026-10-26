@@ -36,7 +36,7 @@ Defaults:
 - `--history-days 84`
 - `--plan-days 28`
 - `--sport-type Ride`
-- `--adaptation-curves 42d,365d` when `--include-adaptation` is set
+- `--adaptation-curves` default: `r.OLDEST.NEWEST,r.PRIOR_START.PRIOR_END` (the scope plus the equally long window just before it) when `--include-adaptation` is set
 - history window ends on the current UTC date
 - plan window starts on the next ISO block boundary used by the CLI
 - explicit `--plan-oldest` and `--plan-newest` dates are aligned to the enclosing ISO week boundaries (Monday/Sunday)
@@ -318,7 +318,7 @@ Defaults:
 
 - `--days 28`
 - `--type Ride`
-- `--curves 42d,365d`
+- `--curves` default: `r.OLDEST.NEWEST,r.PRIOR_START.PRIOR_END` (the scope plus the equally long window just before it)
 
 ### Upstream Data
 
@@ -344,7 +344,8 @@ It then runs `AnalyzeWellness` and passes the result into `AnalyzeCyclingAdaptat
 
 ### Interpretation
 
-- With the default `--curves 42d,365d`, the analyzer treats the shorter window as the current curve and the longer window as the baseline.
+- By default the analyzer compares the scope window (current) against the equally long, non-overlapping window right before it (baseline), so the baseline never contains the current period. The current curve is the one with the latest end date (ties: fewer days), the baseline the one with the earliest end date (ties: more days); nested overrides such as `--curves 42d,365d` keep the old shorter-is-current behaviour.
+- `systemStatus` counts only the anchor durations 5s, 15s, 30s, 1m, 2m, 5m, 10m, 20m, 30m and 60m, not every per-second point; `primarySignal` still considers all deltas.
 - Power anchors prefer the MMP model when available and fall back to sport settings otherwise.
 - `phaseSummary` provides the recent load-segment context needed to interpret whether curve changes look productive or stale.
 

@@ -277,7 +277,14 @@ func readCoachingAdaptation(
 ) (*icu.CyclingAdaptationAnalysis, error) {
 	curveQuery := map[string]string{
 		"type":   sportType,
-		"curves": icu.StringFlag(flags, "adaptation-curves", "42d,365d"),
+		"curves": icu.StringFlag(flags, "adaptation-curves", ""),
+	}
+	if curveQuery["curves"] == "" {
+		windows, err := icu.AdaptationCurveWindows(dateRange.Oldest, dateRange.Newest)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", errInvalidValue, err)
+		}
+		curveQuery["curves"] = windows
 	}
 
 	var curveResponse struct {
@@ -639,7 +646,14 @@ func analysisAdaptationCommand() *Command {
 
 			curveQuery := map[string]string{
 				"type":   sportType,
-				"curves": icu.StringFlag(flags, "curves", "42d,365d"),
+				"curves": icu.StringFlag(flags, "curves", ""),
+			}
+			if curveQuery["curves"] == "" {
+				windows, err := icu.AdaptationCurveWindows(dateRange.Oldest, dateRange.Newest)
+				if err != nil {
+					return fmt.Errorf("%w: %w", errInvalidValue, err)
+				}
+				curveQuery["curves"] = windows
 			}
 
 			var curveResponse struct {

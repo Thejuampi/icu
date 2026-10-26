@@ -1,8 +1,8 @@
 package icu
 
 import (
-	"math"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -121,23 +121,23 @@ type TrainingPlanScope struct {
 }
 
 type TrainingPlanHistory struct {
-	CompletedWeeks       int                         `json:"completedWeeks"`
-	AverageWeeklyLoad    float64                     `json:"averageWeeklyLoad"`
-	PeakWeeklyLoad       int                         `json:"peakWeeklyLoad"`
-	RecentWeeklyLoad     int                         `json:"recentWeeklyLoad"`
-	AverageWeeklyHours   float64                     `json:"averageWeeklyHours"`
-	CurrentStateLabel    string                      `json:"currentStateLabel,omitempty"`
-	CurrentLoadPressure  float64                     `json:"currentLoadPressure,omitempty"`
-	CurrentCTL           float64                     `json:"currentCtl,omitempty"`
-	CurrentATL           float64                     `json:"currentAtl,omitempty"`
-	CurrentTSB           float64                     `json:"currentTsb,omitempty"`
-	CurrentDecoupling    float64                     `json:"currentDecoupling,omitempty"`
-	CurrentHotSessions   int                         `json:"currentHotSessions,omitempty"`
-	CurrentStateSource   string                      `json:"currentStateSource,omitempty"`
+	CompletedWeeks      int     `json:"completedWeeks"`
+	AverageWeeklyLoad   float64 `json:"averageWeeklyLoad"`
+	PeakWeeklyLoad      int     `json:"peakWeeklyLoad"`
+	RecentWeeklyLoad    int     `json:"recentWeeklyLoad"`
+	AverageWeeklyHours  float64 `json:"averageWeeklyHours"`
+	CurrentStateLabel   string  `json:"currentStateLabel,omitempty"`
+	CurrentLoadPressure float64 `json:"currentLoadPressure,omitempty"`
+	CurrentCTL          float64 `json:"currentCtl,omitempty"`
+	CurrentATL          float64 `json:"currentAtl,omitempty"`
+	CurrentTSB          float64 `json:"currentTsb,omitempty"`
+	CurrentDecoupling   float64 `json:"currentDecoupling,omitempty"`
+	CurrentHotSessions  int     `json:"currentHotSessions,omitempty"`
+	CurrentStateSource  string  `json:"currentStateSource,omitempty"`
 	// CurrentLoadSource labels CurrentCTL/ATL/TSB: "wellness" (daily row at
 	// the history end) or "last_activity" (frozen at the newest ride).
-	CurrentLoadSource string `json:"currentLoadSource,omitempty"`
-	CurrentLoadDate   string `json:"currentLoadDate,omitempty"`
+	CurrentLoadSource    string                      `json:"currentLoadSource,omitempty"`
+	CurrentLoadDate      string                      `json:"currentLoadDate,omitempty"`
 	PlannedLoadAlignment string                      `json:"plannedLoadAlignment,omitempty"`
 	Weeks                []TrainingPlanCompletedWeek `json:"weeks,omitempty"`
 }
@@ -226,8 +226,8 @@ type TrainingPlanCompletedWeek struct {
 	MeanDecoupling        float64 `json:"meanDecoupling,omitempty"`
 	// DecouplingExcluded counts rides whose decoupling was dropped from
 	// MeanDecoupling as a robust (MAD z-score) outlier vs. the history.
-	DecouplingExcluded int `json:"decouplingExcluded,omitempty"`
-	Tolerance             string  `json:"tolerance,omitempty"`
+	DecouplingExcluded int    `json:"decouplingExcluded,omitempty"`
+	Tolerance          string `json:"tolerance,omitempty"`
 }
 
 type TrainingPlanPhase struct {
@@ -1320,8 +1320,8 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 // returns the accumulator over all kept rides.
 func filterHistoryDecoupling(weeks map[string]trainingPlanHistoryWeek) numericAccumulator {
 	var all []float64
-	for _, week := range weeks {
-		all = append(all, week.decouplingValues...)
+	for key := range weeks {
+		all = append(all, weeks[key].decouplingValues...)
 	}
 
 	var kept numericAccumulator
@@ -1335,7 +1335,8 @@ func filterHistoryDecoupling(weeks map[string]trainingPlanHistoryWeek) numericAc
 		high = math.Max(high, value)
 	}
 
-	for key, week := range weeks {
+	for key := range weeks {
+		week := weeks[key]
 		for _, value := range week.decouplingValues {
 			if value < low || value > high {
 				week.decouplingExcluded++
