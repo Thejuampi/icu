@@ -91,8 +91,10 @@ func validateTrainingThresholds(thresholds *TrainingThresholds) error {
 	if thresholds.WatchZ < 0 || thresholds.RedZ < 0 || thresholds.MinSamples < 0 {
 		return errors.New("profile thresholds watchZ/redZ/minSamples must not be negative")
 	}
-	if thresholds.WatchZ > 0 && thresholds.RedZ > 0 && thresholds.RedZ < thresholds.WatchZ {
-		return errors.New("profile thresholds redZ must be >= watchZ")
+	// Compare the effective values: a single override is paired with the
+	// other default, so watchZ 3 alone would sit past the default redZ 2.5.
+	if method := thresholdMethod(thresholds); method.watchZ >= method.redZ {
+		return fmt.Errorf("profile thresholds watchZ (%.2f) must be below redZ (%.2f)", method.watchZ, method.redZ)
 	}
 
 	return nil

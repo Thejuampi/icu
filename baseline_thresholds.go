@@ -83,6 +83,9 @@ type DerivedThreshold struct {
 	Samples  int     `json:"samples,omitempty"`
 	// Source is "baseline_mad", "baseline_stddev" or "profile".
 	Source string `json:"source"`
+	// WatchOnly is set when only the WATCH bound is pinned and there is no
+	// history for RED: the signal can reach WATCH but never RED.
+	WatchOnly bool `json:"watchOnly,omitempty"`
 }
 
 type baselineMethod struct {
@@ -186,12 +189,13 @@ func deriveThreshold(
 	return derived
 }
 
-// profilePartialThreshold covers a single pinned bound with no history: the
-// other bound is set equal so both levels still resolve.
+// profilePartialThreshold covers a single pinned bound with no history. A
+// pinned WATCH alone never escalates to RED (WatchOnly); a pinned RED alone
+// is also the WATCH bound, so crossing it is RED.
 func profilePartialThreshold(watch, red *float64) *DerivedThreshold {
 	switch {
 	case watch != nil:
-		return &DerivedThreshold{Watch: *watch, Red: *watch, Source: thresholdSourceProfile}
+		return &DerivedThreshold{Watch: *watch, Red: *watch, Source: thresholdSourceProfile, WatchOnly: true}
 	case red != nil:
 		return &DerivedThreshold{Watch: *red, Red: *red, Source: thresholdSourceProfile}
 	default:
@@ -212,7 +216,7 @@ func thresholdLevel(value float64, threshold *DerivedThreshold, direction int) s
 		return value >= bound
 	}
 	switch {
-	case past(threshold.Red):
+	case !threshold.WatchOnly && past(threshold.Red):
 		return BaselineLevelRed
 	case past(threshold.Watch):
 		return BaselineLevelWatch

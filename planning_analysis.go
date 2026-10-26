@@ -131,8 +131,8 @@ type TrainingPlanHistory struct {
 	CurrentATL          float64 `json:"currentAtl,omitempty"`
 	CurrentTSB          float64 `json:"currentTsb,omitempty"`
 	CurrentDecoupling   float64 `json:"currentDecoupling,omitempty"`
-	// RecentDecoupling is the newest history week's mean decoupling, judged
-	// against DecouplingThreshold derived from the earlier rides.
+	// RecentDecoupling is the mean decoupling of the last 7 days of history,
+	// judged against DecouplingThreshold derived from the rides before them.
 	RecentDecoupling    float64           `json:"recentDecoupling,omitempty"`
 	DecouplingThreshold *DerivedThreshold `json:"decouplingThreshold,omitempty"`
 	CurrentHotSessions  int               `json:"currentHotSessions,omitempty"`
@@ -361,10 +361,15 @@ type trainingPlanHistoryWeek struct {
 	decoupling            numericAccumulator
 	decouplingValues      []float64
 	decouplingSeconds     []int
-	decouplingExcluded    int
-	partial               bool
-	startDate             string
-	endDate               string
+	decouplingDates       []string
+	// decouplingKept are the rides long enough to measure decoupling (the
+	// duration floor only). The history-wide MAD screen is not applied: it
+	// would drop a genuinely high recent block as an outlier of itself.
+	decouplingKept     []datedDecoupling
+	decouplingExcluded int
+	partial            bool
+	startDate          string
+	endDate            string
 }
 
 func AnalyzeTrainingPlan(activities []Activity, events []Event, options TrainingPlanOptions) TrainingPlanAnalysis {
@@ -1300,6 +1305,7 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		if activity.Decoupling != 0 {
 			week.decouplingValues = append(week.decouplingValues, activity.Decoupling)
 			week.decouplingSeconds = append(week.decouplingSeconds, activity.MovingTime)
+			week.decouplingDates = append(week.decouplingDates, date)
 		}
 
 		if activity.Intensity >= highIntensityThreshold {
@@ -1320,38 +1326,64 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 	if historyDecoupling.count > 0 {
 		history.CurrentDecoupling = round2(historyDecoupling.average())
 	}
-	history.RecentDecoupling, history.DecouplingThreshold = recentDecouplingVsBaseline(weeks, options.Thresholds)
+	history.RecentDecoupling, history.DecouplingThreshold = recentDecouplingVsBaseline(weeks, options.HistoryEndDate, options.Thresholds)
 
 	return history
 }
 
-// recentDecouplingVsBaseline returns the newest week's mean decoupling and a
-// high-side bound derived from the rides in the earlier weeks (robust median
-// and MAD after outlier filtering), or the profile's decouplingWatchPct.
+// recentDecouplingWindowDays is the judged window: rides in the last 7 days
+// of the history range.
+const recentDecouplingWindowDays = 7
+
+type datedDecoupling struct {
+	date  string
+	value float64
+}
+
+// recentDecouplingVsBaseline returns the mean decoupling of the long-enough
+// rides in the last recentDecouplingWindowDays up to endDate, and a high-side
+// bound derived from the rides strictly before that window (MAD-screened on
+// their own, then robust median and MAD), or the profile's decouplingWatchPct. The baseline window is fixed by
+// date, so the recent rides never sit in their own baseline and an old week
+// is never judged as "recent". No recent rides means no judgement.
 func recentDecouplingVsBaseline(
-	weeks map[string]trainingPlanHistoryWeek, overrides *TrainingThresholds,
+	weeks map[string]trainingPlanHistoryWeek, endDate string, overrides *TrainingThresholds,
 ) (float64, *DerivedThreshold) {
-	keys := make([]string, 0, len(weeks))
+	var rides []datedDecoupling
 	for key := range weeks {
-		if weeks[key].decoupling.count > 0 {
-			keys = append(keys, key)
-		}
+		rides = append(rides, weeks[key].decouplingKept...)
 	}
-	if len(keys) == 0 {
+	if len(rides) == 0 {
 		return 0, nil
 	}
-	sort.Strings(keys)
-	recentKey := keys[len(keys)-1]
+	if endDate == "" {
+		for _, ride := range rides {
+			endDate = max(endDate, ride.date)
+		}
+	}
+	end, err := time.Parse(analysisDateLayout, endDate)
+	if err != nil {
+		return 0, nil
+	}
+	cutoff := end.AddDate(0, 0, -recentDecouplingWindowDays).Format(analysisDateLayout)
+	var recent numericAccumulator
 	var earlier []float64
-	for _, key := range keys[:len(keys)-1] {
-		earlier = append(earlier, weeks[key].decouplingValues...)
+	for _, ride := range rides {
+		switch {
+		case ride.date > endDate:
+		case ride.date > cutoff:
+			recent.add(ride.value)
+		default:
+			earlier = append(earlier, ride.value)
+		}
+	}
+	if recent.count == 0 {
+		return 0, nil
 	}
 	if len(earlier) > 0 {
 		earlier = robustFilteredFloats(earlier)
 	}
 	watch := overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.DecouplingWatchPct })
-
-	recent := weeks[recentKey].decoupling
 
 	return round2(recent.average()),
 		deriveThreshold(earlier, baselineHighIsBad, thresholdMethod(overrides), watch, nil)
@@ -1431,6 +1463,9 @@ func filterHistoryDecoupling(weeks map[string]trainingPlanHistoryWeek) numericAc
 	for key := range weeks {
 		week := weeks[key]
 		for index, value := range week.decouplingValues {
+			if long(&week, index) && index < len(week.decouplingDates) {
+				week.decouplingKept = append(week.decouplingKept, datedDecoupling{week.decouplingDates[index], value})
+			}
 			if !long(&week, index) || value < low || value > high {
 				week.decouplingExcluded++
 
