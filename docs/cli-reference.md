@@ -238,7 +238,7 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `accept`
   Invocation: `icu plan accept --file PATH`
-  Notes: Re-validates the proposal (including stored blocking errors and `strictTargets` weekly misses) and hard-fails before any API call when blocking. Then rejects baseline drift, applies pending `create`/`update`/`cancel` operations, writes apply results back to the same file, and prints the apply summary. Unknown flags are rejected.
+  Notes: Re-validates the proposal (including stored blocking errors and `strictTargets` weekly misses) and hard-fails before any API call when blocking. Then rejects baseline drift, applies pending `create`/`update`/`cancel` operations (each update/cancel first saves a local backup of the event; its path is in the result's `backupPath`, and a failed backup fails that operation without touching the event), writes apply results back to the same file, and prints the apply summary. Unknown flags are rejected.
   Example: `icu plan accept --file plan.json`
 
 ## profile
@@ -421,6 +421,17 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Notes: `--calculate-load` is explicit only; descriptions are not parsed unless the flag is present. When enabled, calculated `moving_time` and `icu_training_load` override manual values for the request body.
   Example: `icu events update 123 --name "Threshold 4x8" --training-load 92`
   Example: `icu events update 123 --desc "- 60m 70%" --calculate-load --ftp 300`
+
+  Backup: before the PUT, the current event is fetched and saved to the local backup directory (`$ICU_BACKUP_DIR`, else `backups/events/` next to the config file). If the backup fails, the update is not sent.
+
+- `backups`
+  Invocation: `icu events backups [--id ID]`
+  Notes: Lists local event backups newest first (`path`, `eventId`, `reason`, `takenAt`). Local only.
+
+- `revert`
+  Invocation: `icu events revert (--backup PATH | --id ID) [--recreate] [--dry-run]`
+  Notes: Restores an event from a backup (`--id` uses its newest backup). By default it backs up the event's current state, then PUTs the backed-up JSON (every field, including ones the CLI does not model). Backups taken for a cancel, or `--recreate`, POST the event again without its old id. `--dry-run` prints what would happen without calling the API.
+  Example: `icu events revert --id 12345 --dry-run`
 
 - `delete`
   Invocation: `icu events delete <id>`

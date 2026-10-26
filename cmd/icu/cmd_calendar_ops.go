@@ -35,6 +35,18 @@ func applyCalendarOperation(client *icu.Client, operation *icu.CalendarOperation
 
 		return result
 	}
+	if operation.Action == icu.CalendarActionUpdate || operation.Action == icu.CalendarActionCancel {
+		path, err := backupEvent(client, operation.EventID, "calendar "+operation.Action)
+		if err != nil {
+			operation.Status = icu.CalendarStatusFailed
+			operation.Error = err.Error()
+			result.Status = icu.CalendarStatusFailed
+			result.Error = err.Error()
+
+			return result
+		}
+		result.BackupPath = path
+	}
 	var event icu.Event
 	err := applyCalendarMutation(client, operation, &event)
 	if err != nil {

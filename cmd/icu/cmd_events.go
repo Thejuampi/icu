@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -66,6 +67,8 @@ func registerEventsCommands(registry *CommandRegistry) {
 
 	registry.Register("events", "delete", deleteByIDCommand("events", "events delete <id>", "Delete calendar event.", "event id"))
 	registry.Register("events", "download", eventsDownloadCommand())
+	registry.Register("events", "revert", eventsRevertCommand())
+	registry.Register("events", "backups", eventsBackupsCommand())
 	registry.Register("events", "tags", listAllCommand[[]string]("event-tags", "events tags", "List event tags."))
 }
 
@@ -107,6 +110,14 @@ func eventsUpdateCommand() *Command {
 			request, err := buildEventUpdate(flags)
 			if err != nil {
 				return wrapCommandError(err)
+			}
+
+			eventID, err := strconv.Atoi(args[0])
+			if err != nil {
+				return fmt.Errorf("%w: event id %q", errInvalidValue, args[0])
+			}
+			if _, err := backupEvent(client, eventID, "events update"); err != nil {
+				return err
 			}
 
 			var result icu.Event

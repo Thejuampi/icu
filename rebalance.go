@@ -329,6 +329,9 @@ type RebalanceApplyResult struct {
 	EventID     int    `json:"eventId,omitempty"`
 	Status      string `json:"status"`
 	Error       string `json:"error,omitempty"`
+	// BackupPath is the local copy of the event taken before an update or
+	// cancel; "icu events revert --backup PATH" restores it.
+	BackupPath string `json:"backupPath,omitempty"`
 }
 
 type rebalancePlan struct {

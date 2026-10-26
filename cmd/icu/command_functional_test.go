@@ -280,7 +280,10 @@ func TestEventsUpdateCalculateLoadSendsCalculatedFields(t *testing.T) {
 
 	err := cmd.Run([]string{"1"}, flags("desc", "- 60m 70%", "calculate-load", "true", "ftp", "300"), client)
 
-	if err != nil || len(serverState.Requests) != 1 || !strings.Contains(serverState.Requests[0].Body, `"icu_training_load":49`) || !strings.Contains(serverState.Requests[0].Body, `"moving_time":3600`) {
+	// Request 0 is the pre-update backup GET; request 1 is the PUT.
+	if err != nil || len(serverState.Requests) != 2 || serverState.Requests[0].Method != http.MethodGet ||
+		!strings.Contains(serverState.Requests[1].Body, `"icu_training_load":49`) ||
+		!strings.Contains(serverState.Requests[1].Body, `"moving_time":3600`) {
 		t.Fatalf("events update body = %+v err=%v, want calculated load and moving time", serverState.Requests, err)
 	}
 }
