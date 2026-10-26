@@ -155,3 +155,31 @@ func TestParseWorkoutDescriptionRejectsEmptyRepeat(t *testing.T) {
 		t.Fatalf("ParseWorkoutDescription empty repeat error = %v, want ErrWorkoutDescriptionUnsupported", err)
 	}
 }
+
+func TestParseWorkoutDescriptionNativeRepeatSyntax(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		desc         string
+		wantDuration int
+		wantTopSteps int
+	}{
+		{"native un-indented children closed by blank line", "- 15m 60%\n\n3x\n- 12m 80%\n- 6m 65%\n\n- 12m 60%", 15*60 + 3*18*60 + 12*60, 3},
+		{"native repeat at end of description", "- 10m 55%\n\n2x\n- 5m 90%\n- 5m 50%", 10*60 + 2*10*60, 2},
+		{"indented children still parse", "- 15m 60%\n3x\n  - 12m 80%\n  - 6m 65%\n- 12m 60%", 15*60 + 3*18*60 + 12*60, 3},
+		{"indented children across blank lines", "3x\n  - 1m 100%\n\n  - 1m 50%\n\n- 5m 50%", 3*2*60 + 5*60, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			doc, err := icu.ParseWorkoutDescription(tt.desc)
+			if err != nil {
+				t.Fatalf("ParseWorkoutDescription() error = %v", err)
+			}
+			if doc.Duration != tt.wantDuration || len(doc.Steps) != tt.wantTopSteps {
+				t.Fatalf("duration=%d steps=%d, want duration=%d steps=%d", doc.Duration, len(doc.Steps), tt.wantDuration, tt.wantTopSteps)
+			}
+		})
+	}
+}

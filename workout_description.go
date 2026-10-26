@@ -72,18 +72,30 @@ func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
 	return &doc, nil
 }
 
+// parseRepeatBlock collects the steps that follow an "Nx" header. Two
+// layouts are accepted: the indented form, where every child line starts with
+// whitespace, and the intervals.icu native form, where un-indented "-" steps
+// follow the header and a blank line (or any non-step line) closes the block.
 func parseRepeatBlock(lines []string, startIndex, reps int) (WorkoutStep, int, error) {
 	block := WorkoutStep{Reps: reps}
 	index := startIndex
+	indentedBlock := nextNonBlankIsIndented(lines, startIndex)
 	for index < len(lines) {
 		raw := lines[index]
 		line := strings.TrimSpace(raw)
 		if line == "" {
+			if len(block.Steps) > 0 && !indentedBlock {
+				break
+			}
 			index++
 			continue
 		}
 
-		if !strings.HasPrefix(raw, " ") && !strings.HasPrefix(raw, "\t") {
+		indented := strings.HasPrefix(raw, " ") || strings.HasPrefix(raw, "\t")
+		if indented != indentedBlock {
+			break
+		}
+		if !indented && !strings.HasPrefix(line, stepLinePrefix) {
 			break
 		}
 
@@ -104,6 +116,18 @@ func parseRepeatBlock(lines []string, startIndex, reps int) (WorkoutStep, int, e
 	}
 
 	return block, index, nil
+}
+
+func nextNonBlankIsIndented(lines []string, index int) bool {
+	for _, raw := range lines[index:] {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+
+		return strings.HasPrefix(raw, " ") || strings.HasPrefix(raw, "\t")
+	}
+
+	return false
 }
 
 func parseWorkoutDescriptionStep(line string) (WorkoutStep, error) {

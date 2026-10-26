@@ -776,7 +776,7 @@ the raw components.
 
 - `calculate`
   Invocation: `icu workouts calculate --ftp N --desc DESC`
-  Notes: Calculates planned cycling duration, average power, normalized power, IF, and TSS locally without writing to Intervals.icu. Supported description grammar is line-oriented: `- 10m 55-75%`, `- 5m 90%`, and repeat blocks such as `3x` with indented child steps. Power targets are interpreted as `%ftp`.
+  Notes: Calculates planned cycling duration, average power, normalized power, IF, and TSS locally without writing to Intervals.icu. Supported description grammar is line-oriented: `- 10m 55-75%`, `- 5m 90%`, and repeat blocks such as `3x` followed by either indented child steps or the intervals.icu native form (un-indented `-` steps closed by a blank line). Power targets are interpreted as `%ftp`.
   Example: `icu workouts calculate --ftp 300 --desc "- 60m 70%"`
 
 - `create`
