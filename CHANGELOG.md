@@ -9,7 +9,7 @@ Breaking changes:
 - The `--curves` / `--adaptation-curves` default change from #17 applies here too.
 - The local config file is written atomically (temp file + rename).
 - `events delete` now prints `{"deleted": ID, "backupPath": PATH}` instead of nothing, and rejects a non-numeric id before any request.
-- `events create --upsert` now requires `--uid`: intervals.icu's `upsertOnUid` matches on `uid` (not `external_id`), so without a uid it never updated anything. The pre-upsert backup searches ten years either side of the date; if the POST still updates an existing event that was not backed up, the command exits with an error naming it.
+- `events create --upsert` now requires `--uid`: intervals.icu's `upsertOnUid` matches on `uid` (not `external_id`), so without a uid it never updated anything. The pre-upsert backup searches ten years either side of the date; if the POST still updates an existing event that was not backed up, the command exits with an error saying that event was ALREADY OVERWRITTEN with NO BACKUP, giving its id, date, name and uid.
 - `--desc-file` pointing at an empty (or whitespace-only) file is an error.
 - Profile validation checks the *effective* `watchZ < redZ` (a single override is paired with the other default), so e.g. `watchZ: 3` alone is now rejected.
 
@@ -23,6 +23,7 @@ Behaviour:
 - Wellness baselines (HRV, resting HR, sleep, TSB) use a fixed 42-day window ending 7 days before the newest sample, so thresholds no longer move with `--oldest` and the recent week is not in its own baseline. Wellness reads always reach back 49 days for the baselines (rows before `--oldest` feed only the baselines), and a warning says when less history exists. When no signal can be judged the aggregate state is `INSUFFICIENT` with `low` confidence and a warning, instead of `OK`.
 - A profile that pins only a WATCH bound (no history) can reach WATCH but never RED.
 - `events delete` and `events create --upsert` (the event with the same `uid`) back up the event first. `events revert` recreates deleted events, records `restoredEventId` in the backup and refuses to recreate again (or when an event with the same uid, or the same name, category, type and start time, already exists on that date) unless `--force`; it aborts when the event already matches the backup (`--force` overrides), and `--id` skips pre-revert snapshots so a second revert does not undo the first.
+- Third-party-edit check: after every write (`events update`, `events revert`, `plan accept` updates, upserts that matched a backed-up event) the backup records `postWriteHash`/`postWriteAt` (hash of id, name, start, description, load, moving time as returned by the API). `events update` and `events revert` GET the event and compare it with the newest backup's `postWriteHash`; if it was edited in Intervals.icu since, they abort before writing (and write no new backup) unless `--force`. Backups from older versions have no `postWriteHash`, so the next update/revert of that event is refused until `--force` is given once. Backups taken for a delete/cancel are not compared.
 
 ### Fixes from `fix/icu-bugs` (#17)
 

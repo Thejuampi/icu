@@ -114,7 +114,7 @@ func eventsCreateCommand() *Command {
 func eventsUpdateCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N]",
+		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--force]",
 		Description: "Update calendar event.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
@@ -129,7 +129,13 @@ func eventsUpdateCommand() *Command {
 			if _, err := eventDescription(flags); err != nil {
 				return wrapCommandError(err)
 			}
-			_, raw, err := backupEventRaw(client, eventID, "events update")
+			last, err := findLastWrite(eventID)
+			if err != nil {
+				return err
+			}
+			path, raw, err := backupEventChecked(client, eventID, "events update", func(current json.RawMessage) error {
+				return checkThirdPartyEdit(eventID, last, current, BoolFlag(flags, "force"))
+			})
 			if err != nil {
 				return err
 			}
@@ -146,6 +152,9 @@ func eventsUpdateCommand() *Command {
 			var result icu.Event
 			if err := client.Put("events", []string{args[0]}, nil, request.Body, &result); err != nil {
 				return wrapCommandError(err)
+			}
+			if err := recordPostWrite(path, &result); err != nil {
+				return err
 			}
 			if request.Estimate != nil {
 				return writeJSON(calculatedEventOutput(&result, request.Estimate))
@@ -360,7 +369,7 @@ const upsertSearchDays = 3650
 
 // upsertTargets records what the pre-upsert search saw.
 type upsertTargets struct {
-	backedUp map[int]bool
+	backedUp map[int]string // event id -> backup path
 	maxID    int
 	searched bool
 }
@@ -370,12 +379,20 @@ type upsertTargets struct {
 // intervals.icu event ids increase, so a freshly created event has an id
 // above maxID.
 func (targets *upsertTargets) check(result *icu.Event) error {
-	if !targets.searched || result.ID == 0 || targets.backedUp[result.ID] || result.ID > targets.maxID {
+	if !targets.searched || result.ID == 0 {
+		return nil
+	}
+	if path, ok := targets.backedUp[result.ID]; ok {
+		return recordPostWrite(path, result)
+	}
+	if result.ID > targets.maxID {
 		return nil
 	}
 
-	return fmt.Errorf("upsert updated existing event %d, which was not backed up (its uid %q was not found "+
-		"within %d days of the new date); restore it by hand if needed", result.ID, result.UID, upsertSearchDays)
+	return fmt.Errorf("upsert ALREADY OVERWROTE existing event %d (now dated %s, named %q, uid %q) and NO BACKUP "+
+		"was taken: its uid was not found within %d days of the new date, so its previous content is lost; "+
+		"check it in Intervals.icu", result.ID, eventDay(result.StartDateLocal), result.Name, result.UID,
+		upsertSearchDays)
 }
 
 // backupUpsertTargets backs up the events an upsert would overwrite:
@@ -383,7 +400,7 @@ func (targets *upsertTargets) check(result *icu.Event) error {
 // uid (intervals.icu API docs; external_id is only used by events/bulk
 // ?upsert=true), so the same uid is searched here.
 func backupUpsertTargets(client *icu.Client, body *icu.EventEx) (upsertTargets, error) {
-	targets := upsertTargets{backedUp: map[int]bool{}}
+	targets := upsertTargets{backedUp: map[int]string{}}
 	if body.UID == "" || len(body.StartDateLocal) < len("2006-01-02") {
 		return targets, nil
 	}
@@ -404,12 +421,22 @@ func backupUpsertTargets(client *icu.Client, body *icu.EventEx) (upsertTargets, 
 	for index := range events {
 		targets.maxID = max(targets.maxID, events[index].ID)
 		if events[index].UID == body.UID {
-			if _, err := backupEvent(client, events[index].ID, "events create --upsert"); err != nil {
+			path, err := backupEvent(client, events[index].ID, "events create --upsert")
+			if err != nil {
 				return targets, err
 			}
-			targets.backedUp[events[index].ID] = true
+			targets.backedUp[events[index].ID] = path
 		}
 	}
 
 	return targets, nil
+}
+
+// eventDay is the YYYY-MM-DD part of a local start date ("" if missing).
+func eventDay(startDateLocal string) string {
+	if len(startDateLocal) < len("2006-01-02") {
+		return startDateLocal
+	}
+
+	return startDateLocal[:len("2006-01-02")]
 }

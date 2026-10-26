@@ -35,6 +35,75 @@ type eventBackup struct {
 	// RestoredEventID is the id a recreate revert created from this backup,
 	// written back to the file so the revert is not repeated.
 	RestoredEventID int `json:"restoredEventId,omitempty"`
+	// PostWriteHash is icu.EventSourceHash of the event this CLI wrote right
+	// after the backup (the PUT/POST response), so a later revert or update
+	// can tell whether someone else edited the event since.
+	PostWriteHash string `json:"postWriteHash,omitempty"`
+	PostWriteAt   string `json:"postWriteAt,omitempty"`
+}
+
+// recordPostWrite stores the hash of the event just written in the backup
+// taken before the write.
+func recordPostWrite(path string, written *icu.Event) error {
+	if path == "" || written == nil {
+		return nil
+	}
+	backup, err := readEventBackup(path)
+	if err != nil {
+		return err
+	}
+	backup.PostWriteHash = icu.EventSourceHash(written)
+	backup.PostWriteAt = time.Now().UTC().Format(time.RFC3339Nano)
+
+	return rewriteEventBackup(path, &backup)
+}
+
+// lastWrite is what the newest backup of an event says about this CLI's
+// last write to it.
+type lastWrite struct {
+	path   string
+	hash   string
+	legacy bool // newest backup predates postWriteHash
+}
+
+// findLastWrite reads the newest backup of eventID. Backups taken before a
+// delete or cancel record no write to this event id.
+func findLastWrite(eventID int) (lastWrite, error) {
+	paths, err := listEventBackups(eventID)
+	if err != nil || len(paths) == 0 {
+		return lastWrite{}, err
+	}
+	backup, err := readEventBackup(paths[0])
+	if err != nil {
+		return lastWrite{}, nil //nolint:nilerr // an unreadable backup carries no write record.
+	}
+	if backup.Reason == eventBackupReasonDelete || backup.Reason == eventBackupReasonDrop {
+		return lastWrite{}, nil
+	}
+
+	return lastWrite{path: paths[0], hash: backup.PostWriteHash, legacy: backup.PostWriteHash == ""}, nil
+}
+
+// checkThirdPartyEdit aborts (unless force) when the event changed since this
+// CLI last wrote it, or when the newest backup is too old to tell.
+func checkThirdPartyEdit(eventID int, last lastWrite, current json.RawMessage, force bool) error {
+	if force || last.path == "" {
+		return nil
+	}
+	if last.legacy {
+		return fmt.Errorf("event %d: newest backup %s has no post-write hash (taken by an older version), so "+
+			"edits made in Intervals.icu since cannot be detected; re-run with --force to overwrite", eventID, last.path)
+	}
+	var event icu.Event
+	if err := json.Unmarshal(current, &event); err != nil {
+		return fmt.Errorf("decode event %d: %w", eventID, err)
+	}
+	if got := icu.EventSourceHash(&event); got != last.hash {
+		return fmt.Errorf("event %d was changed outside this CLI since it was last written (hash %s, expected %s "+
+			"from %s); not overwriting (use --force to overwrite)", eventID, got, last.hash, last.path)
+	}
+
+	return nil
 }
 
 func eventBackupDir() string {
@@ -56,9 +125,23 @@ func backupEvent(client *icu.Client, eventID int, reason string) (string, error)
 // backupEventRaw is backupEvent that also returns the fetched event JSON, so
 // a caller that needs the current event does not GET it twice.
 func backupEventRaw(client *icu.Client, eventID int, reason string) (string, json.RawMessage, error) {
+	return backupEventChecked(client, eventID, reason, nil)
+}
+
+// backupEventChecked GETs the event, runs check on it (an error aborts with
+// no backup written, so a refused write leaves the backup history as it
+// was), then writes the backup.
+func backupEventChecked(
+	client *icu.Client, eventID int, reason string, check func(json.RawMessage) error,
+) (string, json.RawMessage, error) {
 	var raw json.RawMessage
 	if err := client.Get("events", []string{strconv.Itoa(eventID)}, nil, &raw); err != nil {
 		return "", nil, fmt.Errorf("backup event %d: %w", eventID, wrapCommandError(err))
+	}
+	if check != nil {
+		if err := check(raw); err != nil {
+			return "", nil, err
+		}
 	}
 	path, err := writeEventBackup(&eventBackup{EventID: eventID, Reason: reason, Event: raw}, time.Now())
 
@@ -262,14 +345,26 @@ func applyEventRevert(client *icu.Client, backup *eventBackup, recreate, force b
 
 		return nil
 	}
-	// One GET serves both the pre-revert backup and the comparison.
-	preRevert, current, err := backupEventRaw(client, backup.EventID, eventBackupReasonRevert)
+	last, err := findLastWrite(backup.EventID)
 	if err != nil {
 		return err
 	}
-	if !force && sameEventJSON(current, backup.Event) {
-		return fmt.Errorf("event %d already matches backup %s; nothing to revert (use --force to PUT anyway)",
-			backup.EventID, result.BackupPath)
+	// One GET serves the pre-revert backup and both comparisons; a refused
+	// revert writes no snapshot.
+	preRevert, _, err := backupEventChecked(client, backup.EventID, eventBackupReasonRevert,
+		func(current json.RawMessage) error {
+			if err := checkThirdPartyEdit(backup.EventID, last, current, force); err != nil {
+				return err
+			}
+			if !force && sameEventJSON(current, backup.Event) {
+				return fmt.Errorf("event %d already matches backup %s; nothing to revert (use --force to PUT anyway)",
+					backup.EventID, result.BackupPath)
+			}
+
+			return nil
+		})
+	if err != nil {
+		return err
 	}
 	result.PreRevertBackup = preRevert
 	var updated icu.Event
@@ -277,6 +372,9 @@ func applyEventRevert(client *icu.Client, backup *eventBackup, recreate, force b
 		return wrapCommandError(err)
 	}
 	result.RestoredEventID = backup.EventID
+	if err := recordPostWrite(preRevert, &updated); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -392,7 +490,7 @@ func writeFileAtomic(path string, data []byte) error {
 	defer func() {
 		if !ok {
 			_ = temp.Close()
-			_ = os.Remove(name)
+			_ = os.Remove(name) //nolint:gosec // name is our own CreateTemp file in the backup dir.
 		}
 	}()
 	if err := temp.Chmod(eventBackupFileMode); err != nil {
@@ -407,7 +505,7 @@ func writeFileAtomic(path string, data []byte) error {
 	if err := temp.Close(); err != nil {
 		return fmt.Errorf("close %s: %w", name, err)
 	}
-	if err := os.Rename(name, path); err != nil {
+	if err := os.Rename(name, path); err != nil { //nolint:gosec // path is a backup file inside the backup dir.
 		return fmt.Errorf("rename %s: %w", name, err)
 	}
 	ok = true

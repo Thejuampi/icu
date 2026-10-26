@@ -37,10 +37,15 @@ func newBackupTestServer(t *testing.T) (*icu.Client, *[]recordedRequest) {
 			_, _ = response.Write([]byte(event7))
 			mu.Unlock()
 		case request.Method == http.MethodPut && strings.HasSuffix(request.URL.Path, "/events/7"):
+			// Like Intervals.icu: the PUT returns the stored event.
+			var stored map[string]any
+			_ = json.Unmarshal(body, &stored)
+			stored["id"] = 7
+			echoed, _ := json.Marshal(stored)
 			mu.Lock()
-			event7 = string(body)
+			event7 = string(echoed)
 			mu.Unlock()
-			_, _ = response.Write([]byte(`{"id":7}`))
+			_, _ = response.Write(echoed)
 		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/events/8"):
 			_, _ = response.Write([]byte(`{"id":8,"name":"Dropped"}`))
 		case request.Method == http.MethodPost:
@@ -385,7 +390,7 @@ func upsertCalendarServer(t *testing.T, matchDate string, postID int) (*icu.Clie
 			_, _ = response.Write([]byte(`{"id":5,"uid":"u-1","name":"Old"}`))
 		default:
 			posts++
-			_, _ = fmt.Fprintf(response, `{"id":%d,"uid":"u-1"}`, postID)
+			_, _ = fmt.Fprintf(response, `{"id":%d,"uid":"u-1","name":"New","start_date_local":"2026-10-27T07:00:00"}`, postID)
 		}
 	}))
 	t.Cleanup(server.Close)
@@ -413,12 +418,124 @@ func TestEventsCreateUpsertFailsWhenOverwrittenEventWasNotBackedUp(t *testing.T)
 	// The match lies outside any window; the POST updates existing event 5.
 	client, posts := upsertCalendarServer(t, "1990-01-01T07:00:00", 5)
 	_, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) })
-	if err == nil || !strings.Contains(err.Error(), "updated existing event 5, which was not backed up") || *posts != 1 {
+	if err == nil || !strings.Contains(err.Error(), `ALREADY OVERWROTE existing event 5 (now dated 2026-10-27, named "New"`) ||
+		!strings.Contains(err.Error(), "NO BACKUP") || *posts != 1 {
 		t.Fatalf("err = %v posts=%d", err, *posts)
 	}
 	// A new id (above every id seen) is a plain create.
 	client, _ = upsertCalendarServer(t, "1990-01-01T07:00:00", 41)
 	if _, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) }); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// editableEventServer stores event 3; PUT replaces it and echoes it back.
+func editableEventServer(t *testing.T) (*icu.Client, *string, *int) {
+	t.Helper()
+	var mu sync.Mutex
+	stored := `{"id":3,"name":"Z2","type":"Ride","start_date_local":"2026-10-28T07:00:00","description":"a"}`
+	puts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		response.Header().Set("Content-Type", "application/json")
+		switch request.Method {
+		case http.MethodGet:
+			_, _ = response.Write([]byte(stored))
+		case http.MethodPut:
+			puts++
+			body, _ := io.ReadAll(request.Body)
+			var current, patch map[string]any
+			_ = json.Unmarshal([]byte(stored), &current)
+			_ = json.Unmarshal(body, &patch)
+			for key, value := range patch {
+				current[key] = value
+			}
+			current["id"] = 3
+			data, _ := json.Marshal(current)
+			stored = string(data)
+			_, _ = response.Write(data)
+		default:
+			_, _ = response.Write([]byte(`{}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	return icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL)), &stored, &puts
+}
+
+func TestEventsUpdateDetectsThirdPartyEdits(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	client, stored, puts := editableEventServer(t)
+	update := func(flags map[string]string) error {
+		_, err := captureStdout(t, func() error { return eventsUpdateCommand().Run([]string{"3"}, flags, client) })
+
+		return err
+	}
+	// First write: no earlier backup, nothing to compare.
+	if err := update(map[string]string{"name": "Z2 long"}); err != nil || *puts != 1 {
+		t.Fatalf("first update: %v puts=%d", err, *puts)
+	}
+	paths, _ := listEventBackups(3)
+	if backup, _ := readEventBackup(paths[0]); backup.PostWriteHash == "" || backup.PostWriteAt == "" {
+		t.Fatalf("post-write hash not stored: %+v", backup)
+	}
+	// Unchanged since our write: passes.
+	if err := update(map[string]string{"name": "Z2 longer"}); err != nil || *puts != 2 {
+		t.Fatalf("unchanged update: %v puts=%d", err, *puts)
+	}
+	// Edited in Intervals.icu: aborts before any PUT.
+	*stored = strings.Replace(*stored, `"description":"a"`, `"description":"edited on the web"`, 1)
+	err := update(map[string]string{"name": "Z2 again"})
+	if err == nil || !strings.Contains(err.Error(), "changed outside this CLI") || *puts != 2 {
+		t.Fatalf("edited update: %v puts=%d", err, *puts)
+	}
+	// --force overwrites.
+	if err := update(map[string]string{"name": "Z2 forced", "force": "true"}); err != nil || *puts != 3 {
+		t.Fatalf("forced update: %v puts=%d", err, *puts)
+	}
+}
+
+func TestEventsRevertDetectsThirdPartyEditsAndLegacyBackups(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	client, stored, puts := editableEventServer(t)
+	if _, err := captureStdout(t, func() error {
+		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{"name": "Changed"}, client)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	revert := func(flags map[string]string) error {
+		_, err := captureStdout(t, func() error { return eventsRevertCommand().Run(nil, flags, client) })
+
+		return err
+	}
+	*stored = strings.Replace(*stored, `"description":"a"`, `"description":"web edit"`, 1)
+	if err := revert(map[string]string{"id": "3"}); err == nil ||
+		!strings.Contains(err.Error(), "changed outside this CLI") || *puts != 1 {
+		t.Fatalf("edited revert: %v puts=%d", err, *puts)
+	}
+	// The refused revert wrote no snapshot; undo the web edit: unchanged
+	// passes.
+	if paths, _ := listEventBackups(3); len(paths) != 1 {
+		t.Fatalf("refused revert left a backup: %v", paths)
+	}
+	*stored = strings.Replace(*stored, `"description":"web edit"`, `"description":"a"`, 1)
+	if err := revert(map[string]string{"id": "3"}); err != nil || *puts != 2 {
+		t.Fatalf("unchanged revert: %v puts=%d", err, *puts)
+	}
+	// A backup without postWriteHash (older version) needs --force.
+	paths, _ := listEventBackups(3)
+	legacy, _ := readEventBackup(paths[0])
+	legacy.PostWriteHash = ""
+	if err := rewriteEventBackup(paths[0], &legacy); err != nil {
+		t.Fatal(err)
+	}
+	original := paths[len(paths)-1]
+	err := revert(map[string]string{"backup": original})
+	if err == nil || !strings.Contains(err.Error(), "no post-write hash") || *puts != 2 {
+		t.Fatalf("legacy revert: %v puts=%d", err, *puts)
+	}
+	if err := revert(map[string]string{"backup": original, "force": "true"}); err != nil || *puts != 3 {
+		t.Fatalf("forced revert: %v puts=%d", err, *puts)
 	}
 }

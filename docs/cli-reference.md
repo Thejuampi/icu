@@ -419,12 +419,12 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu events create --name "Endurance" --start-date 2026-06-03 --desc "- 60m 70%" --calculate-load --ftp 300`
 
 - `update`
-  Invocation: `icu events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N]`
+  Invocation: `icu events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N] [--force]`
   Notes: `--calculate-load` is explicit only; descriptions are not parsed unless the flag is present. When enabled, calculated `moving_time` and `icu_training_load` override manual values for the request body. FTP pricing applies only to cycling types: `--type`, else the stored event type read by the backup GET. `--desc-file` and the literal-escape check behave as on `create`.
   Example: `icu events update 123 --name "Threshold 4x8" --training-load 92`
   Example: `icu events update 123 --desc "- 60m 70%" --calculate-load --ftp 300`
 
-  Backup: before the PUT, the current event is fetched and saved to the local backup directory (`$ICU_BACKUP_DIR`, else `backups/events/` next to the config file). If the backup fails, the update is not sent.
+  Backup: before the PUT, the current event is fetched and saved to the local backup directory (`$ICU_BACKUP_DIR`, else `backups/events/` next to the config file). If the backup fails, the update is not sent. After the PUT the backup records `postWriteHash` (and `postWriteAt`) of the event returned. Before the next update or revert, the current event is compared with the newest backup's `postWriteHash`: if it changed outside this CLI the command aborts with no PUT and no new backup, unless `--force`. A newest backup without `postWriteHash` (written by an older version) is also refused until `--force`. Delete/cancel backups are not compared.
 
 - `backups`
   Invocation: `icu events backups [--id ID]`
@@ -432,7 +432,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
 
 - `revert`
   Invocation: `icu events revert (--backup PATH | --id ID) [--recreate] [--force] [--dry-run]`
-  Notes: Restores an event from a backup (`--id` uses its newest backup that is not a pre-revert snapshot, so reverting twice does not undo the first revert). One GET serves both the pre-revert backup and the check: if the event already matches the backup the command aborts unless `--force`. By default it backs up the event's current state, then PUTs the backed-up JSON (every field, including ones the CLI does not model). Backups taken for a cancel or `events delete`, or `--recreate`, POST the event again without its old id: **reverting a cancel recreates the event under a new id** (Intervals.icu cannot restore a deleted id), so any external reference to the old id (plan files, trainer-platform sync, notes) must be updated to the new `id` printed by the command. A recreate records `restoredEventId` in the backup file and is refused when it was already done, or when an event with the same uid (or the same name, category, type and start time) exists on that date, unless `--force`. `--dry-run` prints what would happen without calling the API.
+  Notes: Restores an event from a backup (`--id` uses its newest backup that is not a pre-revert snapshot, so reverting twice does not undo the first revert). One GET serves both the pre-revert backup and the check: if the event already matches the backup, or it was edited outside this CLI since the newest backup's `postWriteHash` (or that backup predates the hash), the command aborts unless `--force`; the revert records `postWriteHash` in its pre-revert snapshot. By default it backs up the event's current state, then PUTs the backed-up JSON (every field, including ones the CLI does not model). Backups taken for a cancel or `events delete`, or `--recreate`, POST the event again without its old id: **reverting a cancel recreates the event under a new id** (Intervals.icu cannot restore a deleted id), so any external reference to the old id (plan files, trainer-platform sync, notes) must be updated to the new `id` printed by the command. A recreate records `restoredEventId` in the backup file and is refused when it was already done, or when an event with the same uid (or the same name, category, type and start time) exists on that date, unless `--force`. `--dry-run` prints what would happen without calling the API.
   Example: `icu events revert --id 12345 --dry-run`
 
 - `delete`

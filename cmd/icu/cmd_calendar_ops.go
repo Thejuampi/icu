@@ -57,6 +57,10 @@ func applyCalendarOperation(client *icu.Client, operation *icu.CalendarOperation
 
 		return result
 	}
+	if operation.Action == icu.CalendarActionUpdate {
+		// Best effort: a failed hash record only weakens a later edit check.
+		_ = recordPostWrite(result.BackupPath, &event)
+	}
 	operation.Status = icu.CalendarStatusApplied
 	operation.AppliedEventID = appliedCalendarEventID(operation, &event)
 	result.Status = icu.CalendarStatusApplied
