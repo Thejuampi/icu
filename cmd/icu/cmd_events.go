@@ -152,7 +152,7 @@ func eventDescription(flags map[string]string) (string, error) {
 		if description != "" {
 			return "", fmt.Errorf("%w: use either --desc or --desc-file", errInvalidValue)
 		}
-		data, err := os.ReadFile(filepath.Clean(path))
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // G703: the user names their own local description file
 		if err != nil {
 			return "", fmt.Errorf("read --desc-file: %w", err)
 		}

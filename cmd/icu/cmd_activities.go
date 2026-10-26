@@ -1,6 +1,10 @@
 package main
 
-import icu "github.com/Thejuampi/icu"
+import (
+	"strings"
+
+	icu "github.com/Thejuampi/icu"
+)
 
 func registerActivitiesCommands(registry *CommandRegistry) {
 	registry.Register(
@@ -77,10 +81,7 @@ func activitiesGetCommand() *Command {
 			}
 
 			var acts []icu.Activity
-			ids := args[0]
-			for i := 1; i < len(args); i++ {
-				ids += "," + args[i]
-			}
+			ids := strings.Join(args, ",")
 
 			if err := client.Get("activities", []string{ids}, nil, &acts); err != nil {
 				return wrapCommandError(err)

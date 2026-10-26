@@ -47,7 +47,9 @@ func TestPlanMonotonyDefaultAllowsTwoRepeats(t *testing.T) {
 	if got := icu.PlanMonotonyWarnings(two, 0); len(got) != 0 {
 		t.Fatalf("two repeats warned by default: %v", got)
 	}
-	three := append(two, session("2026-11-06", "C"))
+	three := make([]icu.PlanResolvedSession, 0, len(two)+1)
+	three = append(three, two...)
+	three = append(three, session("2026-11-06", "C"))
 	got := icu.PlanMonotonyWarnings(three, 0)
 	if len(got) != 1 || !strings.Contains(got[0], "3 sessions") || !strings.Contains(got[0], "limit 2") {
 		t.Fatalf("third repeat warnings = %v", got)
