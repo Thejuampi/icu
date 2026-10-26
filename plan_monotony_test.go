@@ -26,7 +26,7 @@ func TestPlanMonotonyWarnings(t *testing.T) {
 		{Date: "2026-11-08", Name: "H", Action: icu.CalendarActionCreate},
 	}
 
-	got := icu.PlanMonotonyWarnings(sessions, 0)
+	got := icu.PlanMonotonyWarnings(sessions, 1)
 	joined := strings.Join(got, "\n")
 	if len(got) != 2 || !strings.Contains(joined, "2 sessions with the same structure (A, B on 2026-11-02, 2026-11-04)") ||
 		!strings.Contains(joined, "(E, F on") || strings.Contains(joined, "D") {
@@ -34,6 +34,23 @@ func TestPlanMonotonyWarnings(t *testing.T) {
 	}
 	if relaxed := icu.PlanMonotonyWarnings(sessions, 2); len(relaxed) != 0 {
 		t.Fatalf("relaxed warnings = %v", relaxed)
+	}
+}
+
+func TestPlanMonotonyDefaultAllowsTwoRepeats(t *testing.T) {
+	t.Parallel()
+
+	session := func(date, name string) icu.PlanResolvedSession {
+		return icu.PlanResolvedSession{Date: date, Name: name, Action: icu.CalendarActionCreate, Desc: "- 20m 90%"}
+	}
+	two := []icu.PlanResolvedSession{session("2026-11-02", "A"), session("2026-11-04", "B")}
+	if got := icu.PlanMonotonyWarnings(two, 0); len(got) != 0 {
+		t.Fatalf("two repeats warned by default: %v", got)
+	}
+	three := append(two, session("2026-11-06", "C"))
+	got := icu.PlanMonotonyWarnings(three, 0)
+	if len(got) != 1 || !strings.Contains(got[0], "3 sessions") || !strings.Contains(got[0], "limit 2") {
+		t.Fatalf("third repeat warnings = %v", got)
 	}
 }
 

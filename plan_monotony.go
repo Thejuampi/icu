@@ -8,10 +8,10 @@ import (
 )
 
 // DefaultMaxSimilarSessionsPerWeek is used when the profile leaves
-// MaxSimilarSessionsPerWeek unset: any two sessions with the same structure
-// in one week are reported. It is a definition of "repeated", not a
+// MaxSimilarSessionsPerWeek unset: up to two sessions with the same structure
+// in one week are allowed; the third is reported. It is a definition of "repeated", not a
 // physiological limit, and is overridable in the profile.
-const DefaultMaxSimilarSessionsPerWeek = 1
+const DefaultMaxSimilarSessionsPerWeek = 2
 
 // PlanMonotonyWarnings warns when more than maxSimilar non-cancelled
 // sessions in one ISO week share the same workout structure. Structure is

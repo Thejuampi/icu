@@ -258,7 +258,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
 
   FTP per session: `plan show` and `rebalance` read outdoor and indoor FTP from the Intervals.icu sport settings (`ftp`, `indoor_ftp`). When Intervals.icu has no number, the profile's `outdoorFtp`/`indoorFtp` fills the gap (an `ftp:` warning says so); a non-zero Intervals.icu value always wins, with a warning if the profile disagrees. Each session is then priced at indoor FTP when its type is indoor (e.g. `VirtualRide`) or its intent draft sets `"indoor": true`, otherwise at outdoor FTP; `--session-environment` still overrides ambiguous sessions.
 
-  Both commands also run a monotony check (with or without a profile): a `monotony:` warning lists weeks where more than `maxSimilarSessionsPerWeek` (default 1, i.e. any repeat) non-cancelled sessions share the same structure. Structure is the parsed step sequence (durations, %FTP targets, repeats), so indentation and spacing do not matter; unsupported descriptions are compared as normalised text, and sessions without a description are ignored.
+  Both commands also run a monotony check (with or without a profile): a `monotony:` warning lists weeks where more than `maxSimilarSessionsPerWeek` (default 2, so the third session with the same structure in a week warns) non-cancelled sessions share the same structure. Structure is the parsed step sequence (durations, %FTP targets, repeats), so indentation and spacing do not matter; unsupported descriptions are compared as normalised text, and sessions without a description are ignored.
 
 ## rebalance
 
