@@ -86,17 +86,21 @@ func eventsCreateCommand() *Command {
 				return wrapCommandError(err)
 			}
 
+			var targets upsertTargets
 			if BoolFlag(flags, "upsert") {
 				if request.Body.UID == "" {
 					return fmt.Errorf("%w: --upsert updates the event with the same --uid; pass --uid", errInvalidValue)
 				}
-				if err := backupUpsertTargets(client, &request.Body); err != nil {
+				if targets, err = backupUpsertTargets(client, &request.Body); err != nil {
 					return err
 				}
 			}
 			var result icu.Event
 			if err := client.Post("events", nil, eventsCreateQuery(flags), request.Body, &result); err != nil {
 				return wrapCommandError(err)
+			}
+			if err := targets.check(&result); err != nil {
+				return err
 			}
 			if request.Estimate != nil {
 				return writeJSON(calculatedEventOutput(&result, request.Estimate))
@@ -348,41 +352,64 @@ func eventsDownloadCommand() *Command {
 	}
 }
 
-// upsertSearchDays bounds the uid search around the new event's date.
-// intervals.icu matches upsertOnUid across the whole calendar, but the
-// events list needs a range. A uid names one planned session, and an upsert
-// re-sends a plan for dates near it; 90 days either side covers a training
-// block's re-plans while keeping the read small.
-const upsertSearchDays = 90
+// upsertSearchDays is how far either side of the new event's date the uid
+// search reads. intervals.icu matches upsertOnUid across the whole calendar
+// and the events list needs a range, so the read spans ten years each way;
+// upsertTargets.check catches a match outside it after the POST.
+const upsertSearchDays = 3650
+
+// upsertTargets records what the pre-upsert search saw.
+type upsertTargets struct {
+	backedUp map[int]bool
+	maxID    int
+	searched bool
+}
+
+// check fails loudly when the upsert updated an event that existed before
+// (its id is not newer than every id the search saw) but was not backed up.
+// intervals.icu event ids increase, so a freshly created event has an id
+// above maxID.
+func (targets *upsertTargets) check(result *icu.Event) error {
+	if !targets.searched || result.ID == 0 || targets.backedUp[result.ID] || result.ID > targets.maxID {
+		return nil
+	}
+
+	return fmt.Errorf("upsert updated existing event %d, which was not backed up (its uid %q was not found "+
+		"within %d days of the new date); restore it by hand if needed", result.ID, result.UID, upsertSearchDays)
+}
 
 // backupUpsertTargets backs up the events an upsert would overwrite:
 // POST events?upsertOnUid=true updates the event whose uid equals the body's
 // uid (intervals.icu API docs; external_id is only used by events/bulk
 // ?upsert=true), so the same uid is searched here.
-func backupUpsertTargets(client *icu.Client, body *icu.EventEx) error {
+func backupUpsertTargets(client *icu.Client, body *icu.EventEx) (upsertTargets, error) {
+	targets := upsertTargets{backedUp: map[int]bool{}}
 	if body.UID == "" || len(body.StartDateLocal) < len("2006-01-02") {
-		return nil
+		return targets, nil
 	}
 	day := body.StartDateLocal[:len("2006-01-02")]
 	oldest, err := addDays(day, -upsertSearchDays)
 	if err != nil {
-		return err
+		return targets, err
 	}
 	newest, err := addDays(day, upsertSearchDays)
 	if err != nil {
-		return err
+		return targets, err
 	}
 	events, err := readRebalanceEvents(client, oldest, newest)
 	if err != nil {
-		return err
+		return targets, err
 	}
+	targets.searched = true
 	for index := range events {
+		targets.maxID = max(targets.maxID, events[index].ID)
 		if events[index].UID == body.UID {
 			if _, err := backupEvent(client, events[index].ID, "events create --upsert"); err != nil {
-				return err
+				return targets, err
 			}
+			targets.backedUp[events[index].ID] = true
 		}
 	}
 
-	return nil
+	return targets, nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -361,5 +362,63 @@ func TestWriteFileAtomicReplacesWithoutLeftovers(t *testing.T) {
 	}
 	if err := rewriteEventBackup(filepath.Join(dir, "missing", "b.json"), &eventBackup{}); err == nil {
 		t.Fatal("rewrite into a missing dir succeeded")
+	}
+}
+
+// upsertCalendarServer serves a calendar whose only uid match is dated
+// matchDate: the events list returns it only when the requested range
+// covers that date, like intervals.icu. POST returns postID.
+func upsertCalendarServer(t *testing.T, matchDate string, postID int) (*icu.Client, *int) {
+	t.Helper()
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/events"):
+			query := request.URL.Query()
+			body := `[{"id":40,"uid":"other","start_date_local":"2026-10-20T07:00:00"}`
+			if query.Get("oldest") <= matchDate && matchDate <= query.Get("newest")+"T23:59:59" {
+				body += `,{"id":5,"uid":"u-1","start_date_local":"` + matchDate + `"}`
+			}
+			_, _ = response.Write([]byte(body + `]`))
+		case request.Method == http.MethodGet:
+			_, _ = response.Write([]byte(`{"id":5,"uid":"u-1","name":"Old"}`))
+		default:
+			posts++
+			_, _ = fmt.Fprintf(response, `{"id":%d,"uid":"u-1"}`, postID)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	return icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL)), &posts
+}
+
+func TestEventsCreateUpsertBacksUpMatchYearsAway(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	// A uid match nine years before the new date must still be found: this
+	// fails if the search window is shrunk.
+	client, _ := upsertCalendarServer(t, "2017-11-01T07:00:00", 5)
+	flags := map[string]string{"upsert": "true", "uid": "u-1", "name": "New", "start-date": "2026-10-27T07:00:00"}
+	if _, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) }); err != nil {
+		t.Fatal(err)
+	}
+	if paths, _ := listEventBackups(5); len(paths) != 1 {
+		t.Fatalf("old uid match not backed up: %v", paths)
+	}
+}
+
+func TestEventsCreateUpsertFailsWhenOverwrittenEventWasNotBackedUp(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	flags := map[string]string{"upsert": "true", "uid": "u-1", "name": "New", "start-date": "2026-10-27T07:00:00"}
+	// The match lies outside any window; the POST updates existing event 5.
+	client, posts := upsertCalendarServer(t, "1990-01-01T07:00:00", 5)
+	_, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) })
+	if err == nil || !strings.Contains(err.Error(), "updated existing event 5, which was not backed up") || *posts != 1 {
+		t.Fatalf("err = %v posts=%d", err, *posts)
+	}
+	// A new id (above every id seen) is a plain create.
+	client, _ = upsertCalendarServer(t, "1990-01-01T07:00:00", 41)
+	if _, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) }); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -41,7 +41,7 @@ func planShowCommand() *Command {
 func planPreviewCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "plan preview --file PATH [--no-live-check] [--max-ramp CTL/WEEK] [--now-date DATE] [--timezone TZ]",
+		Usage:       "plan preview --file PATH [--no-live-check] [--max-ramp CTL/WEEK] [--now-date DATE] [--timezone TZ] [--save-learned]",
 		Description: "Validate a plan proposal and print a non-mutating operation preview.",
 		Schema:      planPreviewSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
@@ -140,6 +140,7 @@ func planPreviewSchema() *CommandSchema {
 			{Name: "max-ramp", ValueName: "CTL/WEEK", Description: "Projected CTL ramp cap; overrides profile maxRampPerWeek."},
 			{Name: "now-date", ValueName: "DATE", Description: "Projection 'today' (YYYY-MM-DD); default is today in the athlete timezone."},
 			{Name: "timezone", ValueName: "TZ", Description: "IANA timezone for 'today'; default is the athlete profile timezone."},
+			{Name: "save-learned", ValueName: "BOOL", Description: "Save the learned CTL/ATL-only activity types in the local profile (default: use them in memory only).", Kind: commandFlagBoolean},
 		}, commonAuthFlags()...),
 	}
 }
@@ -430,7 +431,9 @@ func planLoadProjection(
 	if profile == nil {
 		profile = &icu.TrainingProfile{}
 	}
-	excluded, typeWarnings := planFitnessLoadTypes(profile, records, activities, proposal.Operations, events, firstDay)
+	excluded, typeWarnings := planFitnessLoadTypes(
+		profile, records, activities, proposal.Operations, events, firstDay, BoolFlag(flags, "save-learned"),
+	)
 	actual, actualFitness := projectionActualLoads(records, activities, excluded, firstDay, today)
 	maxRamp := floatFlagVal(flags, "max-ramp", profile.MaxRampPerWeek)
 	planned, plannedFitness := icu.PlanProjectedDailyLoadsByModel(proposal.Operations, events, excluded, completed)
@@ -449,13 +452,14 @@ func planLoadProjection(
 }
 
 // planFitnessLoadTypes learns which activity types feed CTL from the
-// wellness ctlLoad history, persists newly learned classes in the local
-// profile and resolves them with the profile's manual overrides. Types the
+// wellness ctlLoad history, merges them in memory with the classes saved in
+// the local profile (writing them back only when save is set, i.e.
+// --save-learned) and resolves them with the profile's manual overrides. Types the
 // projection needs (activities from firstDay on, planned sessions) with no
 // class get a warning.
 func planFitnessLoadTypes(
 	profile *icu.TrainingProfile, records []icu.Wellness, activities []icu.Activity,
-	operations []icu.CalendarOperation, events []icu.Event, firstDay string,
+	operations []icu.CalendarOperation, events []icu.Event, firstDay string, save bool,
 ) (map[string]bool, []string) {
 	learned, conflicts := icu.ClassifyFitnessLoadTypes(icu.LearnFitnessLoadTypes(records, activities))
 	var warnings []string
@@ -469,7 +473,14 @@ func planFitnessLoadTypes(
 			merged[sport], changed = class, true
 		}
 	}
-	if changed {
+	// A type now seen both ways drops its stale saved class.
+	for _, sport := range conflicts {
+		if _, ok := merged[sport]; ok {
+			delete(merged, sport)
+			changed = true
+		}
+	}
+	if changed && save {
 		if err := saveLearnedFitnessLoadTypes(merged); err != nil {
 			warnings = append(warnings, "fitness load: could not save learned types: "+err.Error())
 		}

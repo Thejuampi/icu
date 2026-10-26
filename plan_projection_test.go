@@ -383,3 +383,26 @@ func TestResolveFitnessLoadTypesPrecedenceAndUnknown(t *testing.T) {
 		t.Fatalf("warnings = %v", warnings)
 	}
 }
+
+func TestLearnFitnessLoadTypesSkipsDaysOverTypeCap(t *testing.T) {
+	t.Parallel()
+	build := func(types int) ([]icu.Wellness, []icu.Activity) {
+		var activities []icu.Activity
+		for index := range types {
+			activities = append(activities, icu.Activity{
+				Type: fmt.Sprintf("Sport%02d", index), StartDateLocal: "2026-09-01T07:00:00", TrainingLoad: 1 << index,
+			})
+		}
+		total := float64(int(1)<<types - 1)
+
+		return []icu.Wellness{{ID: "2026-09-01", CTLLoad: total, ATLLoad: total}}, activities
+	}
+	wellness, activities := build(16)
+	if got := icu.LearnFitnessLoadTypes(wellness, activities); len(got) != 16 {
+		t.Fatalf("16 types: %d classified", len(got))
+	}
+	wellness, activities = build(17)
+	if got := icu.LearnFitnessLoadTypes(wellness, activities); len(got) != 0 {
+		t.Fatalf("17 types (over the cap) classified %d", len(got))
+	}
+}

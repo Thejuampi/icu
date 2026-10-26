@@ -729,7 +729,15 @@ func TestPlanLoadProjectionPersistsLearnedTypesAndHonorsOverrides(t *testing.T) 
 	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	proposal := &icu.PlanProposalFile{Scope: icu.PlanScope{EndDate: "2026-09-13"}}
 
-	got, err := planLoadProjection(client, proposal, map[string]string{"now-date": "2026-09-12"}, time.Now())
+	// Without --save-learned the learned types are used in memory only.
+	if _, err := planLoadProjection(client, proposal, map[string]string{"now-date": "2026-09-12"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := icu.LoadConfig(); cfg.Profile.LearnedFitnessLoadTypes != nil {
+		t.Fatalf("preview wrote config without --save-learned: %+v", cfg.Profile)
+	}
+	got, err := planLoadProjection(client, proposal,
+		map[string]string{"now-date": "2026-09-12", "save-learned": "true"}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -795,5 +803,30 @@ func TestSaveLearnedFitnessLoadTypesKeepsOtherConfig(t *testing.T) {
 	if cfg.AthleteID != "i1" || cfg.Profile.LearnedFitnessLoadTypes["Ride"] != "ctl" ||
 		cfg.Profile.FitnessLoadTypes["Yoga"] != "atl-only" {
 		t.Fatalf("config = %+v profile %+v", cfg, cfg.Profile)
+	}
+}
+
+func TestPlanFitnessLoadTypesClearsConflictedSavedClass(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	profile := &icu.TrainingProfile{LearnedFitnessLoadTypes: map[string]string{"Swim": "ctl", "Ride": "ctl"}}
+	if err := icu.SaveConfigWithAction(&icu.Config{AthleteID: "i1", Profile: profile}, "config_set"); err != nil {
+		t.Fatal(err)
+	}
+	records := []icu.Wellness{
+		{ID: "2026-09-01", CTLLoad: 20, ATLLoad: 20},
+		{ID: "2026-09-02", CTLLoad: 0, ATLLoad: 20},
+	}
+	activities := []icu.Activity{
+		{Type: "Swim", StartDateLocal: "2026-09-01T07:00:00", TrainingLoad: 20},
+		{Type: "Swim", StartDateLocal: "2026-09-02T07:00:00", TrainingLoad: 20},
+	}
+	_, warnings := planFitnessLoadTypes(profile, records, activities, nil, nil, "2026-09-03", true)
+	if !strings.Contains(strings.Join(warnings, "|"), "Swim counted toward CTL on some days") {
+		t.Fatalf("warnings = %v", warnings)
+	}
+	cfg, _ := icu.LoadConfig()
+	if _, ok := cfg.Profile.LearnedFitnessLoadTypes["Swim"]; ok || cfg.Profile.LearnedFitnessLoadTypes["Ride"] != "ctl" {
+		t.Fatalf("saved = %v", cfg.Profile.LearnedFitnessLoadTypes)
 	}
 }
