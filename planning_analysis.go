@@ -1,6 +1,7 @@
 package icu
 
 import (
+	"math"
 	"fmt"
 	"sort"
 	"strings"
@@ -223,6 +224,9 @@ type TrainingPlanCompletedWeek struct {
 	LongEnduranceSessions int     `json:"longEnduranceSessions"`
 	MeanIntensity         float64 `json:"meanIntensity,omitempty"`
 	MeanDecoupling        float64 `json:"meanDecoupling,omitempty"`
+	// DecouplingExcluded counts rides whose decoupling was dropped from
+	// MeanDecoupling as a robust (MAD z-score) outlier vs. the history.
+	DecouplingExcluded int `json:"decouplingExcluded,omitempty"`
 	Tolerance             string  `json:"tolerance,omitempty"`
 }
 
@@ -346,6 +350,8 @@ type trainingPlanHistoryWeek struct {
 	longEnduranceSessions int
 	intensity             numericAccumulator
 	decoupling            numericAccumulator
+	decouplingValues      []float64
+	decouplingExcluded    int
 	startDate             string
 	endDate               string
 }
@@ -1279,7 +1285,9 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		week.startDate = weekStart.Format(analysisDateLayout)
 		week.endDate = weekEnd.Format(analysisDateLayout)
 		week.intensity.addIfNonZero(activity.Intensity)
-		week.decoupling.addIfNonZero(activity.Decoupling)
+		if activity.Decoupling != 0 {
+			week.decouplingValues = append(week.decouplingValues, activity.Decoupling)
+		}
 
 		if activity.Intensity >= highIntensityThreshold {
 			week.highIntensityDays++
@@ -1293,10 +1301,53 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 	}
 
 	zeroFillHistoryWeeks(weeks, options.HistoryStartDate, options.HistoryEndDate)
+	historyDecoupling := filterHistoryDecoupling(weeks)
 	finishTrainingPlanHistory(&history, weeks)
 	addCurrentTrainingStateToHistory(&history, activities, options, wellness)
+	if historyDecoupling.count > 0 {
+		history.CurrentDecoupling = round2(historyDecoupling.average())
+	}
 
 	return history
+}
+
+// filterHistoryDecoupling drops per-ride decoupling outliers before weekly
+// means are taken. Short or unsteady rides (e.g. a 6-minute spin at -74%)
+// produce implausible values that dominate a 3-ride mean. Outliers are
+// detected against the athlete's own history with a MAD robust z-score
+// (robustFilteredFloats); with fewer samples than it needs, all values are
+// kept. It fills each week's decoupling accumulator and excluded count and
+// returns the accumulator over all kept rides.
+func filterHistoryDecoupling(weeks map[string]trainingPlanHistoryWeek) numericAccumulator {
+	var all []float64
+	for _, week := range weeks {
+		all = append(all, week.decouplingValues...)
+	}
+
+	var kept numericAccumulator
+	if len(all) == 0 {
+		return kept
+	}
+	filtered := robustFilteredFloats(all)
+	low, high := filtered[0], filtered[0]
+	for _, value := range filtered {
+		low = math.Min(low, value)
+		high = math.Max(high, value)
+	}
+
+	for key, week := range weeks {
+		for _, value := range week.decouplingValues {
+			if value < low || value > high {
+				week.decouplingExcluded++
+				continue
+			}
+			week.decoupling.add(value)
+			kept.add(value)
+		}
+		weeks[key] = week
+	}
+
+	return kept
 }
 
 // zeroFillHistoryWeeks adds an empty entry for every ISO week that overlaps
@@ -1370,6 +1421,7 @@ func completedHistoryWeeks(keys []string, weeks map[string]trainingPlanHistoryWe
 			LongEnduranceSessions: week.longEnduranceSessions,
 			MeanIntensity:         round3(week.intensity.average()),
 			MeanDecoupling:        round2(week.decoupling.average()),
+			DecouplingExcluded:    week.decouplingExcluded,
 			Tolerance:             completedWeekTolerance(week.load, averageWeeklyLoad),
 		})
 	}

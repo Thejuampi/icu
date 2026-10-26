@@ -890,3 +890,38 @@ func TestAnalyzeTrainingPlanHistoryDoesNotZeroFillPartialEdgeWeeks(t *testing.T)
 		t.Fatalf("weeks=%d avg=%v, want 2 full weeks avg 75", got.CompletedWeeks, got.AverageWeeklyLoad)
 	}
 }
+
+func TestAnalyzeTrainingPlanHistoryFiltersDecouplingOutliers(t *testing.T) {
+	t.Parallel()
+
+	ride := func(id, date string, decoupling float64) icu.Activity {
+		return icu.Activity{ID: id, StartDateLocal: date + "T08:00:00", Type: "Ride", TrainingLoad: 50, MovingTime: 3600, Decoupling: decoupling}
+	}
+	// Replays the reported W38: a 6-minute spin at -74.1% beside steady rides.
+	activities := []icu.Activity{
+		ride("a1", "2026-09-08", 3.1), ride("a2", "2026-09-10", 4.4), ride("a3", "2026-09-12", 2.8),
+		ride("b1", "2026-09-15", 3.56), ride("b2", "2026-09-17", 4.19), ride("b3", "2026-09-20", -74.1),
+	}
+	options := icu.TrainingPlanOptions{HistoryStartDate: "2026-09-07", HistoryEndDate: "2026-09-20", PlanStartDate: "2026-09-21", PlanEndDate: "2026-10-04"}
+
+	got := icu.AnalyzeTrainingPlanWithContext(activities, nil, options, icu.TrainingPlanContext{}).History
+	w38 := got.Weeks[len(got.Weeks)-1]
+	if w38.MeanDecoupling != 3.88 || w38.DecouplingExcluded != 1 || got.CurrentDecoupling < 2 || got.CurrentDecoupling > 5 {
+		t.Fatalf("W38 mean=%v excluded=%d current=%v, want 3.88, 1 excluded, current within steady range", w38.MeanDecoupling, w38.DecouplingExcluded, got.CurrentDecoupling)
+	}
+}
+
+func TestAnalyzeTrainingPlanHistoryKeepsDecouplingWhenSparse(t *testing.T) {
+	t.Parallel()
+
+	activities := []icu.Activity{
+		{ID: "a1", StartDateLocal: "2026-09-15T08:00:00", Type: "Ride", TrainingLoad: 50, Decoupling: 3},
+		{ID: "a2", StartDateLocal: "2026-09-17T08:00:00", Type: "Ride", TrainingLoad: 50, Decoupling: 30},
+	}
+	options := icu.TrainingPlanOptions{HistoryStartDate: "2026-09-14", HistoryEndDate: "2026-09-20", PlanStartDate: "2026-09-21", PlanEndDate: "2026-10-04"}
+
+	got := icu.AnalyzeTrainingPlanWithContext(activities, nil, options, icu.TrainingPlanContext{}).History
+	if got.Weeks[0].MeanDecoupling != 16.5 || got.Weeks[0].DecouplingExcluded != 0 {
+		t.Fatalf("mean=%v excluded=%d, want 16.5 and nothing excluded with too few samples", got.Weeks[0].MeanDecoupling, got.Weeks[0].DecouplingExcluded)
+	}
+}
