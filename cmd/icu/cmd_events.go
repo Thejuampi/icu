@@ -78,7 +78,7 @@ func eventsCreateCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--upsert]",
+			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert]",
 		Description: "Create calendar event.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			request, err := buildEventCreate(flags)
@@ -87,6 +87,9 @@ func eventsCreateCommand() *Command {
 			}
 
 			if BoolFlag(flags, "upsert") {
+				if request.Body.UID == "" {
+					return fmt.Errorf("%w: --upsert updates the event with the same --uid; pass --uid", errInvalidValue)
+				}
 				if err := backupUpsertTargets(client, &request.Body); err != nil {
 					return err
 				}
@@ -189,6 +192,7 @@ func buildEventCreate(flags map[string]string) (calculatedEventRequest, error) {
 		Color:          icu.StringFlag(flags, "color", ""),
 		Indoor:         BoolFlag(flags, "indoor"),
 		ExternalID:     icu.StringFlag(flags, "external-id", ""),
+		UID:            icu.StringFlag(flags, "uid", ""),
 	}
 
 	return applyCalculatedEventLoad(flags, &body, body.Type)
@@ -344,20 +348,34 @@ func eventsDownloadCommand() *Command {
 	}
 }
 
-// backupUpsertTargets backs up every event on the body's start date that an
-// upsert could overwrite (same external_id), so events revert can undo it.
-// Without an external id the upsert has nothing to match and creates.
+// upsertSearchDays bounds the uid search around the new event's date.
+// intervals.icu matches upsertOnUid across the whole calendar, but the
+// events list needs a range; two years either side covers real calendars.
+const upsertSearchDays = 730
+
+// backupUpsertTargets backs up the events an upsert would overwrite:
+// POST events?upsertOnUid=true updates the event whose uid equals the body's
+// uid (intervals.icu API docs; external_id is only used by events/bulk
+// ?upsert=true), so the same uid is searched here.
 func backupUpsertTargets(client *icu.Client, body *icu.EventEx) error {
-	if body.ExternalID == "" || len(body.StartDateLocal) < len("2006-01-02") {
+	if body.UID == "" || len(body.StartDateLocal) < len("2006-01-02") {
 		return nil
 	}
 	day := body.StartDateLocal[:len("2006-01-02")]
-	events, err := readRebalanceEvents(client, day, day)
+	oldest, err := addDays(day, -upsertSearchDays)
+	if err != nil {
+		return err
+	}
+	newest, err := addDays(day, upsertSearchDays)
+	if err != nil {
+		return err
+	}
+	events, err := readRebalanceEvents(client, oldest, newest)
 	if err != nil {
 		return err
 	}
 	for index := range events {
-		if events[index].ExternalID == body.ExternalID || events[index].UID == body.ExternalID {
+		if events[index].UID == body.UID {
 			if _, err := backupEvent(client, events[index].ID, "events create --upsert"); err != nil {
 				return err
 			}

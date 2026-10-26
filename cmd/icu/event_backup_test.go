@@ -219,9 +219,9 @@ func TestEventsCreateUpsertBacksUpMatchingEvent(t *testing.T) {
 		response.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/events"):
-			_, _ = response.Write([]byte(`[{"id":5,"external_id":"ext-1"},{"id":6,"external_id":"other"}]`))
+			_, _ = response.Write([]byte(`[{"id":5,"uid":"u-1"},{"id":6,"uid":"other","external_id":"u-1"}]`))
 		case request.Method == http.MethodGet:
-			_, _ = response.Write([]byte(`{"id":5,"external_id":"ext-1","name":"Old"}`))
+			_, _ = response.Write([]byte(`{"id":5,"uid":"u-1","name":"Old"}`))
 		default:
 			_, _ = response.Write([]byte(`{"id":5}`))
 		}
@@ -229,7 +229,10 @@ func TestEventsCreateUpsertBacksUpMatchingEvent(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 
-	flags := map[string]string{"upsert": "true", "external-id": "ext-1", "name": "New", "start-date": "2026-10-27T07:00:00"}
+	if err := eventsCreateCommand().Run(nil, map[string]string{"upsert": "true", "name": "x"}, client); err == nil {
+		t.Fatal("--upsert without --uid accepted")
+	}
+	flags := map[string]string{"upsert": "true", "uid": "u-1", "name": "New", "start-date": "2026-10-27T07:00:00"}
 	if _, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) }); err != nil {
 		t.Fatal(err)
 	}
@@ -251,5 +254,63 @@ func TestEventDescriptionRejectsEmptyFile(t *testing.T) {
 	if _, err := eventDescription(map[string]string{"desc-file": path}); err == nil ||
 		!strings.Contains(err.Error(), "is empty") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+//nolint:paralleltest // sets ICU_BACKUP_DIR and captures stdout.
+func TestEventsRevertRecreateIsIdempotent(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	var calendar string
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/events/8"):
+			_, _ = response.Write([]byte(`{"id":8,"name":"Z2","category":"WORKOUT","start_date_local":"2026-10-27T07:00:00"}`))
+		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/events"):
+			if calendar == "" {
+				_, _ = response.Write([]byte(`[]`))
+			} else {
+				_, _ = response.Write([]byte(calendar))
+			}
+		case request.Method == http.MethodPost:
+			posts++
+			_, _ = response.Write([]byte(`{"id":99}`))
+		default:
+			_, _ = response.Write([]byte(`{}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	if _, err := captureStdout(t, func() error { return eventsDeleteCommand().Run([]string{"8"}, nil, client) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := captureStdout(t, func() error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	}); err != nil || posts != 1 {
+		t.Fatalf("first revert: posts=%d err=%v", posts, err)
+	}
+	// The backup now records restoredEventId: a second revert aborts.
+	err := eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	if err == nil || !strings.Contains(err.Error(), "already restored as event 99") || posts != 1 {
+		t.Fatalf("second revert: posts=%d err=%v", posts, err)
+	}
+	// A fresh backup (e.g. restored by hand) is caught by the calendar lookup.
+	paths, _ := listEventBackups(8)
+	backup, _ := readEventBackup(paths[0])
+	backup.RestoredEventID = 0
+	if err := rewriteEventBackup(paths[0], &backup); err != nil {
+		t.Fatal(err)
+	}
+	calendar = `[{"id":99,"name":"Z2","category":"WORKOUT","start_date_local":"2026-10-27T07:00:00"}]`
+	err = eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	if err == nil || !strings.Contains(err.Error(), "already matches backup") || posts != 1 {
+		t.Fatalf("lookup revert: posts=%d err=%v", posts, err)
+	}
+	if _, err := captureStdout(t, func() error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "8", "force": "true"}, client)
+	}); err != nil || posts != 2 {
+		t.Fatalf("forced revert: posts=%d err=%v", posts, err)
 	}
 }

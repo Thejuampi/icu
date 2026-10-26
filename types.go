@@ -395,23 +395,25 @@ type Event struct {
 //
 //nolint:tagliatelle // API requires snake_case
 type EventEx struct {
-	StartDateLocal  string   `json:"start_date_local,omitempty"`
-	EndDateLocal    string   `json:"end_date_local,omitempty"`
-	Category        string   `json:"category,omitempty"`
-	Type            string   `json:"type,omitempty"`
-	Name            string   `json:"name,omitempty"`
-	Description     string   `json:"description,omitempty"`
-	TrainingLoad    int      `json:"icu_training_load,omitempty"`
-	MovingTime      int      `json:"moving_time,omitempty"`
-	Distance        float64  `json:"distance,omitempty"`
-	Color           string   `json:"color,omitempty"`
-	Indoor          bool     `json:"indoor,omitempty"`
-	Target          string   `json:"target,omitempty"`
-	Tags            []string `json:"tags,omitempty"`
-	ExternalID      string   `json:"external_id,omitempty"`
-	FileContents    string   `json:"file_contents,omitempty"`
-	FileContentsB64 string   `json:"file_contents_base64,omitempty"`
-	Filename        string   `json:"filename,omitempty"`
+	StartDateLocal string   `json:"start_date_local,omitempty"`
+	EndDateLocal   string   `json:"end_date_local,omitempty"`
+	Category       string   `json:"category,omitempty"`
+	Type           string   `json:"type,omitempty"`
+	Name           string   `json:"name,omitempty"`
+	Description    string   `json:"description,omitempty"`
+	TrainingLoad   int      `json:"icu_training_load,omitempty"`
+	MovingTime     int      `json:"moving_time,omitempty"`
+	Distance       float64  `json:"distance,omitempty"`
+	Color          string   `json:"color,omitempty"`
+	Indoor         bool     `json:"indoor,omitempty"`
+	Target         string   `json:"target,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	ExternalID     string   `json:"external_id,omitempty"`
+	// UID is the calendar uid that POST events?upsertOnUid=true matches on.
+	UID             string `json:"uid,omitempty"`
+	FileContents    string `json:"file_contents,omitempty"`
+	FileContentsB64 string `json:"file_contents_base64,omitempty"`
+	Filename        string `json:"filename,omitempty"`
 }
 
 type Workout struct {

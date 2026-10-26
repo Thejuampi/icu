@@ -32,6 +32,9 @@ type eventBackup struct {
 	Reason  string          `json:"reason"`
 	TakenAt string          `json:"takenAt"`
 	Event   json.RawMessage `json:"event"`
+	// RestoredEventID is the id a recreate revert created from this backup,
+	// written back to the file so the revert is not repeated.
+	RestoredEventID int `json:"restoredEventId,omitempty"`
 }
 
 func eventBackupDir() string {
@@ -202,6 +205,12 @@ func eventsRevertCommand() *Command {
 			if err := applyEventRevert(client, &backup, recreate, BoolFlag(flags, "force"), &result); err != nil {
 				return err
 			}
+			if recreate {
+				backup.RestoredEventID = result.RestoredEventID
+				if err := rewriteEventBackup(path, &backup); err != nil {
+					return err
+				}
+			}
 
 			return writeJSON(result)
 		},
@@ -236,6 +245,11 @@ func resolveRevertBackup(flags map[string]string) (string, error) {
 
 func applyEventRevert(client *icu.Client, backup *eventBackup, recreate, force bool, result *eventRevertResult) error {
 	if recreate {
+		if !force {
+			if err := checkNotRecreated(client, backup); err != nil {
+				return err
+			}
+		}
 		body, err := withoutEventID(backup.Event)
 		if err != nil {
 			return err
@@ -315,4 +329,50 @@ func eventsDeleteCommand() *Command {
 			return writeJSON(map[string]any{"deleted": eventID, "backupPath": path})
 		},
 	}
+}
+
+// checkNotRecreated aborts a recreate that already happened: the backup
+// records a restored id, or the calendar already has an event on the same
+// date with the same uid, or the same name and category.
+func checkNotRecreated(client *icu.Client, backup *eventBackup) error {
+	if backup.RestoredEventID != 0 {
+		return fmt.Errorf("backup of event %d was already restored as event %d (use --force to create another copy)",
+			backup.EventID, backup.RestoredEventID)
+	}
+	var stored icu.Event
+	if err := json.Unmarshal(backup.Event, &stored); err != nil {
+		return fmt.Errorf("decode backup event %d: %w", backup.EventID, err)
+	}
+	day := stored.StartDateLocal
+	if len(day) < len("2006-01-02") {
+		return nil
+	}
+	day = day[:len("2006-01-02")]
+	events, err := readRebalanceEvents(client, day, day)
+	if err != nil {
+		return err
+	}
+	for index := range events {
+		event := &events[index]
+		sameUID := stored.UID != "" && event.UID == stored.UID
+		sameName := stored.Name != "" && event.Name == stored.Name && event.Category == stored.Category
+		if sameUID || sameName {
+			return fmt.Errorf("event %d on %s already matches backup of event %d (uid or name); "+
+				"not recreating (use --force to create another copy)", event.ID, day, backup.EventID)
+		}
+	}
+
+	return nil
+}
+
+func rewriteEventBackup(path string, backup *eventBackup) error {
+	data, err := json.MarshalIndent(backup, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal event backup: %w", err)
+	}
+	if err := os.WriteFile(filepath.Clean(path), data, eventBackupFileMode); err != nil {
+		return fmt.Errorf("record restored id in %s: %w", path, err)
+	}
+
+	return nil
 }
