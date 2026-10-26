@@ -41,7 +41,7 @@ func planShowCommand() *Command {
 func planPreviewCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "plan preview --file PATH [--no-live-check] [--max-ramp CTL/WEEK]",
+		Usage:       "plan preview --file PATH [--no-live-check] [--max-ramp CTL/WEEK] [--now-date DATE] [--timezone TZ]",
 		Description: "Validate a plan proposal and print a non-mutating operation preview.",
 		Schema:      planPreviewSchema(),
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
@@ -138,6 +138,8 @@ func planPreviewSchema() *CommandSchema {
 			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
 			{Name: "no-live-check", ValueName: "BOOL", Description: "Skip live source-hash, baseline drift and load projection.", Kind: commandFlagBoolean},
 			{Name: "max-ramp", ValueName: "CTL/WEEK", Description: "Projected CTL ramp cap; overrides profile maxRampPerWeek."},
+			{Name: "now-date", ValueName: "DATE", Description: "Projection 'today' (YYYY-MM-DD); default is today in the athlete timezone."},
+			{Name: "timezone", ValueName: "TZ", Description: "IANA timezone for 'today'; default is the athlete profile timezone."},
 		}, commonAuthFlags()...),
 	}
 }
@@ -354,27 +356,61 @@ func planProfileWarnings(proposal *icu.PlanProposalFile, settings *icu.SportSett
 		icu.PlanMonotonyWarnings(proposal.Sessions, maxSimilar)...)
 }
 
-// planLoadProjection projects CTL/ATL/TSB from today's wellness through the
-// proposal's end date using existing calendar workouts plus pending
-// operations. The ramp cap comes from --max-ramp, else the profile; with no
-// cap configured the ramp is reported but never flagged.
+// projectionLookbackDays bounds the wellness read: the start row plus the
+// real CTL of the 7 days before it, used for the rolling ramp.
+const projectionLookbackDays = 14
+
+// planLoadProjection projects CTL/ATL/TSB from the last wellness row before
+// today through the proposal's end date. Today is --now-date, else today in
+// the athlete timezone. Days before today use completed activity load, today
+// uses the larger of completed and planned load, later days use existing
+// calendar workouts plus pending operations. The ramp cap comes from
+// --max-ramp, else the profile; with no cap the ramp is reported but never
+// flagged. All reads are GETs.
 func planLoadProjection(
 	client *icu.Client, proposal *icu.PlanProposalFile, flags map[string]string, now time.Time,
 ) (*icu.LoadProjection, error) {
-	today := now.Format("2006-01-02")
-	records, asOf, _, err := readCurrentWellnessFitness(client, flags, analysisRange{Oldest: today, Newest: today})
+	today, err := projectionToday(client, flags, now)
 	if err != nil {
 		return nil, err
 	}
-	start, ok := icu.LatestWellnessFitness(records, asOf)
+	oldest, err := addDays(today, -projectionLookbackDays)
+	if err != nil {
+		return nil, err
+	}
+	var records []icu.Wellness
+	if err := client.Get("wellness", nil, dateRangeQuery(oldest, today), &records); err != nil {
+		return nil, wrapCommandError(err)
+	}
+	yesterday, err := addDays(today, -1)
+	if err != nil {
+		return nil, err
+	}
+	start, ok := icu.LatestWellnessFitness(records, yesterday)
 	if !ok {
-		return nil, fmt.Errorf("no wellness CTL/ATL on or before %s", asOf)
+		if start, ok = icu.LatestWellnessFitness(records, today); !ok {
+			return nil, fmt.Errorf("no wellness CTL/ATL on or before %s", today)
+		}
+	}
+	known := map[string]float64{}
+	for index := range records {
+		if records[index].CTL != 0 || records[index].ATL != 0 {
+			known[records[index].ID] = records[index].CTL
+		}
 	}
 	end := proposal.Scope.EndDate
 	if end == "" || end < start.ID {
 		end = start.ID
 	}
-	events, err := readRebalanceEvents(client, start.ID, end)
+	firstDay, err := addDays(start.ID, 1)
+	if err != nil {
+		return nil, err
+	}
+	actual, err := projectionActualLoads(client, firstDay, today)
+	if err != nil {
+		return nil, err
+	}
+	events, err := readRebalanceEvents(client, firstDay, end)
 	if err != nil {
 		return nil, err
 	}
@@ -388,12 +424,49 @@ func planLoadProjection(
 	maxRamp := floatFlagVal(flags, "max-ramp", profile.MaxRampPerWeek)
 	projection, err := icu.ProjectLoad(&icu.LoadProjectionInput{
 		StartDate: start.ID, StartSource: "wellness", StartCTL: start.CTL, StartATL: start.ATL,
-		EndDate: end, DailyLoads: icu.PlanProjectedDailyLoads(proposal.Operations, events),
-		CTLDays: profile.CTLDays, ATLDays: profile.ATLDays, MaxRampPerWeek: maxRamp,
+		EndDate: end, Today: today, KnownCTL: known, ActualLoads: actual,
+		PlannedLoads: icu.PlanProjectedDailyLoads(proposal.Operations, events),
+		CTLDays:      profile.CTLDays, ATLDays: profile.ATLDays, MaxRampPerWeek: maxRamp,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("project load: %w", err)
 	}
 
 	return &projection, nil
+}
+
+func projectionToday(client *icu.Client, flags map[string]string, now time.Time) (string, error) {
+	if nowDate := icu.StringFlag(flags, "now-date", ""); nowDate != "" {
+		if _, err := parseAnalysisDate("--now-date", nowDate); err != nil {
+			return "", err
+		}
+
+		return nowDate, nil
+	}
+
+	return clampDateToAthleteToday(client, flags, "9999-12-31", now)
+}
+
+// projectionActualLoads sums completed activity load per local day.
+func projectionActualLoads(client *icu.Client, oldest, newest string) (map[string]float64, error) {
+	loads := map[string]float64{}
+	if oldest > newest {
+		return loads, nil
+	}
+	activities, err := readRebalanceActivities(client, oldest, newest, nil)
+	if err != nil {
+		return nil, err
+	}
+	for index := range activities {
+		if date := activities[index].StartDateLocal; len(date) >= len("2006-01-02") {
+			loads[date[:len("2006-01-02")]] += float64(activities[index].TrainingLoad)
+		}
+	}
+
+	return loads, nil
+}
+
+// dateRangeQuery is the oldest/newest query shared by read-only range GETs.
+func dateRangeQuery(oldest, newest string) map[string]string {
+	return map[string]string{"oldest": oldest, "newest": newest}
 }

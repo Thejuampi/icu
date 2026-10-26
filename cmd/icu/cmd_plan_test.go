@@ -587,16 +587,17 @@ func TestPlanLoadProjectionStartsFromWellness(t *testing.T) {
 	}
 	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
 
-	got, err := planLoadProjection(client, proposal, map[string]string{}, now)
+	got, err := planLoadProjection(client, proposal, map[string]string{"timezone": "UTC"}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.StartDate != "2026-10-26" || got.StartCTL != 41 || got.StartSource != "wellness" ||
+	// Starts from yesterday's row so today's load is projected too.
+	if got.StartDate != "2026-10-25" || got.StartCTL != 40 || got.StartSource != "wellness" ||
 		got.EndDate != "2026-11-01" || got.MaxRampPerWeek != 50 || len(got.Warnings) != 0 {
 		t.Fatalf("projection = %+v", got)
 	}
-	capped, err := planLoadProjection(client, proposal, map[string]string{"max-ramp": "2"}, now)
-	if err != nil || len(capped.Warnings) != 1 || !strings.Contains(capped.Warnings[0], "exceeds the 2.00/week cap") {
+	capped, err := planLoadProjection(client, proposal, map[string]string{"max-ramp": "1", "timezone": "UTC"}, now)
+	if err != nil || len(capped.Warnings) != 1 || !strings.Contains(capped.Warnings[0], "exceeds the 1.00/week cap") {
 		t.Fatalf("capped = %+v, %v", capped, err)
 	}
 	for _, method := range methods {
@@ -612,5 +613,43 @@ func TestPlanLoadProjectionStartsFromWellness(t *testing.T) {
 	emptyClient := icu.NewClient("k", "i1", icu.WithHTTPClient(empty.Client()), icu.WithBaseURL(empty.URL))
 	if _, err := planLoadProjection(emptyClient, proposal, nil, now); err == nil {
 		t.Fatal("projection without wellness succeeded")
+	}
+}
+
+func TestPlanLoadProjectionUsesNowDateAndActualLoads(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+
+	var activityQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet {
+			t.Errorf("unexpected %s", request.Method)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-10-20","ctl":40,"atl":45}]`))
+		case strings.HasSuffix(request.URL.Path, "/activities"):
+			activityQuery = request.URL.Query().Get("oldest") + ".." + request.URL.Query().Get("newest")
+			_, _ = response.Write([]byte(`[{"id":"a1","start_date_local":"2026-10-21T08:00:00","icu_training_load":60},` +
+				`{"id":"a2","start_date_local":"2026-10-21T18:00:00","icu_training_load":40}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	proposal := &icu.PlanProposalFile{Scope: icu.PlanScope{EndDate: "2026-10-23"}}
+
+	got, err := planLoadProjection(client, proposal, map[string]string{"now-date": "2026-10-22"},
+		time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activityQuery != "2026-10-21..2026-10-22" || got.StartDate != "2026-10-20" || got.Weeks[0].Load != 100 {
+		t.Fatalf("query=%s projection=%+v", activityQuery, got)
+	}
+	if _, err := planLoadProjection(client, proposal, map[string]string{"now-date": "bad"}, time.Now()); err == nil {
+		t.Fatal("expected --now-date validation error")
 	}
 }

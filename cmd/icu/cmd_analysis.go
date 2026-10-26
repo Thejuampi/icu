@@ -388,7 +388,7 @@ func readCurrentWellnessFitness(client *icu.Client, flags map[string]string, dat
 	}
 
 	var records []icu.Wellness
-	if err := client.Get("wellness", nil, map[string]string{"oldest": oldest, "newest": newest}, &records); err != nil {
+	if err := client.Get("wellness", nil, dateRangeQuery(oldest, newest), &records); err != nil {
 		return nil, newest, "wellness unavailable, CTL/ATL/TSB are from the last activity: " + err.Error(), nil //nolint:nilerr // wellness is optional context; the failure is reported as a warning
 	}
 

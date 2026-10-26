@@ -2,6 +2,7 @@ package icu
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -26,8 +27,11 @@ type LoadProjection struct {
 	Warnings       []string             `json:"warnings,omitempty"`
 }
 
-// LoadProjectionWeek is one ISO week of the projection. RampPerWeek is the
-// CTL change scaled to 7 days so partial weeks compare against the cap.
+// LoadProjectionWeek is one ISO week of the projection. Ramp is the raw CTL
+// change across the projected days of the week. RampPerWeek is the largest
+// rolling 7-day ramp, CTL[d] - CTL[d-7], ending on a day of this week, so a
+// partial week is never extrapolated. Days before the projection start use
+// the athlete's real wellness CTL (LoadProjectionInput.KnownCTL).
 type LoadProjectionWeek struct {
 	WeekStart   string  `json:"weekStart"`
 	Days        int     `json:"days"`
@@ -36,26 +40,54 @@ type LoadProjectionWeek struct {
 	EndCTL      float64 `json:"endCtl"`
 	Ramp        float64 `json:"ramp"`
 	RampPerWeek float64 `json:"rampPerWeek"`
-	OverCap     bool    `json:"overCap,omitempty"`
+	// RampKnown is false when no day of the week has a CTL value 7 days back.
+	RampKnown bool `json:"rampKnown"`
+	OverCap   bool `json:"overCap,omitempty"`
 }
 
-// LoadProjectionInput feeds ProjectLoad. DailyLoads are keyed by
-// YYYY-MM-DD; only days after StartDate (whose values already include that
-// day) through EndDate are projected.
+// LoadProjectionInput feeds ProjectLoad. Loads are keyed by YYYY-MM-DD; only
+// days after StartDate (whose values already include that day) through
+// EndDate are projected. Days before Today use ActualLoads (completed
+// activities); Today uses the larger of the completed and planned load, so a
+// workout that is still planned counts and a completed one is not counted
+// twice; later days use PlannedLoads. An empty Today treats every day as
+// planned.
 type LoadProjectionInput struct {
 	StartDate      string
 	StartSource    string
 	StartCTL       float64
 	StartATL       float64
 	EndDate        string
-	DailyLoads     map[string]float64
+	Today          string
+	PlannedLoads   map[string]float64
+	ActualLoads    map[string]float64
+	KnownCTL       map[string]float64
 	CTLDays        int
 	ATLDays        int
 	MaxRampPerWeek float64
 }
 
+// emaFactor is the daily smoothing factor intervals.icu uses for CTL/ATL:
+// k = 1 - exp(-1/tau). The linear 1/tau approximation drifts (ATL 45.84 vs
+// 45.02 live); see the replay test against real wellness rows.
+func emaFactor(days int) float64 {
+	return 1 - math.Exp(-1/float64(days))
+}
+
+func (input *LoadProjectionInput) loadOn(date string) float64 {
+	switch {
+	case input.Today == "" || date > input.Today:
+		return input.PlannedLoads[date]
+	case date == input.Today:
+		return math.Max(input.ActualLoads[date], input.PlannedLoads[date])
+	default:
+		return input.ActualLoads[date]
+	}
+}
+
 // ProjectLoad runs the exponentially weighted CTL/ATL model day by day:
-// x += (load - x) / days. TSB is CTL - ATL, as intervals.icu reports form.
+// x += (load - x) * (1 - exp(-1/days)). TSB is CTL - ATL, as intervals.icu
+// reports form.
 func ProjectLoad(input *LoadProjectionInput) (LoadProjection, error) {
 	start, err := time.Parse(analysisDateLayout, input.StartDate)
 	if err != nil {
@@ -73,6 +105,14 @@ func ProjectLoad(input *LoadProjectionInput) (LoadProjection, error) {
 		StartTSB: round2(input.StartCTL - input.StartATL),
 		EndDate:  input.StartDate, CTLDays: ctlDays, ATLDays: atlDays, MaxRampPerWeek: input.MaxRampPerWeek,
 	}
+	ctlByDate := map[string]float64{}
+	for date, value := range input.KnownCTL {
+		if date <= input.StartDate {
+			ctlByDate[date] = value
+		}
+	}
+	ctlByDate[input.StartDate] = input.StartCTL
+	ctlFactor, atlFactor := emaFactor(ctlDays), emaFactor(atlDays)
 	ctl, atl := input.StartCTL, input.StartATL
 	var week *LoadProjectionWeek
 	for day := start.AddDate(0, 0, 1); !day.After(end); day = day.AddDate(0, 0, 1) {
@@ -82,9 +122,17 @@ func ProjectLoad(input *LoadProjectionInput) (LoadProjection, error) {
 			projection.appendWeek(week)
 			week = &LoadProjectionWeek{WeekStart: weekStart, StartCTL: round2(ctl)}
 		}
-		load := input.DailyLoads[date]
-		ctl += (load - ctl) / float64(ctlDays)
-		atl += (load - atl) / float64(atlDays)
+		load := input.loadOn(date)
+		ctl += (load - ctl) * ctlFactor
+		atl += (load - atl) * atlFactor
+		ctlByDate[date] = ctl
+		if prior, ok := ctlByDate[day.AddDate(0, 0, -daysPerWeek).Format(analysisDateLayout)]; ok {
+			ramp := ctl - prior
+			if !week.RampKnown || ramp > week.RampPerWeek {
+				week.RampPerWeek = ramp
+			}
+			week.RampKnown = true
+		}
 		week.Days++
 		week.Load += load
 		week.EndCTL = round2(ctl)
@@ -101,11 +149,11 @@ func (projection *LoadProjection) appendWeek(week *LoadProjectionWeek) {
 		return
 	}
 	week.Ramp = round2(week.EndCTL - week.StartCTL)
-	week.RampPerWeek = round2(week.Ramp * daysPerWeek / float64(week.Days))
-	if projection.MaxRampPerWeek > 0 && week.RampPerWeek > projection.MaxRampPerWeek {
+	week.RampPerWeek = round2(week.RampPerWeek)
+	if projection.MaxRampPerWeek > 0 && week.RampKnown && week.RampPerWeek > projection.MaxRampPerWeek {
 		week.OverCap = true
 		projection.Warnings = append(projection.Warnings, fmt.Sprintf(
-			"projection: week %s CTL ramp %.2f/week exceeds the %.2f/week cap (CTL %.1f -> %.1f)",
+			"projection: week %s rolling 7-day CTL ramp %.2f exceeds the %.2f/week cap (CTL %.1f -> %.1f)",
 			week.WeekStart, week.RampPerWeek, projection.MaxRampPerWeek, week.StartCTL, week.EndCTL,
 		))
 	}
