@@ -860,3 +860,33 @@ func TestAnalyzeTrainingPlanCurrentLoadPrefersWellness(t *testing.T) {
 		t.Fatalf("current tsb=%v source=%q date=%q, want -10.15 wellness 2026-10-26", got.CurrentTSB, got.CurrentLoadSource, got.CurrentLoadDate)
 	}
 }
+
+func TestAnalyzeTrainingPlanHistoryCountsZeroLoadWeeks(t *testing.T) {
+	t.Parallel()
+
+	// History 2026-08-03 (Mon) .. 2026-08-30 (Sun) = 4 full ISO weeks; only
+	// weeks 1 and 4 have rides, so the average must divide by 4, not 2.
+	activities := []icu.Activity{
+		{ID: "a1", StartDateLocal: "2026-08-04T08:00:00", Type: "Ride", TrainingLoad: 200, MovingTime: 3600},
+		{ID: "a2", StartDateLocal: "2026-08-27T08:00:00", Type: "Ride", TrainingLoad: 200, MovingTime: 3600},
+	}
+	options := icu.TrainingPlanOptions{HistoryStartDate: "2026-08-03", HistoryEndDate: "2026-08-30", PlanStartDate: "2026-08-31", PlanEndDate: "2026-09-13"}
+
+	got := icu.AnalyzeTrainingPlanWithContext(activities, nil, options, icu.TrainingPlanContext{}).History
+	if got.CompletedWeeks != 4 || got.AverageWeeklyLoad != 100 || len(got.Weeks) != 4 || got.Weeks[1].Load != 0 {
+		t.Fatalf("weeks=%d avg=%v len=%d, want 4 weeks avg 100 with zero-filled middle weeks", got.CompletedWeeks, got.AverageWeeklyLoad, len(got.Weeks))
+	}
+}
+
+func TestAnalyzeTrainingPlanHistoryDoesNotZeroFillPartialEdgeWeeks(t *testing.T) {
+	t.Parallel()
+
+	// 2026-08-05 (Wed) .. 2026-08-25 (Tue): edge weeks are partial and empty.
+	activities := []icu.Activity{{ID: "a1", StartDateLocal: "2026-08-12T08:00:00", Type: "Ride", TrainingLoad: 150}}
+	options := icu.TrainingPlanOptions{HistoryStartDate: "2026-08-05", HistoryEndDate: "2026-08-25", PlanStartDate: "2026-08-31", PlanEndDate: "2026-09-13"}
+
+	got := icu.AnalyzeTrainingPlanWithContext(activities, nil, options, icu.TrainingPlanContext{}).History
+	if got.CompletedWeeks != 2 || got.AverageWeeklyLoad != 75 {
+		t.Fatalf("weeks=%d avg=%v, want 2 full weeks avg 75", got.CompletedWeeks, got.AverageWeeklyLoad)
+	}
+}

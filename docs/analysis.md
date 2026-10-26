@@ -271,7 +271,7 @@ The CLI currently passes `Adaptation: nil`, even though the library supports ada
 ### Output Sections
 
 - `scope`: history window, plan window, event counts, and `timezone`/`timezoneSource` metadata
-- `history`: completed weekly load/hours, recent tolerance, current state, and completed-week series. `currentCtl`/`currentAtl`/`currentTsb` prefer the latest wellness row at or before the history end (`currentLoadSource: "wellness"`, `currentLoadDate`), falling back to the newest activity (`currentLoadSource: "last_activity"`). Projected future wellness rows are ignored.
+- `history`: completed weekly load/hours, recent tolerance, current state, and completed-week series. `currentCtl`/`currentAtl`/`currentTsb` prefer the latest wellness row at or before the history end (`currentLoadSource: "wellness"`, `currentLoadDate`), falling back to the newest activity (`currentLoadSource: "last_activity"`). Projected future wellness rows are ignored. Every full ISO week inside the history range is counted, with zero-load weeks included in `weeks`, `completedWeeks`, and the weekly averages; partial weeks at the range edges count only when they have rides. History load and hours are cycling-only (`Ride`-family activities); CTL/ATL include all sports.
 - `anchors`: FTP, indoor FTP, LTHR, max HR, W', and Pmax from sport settings
 - `phase`: inferred block label, pattern, intent, confidence, and source
 - `load`: total planned load, weekly progression, peak week, lowest week, and deload percentage

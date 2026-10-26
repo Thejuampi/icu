@@ -1292,10 +1292,36 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		weeks[key] = week
 	}
 
+	zeroFillHistoryWeeks(weeks, options.HistoryStartDate, options.HistoryEndDate)
 	finishTrainingPlanHistory(&history, weeks)
 	addCurrentTrainingStateToHistory(&history, activities, options, wellness)
 
 	return history
+}
+
+// zeroFillHistoryWeeks adds an empty entry for every ISO week that overlaps
+// the history range and has no cycling activity, so weekly averages and
+// tolerance labels count rest/off-bike weeks as zero load instead of skipping
+// them. Partial weeks at either edge of the range (for example the week still
+// in progress) are only kept when they already have activity.
+func zeroFillHistoryWeeks(weeks map[string]trainingPlanHistoryWeek, startDate, endDate string) {
+	start, startErr := time.Parse(analysisDateLayout, startDate)
+	end, endErr := time.Parse(analysisDateLayout, endDate)
+	if startErr != nil || endErr != nil || end.Before(start) {
+		return
+	}
+
+	for weekStart := isoWeekStart(start); !weekStart.After(end); weekStart = weekStart.AddDate(0, 0, planWeekDays) {
+		weekEnd := weekStart.AddDate(0, 0, planWeekDays-1)
+		key := isoWeekKey(weekStart)
+		if _, ok := weeks[key]; ok || weekStart.Before(start) || weekEnd.After(end) {
+			continue
+		}
+		weeks[key] = trainingPlanHistoryWeek{
+			startDate: weekStart.Format(analysisDateLayout),
+			endDate:   weekEnd.Format(analysisDateLayout),
+		}
+	}
 }
 
 func finishTrainingPlanHistory(history *TrainingPlanHistory, weeks map[string]trainingPlanHistoryWeek) {
