@@ -430,7 +430,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
 
 - `revert`
   Invocation: `icu events revert (--backup PATH | --id ID) [--recreate] [--dry-run]`
-  Notes: Restores an event from a backup (`--id` uses its newest backup). By default it backs up the event's current state, then PUTs the backed-up JSON (every field, including ones the CLI does not model). Backups taken for a cancel, or `--recreate`, POST the event again without its old id. `--dry-run` prints what would happen without calling the API.
+  Notes: Restores an event from a backup (`--id` uses its newest backup). By default it backs up the event's current state, then PUTs the backed-up JSON (every field, including ones the CLI does not model). Backups taken for a cancel, or `--recreate`, POST the event again without its old id: **reverting a cancel recreates the event under a new id** (Intervals.icu cannot restore a deleted id), so any external reference to the old id (plan files, trainer-platform sync, notes) must be updated to the new `id` printed by the command. `--dry-run` prints what would happen without calling the API.
   Example: `icu events revert --id 12345 --dry-run`
 
 - `delete`
