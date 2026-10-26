@@ -1,6 +1,8 @@
 package icu
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -103,5 +105,37 @@ func TestWellnessBaselinesUseFixedPriorWindow(t *testing.T) {
 	short, long := analyze(49), analyze(120)
 	if short == nil || long == nil || *short != *long || short.Baseline != 51 || short.Samples != 42 {
 		t.Fatalf("thresholds depend on --oldest or include the recent week: %+v vs %+v", short, long)
+	}
+}
+
+func TestWellnessStateInsufficientWithoutBaselines(t *testing.T) {
+	t.Parallel()
+	var records []Wellness
+	for day := 20; day <= 26; day++ {
+		records = append(records, Wellness{
+			ID: fmt.Sprintf("2026-10-%02d", day), HRV: 50, RestingHR: 50, SleepScore: 80, CTL: 40, ATL: 45,
+		})
+	}
+	got := AnalyzeWellness(records, AnalysisOptions{StartDate: "2026-10-20", EndDate: "2026-10-26"})
+	if got.State.State != PhysiologyInsufficient || got.State.Confidence != "low" ||
+		!strings.Contains(strings.Join(got.Warnings, "|"), "INSUFFICIENT") ||
+		!strings.Contains(strings.Join(got.Warnings, "|"), "data starts 2026-10-20") {
+		t.Fatalf("state %+v warnings %v", got.State, got.Warnings)
+	}
+}
+
+func TestWellnessBaselineUsesHistoryBeforeShortScope(t *testing.T) {
+	t.Parallel()
+	end := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
+	var records []Wellness
+	for day := 60; day >= 0; day-- {
+		records = append(records, Wellness{ID: end.AddDate(0, 0, -day).Format(analysisDateLayout), RestingHR: 50 + day%3})
+	}
+	full := AnalyzeWellness(records, AnalysisOptions{StartDate: records[0].ID, EndDate: "2026-10-26"})
+	short := AnalyzeWellness(records, AnalysisOptions{StartDate: "2026-10-20", EndDate: "2026-10-26"})
+	if short.RestingHR.Threshold == nil || full.RestingHR.Threshold == nil ||
+		*short.RestingHR.Threshold != *full.RestingHR.Threshold || short.Scope.Records != 7 ||
+		short.RestingHR.Samples != 7 || len(short.Warnings) != 0 {
+		t.Fatalf("short %+v (%v) vs full %+v", short.RestingHR, short.Warnings, full.RestingHR)
 	}
 }

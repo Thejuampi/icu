@@ -122,8 +122,8 @@ func TestAnalyzeWellnessPrefersNamedScoreOverSleepScore(t *testing.T) {
 		EndDate:   testWellnessSecondDate,
 	})
 
-	if got.Sleep.Latest != 88 || got.Sleep.Mean != 90 || got.Sleep.ScoreName != "zepp_hybridcharge" || got.State.State != "OK" {
-		t.Fatalf("Sleep = %+v State = %+v, want latest 88 mean 90 score zepp_hybridcharge state OK", got.Sleep, got.State)
+	if got.Sleep.Latest != 88 || got.Sleep.Mean != 90 || got.Sleep.ScoreName != "zepp_hybridcharge" || got.State.State != icu.PhysiologyInsufficient {
+		t.Fatalf("Sleep = %+v State = %+v, want latest 88 mean 90 score zepp_hybridcharge state INSUFFICIENT", got.Sleep, got.State)
 	}
 }
 
@@ -169,7 +169,7 @@ func TestAnalyzeWellnessKeepsHRVOKWhenLatestRatioDropsButRecentMeanIsNormal(t *t
 	var records []icu.Wellness
 	var day int
 	for day = 1; day <= 35; day++ {
-		records = append(records, wellnessRecordWithHRV(day, 44))
+		records = append(records, wellnessRecordWithHRV(day, float64(43+day%3)))
 	}
 	for day = 36; day <= 41; day++ {
 		records = append(records, wellnessRecordWithHRV(day, 44))

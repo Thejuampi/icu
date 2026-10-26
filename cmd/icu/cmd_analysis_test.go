@@ -498,8 +498,8 @@ func TestAnalysisWellnessCommandPrefersZeppHybridCharge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Unmarshal error = %v", err)
 	}
-	if got.Sleep.ScoreName != "zepp_hybridcharge" || got.Sleep.Latest != 88 || got.State.State != "OK" {
-		t.Fatalf("Sleep = %+v State = %+v, want zepp_hybridcharge latest 88 state OK", got.Sleep, got.State)
+	if got.Sleep.ScoreName != "zepp_hybridcharge" || got.Sleep.Latest != 88 || got.State.State != icu.PhysiologyInsufficient {
+		t.Fatalf("Sleep = %+v State = %+v, want zepp_hybridcharge latest 88 state INSUFFICIENT", got.Sleep, got.State)
 	}
 }
 
@@ -544,8 +544,8 @@ func TestAnalysisCoachingCommandPropagatesPreferredWellnessScore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Unmarshal error = %v", err)
 	}
-	if got.Analyses.Wellness == nil || got.Analyses.Wellness.Sleep.ScoreName != "zepp_hybridcharge" || got.Analyses.Wellness.State.State != "OK" {
-		t.Fatalf("wellness = %+v, want zepp_hybridcharge state OK", got.Analyses.Wellness)
+	if got.Analyses.Wellness == nil || got.Analyses.Wellness.Sleep.ScoreName != "zepp_hybridcharge" || got.Analyses.Wellness.State.State != icu.PhysiologyInsufficient {
+		t.Fatalf("wellness = %+v, want zepp_hybridcharge state INSUFFICIENT", got.Analyses.Wellness)
 	}
 }
 

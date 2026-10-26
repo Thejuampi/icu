@@ -232,8 +232,10 @@ func TestReadRebalanceWellnessUsesExplicitLookback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read wellness: %v", err)
 	}
-	if gotOldest != "2026-06-08" {
-		t.Fatalf("oldest = %q, want 2026-06-08", gotOldest)
+	// The 14-day lookback is the analysis scope; the read still reaches back
+	// the full wellness baseline (49 days) so thresholds are not truncated.
+	if gotOldest != "2026-05-10" {
+		t.Fatalf("oldest = %q, want 2026-05-10", gotOldest)
 	}
 }
 
@@ -265,8 +267,9 @@ func TestRebalanceDryRunPrefersHybridChargeForWellnessContext(t *testing.T) {
 	}
 
 	proposal := readRebalanceTestProposal(t, file)
-	if proposal.Context.WellnessState != "OK" {
-		t.Fatalf("wellness state = %q, want OK", proposal.Context.WellnessState)
+	// Two days of history judge nothing.
+	if proposal.Context.WellnessState != icu.PhysiologyInsufficient {
+		t.Fatalf("wellness state = %q, want INSUFFICIENT", proposal.Context.WellnessState)
 	}
 }
 
