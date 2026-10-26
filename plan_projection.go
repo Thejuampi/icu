@@ -52,19 +52,27 @@ type LoadProjectionWeek struct {
 // workout that is still planned counts and a completed one is not counted
 // twice; later days use PlannedLoads. An empty Today treats every day as
 // planned.
+//
+// intervals.icu feeds CTL and ATL separate loads (wellness ctlLoad/atlLoad):
+// some sports count toward fatigue only. The *FitnessLoads maps carry the CTL
+// side; nil means "same as the ATL map".
 type LoadProjectionInput struct {
-	StartDate      string
-	StartSource    string
-	StartCTL       float64
-	StartATL       float64
-	EndDate        string
-	Today          string
-	PlannedLoads   map[string]float64
-	ActualLoads    map[string]float64
-	KnownCTL       map[string]float64
-	CTLDays        int
-	ATLDays        int
-	MaxRampPerWeek float64
+	StartDate    string
+	StartSource  string
+	StartCTL     float64
+	StartATL     float64
+	EndDate      string
+	Today        string
+	PlannedLoads map[string]float64
+	ActualLoads  map[string]float64
+	// PlannedFitnessLoads/ActualFitnessLoads are the CTL loads (nil: same
+	// as PlannedLoads/ActualLoads).
+	PlannedFitnessLoads map[string]float64
+	ActualFitnessLoads  map[string]float64
+	KnownCTL            map[string]float64
+	CTLDays             int
+	ATLDays             int
+	MaxRampPerWeek      float64
 }
 
 // emaFactor is the daily smoothing factor intervals.icu uses for CTL/ATL:
@@ -74,14 +82,25 @@ func emaFactor(days int) float64 {
 	return 1 - math.Exp(-1/float64(days))
 }
 
-func (input *LoadProjectionInput) loadOn(date string) float64 {
+// loadOn returns the day's (CTL load, ATL load).
+func (input *LoadProjectionInput) loadOn(date string) (float64, float64) {
+	plannedFitness := input.PlannedFitnessLoads
+	if plannedFitness == nil {
+		plannedFitness = input.PlannedLoads
+	}
+	actualFitness := input.ActualFitnessLoads
+	if actualFitness == nil {
+		actualFitness = input.ActualLoads
+	}
 	switch {
 	case input.Today == "" || date > input.Today:
-		return input.PlannedLoads[date]
+		return plannedFitness[date], input.PlannedLoads[date]
 	case date == input.Today:
-		return math.Max(input.ActualLoads[date], input.PlannedLoads[date])
+		// Completed load plus what is still planned. Callers leave sessions
+		// already paired with a completed activity out of PlannedLoads.
+		return actualFitness[date] + plannedFitness[date], input.ActualLoads[date] + input.PlannedLoads[date]
 	default:
-		return input.ActualLoads[date]
+		return actualFitness[date], input.ActualLoads[date]
 	}
 }
 
@@ -122,8 +141,8 @@ func ProjectLoad(input *LoadProjectionInput) (LoadProjection, error) {
 			projection.appendWeek(week)
 			week = &LoadProjectionWeek{WeekStart: weekStart, StartCTL: round2(ctl)}
 		}
-		load := input.loadOn(date)
-		ctl += (load - ctl) * ctlFactor
+		fitnessLoad, load := input.loadOn(date)
+		ctl += (fitnessLoad - ctl) * ctlFactor
 		atl += (load - atl) * atlFactor
 		ctlByDate[date] = ctl
 		if prior, ok := ctlByDate[day.AddDate(0, 0, -daysPerWeek).Format(analysisDateLayout)]; ok {
@@ -172,8 +191,31 @@ func positiveOr(value, fallback int) int {
 // calendar workouts not touched by an update/cancel operation, plus every
 // pending create/update operation's expected load.
 func PlanProjectedDailyLoads(operations []CalendarOperation, events []Event) map[string]float64 {
+	loads, _ := PlanProjectedDailyLoadsByModel(operations, events, nil, nil)
+
+	return loads
+}
+
+// PlanProjectedDailyLoadsByModel is PlanProjectedDailyLoads split into the
+// ATL loads and the CTL (fitness) loads, which leave out sessions whose type
+// is in fitnessExcluded (see FitnessExcludedTypes). Events in completed
+// (paired with a completed activity) and operations on them are skipped:
+// their load is already in the actual load.
+func PlanProjectedDailyLoadsByModel(
+	operations []CalendarOperation, events []Event, fitnessExcluded map[string]bool, completed map[int]bool,
+) (map[string]float64, map[string]float64) {
 	replaced := map[int]bool{}
 	loads := map[string]float64{}
+	fitness := map[string]float64{}
+	add := func(date, sport string, load float64) {
+		if date == "" {
+			return
+		}
+		loads[date] += load
+		if !fitnessExcluded[sport] {
+			fitness[date] += load
+		}
+	}
 	for index := range operations {
 		operation := &operations[index]
 		if operation.Status != "" && operation.Status != CalendarStatusPending {
@@ -181,29 +223,62 @@ func PlanProjectedDailyLoads(operations []CalendarOperation, events []Event) map
 		}
 		if operation.EventID != 0 {
 			replaced[operation.EventID] = true
+			if completed[operation.EventID] {
+				continue
+			}
 		}
 		if operation.Action == CalendarActionCancel {
 			continue
 		}
-		if date := dateOnly(operation.Body.StartDateLocal); date != "" {
-			loads[date] += float64(operation.ExpectedLoad)
-		}
+		add(dateOnly(operation.Body.StartDateLocal), operation.Body.Type, float64(operation.ExpectedLoad))
 	}
 	for index := range events {
 		event := &events[index]
-		if replaced[event.ID] || event.Category != planWorkoutCategory {
+		if replaced[event.ID] || completed[event.ID] || event.Category != planWorkoutCategory {
 			continue
 		}
 		load := event.TrainingLoad
 		if load == 0 {
 			load = event.LoadTarget
 		}
-		if date := dateOnly(event.StartDateLocal); date != "" {
-			loads[date] += float64(load)
+		add(dateOnly(event.StartDateLocal), event.Type, float64(load))
+	}
+
+	return loads, fitness
+}
+
+// FitnessExcludedTypes infers which activity types intervals.icu leaves out
+// of CTL for this athlete, from history: a type with load is excluded when it
+// never appears on a day whose wellness ctlLoad equals atlLoad (everything
+// counted) and appears on at least one day where ctlLoad < atlLoad.
+// Example (live, 2026): WeightTraining and Workout count toward ATL only.
+func FitnessExcludedTypes(wellness []Wellness, activities []Activity) map[string]bool {
+	const tolerance = 0.5
+	byDate := map[string]*Wellness{}
+	for index := range wellness {
+		byDate[wellness[index].ID] = &wellness[index]
+	}
+	included, short := map[string]bool{}, map[string]bool{}
+	for index := range activities {
+		activity := &activities[index]
+		row := byDate[activityDate(activity)]
+		if row == nil || activity.TrainingLoad <= 0 || activity.Type == "" {
+			continue
+		}
+		if math.Abs(row.CTLLoad-row.ATLLoad) <= tolerance {
+			included[activity.Type] = true
+		} else if row.CTLLoad < row.ATLLoad {
+			short[activity.Type] = true
+		}
+	}
+	excluded := map[string]bool{}
+	for sport := range short {
+		if !included[sport] {
+			excluded[sport] = true
 		}
 	}
 
-	return loads
+	return excluded
 }
 
 func dateOnly(value string) string {

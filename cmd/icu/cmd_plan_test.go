@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -646,10 +647,56 @@ func TestPlanLoadProjectionUsesNowDateAndActualLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if activityQuery != "2026-10-21..2026-10-22" || got.StartDate != "2026-10-20" || got.Weeks[0].Load != 100 {
+	if activityQuery != "2026-07-24..2026-10-22" || got.StartDate != "2026-10-20" || got.Weeks[0].Load != 100 {
 		t.Fatalf("query=%s projection=%+v", activityQuery, got)
 	}
 	if _, err := planLoadProjection(client, proposal, map[string]string{"now-date": "bad"}, time.Now()); err == nil {
 		t.Fatal("expected --now-date validation error")
+	}
+}
+
+func TestPlanLoadProjectionSplitsFitnessAndFatigueLoads(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			// 09-11: strength only, CTL load 0, ATL load 42 (live shape).
+			_, _ = response.Write([]byte(`[{"id":"2026-09-10","ctl":40,"atl":40},` +
+				`{"id":"2026-09-11","ctl":39,"atl":44,"ctlLoad":0,"atlLoad":42}]`))
+		case strings.HasSuffix(request.URL.Path, "/activities"):
+			if !strings.Contains(request.URL.Query().Get("fields"), "paired_event_id") {
+				t.Error("activities read must request paired_event_id")
+			}
+			_, _ = response.Write([]byte(`[{"id":"a","type":"WeightTraining","start_date_local":"2026-09-11T17:00:00",` +
+				`"icu_training_load":42},{"id":"b","type":"Ride","start_date_local":"2026-09-12T07:00:00",` +
+				`"icu_training_load":50,"paired_event_id":7}]`))
+		case strings.HasSuffix(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[{"id":7,"category":"WORKOUT","type":"Ride","start_date_local":"2026-09-12T07:00:00",` +
+				`"icu_training_load":50},{"id":8,"category":"WORKOUT","type":"WeightTraining",` +
+				`"start_date_local":"2026-09-13T17:00:00","icu_training_load":30}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	proposal := &icu.PlanProposalFile{Scope: icu.PlanScope{EndDate: "2026-09-13"}}
+
+	got, err := planLoadProjection(client, proposal, map[string]string{"now-date": "2026-09-12"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Start 09-11 (last row before today). Today: completed ride 50, its
+	// paired event not added again. 09-13: strength 30 is ATL-only.
+	k42, k7 := 1-math.Exp(-1.0/42), 1-math.Exp(-1.0/7)
+	ctl, atl := 39.0, 44.0
+	ctl += (50 - ctl) * k42
+	atl += (50 - atl) * k7
+	ctl += (0 - ctl) * k42
+	atl += (30 - atl) * k7
+	if got.StartDate != "2026-09-11" || math.Abs(got.EndCTL-ctl) > 0.01 || math.Abs(got.EndATL-atl) > 0.01 {
+		t.Fatalf("projection = %+v, want CTL %.2f ATL %.2f", got, ctl, atl)
 	}
 }

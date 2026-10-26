@@ -290,7 +290,12 @@ type ActivitySearchResult struct {
 }
 
 type Wellness struct {
-	ID             string             `json:"id"`
+	ID string `json:"id"`
+	// CTLLoad/ATLLoad are the day's load as intervals.icu feeds it into
+	// fitness and fatigue. They differ when a sport (e.g. WeightTraining)
+	// counts toward fatigue only.
+	CTLLoad        float64            `json:"ctlLoad,omitempty"`
+	ATLLoad        float64            `json:"atlLoad,omitempty"`
 	Weight         float64            `json:"weight,omitempty"`
 	RestingHR      int                `json:"restingHr,omitempty"`
 	HRV            float64            `json:"hrv,omitempty"`

@@ -356,9 +356,10 @@ func planProfileWarnings(proposal *icu.PlanProposalFile, settings *icu.SportSett
 		icu.PlanMonotonyWarnings(proposal.Sessions, maxSimilar)...)
 }
 
-// projectionLookbackDays bounds the wellness read: the start row plus the
-// real CTL of the 7 days before it, used for the rolling ramp.
-const projectionLookbackDays = 14
+// projectionLookbackDays bounds the wellness and activity reads: the start
+// row, the real CTL of the days before it (rolling ramp), and enough history
+// to infer which sports intervals.icu leaves out of CTL.
+const projectionLookbackDays = 90
 
 // planLoadProjection projects CTL/ATL/TSB from the last wellness row before
 // today through the proposal's end date. Today is --now-date, else today in
@@ -406,10 +407,20 @@ func planLoadProjection(
 	if err != nil {
 		return nil, err
 	}
-	actual, err := projectionActualLoads(client, firstDay, today)
-	if err != nil {
-		return nil, err
+	var activities []icu.Activity
+	activityQuery := dateRangeQuery(oldest, today)
+	activityQuery["fields"] = analysisActivityFields() + ",paired_event_id"
+	if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
+		return nil, wrapCommandError(err)
 	}
+	completed := map[int]bool{}
+	for index := range activities {
+		if activities[index].PairedEventID != nil {
+			completed[*activities[index].PairedEventID] = true
+		}
+	}
+	excluded := icu.FitnessExcludedTypes(records, activities)
+	actual, actualFitness := projectionActualLoads(records, activities, excluded, firstDay, today)
 	events, err := readRebalanceEvents(client, firstDay, end)
 	if err != nil {
 		return nil, err
@@ -422,11 +433,12 @@ func planLoadProjection(
 		profile = &icu.TrainingProfile{}
 	}
 	maxRamp := floatFlagVal(flags, "max-ramp", profile.MaxRampPerWeek)
+	planned, plannedFitness := icu.PlanProjectedDailyLoadsByModel(proposal.Operations, events, excluded, completed)
 	projection, err := icu.ProjectLoad(&icu.LoadProjectionInput{
 		StartDate: start.ID, StartSource: "wellness", StartCTL: start.CTL, StartATL: start.ATL,
 		EndDate: end, Today: today, KnownCTL: known, ActualLoads: actual,
-		PlannedLoads: icu.PlanProjectedDailyLoads(proposal.Operations, events),
-		CTLDays:      profile.CTLDays, ATLDays: profile.ATLDays, MaxRampPerWeek: maxRamp,
+		PlannedLoads: planned, PlannedFitnessLoads: plannedFitness, ActualFitnessLoads: actualFitness,
+		CTLDays: profile.CTLDays, ATLDays: profile.ATLDays, MaxRampPerWeek: maxRamp,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("project load: %w", err)
@@ -447,23 +459,38 @@ func projectionToday(client *icu.Client, flags map[string]string, now time.Time)
 	return clampDateToAthleteToday(client, flags, "9999-12-31", now)
 }
 
-// projectionActualLoads sums completed activity load per local day.
-func projectionActualLoads(client *icu.Client, oldest, newest string) (map[string]float64, error) {
-	loads := map[string]float64{}
-	if oldest > newest {
-		return loads, nil
-	}
-	activities, err := readRebalanceActivities(client, oldest, newest, nil)
-	if err != nil {
-		return nil, err
-	}
+// projectionActualLoads returns completed ATL and CTL loads per day from
+// oldest through newest. Days before newest use the wellness atlLoad/ctlLoad
+// intervals.icu computed (effective loads, including manual overrides and
+// fatigue-only sports); otherwise the activities' icu_training_load is summed,
+// leaving fitness-excluded types out of the CTL side.
+func projectionActualLoads(
+	records []icu.Wellness, activities []icu.Activity, excluded map[string]bool, oldest, newest string,
+) (map[string]float64, map[string]float64) {
+	loads, fitness := map[string]float64{}, map[string]float64{}
 	for index := range activities {
-		if date := activities[index].StartDateLocal; len(date) >= len("2006-01-02") {
-			loads[date[:len("2006-01-02")]] += float64(activities[index].TrainingLoad)
+		date := activities[index].StartDateLocal
+		if len(date) < len("2006-01-02") {
+			continue
+		}
+		date = date[:len("2006-01-02")]
+		if date < oldest || date > newest {
+			continue
+		}
+		load := float64(activities[index].TrainingLoad)
+		loads[date] += load
+		if !excluded[activities[index].Type] {
+			fitness[date] += load
+		}
+	}
+	for index := range records {
+		row := &records[index]
+		if row.ID >= oldest && row.ID < newest && (row.ATLLoad != 0 || row.CTLLoad != 0) {
+			loads[row.ID], fitness[row.ID] = row.ATLLoad, row.CTLLoad
 		}
 	}
 
-	return loads, nil
+	return loads, fitness
 }
 
 // dateRangeQuery is the oldest/newest query shared by read-only range GETs.

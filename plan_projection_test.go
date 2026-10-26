@@ -11,11 +11,21 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
+type replayActivity struct {
+	Type      string  `json:"type"`
+	Load      float64 `json:"icuTrainingLoad"`
+	HRLoad    float64 `json:"hrLoad"`
+	PaceLoad  float64 `json:"paceLoad"`
+	PowerLoad float64 `json:"powerLoad"`
+}
+
 type replayRow struct {
-	ID   string  `json:"id"`
-	CTL  float64 `json:"ctl"`
-	ATL  float64 `json:"atl"`
-	Load float64 `json:"load"`
+	ID         string           `json:"id"`
+	CTL        float64          `json:"ctl"`
+	ATL        float64          `json:"atl"`
+	CTLLoad    float64          `json:"ctlLoad"`
+	ATLLoad    float64          `json:"atlLoad"`
+	Activities []replayActivity `json:"activities"`
 }
 
 func loadReplayRows(t *testing.T) []replayRow {
@@ -34,36 +44,94 @@ func loadReplayRows(t *testing.T) []replayRow {
 	return fixture.Rows
 }
 
-// TestProjectLoadReplaysRealWellness replays 45 real days (read-only GETs of
-// wellness and activities, see the fixture's _source): starting from the
-// first row's CTL/ATL and feeding the real daily loads, every later day must
-// match intervals.icu's own CTL/ATL to 3 decimals. The linear 1/tau model
-// misses ATL by up to 0.8 on the same data.
-func TestProjectLoadReplaysRealWellness(t *testing.T) {
-	t.Parallel()
-	rows := loadReplayRows(t)
-	loads := map[string]float64{}
-	for _, row := range rows {
-		loads[row.ID] = row.Load
-	}
+// replayWorst replays every row from the first and returns the worst CTL and
+// ATL error against intervals.icu and the date of the worst CTL miss.
+func replayWorst(t *testing.T, rows []replayRow, fitness, fatigue map[string]float64) (float64, float64, string) {
+	t.Helper()
 	first := rows[0]
+	worstCTL, worstATL, worstDate := 0.0, 0.0, ""
 	for _, row := range rows[1:] {
 		got, err := icu.ProjectLoad(&icu.LoadProjectionInput{
-			StartDate: first.ID, StartCTL: first.CTL, StartATL: first.ATL, EndDate: row.ID, PlannedLoads: loads,
+			StartDate: first.ID, StartCTL: first.CTL, StartATL: first.ATL, EndDate: row.ID,
+			PlannedLoads: fatigue, PlannedFitnessLoads: fitness,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		// End values are rounded to 2 decimals, so compare at that precision.
-		if math.Abs(got.EndCTL-row.CTL) > 0.006 || math.Abs(got.EndATL-row.ATL) > 0.006 {
-			t.Fatalf("%s: projected %.3f/%.3f, intervals.icu %.3f/%.3f", row.ID, got.EndCTL, got.EndATL, row.CTL, row.ATL)
+		if diff := math.Abs(got.EndCTL - row.CTL); diff > worstCTL {
+			worstCTL, worstDate = diff, row.ID
+		}
+		worstATL = math.Max(worstATL, math.Abs(got.EndATL-row.ATL))
+	}
+
+	return worstCTL, worstATL, worstDate
+}
+
+// TestProjectLoadReplaysRealWellness replays 2026-07-31..10-26 of real data,
+// including the days where the athlete overrode icu_training_load by hand
+// (e.g. 09-07 run: 15 = hr_load, pace_load 8) and the strength days that
+// intervals.icu counts toward ATL only (08-18, 08-30, 09-06, 09-07, 09-11).
+func TestProjectLoadReplaysRealWellness(t *testing.T) {
+	t.Parallel()
+	rows := loadReplayRows(t)
+	wellness := make([]icu.Wellness, 0, len(rows))
+	var activities []icu.Activity
+	activityLoads := map[string]float64{}
+	ctlLoads, atlLoads := map[string]float64{}, map[string]float64{}
+	overrides := 0
+	for _, row := range rows {
+		wellness = append(wellness, icu.Wellness{ID: row.ID, CTLLoad: row.CTLLoad, ATLLoad: row.ATLLoad})
+		ctlLoads[row.ID], atlLoads[row.ID] = row.CTLLoad, row.ATLLoad
+		for _, activity := range row.Activities {
+			activityLoads[row.ID] += activity.Load
+			activities = append(activities, icu.Activity{
+				Type: activity.Type, StartDateLocal: row.ID + "T12:00:00", TrainingLoad: int(activity.Load),
+			})
+			if activity.PaceLoad > 0 && activity.Load != activity.PaceLoad {
+				overrides++
+			}
+		}
+		// The effective (overridden) icu_training_load is what feeds ATL.
+		if math.Abs(activityLoads[row.ID]-row.ATLLoad) > 0.5 {
+			t.Fatalf("%s: activity load %.1f != wellness atlLoad %.1f", row.ID, activityLoads[row.ID], row.ATLLoad)
 		}
 	}
-	// The same replay with the linear factor would be off by more than 0.5 ATL.
-	linear := first.ATL
-	worst := 0.0
+	if overrides == 0 {
+		t.Fatal("fixture has no manually overridden load")
+	}
+
+	// 1. The wellness ctlLoad/atlLoad pair reproduces intervals.icu exactly.
+	if ctlErr, atlErr, date := replayWorst(t, rows, ctlLoads, atlLoads); ctlErr > 0.006 || atlErr > 0.006 {
+		t.Fatalf("wellness loads: worst CTL %.3f (%s) ATL %.3f", ctlErr, date, atlErr)
+	}
+
+	// 2. Activity loads, with the fitness-excluded types inferred from
+	// history, reproduce it too.
+	excluded := icu.FitnessExcludedTypes(wellness, activities)
+	if !excluded["WeightTraining"] || !excluded["Workout"] || excluded["Ride"] || excluded["VirtualRun"] {
+		t.Fatalf("excluded = %v", excluded)
+	}
+	fitness := map[string]float64{}
+	for _, row := range rows {
+		for _, activity := range row.Activities {
+			if !excluded[activity.Type] {
+				fitness[row.ID] += activity.Load
+			}
+		}
+	}
+	if ctlErr, atlErr, date := replayWorst(t, rows, fitness, activityLoads); ctlErr > 0.006 || atlErr > 0.006 {
+		t.Fatalf("activity loads: worst CTL %.3f (%s) ATL %.3f", ctlErr, date, atlErr)
+	}
+
+	// 3. Feeding every load into CTL (the old model) misses from 08-18 on.
+	if ctlErr, _, date := replayWorst(t, rows, nil, activityLoads); ctlErr < 0.1 || date < "2026-08-18" {
+		t.Fatalf("single-load CTL error %.3f (%s): fixture no longer discriminates", ctlErr, date)
+	}
+
+	// 4. The linear 1/tau factor would be off by more than 0.5 ATL.
+	linear, worst := rows[0].ATL, 0.0
 	for _, row := range rows[1:] {
-		linear += (row.Load - linear) / 7
+		linear += (row.ATLLoad - linear) / 7
 		worst = math.Max(worst, math.Abs(linear-row.ATL))
 	}
 	if worst < 0.5 {
@@ -116,7 +184,7 @@ func TestProjectLoadRollingRampDoesNotExtrapolatePartialWeeks(t *testing.T) {
 	}
 }
 
-func TestProjectLoadUsesActualPastAndTodayMax(t *testing.T) {
+func TestProjectLoadUsesActualPastAndTodayRemaining(t *testing.T) {
 	t.Parallel()
 	input := icu.LoadProjectionInput{
 		StartDate: "2026-10-24", StartCTL: 0, StartATL: 0, EndDate: "2026-10-27", Today: "2026-10-26",
@@ -127,10 +195,10 @@ func TestProjectLoadUsesActualPastAndTodayMax(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Past Sunday: actual 30 (not planned 999). Today (Monday): max(10, 80).
-	// Tomorrow: planned 50.
-	if got.Weeks[0].Load != 30 || got.Weeks[1].Load != 130 {
-		t.Fatalf("weeks = %+v, want 30 then 80+50", got.Weeks)
+	// Past Sunday: actual 30 (not planned 999). Today (Monday): completed 10
+	// plus the 80 still planned. Tomorrow: planned 50.
+	if got.Weeks[0].Load != 30 || got.Weeks[1].Load != 140 {
+		t.Fatalf("weeks = %+v, want 30 then 10+80+50", got.Weeks)
 	}
 	if _, err := icu.ProjectLoad(&icu.LoadProjectionInput{StartDate: "x", EndDate: "2026-11-08"}); err == nil {
 		t.Fatal("bad start accepted")
@@ -182,5 +250,63 @@ func TestLatestWellnessFitnessSkipsFutureAndEmptyRows(t *testing.T) {
 	}
 	if _, ok := icu.LatestWellnessFitness(nil, "2026-10-27"); ok {
 		t.Fatal("empty records returned a row")
+	}
+}
+
+func TestPlanProjectedDailyLoadsByModelSkipsCompletedAndFatigueOnly(t *testing.T) {
+	t.Parallel()
+	events := []icu.Event{
+		{ID: 1, Category: "WORKOUT", Type: "Ride", StartDateLocal: "2026-10-26T07:00:00", TrainingLoad: 60},
+		{ID: 2, Category: "WORKOUT", Type: "Ride", StartDateLocal: "2026-10-26T18:00:00", TrainingLoad: 40},
+		{ID: 3, Category: "WORKOUT", Type: "WeightTraining", StartDateLocal: "2026-10-27T18:00:00", TrainingLoad: 30},
+	}
+	operations := []icu.CalendarOperation{{
+		Action: icu.CalendarActionUpdate, EventID: 1, ExpectedLoad: 999,
+		Body: icu.EventEx{StartDateLocal: "2026-10-26T07:00:00"},
+	}}
+	loads, fitness := icu.PlanProjectedDailyLoadsByModel(operations, events,
+		map[string]bool{"WeightTraining": true}, map[int]bool{1: true})
+	// Event 1 is done (its update too); event 2 is still planned; strength
+	// counts toward ATL only.
+	if loads["2026-10-26"] != 40 || fitness["2026-10-26"] != 40 ||
+		loads["2026-10-27"] != 30 || fitness["2026-10-27"] != 0 {
+		t.Fatalf("loads=%v fitness=%v", loads, fitness)
+	}
+}
+
+func TestProjectLoadRampKnownGatesOverCap(t *testing.T) {
+	t.Parallel()
+	planned := map[string]float64{"2026-10-27": 300, "2026-10-28": 300}
+	input := icu.LoadProjectionInput{
+		StartDate: "2026-10-26", StartCTL: 40, StartATL: 40, EndDate: "2026-10-28",
+		PlannedLoads: planned, MaxRampPerWeek: 1,
+	}
+	// No CTL 7 days back: the ramp is unknown and never flagged.
+	got, err := icu.ProjectLoad(&input)
+	if err != nil || got.Weeks[0].RampKnown || got.Weeks[0].OverCap || len(got.Warnings) != 0 {
+		t.Fatalf("unknown ramp flagged: %+v, %v", got, err)
+	}
+	input.KnownCTL = map[string]float64{"2026-10-20": 40, "2026-10-21": 40}
+	got, err = icu.ProjectLoad(&input)
+	if err != nil || !got.Weeks[0].RampKnown || !got.Weeks[0].OverCap || len(got.Warnings) != 1 {
+		t.Fatalf("known ramp not flagged: %+v, %v", got, err)
+	}
+}
+
+func TestFitnessExcludedTypesKeepsTypesSeenOnFullyCountedDays(t *testing.T) {
+	t.Parallel()
+	wellness := []icu.Wellness{
+		{ID: "2026-08-10", CTLLoad: 12, ATLLoad: 12},
+		{ID: "2026-09-11", CTLLoad: 0, ATLLoad: 42},
+	}
+	activities := []icu.Activity{
+		// Walk has no sport settings but intervals.icu counted it in CTL.
+		{Type: "Walk", StartDateLocal: "2026-08-10T10:00:00", TrainingLoad: 12},
+		{Type: "WeightTraining", StartDateLocal: "2026-09-11T17:00:00", TrainingLoad: 42},
+		{Type: "Ride", StartDateLocal: "2026-09-12T17:00:00", TrainingLoad: 50},
+	}
+	got := icu.FitnessExcludedTypes(wellness, activities)
+	if len(got) != 1 || !got["WeightTraining"] {
+		t.Fatalf("excluded = %v", got)
 	}
 }
