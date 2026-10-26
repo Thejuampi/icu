@@ -362,7 +362,10 @@ func planLoadProjection(
 	client *icu.Client, proposal *icu.PlanProposalFile, flags map[string]string, now time.Time,
 ) (*icu.LoadProjection, error) {
 	today := now.Format("2006-01-02")
-	records, asOf := readCurrentWellnessFitness(client, analysisRange{Oldest: today, Newest: today})
+	records, asOf, _, err := readCurrentWellnessFitness(client, flags, analysisRange{Oldest: today, Newest: today})
+	if err != nil {
+		return nil, err
+	}
 	start, ok := icu.LatestWellnessFitness(records, asOf)
 	if !ok {
 		return nil, fmt.Errorf("no wellness CTL/ATL on or before %s", asOf)

@@ -930,3 +930,41 @@ func TestAnalyzeTrainingPlanHistoryKeepsDecouplingWhenSparse(t *testing.T) {
 		t.Fatalf("mean=%v excluded=%d, want 16.5 and nothing excluded with too few samples", got.Weeks[0].MeanDecoupling, got.Weeks[0].DecouplingExcluded)
 	}
 }
+
+func TestAnalyzeTrainingPlanHistoryDropsShortRideDecouplingWhenSparse(t *testing.T) {
+	t.Parallel()
+
+	// Three rides is too few for the MAD screen; the athlete-relative duration
+	// floor (min of P25 and half the median moving time) still drops the
+	// 6-minute spin.
+	activities := []icu.Activity{
+		{ID: "a1", StartDateLocal: "2026-09-15T08:00:00", Type: "Ride", TrainingLoad: 50, MovingTime: 3600, Decoupling: 3},
+		{ID: "a2", StartDateLocal: "2026-09-17T08:00:00", Type: "Ride", TrainingLoad: 50, MovingTime: 5400, Decoupling: 5},
+		{ID: "a3", StartDateLocal: "2026-09-19T08:00:00", Type: "Ride", TrainingLoad: 5, MovingTime: 360, Decoupling: -74.1},
+	}
+	options := icu.TrainingPlanOptions{HistoryStartDate: "2026-09-14", HistoryEndDate: "2026-09-20", PlanStartDate: "2026-09-21", PlanEndDate: "2026-10-04"}
+
+	got := icu.AnalyzeTrainingPlanWithContext(activities, nil, options, icu.TrainingPlanContext{}).History
+	if got.Weeks[0].MeanDecoupling != 4 || got.Weeks[0].DecouplingExcluded != 1 {
+		t.Fatalf("mean=%v excluded=%d, want 4 with the short ride excluded", got.Weeks[0].MeanDecoupling, got.Weeks[0].DecouplingExcluded)
+	}
+}
+
+func TestAnalyzeTrainingPlanHistoryExcludesPartialWeeksFromAverages(t *testing.T) {
+	t.Parallel()
+
+	// 2026-08-03 (Mon) .. 2026-08-19 (Wed): two full weeks of 200, then an
+	// in-progress week with one 40-load ride. Averaging it would give 146.67.
+	activities := []icu.Activity{
+		{ID: "a1", StartDateLocal: "2026-08-04T08:00:00", Type: "Ride", TrainingLoad: 200},
+		{ID: "a2", StartDateLocal: "2026-08-11T08:00:00", Type: "Ride", TrainingLoad: 200},
+		{ID: "a3", StartDateLocal: "2026-08-18T08:00:00", Type: "Ride", TrainingLoad: 40},
+	}
+	options := icu.TrainingPlanOptions{HistoryStartDate: "2026-08-03", HistoryEndDate: "2026-08-19", PlanStartDate: "2026-08-24", PlanEndDate: "2026-09-06"}
+
+	got := icu.AnalyzeTrainingPlanWithContext(activities, nil, options, icu.TrainingPlanContext{}).History
+	if got.CompletedWeeks != 2 || got.AverageWeeklyLoad != 200 || got.RecentWeeklyLoad != 200 ||
+		len(got.Weeks) != 3 || !got.Weeks[2].Partial || got.Weeks[2].Load != 40 {
+		t.Fatalf("history = %+v, want 2 complete weeks avg 200 and a listed partial week", got)
+	}
+}

@@ -334,7 +334,10 @@ func analysisCyclingCommand() *Command {
 				return err
 			}
 
-			fitnessRecords, fitnessNewest := readCurrentWellnessFitness(client, dateRange)
+			fitnessRecords, fitnessNewest, fitnessWarning, err := readCurrentWellnessFitness(client, flags, dateRange)
+			if err != nil {
+				return err
+			}
 
 			query := queryFromFlags(flags, "limit")
 			query["oldest"] = dateRange.Oldest
@@ -356,6 +359,9 @@ func analysisCyclingCommand() *Command {
 				MinIncludedActivities: IntFlag(flags, "min-included-activities", 0),
 			})
 			icu.ApplyWellnessFitness(&analysis.Load, fitnessRecords, fitnessNewest)
+			if fitnessWarning != "" {
+				analysis.Warnings = append(analysis.Warnings, fitnessWarning)
+			}
 
 			return writeJSON(analysis)
 		},
@@ -367,22 +373,37 @@ func analysisCyclingCommand() *Command {
 const currentFitnessLookbackDays = 7
 
 // readCurrentWellnessFitness reads the daily wellness rows used to replace
-// activity-frozen CTL/ATL with the state at the range end (clamped to today).
-// Wellness is optional context here: a failed read returns no rows, so the
-// activity-derived values stay, labeled latestLoadSource "last_activity".
-func readCurrentWellnessFitness(client *icu.Client, dateRange analysisRange) ([]icu.Wellness, string) {
-	newest := clampDateToToday(dateRange.Newest, time.Now())
+// activity-frozen CTL/ATL with the state at the range end, clamped to today
+// in the athlete's timezone. Wellness is optional context here: a failed read
+// returns no rows plus a warning for the JSON output, so the activity-derived
+// values stay, labeled latestLoadSource "last_activity".
+func readCurrentWellnessFitness(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Wellness, string, string, error) {
+	newest, err := clampDateToAthleteToday(client, flags, dateRange.Newest, time.Now())
+	if err != nil {
+		return nil, "", "", err
+	}
 	oldest, err := addDays(newest, -currentFitnessLookbackDays)
 	if err != nil {
-		return nil, newest
+		return nil, newest, "", err
 	}
 
 	var records []icu.Wellness
 	if err := client.Get("wellness", nil, map[string]string{"oldest": oldest, "newest": newest}, &records); err != nil {
-		return nil, newest
+		return nil, newest, "wellness unavailable, CTL/ATL/TSB are from the last activity: " + err.Error(), nil //nolint:nilerr // wellness is optional context; the failure is reported as a warning
 	}
 
-	return records, newest
+	return records, newest, "", nil
+}
+
+// clampDateToAthleteToday clamps date to today in the athlete's timezone
+// (--timezone, else the athlete profile, else the system zone).
+func clampDateToAthleteToday(client *icu.Client, flags map[string]string, date string, now time.Time) (string, error) {
+	location, _, err := resolveMicrocycleLocation(client, flags)
+	if err != nil {
+		return "", err
+	}
+
+	return clampDateToToday(date, now.In(location)), nil
 }
 
 func analysisPlanCommand() *Command {
@@ -414,7 +435,10 @@ func analysisPlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			wellnessNewest := clampDateToToday(dateRanges.History.Newest, time.Now())
+			wellnessNewest, err := clampDateToAthleteToday(client, flags, dateRanges.History.Newest, time.Now())
+			if err != nil {
+				return err
+			}
 			wellnessRecords, wellnessWarnings, err := readWellnessRecordsForAnalysis(client, dateRanges.History.Oldest, wellnessNewest, nil)
 			if err != nil {
 				return err
