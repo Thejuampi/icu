@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -22,6 +23,7 @@ func newBackupTestServer(t *testing.T) (*icu.Client, *[]recordedRequest) {
 
 	var mu sync.Mutex
 	var requests []recordedRequest
+	event7 := `{"id":7,"name":"Original","description":"- 60m 65%","custom_field":"kept"}`
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		body, _ := io.ReadAll(request.Body)
 		mu.Lock()
@@ -30,7 +32,14 @@ func newBackupTestServer(t *testing.T) (*icu.Client, *[]recordedRequest) {
 		response.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/events/7"):
-			_, _ = response.Write([]byte(`{"id":7,"name":"Original","description":"- 60m 65%","custom_field":"kept"}`))
+			mu.Lock()
+			_, _ = response.Write([]byte(event7))
+			mu.Unlock()
+		case request.Method == http.MethodPut && strings.HasSuffix(request.URL.Path, "/events/7"):
+			mu.Lock()
+			event7 = string(body)
+			mu.Unlock()
+			_, _ = response.Write([]byte(`{"id":7}`))
 		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/events/8"):
 			_, _ = response.Write([]byte(`{"id":8,"name":"Dropped"}`))
 		case request.Method == http.MethodPost:
@@ -95,6 +104,13 @@ func TestApplyCalendarOperationsBacksUpAndRevertRestores(t *testing.T) {
 	if put.method != http.MethodPut || !strings.Contains(put.body, `"name":"Original"`) ||
 		!strings.Contains(put.body, `"custom_field":"kept"`) {
 		t.Fatalf("revert PUT = %+v", put)
+	}
+
+	// The event now matches the original backup: a second revert by id skips
+	// the pre-revert snapshot, finds nothing to do and aborts without --force.
+	if err := eventsRevertCommand().Run(nil, map[string]string{"id": "7"}, client); err == nil ||
+		!strings.Contains(err.Error(), "already matches backup") {
+		t.Fatalf("second revert error = %v", err)
 	}
 
 	*requests = nil
@@ -165,5 +181,75 @@ func TestEventsUpdateFailsWhenBackupFails(t *testing.T) {
 	})
 	if result.Status != icu.CalendarStatusFailed || !strings.Contains(result.Error, "backup event 7") {
 		t.Fatalf("result = %+v", result)
+	}
+}
+
+//nolint:paralleltest // sets ICU_BACKUP_DIR and captures stdout.
+func TestEventsDeleteBacksUpAndRevertRecreates(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	client, requests := newBackupTestServer(t)
+
+	out, err := captureStdout(t, func() error { return eventsDeleteCommand().Run([]string{"8"}, nil, client) })
+	if err != nil || !strings.Contains(out, `"backupPath"`) {
+		t.Fatalf("delete = %s, %v", out, err)
+	}
+	if (*requests)[0].method != http.MethodGet || (*requests)[1].method != http.MethodDelete {
+		t.Fatalf("backup must precede the delete: %+v", *requests)
+	}
+	out, err = captureStdout(t, func() error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	})
+	if err != nil || !strings.Contains(out, `"action": "create"`) {
+		t.Fatalf("revert deleted = %s, %v", out, err)
+	}
+	for _, args := range [][]string{nil, {"x"}} {
+		if err := eventsDeleteCommand().Run(args, nil, client); err == nil {
+			t.Fatalf("delete %v: expected error", args)
+		}
+	}
+}
+
+//nolint:paralleltest // sets ICU_BACKUP_DIR and captures stdout.
+func TestEventsCreateUpsertBacksUpMatchingEvent(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(eventBackupDirEnv, dir)
+	var methods []string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		methods = append(methods, request.Method+" "+request.URL.Path)
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[{"id":5,"external_id":"ext-1"},{"id":6,"external_id":"other"}]`))
+		case request.Method == http.MethodGet:
+			_, _ = response.Write([]byte(`{"id":5,"external_id":"ext-1","name":"Old"}`))
+		default:
+			_, _ = response.Write([]byte(`{"id":5}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	flags := map[string]string{"upsert": "true", "external-id": "ext-1", "name": "New", "start-date": "2026-10-27T07:00:00"}
+	if _, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) }); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := listEventBackups(5)
+	if err != nil || len(paths) != 1 || !strings.HasPrefix(methods[len(methods)-1], http.MethodPost) {
+		t.Fatalf("paths=%v methods=%v err=%v", paths, methods, err)
+	}
+	if others, _ := listEventBackups(6); len(others) != 0 {
+		t.Fatalf("non-matching event backed up: %v", others)
+	}
+}
+
+func TestEventDescriptionRejectsEmptyFile(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "empty.txt")
+	if err := os.WriteFile(path, []byte("\n\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := eventDescription(map[string]string{"desc-file": path}); err == nil ||
+		!strings.Contains(err.Error(), "is empty") {
+		t.Fatalf("err = %v", err)
 	}
 }

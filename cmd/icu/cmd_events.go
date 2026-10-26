@@ -67,7 +67,7 @@ func registerEventsCommands(registry *CommandRegistry) {
 		eventsUpdateCommand(),
 	)
 
-	registry.Register("events", "delete", deleteByIDCommand("events", "events delete <id>", "Delete calendar event.", "event id"))
+	registry.Register("events", "delete", eventsDeleteCommand())
 	registry.Register("events", "download", eventsDownloadCommand())
 	registry.Register("events", "revert", eventsRevertCommand())
 	registry.Register("events", "backups", eventsBackupsCommand())
@@ -86,6 +86,11 @@ func eventsCreateCommand() *Command {
 				return wrapCommandError(err)
 			}
 
+			if BoolFlag(flags, "upsert") {
+				if err := backupUpsertTargets(client, &request.Body); err != nil {
+					return err
+				}
+			}
 			var result icu.Event
 			if err := client.Post("events", nil, eventsCreateQuery(flags), request.Body, &result); err != nil {
 				return wrapCommandError(err)
@@ -157,6 +162,9 @@ func eventDescription(flags map[string]string) (string, error) {
 			return "", fmt.Errorf("read --desc-file: %w", err)
 		}
 		description = strings.TrimRight(string(data), "\r\n")
+		if strings.TrimSpace(description) == "" {
+			return "", fmt.Errorf("%w: --desc-file %s is empty", errInvalidValue, path)
+		}
 	}
 	if err := icu.ValidateDescriptionText(description); err != nil {
 		return "", err
@@ -334,4 +342,27 @@ func eventsDownloadCommand() *Command {
 			return writeOutput(data)
 		},
 	}
+}
+
+// backupUpsertTargets backs up every event on the body's start date that an
+// upsert could overwrite (same external_id), so events revert can undo it.
+// Without an external id the upsert has nothing to match and creates.
+func backupUpsertTargets(client *icu.Client, body *icu.EventEx) error {
+	if body.ExternalID == "" || len(body.StartDateLocal) < len("2006-01-02") {
+		return nil
+	}
+	day := body.StartDateLocal[:len("2006-01-02")]
+	events, err := readRebalanceEvents(client, day, day)
+	if err != nil {
+		return err
+	}
+	for index := range events {
+		if events[index].ExternalID == body.ExternalID || events[index].UID == body.ExternalID {
+			if _, err := backupEvent(client, events[index].ID, "events create --upsert"); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

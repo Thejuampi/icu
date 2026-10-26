@@ -15,10 +15,12 @@ import (
 )
 
 const (
-	eventBackupDirEnv     = "ICU_BACKUP_DIR"
-	eventBackupFileMode   = 0o600
-	eventBackupDirMode    = 0o700
-	eventBackupReasonDrop = "calendar " + icu.CalendarActionCancel
+	eventBackupDirEnv       = "ICU_BACKUP_DIR"
+	eventBackupFileMode     = 0o600
+	eventBackupDirMode      = 0o700
+	eventBackupReasonDrop   = "calendar " + icu.CalendarActionCancel
+	eventBackupReasonDelete = "events delete"
+	eventBackupReasonRevert = "events revert"
 )
 
 // eventBackup is the on-disk copy of an event taken before it is changed.
@@ -170,10 +172,12 @@ type eventRevertResult struct {
 func eventsRevertCommand() *Command {
 	return &Command{
 		Name:  "",
-		Usage: "events revert (--backup PATH | --id ID) [--recreate] [--dry-run]",
+		Usage: "events revert (--backup PATH | --id ID) [--recreate] [--force] [--dry-run]",
 		Description: "Restore a calendar event from a local backup taken by events update / plan accept / " +
-			"rebalance accept. Updates the event in place (after backing up its current state); an event the " +
-			"backup recorded as cancelled, or --recreate, is created again instead.",
+			"rebalance accept / events delete. Updates the event in place (after backing up its current state); an " +
+			"event the backup recorded as cancelled or deleted, or --recreate, is created again instead. --id picks " +
+			"the newest backup that is not itself a pre-revert snapshot. Aborts when the event already matches " +
+			"the backup unless --force.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			path, err := resolveRevertBackup(flags)
 			if err != nil {
@@ -183,7 +187,8 @@ func eventsRevertCommand() *Command {
 			if err != nil {
 				return err
 			}
-			recreate := BoolFlag(flags, "recreate") || backup.Reason == eventBackupReasonDrop
+			recreate := BoolFlag(flags, "recreate") || backup.Reason == eventBackupReasonDrop ||
+				backup.Reason == eventBackupReasonDelete
 			result := eventRevertResult{Action: "update", EventID: backup.EventID, BackupPath: path}
 			if recreate {
 				result.Action = "create"
@@ -193,7 +198,7 @@ func eventsRevertCommand() *Command {
 
 				return writeJSON(result)
 			}
-			if err := applyEventRevert(client, &backup, recreate, &result); err != nil {
+			if err := applyEventRevert(client, &backup, recreate, BoolFlag(flags, "force"), &result); err != nil {
 				return err
 			}
 
@@ -214,14 +219,21 @@ func resolveRevertBackup(flags map[string]string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(paths) == 0 {
-		return "", fmt.Errorf("no local backup for event %d in %s", eventID, eventBackupDir())
+	// A pre-revert snapshot holds the state the revert replaced; picking it
+	// would make a second revert undo the first.
+	for _, path := range paths {
+		backup, err := readEventBackup(path)
+		if err != nil || backup.Reason == eventBackupReasonRevert {
+			continue
+		}
+
+		return path, nil
 	}
 
-	return paths[0], nil
+	return "", fmt.Errorf("no local backup for event %d in %s", eventID, eventBackupDir())
 }
 
-func applyEventRevert(client *icu.Client, backup *eventBackup, recreate bool, result *eventRevertResult) error {
+func applyEventRevert(client *icu.Client, backup *eventBackup, recreate, force bool, result *eventRevertResult) error {
 	if recreate {
 		body, err := withoutEventID(backup.Event)
 		if err != nil {
@@ -235,9 +247,14 @@ func applyEventRevert(client *icu.Client, backup *eventBackup, recreate bool, re
 
 		return nil
 	}
-	preRevert, err := backupEvent(client, backup.EventID, "events revert")
+	// One GET serves both the pre-revert backup and the comparison.
+	preRevert, current, err := backupEventRaw(client, backup.EventID, eventBackupReasonRevert)
 	if err != nil {
 		return err
+	}
+	if !force && sameEventJSON(current, backup.Event) {
+		return fmt.Errorf("event %d already matches backup %s; nothing to revert (use --force to PUT anyway)",
+			backup.EventID, result.BackupPath)
 	}
 	result.PreRevertBackup = preRevert
 	var updated icu.Event
@@ -257,4 +274,44 @@ func withoutEventID(raw json.RawMessage) (map[string]json.RawMessage, error) {
 	delete(fields, "id")
 
 	return fields, nil
+}
+
+// sameEventJSON compares two event JSON documents ignoring key order and
+// whitespace.
+func sameEventJSON(left, right json.RawMessage) bool {
+	var leftValue, rightValue any
+	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
+		return false
+	}
+	leftJSON, leftErr := json.Marshal(leftValue)
+	rightJSON, rightErr := json.Marshal(rightValue)
+
+	return leftErr == nil && rightErr == nil && string(leftJSON) == string(rightJSON)
+}
+
+func eventsDeleteCommand() *Command {
+	return &Command{
+		Name:  "",
+		Usage: "events delete <id>",
+		Description: "Delete calendar event. Backs the event up locally first; restore it with " +
+			"events revert --id ID.",
+		Run: func(args []string, _ map[string]string, client *icu.Client) error {
+			if len(args) == 0 {
+				return errMissing("event id")
+			}
+			eventID, err := strconv.Atoi(args[0])
+			if err != nil {
+				return fmt.Errorf("%w: event id %q", errInvalidValue, args[0])
+			}
+			path, err := backupEvent(client, eventID, eventBackupReasonDelete)
+			if err != nil {
+				return err
+			}
+			if err := client.Delete("events", []string{args[0]}, nil, nil); err != nil {
+				return wrapCommandError(err)
+			}
+
+			return writeJSON(map[string]any{"deleted": eventID, "backupPath": path})
+		},
+	}
 }
