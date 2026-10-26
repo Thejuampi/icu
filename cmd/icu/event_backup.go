@@ -370,7 +370,7 @@ func rewriteEventBackup(path string, backup *eventBackup) error {
 	if err != nil {
 		return fmt.Errorf("marshal event backup: %w", err)
 	}
-	if err := os.WriteFile(filepath.Clean(path), data, eventBackupFileMode); err != nil {
+	if err := os.WriteFile(filepath.Clean(path), data, eventBackupFileMode); err != nil { //nolint:gosec // path is a backup file listed or named by the user
 		return fmt.Errorf("record restored id in %s: %w", path, err)
 	}
 

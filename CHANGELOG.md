@@ -7,7 +7,8 @@
 Breaking changes:
 - `analysis wellness` → `physiologyState.source` is now `athlete_baseline_robust_z` (was `local_wellness_heuristic`), and `reasons` codes are now `hrv_below_baseline`, `resting_hr_above_baseline`, `sleep_below_baseline`, `form_below_baseline` (the old fixed-threshold codes such as `hrv_zscore_watch` are gone). Levels come from the athlete's own median/MAD baselines, not fixed numbers; consumers that matched the old strings must be updated.
 - The `--curves` / `--adaptation-curves` default change from #17 applies here too.
-- `events delete` now prints `{"deleted": ID, "backupPath": PATH}` instead of nothing.
+- `events delete` now prints `{"deleted": ID, "backupPath": PATH}` instead of nothing, and rejects a non-numeric id before any request.
+- `events create --upsert` now requires `--uid`: intervals.icu's `upsertOnUid` matches on `uid` (not `external_id`), so without a uid it never updated anything.
 - `--desc-file` pointing at an empty (or whitespace-only) file is an error.
 - Profile validation checks the *effective* `watchZ < redZ` (a single override is paired with the other default), so e.g. `watchZ: 3` alone is now rejected.
 
@@ -16,10 +17,11 @@ New JSON fields:
 - `*.threshold` objects (`watch`, `red`, `baseline`, `scale`, `samples`, `source`, `watchOnly`) on wellness signals and `analysis plan` → `history.decouplingThreshold`, plus `history.recentDecoupling`.
 
 Behaviour:
-- Load projection uses Intervals.icu's EWMA, `k = 1 − exp(−1/τ)` (τ = 42/7 days); replayed against real wellness data in `testdata/wellness_replay.json`. It starts from the last wellness row before today; days before today use completed activity load, today uses `max(completed, planned)`, later days use planned load. `plan preview --now-date DATE` / `--timezone TZ` set "today" (default: today in the athlete's timezone).
+- Load projection uses Intervals.icu's EWMA, `k = 1 − exp(−1/τ)` (τ = 42/7 days), and feeds CTL and ATL separate loads as Intervals.icu does (wellness `ctlLoad`/`atlLoad`): sports such as WeightTraining and Workout count toward ATL only. Fatigue-only types are inferred from 90 days of history. Replayed against real data 2026-07-31..10-26 (`testdata/wellness_replay.json`, including manual load overrides): CTL and ATL match every day. It starts from the last wellness row before today; days before today use wellness `ctlLoad`/`atlLoad`, today uses completed load plus planned sessions not yet paired with a completed activity, later days use planned load. `plan preview --now-date DATE` / `--timezone TZ` set "today" (default: today in the athlete's timezone).
 - `history.recentDecoupling` is the mean of the last 7 days of history and is judged against the rides *before* that window; no recent rides means no judgement.
+- Wellness baselines (HRV, resting HR, sleep, TSB) use a fixed 42-day window ending 7 days before the newest sample, so thresholds no longer move with `--oldest` and the recent week is not in its own baseline.
 - A profile that pins only a WATCH bound (no history) can reach WATCH but never RED.
-- `events delete` and `events create --upsert` (for events on that date with the same `external_id`) back up the event first. `events revert` recreates deleted events, aborts when the event already matches the backup (`--force` overrides), and `--id` skips pre-revert snapshots so a second revert does not undo the first.
+- `events delete` and `events create --upsert` (the event with the same `uid`) back up the event first. `events revert` recreates deleted events, records `restoredEventId` in the backup and refuses to recreate again (or when an event with the same uid, or name and category, already exists on that date) unless `--force`; it aborts when the event already matches the backup (`--force` overrides), and `--id` skips pre-revert snapshots so a second revert does not undo the first.
 
 ### Fixes from `fix/icu-bugs` (#17)
 

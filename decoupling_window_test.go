@@ -76,3 +76,32 @@ func TestValidateThresholdsRejectsWatchZAtOrAboveRedZ(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWellnessBaselinesUseFixedPriorWindow(t *testing.T) {
+	t.Parallel()
+	end := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
+	records := make([]Wellness, 0, 120)
+	for day := 119; day >= 0; day-- {
+		date := end.AddDate(0, 0, -day)
+		hr := 50 + day%3
+		if day >= 49 {
+			hr = 70 // older than the window: must not shift the baseline
+		}
+		if day < 7 {
+			hr = 58 // recent week: must not sit in its own baseline
+		}
+		records = append(records, Wellness{ID: date.Format(analysisDateLayout), RestingHR: hr})
+	}
+	analyze := func(oldest int) *DerivedThreshold {
+		window := records[len(records)-oldest:]
+		analysis := AnalyzeWellness(window, AnalysisOptions{
+			StartDate: window[0].ID, EndDate: window[len(window)-1].ID,
+		})
+
+		return analysis.RestingHR.Threshold
+	}
+	short, long := analyze(49), analyze(120)
+	if short == nil || long == nil || *short != *long || short.Baseline != 51 || short.Samples != 42 {
+		t.Fatalf("thresholds depend on --oldest or include the recent week: %+v vs %+v", short, long)
+	}
+}

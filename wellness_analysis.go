@@ -624,7 +624,7 @@ func (accumulator *wellnessAccumulator) judgeAgainstBaselines() {
 
 	if len(accumulator.tsb) > 0 {
 		sortWellnessSamples(accumulator.tsb)
-		baseline := sampleValues(accumulator.tsb[:len(accumulator.tsb)-1])
+		baseline := priorWindowValues(accumulator.tsb)
 		analysis.Load.Threshold = deriveThreshold(baseline, baselineLowIsBad, method,
 			overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.TSBWatch }),
 			overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.TSBRed }))
@@ -639,25 +639,45 @@ func judgeLatest(
 		return
 	}
 	sortWellnessSamples(samples)
-	signal.Threshold = deriveThreshold(sampleValues(samples[:len(samples)-1]), direction, method, watch, red)
+	signal.Threshold = deriveThreshold(priorWindowValues(samples), direction, method, watch, red)
 	signal.Level = thresholdLevel(samples[len(samples)-1].value, signal.Threshold, direction)
 }
 
 // hrvBaselineValues is the HRV history before the recent window, which the
 // recent mean is judged against.
 func hrvBaselineValues(samples []wellnessSample) []float64 {
-	if len(samples) <= recentWellnessDays {
+	if len(samples) == 0 {
 		return nil
 	}
 	sortWellnessSamples(samples)
 
-	return sampleValues(samples[:len(samples)-recentWellnessDays])
+	return priorWindowValues(samples)
 }
 
-func sampleValues(samples []wellnessSample) []float64 {
-	values := make([]float64, 0, len(samples))
+// baselineWindowDays is the fixed baseline length: the 42 days that end
+// before the last recentWellnessDays of data. Fixing it by date (not by
+// "every sample before the latest") keeps a threshold from moving with
+// --oldest and keeps the recent week out of its own baseline.
+const baselineWindowDays = 42
+
+// priorWindowValues returns the values dated in the baselineWindowDays
+// window that ends recentWellnessDays before the newest sample. samples must
+// be sorted by date.
+func priorWindowValues(samples []wellnessSample) []float64 {
+	if len(samples) == 0 {
+		return nil
+	}
+	newest, err := time.Parse(analysisDateLayout, samples[len(samples)-1].date)
+	if err != nil {
+		return nil
+	}
+	end := newest.AddDate(0, 0, -recentWellnessDays).Format(analysisDateLayout)
+	start := newest.AddDate(0, 0, -recentWellnessDays-baselineWindowDays).Format(analysisDateLayout)
+	var values []float64
 	for _, sample := range samples {
-		values = append(values, sample.value)
+		if sample.date > start && sample.date <= end {
+			values = append(values, sample.value)
+		}
 	}
 
 	return values
