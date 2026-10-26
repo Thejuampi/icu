@@ -30,6 +30,8 @@ func planShowCommand() *Command {
 				return err
 			}
 			proposal := icu.BuildPlanProposal(&input)
+			proposal.Validation.Warnings = append(proposal.Validation.Warnings,
+				planProfileWarnings(&proposal, input.SportSettings)...)
 
 			return writePlanProposal(flags, &proposal)
 		},
@@ -48,6 +50,7 @@ func planPreviewCommand() *Command {
 				return err
 			}
 			validation := icu.ValidatePlanProposal(&proposal)
+			validation.Warnings = append(validation.Warnings, planProfileWarnings(&proposal, nil)...)
 			var blockingErr error
 			if validation.Blocking {
 				blockingErr = fmt.Errorf("validate plan proposal: %s", validation.Errors[0])
@@ -303,4 +306,16 @@ func checkPlanBaselineDrift(client *icu.Client, proposal *icu.PlanProposalFile, 
 	}
 
 	return nil
+}
+
+// planProfileWarnings validates a proposal against the local training
+// profile. A missing profile yields no warnings; an unreadable config is
+// reported instead of silently skipping the checks.
+func planProfileWarnings(proposal *icu.PlanProposalFile, settings *icu.SportSettings) []string {
+	profile, err := loadTrainingProfile()
+	if err != nil {
+		return []string{"profile: " + err.Error()}
+	}
+
+	return icu.ValidatePlanAgainstProfile(proposal, profile, settings)
 }

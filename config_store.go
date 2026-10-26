@@ -388,6 +388,7 @@ func buildConfigAuditEntry(action, configPath, auditPath string, previous, next 
 	appendSecretMutation(&secretMutations, previous.ZeppAppToken, next.ZeppAppToken, "zeppAppToken")
 	appendChangedField(&changedFields, previous.ZeppUserID, next.ZeppUserID, "zeppUserId")
 	appendChangedField(&changedFields, previous.ZeppCountryCode, next.ZeppCountryCode, "zeppCountryCode")
+	appendChangedField(&changedFields, profileFingerprint(previous.Profile), profileFingerprint(next.Profile), "profile")
 
 	return ConfigAuditEntry{
 		Timestamp:       now.UTC().Format(time.RFC3339),
@@ -446,4 +447,16 @@ func currentConfigStore() ConfigStore {
 	defer activeConfigStoreMu.RUnlock()
 
 	return activeConfigStore
+}
+
+func profileFingerprint(profile *TrainingProfile) string {
+	if profile == nil {
+		return ""
+	}
+	data, err := json.Marshal(profile)
+	if err != nil {
+		return ""
+	}
+
+	return string(data)
 }

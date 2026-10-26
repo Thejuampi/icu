@@ -12,6 +12,9 @@ type Config struct {
 	ZeppAppToken    string `json:"zeppAppToken,omitempty"`
 	ZeppUserID      string `json:"zeppUserId,omitempty"`
 	ZeppCountryCode string `json:"zeppCountryCode,omitempty"`
+	// Profile holds the athlete's local goals and caps. It is never sent to
+	// intervals.icu; plan show/preview validate against it.
+	Profile *TrainingProfile `json:"profile,omitempty"`
 }
 
 func StringFlag(args map[string]string, name, defaultVal string) string {

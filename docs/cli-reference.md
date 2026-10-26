@@ -241,6 +241,21 @@ Invoke these commands as `icu activity <id> <action>`.
   Notes: Re-validates the proposal (including stored blocking errors and `strictTargets` weekly misses) and hard-fails before any API call when blocking. Then rejects baseline drift, applies pending `create`/`update`/`cancel` operations, writes apply results back to the same file, and prints the apply summary. Unknown flags are rejected.
   Example: `icu plan accept --file plan.json`
 
+## profile
+
+Local training profile stored in the config file under `profile`. Nothing here is sent to Intervals.icu. Every field is optional; an unset field disables its check instead of falling back to a built-in number.
+
+- `show`
+  Invocation: `icu profile show`
+  Notes: Prints the profile JSON (`{}` when none is configured).
+
+- `set`
+  Invocation: `icu profile set [--target-ftp W] [--outdoor-ftp W] [--indoor-ftp W] [--max-ramp CTL/WEEK] [--min-z2-minutes N] [--z2-low PCT --z2-high PCT] [--usual-days mon,wed,...] [--usual-times HH:MM,...] [--max-similar-sessions N] [--ctl-days N] [--atl-days N]`
+  Notes: Merges the given fields into the stored profile; `-` clears a field. Days are `sun`..`sat`. The Z2 band defaults to the sport settings' power zones (Z2 = zone 1 upper bound, zone 2 upper bound] when `--z2-low/--z2-high` are not set.
+  Example: `icu profile set --target-ftp 280 --indoor-ftp 250 --max-ramp 5 --usual-days tue,thu,sat --usual-times 07:00`
+
+  `plan show` and `plan preview` add `profile:` warnings for sessions on unusual days or start times, an intent `ftp` above `targetFtp`, and weeks whose planned Z2 minutes are below `minZ2MinutesPerWeek`. `plan preview` has no sport settings offline, so it only knows the Z2 band from the profile.
+
 ## rebalance
 
 - `show`
