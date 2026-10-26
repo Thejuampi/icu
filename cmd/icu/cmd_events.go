@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -76,7 +78,7 @@ func eventsCreateCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--desc DESC] [--calculate-load --ftp N] [--upsert]",
+			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--upsert]",
 		Description: "Create calendar event.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			request, err := buildEventCreate(flags)
@@ -100,24 +102,33 @@ func eventsCreateCommand() *Command {
 func eventsUpdateCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "events update <id> --name NAME [--desc DESC] [--calculate-load --ftp N]",
+		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N]",
 		Description: "Update calendar event.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
 
-			request, err := buildEventUpdate(flags)
-			if err != nil {
-				return wrapCommandError(err)
-			}
-
 			eventID, err := strconv.Atoi(args[0])
 			if err != nil {
 				return fmt.Errorf("%w: event id %q", errInvalidValue, args[0])
 			}
-			if _, err := backupEvent(client, eventID, "events update"); err != nil {
+
+			if _, err := eventDescription(flags); err != nil {
+				return wrapCommandError(err)
+			}
+			_, raw, err := backupEventRaw(client, eventID, "events update")
+			if err != nil {
 				return err
+			}
+			var current icu.Event
+			if err := json.Unmarshal(raw, &current); err != nil {
+				return fmt.Errorf("decode event %d: %w", eventID, err)
+			}
+
+			request, err := buildEventUpdate(flags, current.Type)
+			if err != nil {
+				return wrapCommandError(err)
 			}
 
 			var result icu.Event
@@ -133,7 +144,32 @@ func eventsUpdateCommand() *Command {
 	}
 }
 
+// eventDescription reads --desc/--description or --desc-file (verbatim, real
+// line breaks preserved) and rejects literal escape sequences.
+func eventDescription(flags map[string]string) (string, error) {
+	description := stringFlagAlias(flags, "desc", "description")
+	if path := flags["desc-file"]; path != "" {
+		if description != "" {
+			return "", fmt.Errorf("%w: use either --desc or --desc-file", errInvalidValue)
+		}
+		data, err := os.ReadFile(filepath.Clean(path))
+		if err != nil {
+			return "", fmt.Errorf("read --desc-file: %w", err)
+		}
+		description = strings.TrimRight(string(data), "\r\n")
+	}
+	if err := icu.ValidateDescriptionText(description); err != nil {
+		return "", err
+	}
+
+	return description, nil
+}
+
 func buildEventCreate(flags map[string]string) (calculatedEventRequest, error) {
+	description, err := eventDescription(flags)
+	if err != nil {
+		return calculatedEventRequest{}, err
+	}
 	body := icu.EventEx{
 		Category:       icu.StringFlag(flags, "category", "WORKOUT"),
 		Type:           icu.StringFlag(flags, "type", "Ride"),
@@ -141,24 +177,31 @@ func buildEventCreate(flags map[string]string) (calculatedEventRequest, error) {
 		StartDateLocal: icu.StringFlag(flags, "start-date", ""),
 		MovingTime:     IntFlag(flags, "moving-time", 0),
 		TrainingLoad:   IntFlag(flags, "training-load", 0),
-		Description:    stringFlagAlias(flags, "desc", "description"),
+		Description:    description,
 		Color:          icu.StringFlag(flags, "color", ""),
 		Indoor:         BoolFlag(flags, "indoor"),
 		ExternalID:     icu.StringFlag(flags, "external-id", ""),
 	}
 
-	return applyCalculatedEventLoad(flags, &body)
+	return applyCalculatedEventLoad(flags, &body, body.Type)
 }
 
-func buildEventUpdate(flags map[string]string) (calculatedEventRequest, error) {
+// buildEventUpdate builds the PUT body. currentType is the stored event type,
+// used to decide FTP pricing when --type is not given.
+func buildEventUpdate(flags map[string]string, currentType string) (calculatedEventRequest, error) {
 	var body icu.EventEx
 	if v := flags["name"]; v != "" {
 		body.Name = v
 	}
-
-	if v := stringFlagAlias(flags, "desc", "description"); v != "" {
-		body.Description = v
+	if v := flags["type"]; v != "" {
+		body.Type = v
 	}
+
+	description, err := eventDescription(flags)
+	if err != nil {
+		return calculatedEventRequest{}, err
+	}
+	body.Description = description
 
 	if v := flags["training-load"]; v != "" {
 		body.TrainingLoad = IntFlag(flags, "training-load", 0)
@@ -168,13 +211,25 @@ func buildEventUpdate(flags map[string]string) (calculatedEventRequest, error) {
 		body.MovingTime = IntFlag(flags, "moving-time", 0)
 	}
 
-	return applyCalculatedEventLoad(flags, &body)
+	eventType := body.Type
+	if eventType == "" {
+		eventType = currentType
+	}
+
+	return applyCalculatedEventLoad(flags, &body, eventType)
 }
 
-func applyCalculatedEventLoad(flags map[string]string, body *icu.EventEx) (calculatedEventRequest, error) {
+func applyCalculatedEventLoad(flags map[string]string, body *icu.EventEx, eventType string) (calculatedEventRequest, error) {
 	request := calculatedEventRequest{Body: *body}
 	if !BoolFlag(flags, "calculate-load") {
 		return request, nil
+	}
+	if !icu.IsCyclingActivityType(eventType) {
+		return request, fmt.Errorf(
+			"%w: --calculate-load prices power steps against FTP and only applies to cycling types; "+
+				"%q is not FTP-priced, pass --moving-time/--training-load instead",
+			errInvalidValue, eventType,
+		)
 	}
 	if body.Description == "" {
 		return request, errMissing("desc")

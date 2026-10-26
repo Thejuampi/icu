@@ -53,6 +53,9 @@ type CalendarOpsPreviewItem struct {
 	Name         string `json:"name,omitempty"`
 	Date         string `json:"date,omitempty"`
 	ExpectedLoad int    `json:"expectedLoad,omitempty"`
+	// Description is the event description as it will render, one line per
+	// entry, so the preview shows exactly what will be written.
+	Description []string `json:"description,omitempty"`
 }
 
 func EventSourceHash(event *Event) string {
@@ -71,6 +74,7 @@ func PreviewCalendarOperations(operations []CalendarOperation) CalendarOpsPrevie
 			Name:         operation.Body.Name,
 			Date:         eventDateOnly(operation.Body.StartDateLocal),
 			ExpectedLoad: operation.ExpectedLoad,
+			Description:  RenderDescriptionLines(operation.Body.Description),
 		}
 		preview.Operations = append(preview.Operations, item)
 		status := operation.Status
@@ -120,6 +124,9 @@ func CalendarOperationErrors(operation *CalendarOperation) []string {
 	}
 	if operation.Action != CalendarActionCreate && operation.EventID == 0 {
 		errors = append(errors, "eventId is required for "+operation.Action)
+	}
+	if err := ValidateDescriptionText(operation.Body.Description); err != nil && operation.Action != CalendarActionCancel {
+		errors = append(errors, operation.ID+": "+err.Error())
 	}
 	if operation.Action != CalendarActionCancel && operation.Body.Name == "" {
 		errors = append(errors, "body.name is required for "+operation.Action)

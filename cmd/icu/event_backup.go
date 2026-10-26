@@ -42,12 +42,21 @@ func eventBackupDir() string {
 // backupEvent GETs the event and writes it to the backup directory before
 // any change. A failed backup aborts the change.
 func backupEvent(client *icu.Client, eventID int, reason string) (string, error) {
+	path, _, err := backupEventRaw(client, eventID, reason)
+
+	return path, err
+}
+
+// backupEventRaw is backupEvent that also returns the fetched event JSON, so
+// a caller that needs the current event does not GET it twice.
+func backupEventRaw(client *icu.Client, eventID int, reason string) (string, json.RawMessage, error) {
 	var raw json.RawMessage
 	if err := client.Get("events", []string{strconv.Itoa(eventID)}, nil, &raw); err != nil {
-		return "", fmt.Errorf("backup event %d: %w", eventID, wrapCommandError(err))
+		return "", nil, fmt.Errorf("backup event %d: %w", eventID, wrapCommandError(err))
 	}
+	path, err := writeEventBackup(&eventBackup{EventID: eventID, Reason: reason, Event: raw}, time.Now())
 
-	return writeEventBackup(&eventBackup{EventID: eventID, Reason: reason, Event: raw}, time.Now())
+	return path, raw, err
 }
 
 func writeEventBackup(backup *eventBackup, now time.Time) (string, error) {

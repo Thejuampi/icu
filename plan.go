@@ -772,6 +772,9 @@ func matchPlanEvent(events []Event, draft *PlanSessionDraft, matched map[int]boo
 
 func estimatePlanSessionLoad(description string, selection FTPSelection, category string) (PlannedLoadEstimate, string, planSessionIssue) {
 	requiresLoad := planCategoryRequiresLoad(category)
+	if err := ValidateDescriptionText(description); err != nil {
+		return PlannedLoadEstimate{}, "", planSessionIssue{errMsg: err.Error()}
+	}
 	if description == "" {
 		if requiresLoad {
 			return PlannedLoadEstimate{}, "", planSessionIssue{errMsg: "workout session requires a parseable description with expectedLoad > 0"}
