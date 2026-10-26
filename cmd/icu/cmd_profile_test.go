@@ -69,3 +69,17 @@ func TestProfileShowEmpty(t *testing.T) {
 		t.Fatalf("profile show = %q, %v", out, err)
 	}
 }
+
+//nolint:paralleltest // swaps the process-wide config store.
+func TestPlanProfileWarningsIncludeMonotonyWithoutProfile(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+
+	warnings := planProfileWarnings(&icu.PlanProposalFile{Sessions: []icu.PlanResolvedSession{
+		{Date: "2026-11-02", Name: "A", Action: icu.CalendarActionCreate, Desc: "- 20m 90%"},
+		{Date: "2026-11-04", Name: "B", Action: icu.CalendarActionCreate, Desc: "- 20m 90%"},
+	}}, nil)
+	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], "monotony:") {
+		t.Fatalf("warnings = %v", warnings)
+	}
+}

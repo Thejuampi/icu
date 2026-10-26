@@ -256,6 +256,8 @@ Local training profile stored in the config file under `profile`. Nothing here i
 
   `plan show` and `plan preview` add `profile:` warnings for sessions on unusual days or start times, an intent `ftp` above `targetFtp`, and weeks whose planned Z2 minutes are below `minZ2MinutesPerWeek`. `plan preview` has no sport settings offline, so it only knows the Z2 band from the profile.
 
+  Both commands also run a monotony check (with or without a profile): a `monotony:` warning lists weeks where more than `maxSimilarSessionsPerWeek` (default 1, i.e. any repeat) non-cancelled sessions share the same structure. Structure is the parsed step sequence (durations, %FTP targets, repeats), so indentation and spacing do not matter; unsupported descriptions are compared as normalised text, and sessions without a description are ignored.
+
 ## rebalance
 
 - `show`

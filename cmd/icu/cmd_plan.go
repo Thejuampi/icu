@@ -315,15 +315,21 @@ func checkPlanBaselineDrift(client *icu.Client, proposal *icu.PlanProposalFile, 
 }
 
 // planProfileWarnings validates a proposal against the local training
-// profile. A missing profile yields no warnings; an unreadable config is
-// reported instead of silently skipping the checks.
+// profile and runs the weekly monotony check. A missing profile skips the
+// profile checks; an unreadable config is reported instead of silently
+// skipping them.
 func planProfileWarnings(proposal *icu.PlanProposalFile, settings *icu.SportSettings) []string {
 	profile, err := loadTrainingProfile()
 	if err != nil {
 		return []string{"profile: " + err.Error()}
 	}
+	maxSimilar := 0
+	if profile != nil {
+		maxSimilar = profile.MaxSimilarSessionsPerWeek
+	}
 
-	return icu.ValidatePlanAgainstProfile(proposal, profile, settings)
+	return append(icu.ValidatePlanAgainstProfile(proposal, profile, settings),
+		icu.PlanMonotonyWarnings(proposal.Sessions, maxSimilar)...)
 }
 
 // planLoadProjection projects CTL/ATL/TSB from today's wellness through the
