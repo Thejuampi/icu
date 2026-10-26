@@ -37,6 +37,12 @@ type TrainingProfile struct {
 	// projection; unset means the intervals.icu defaults.
 	CTLDays int `json:"ctlDays,omitempty"`
 	ATLDays int `json:"atlDays,omitempty"`
+	// FitnessLoadTypes are manual per-type overrides ("ctl" or "atl-only") of
+	// whether a sport's load feeds CTL; they win over learned classes.
+	FitnessLoadTypes map[string]string `json:"fitnessLoadTypes,omitempty"`
+	// LearnedFitnessLoadTypes are the classes plan check learned from
+	// wellness ctlLoad, kept so a short history window does not forget them.
+	LearnedFitnessLoadTypes map[string]string `json:"learnedFitnessLoadTypes,omitempty"`
 }
 
 // Intervals.icu's fitness and fatigue time constants (days). These are the
@@ -78,6 +84,15 @@ func ValidateTrainingProfile(profile *TrainingProfile) error {
 	for _, clock := range profile.UsualStartTimes {
 		if _, err := time.Parse("15:04", clock); err != nil {
 			return fmt.Errorf("profile usual start time %q must be HH:MM", clock)
+		}
+	}
+
+	for _, classes := range []map[string]string{profile.FitnessLoadTypes, profile.LearnedFitnessLoadTypes} {
+		for sport, class := range classes {
+			if sport == "" || !ValidFitnessLoadClass(class) {
+				return fmt.Errorf("profile fitness load type %q=%q must be %s or %s",
+					sport, class, FitnessLoadCTL, FitnessLoadATLOnly)
+			}
 		}
 	}
 

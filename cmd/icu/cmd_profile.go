@@ -38,7 +38,8 @@ func profileSetCommand() *Command {
 		Name: "",
 		Usage: "profile set [--target-ftp W] [--outdoor-ftp W] [--indoor-ftp W] [--max-ramp CTL/WEEK] " +
 			"[--min-z2-minutes N] [--z2-low PCT --z2-high PCT] [--usual-days mon,wed,...] [--usual-times HH:MM,...] " +
-			"[--max-similar-sessions N] [--ctl-days N] [--atl-days N] [--thresholds JSON|-]",
+			"[--max-similar-sessions N] [--ctl-days N] [--atl-days N] [--thresholds JSON|-] " +
+			"[--fitness-load-types TYPE=ctl|atl-only,...|-]",
 		Description: "Update the local training profile. Pass an empty value (e.g. --max-ramp \"\") to keep, " +
 			"or 0 / \"-\" to clear a field. Local config only; nothing is sent to Intervals.icu.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
@@ -112,7 +113,47 @@ func applyProfileFlags(profile *icu.TrainingProfile, flags map[string]string) er
 		profile.UsualStartTimes = splitProfileList(value)
 	}
 
+	if err := applyFitnessLoadTypesFlag(profile, flags); err != nil {
+		return err
+	}
+
 	return applyThresholdsFlag(profile, flags)
+}
+
+// applyFitnessLoadTypesFlag merges TYPE=ctl|atl-only overrides into the
+// profile ("-" clears them; TYPE=- removes one).
+func applyFitnessLoadTypesFlag(profile *icu.TrainingProfile, flags map[string]string) error {
+	value := flags["fitness-load-types"]
+	switch value {
+	case "":
+		return nil
+	case "-":
+		profile.FitnessLoadTypes = nil
+
+		return nil
+	}
+	if profile.FitnessLoadTypes == nil {
+		profile.FitnessLoadTypes = map[string]string{}
+	}
+	for _, item := range splitProfileList(value) {
+		sport, class, ok := strings.Cut(item, "=")
+		sport, class = strings.TrimSpace(sport), strings.TrimSpace(class)
+		switch {
+		case !ok || sport == "":
+			return fmt.Errorf("%w: --fitness-load-types %q (want TYPE=ctl|atl-only)", errInvalidValue, item)
+		case class == "-":
+			delete(profile.FitnessLoadTypes, sport)
+		case !icu.ValidFitnessLoadClass(class):
+			return fmt.Errorf("%w: --fitness-load-types %s=%q (want ctl or atl-only)", errInvalidValue, sport, class)
+		default:
+			profile.FitnessLoadTypes[sport] = class
+		}
+	}
+	if len(profile.FitnessLoadTypes) == 0 {
+		profile.FitnessLoadTypes = nil
+	}
+
+	return nil
 }
 
 // applyThresholdsFlag replaces the threshold overrides with a JSON object

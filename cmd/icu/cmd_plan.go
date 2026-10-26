@@ -419,8 +419,6 @@ func planLoadProjection(
 			completed[*activities[index].PairedEventID] = true
 		}
 	}
-	excluded := icu.FitnessExcludedTypes(records, activities)
-	actual, actualFitness := projectionActualLoads(records, activities, excluded, firstDay, today)
 	events, err := readRebalanceEvents(client, firstDay, end)
 	if err != nil {
 		return nil, err
@@ -432,6 +430,8 @@ func planLoadProjection(
 	if profile == nil {
 		profile = &icu.TrainingProfile{}
 	}
+	excluded, typeWarnings := planFitnessLoadTypes(profile, records, activities, proposal.Operations, events, firstDay)
+	actual, actualFitness := projectionActualLoads(records, activities, excluded, firstDay, today)
 	maxRamp := floatFlagVal(flags, "max-ramp", profile.MaxRampPerWeek)
 	planned, plannedFitness := icu.PlanProjectedDailyLoadsByModel(proposal.Operations, events, excluded, completed)
 	projection, err := icu.ProjectLoad(&icu.LoadProjectionInput{
@@ -443,8 +443,74 @@ func planLoadProjection(
 	if err != nil {
 		return nil, fmt.Errorf("project load: %w", err)
 	}
+	projection.Warnings = append(projection.Warnings, typeWarnings...)
 
 	return &projection, nil
+}
+
+// planFitnessLoadTypes learns which activity types feed CTL from the
+// wellness ctlLoad history, persists newly learned classes in the local
+// profile and resolves them with the profile's manual overrides. Types the
+// projection needs (activities from firstDay on, planned sessions) with no
+// class get a warning.
+func planFitnessLoadTypes(
+	profile *icu.TrainingProfile, records []icu.Wellness, activities []icu.Activity,
+	operations []icu.CalendarOperation, events []icu.Event, firstDay string,
+) (map[string]bool, []string) {
+	learned, conflicts := icu.ClassifyFitnessLoadTypes(icu.LearnFitnessLoadTypes(records, activities))
+	var warnings []string
+	merged := map[string]string{}
+	for sport, class := range profile.LearnedFitnessLoadTypes {
+		merged[sport] = class
+	}
+	changed := false
+	for sport, class := range learned {
+		if merged[sport] != class {
+			merged[sport], changed = class, true
+		}
+	}
+	if changed {
+		if err := saveLearnedFitnessLoadTypes(merged); err != nil {
+			warnings = append(warnings, "fitness load: could not save learned types: "+err.Error())
+		}
+	}
+	var needed []string
+	for index := range activities {
+		if activities[index].StartDateLocal >= firstDay {
+			needed = append(needed, activities[index].Type)
+		}
+	}
+	for index := range operations {
+		if operations[index].Action != icu.CalendarActionCancel {
+			needed = append(needed, operations[index].Body.Type)
+		}
+	}
+	for index := range events {
+		if events[index].Category == "WORKOUT" {
+			needed = append(needed, events[index].Type)
+		}
+	}
+	excluded, resolveWarnings := icu.ResolveFitnessLoadTypes(profile.FitnessLoadTypes, nil, merged, conflicts, needed)
+
+	return excluded, append(warnings, resolveWarnings...)
+}
+
+// saveLearnedFitnessLoadTypes writes the learned classes into the local
+// config profile (local file only; nothing is sent to Intervals.icu).
+func saveLearnedFitnessLoadTypes(learned map[string]string) error {
+	cfg, err := icu.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if cfg == nil {
+		return nil // no local config to persist into
+	}
+	if cfg.Profile == nil {
+		cfg.Profile = &icu.TrainingProfile{}
+	}
+	cfg.Profile.LearnedFitnessLoadTypes = learned
+
+	return icu.SaveConfigWithAction(cfg, "profile_learn_fitness_load")
 }
 
 func projectionToday(client *icu.Client, flags map[string]string, now time.Time) (string, error) {

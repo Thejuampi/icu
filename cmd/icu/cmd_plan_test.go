@@ -700,3 +700,79 @@ func TestPlanLoadProjectionSplitsFitnessAndFatigueLoads(t *testing.T) {
 		t.Fatalf("projection = %+v, want CTL %.2f ATL %.2f", got, ctl, atl)
 	}
 }
+
+func TestPlanLoadProjectionPersistsLearnedTypesAndHonorsOverrides(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	if err := icu.SaveConfigWithAction(&icu.Config{AthleteID: "i1", Profile: &icu.TrainingProfile{
+		FitnessLoadTypes: map[string]string{"Yoga": "atl-only"},
+	}}, "config_set"); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-09-11","ctl":39,"atl":44,"ctlLoad":0,"atlLoad":42}]`))
+		case strings.HasSuffix(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[{"id":"a","type":"WeightTraining","start_date_local":"2026-09-11T17:00:00",` +
+				`"icu_training_load":42}]`))
+		case strings.HasSuffix(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[{"id":8,"category":"WORKOUT","type":"Yoga",` +
+				`"start_date_local":"2026-09-13T07:00:00","icu_training_load":30},` +
+				`{"id":9,"category":"WORKOUT","type":"Rowing","start_date_local":"2026-09-13T17:00:00","icu_training_load":0}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	proposal := &icu.PlanProposalFile{Scope: icu.PlanScope{EndDate: "2026-09-13"}}
+
+	got, err := planLoadProjection(client, proposal, map[string]string{"now-date": "2026-09-12"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	k42 := 1 - math.Exp(-1.0/42)
+	ctl := 39 * (1 - k42) * (1 - k42) // Yoga is manually ATL-only
+	if math.Abs(got.EndCTL-ctl) > 0.01 {
+		t.Fatalf("CTL %.3f, want %.3f", got.EndCTL, ctl)
+	}
+	if !strings.Contains(strings.Join(got.Warnings, "|"), "whether Rowing counts toward CTL") {
+		t.Fatalf("warnings = %v", got.Warnings)
+	}
+	cfg, err := icu.LoadConfig()
+	if err != nil || cfg.Profile.LearnedFitnessLoadTypes["WeightTraining"] != "atl-only" ||
+		cfg.Profile.FitnessLoadTypes["Yoga"] != "atl-only" {
+		t.Fatalf("persisted profile = %+v, %v", cfg.Profile, err)
+	}
+}
+
+func TestApplyFitnessLoadTypesFlag(t *testing.T) {
+	t.Parallel()
+	profile := icu.TrainingProfile{FitnessLoadTypes: map[string]string{"Yoga": "ctl"}}
+	if err := applyFitnessLoadTypesFlag(&profile, map[string]string{
+		"fitness-load-types": "WeightTraining=atl-only, Yoga=-",
+	}); err != nil || len(profile.FitnessLoadTypes) != 1 || profile.FitnessLoadTypes["WeightTraining"] != "atl-only" {
+		t.Fatalf("%v %v", profile.FitnessLoadTypes, err)
+	}
+	for _, bad := range []string{"Yoga", "=ctl", "Yoga=maybe"} {
+		if err := applyFitnessLoadTypesFlag(&profile, map[string]string{"fitness-load-types": bad}); err == nil {
+			t.Fatalf("%q accepted", bad)
+		}
+	}
+	_ = applyFitnessLoadTypesFlag(&profile, map[string]string{"fitness-load-types": "WeightTraining=-"})
+	if profile.FitnessLoadTypes != nil {
+		t.Fatal("empty overrides not cleared")
+	}
+	_ = applyFitnessLoadTypesFlag(&profile, map[string]string{"fitness-load-types": "Yoga=ctl"})
+	if err := applyFitnessLoadTypesFlag(&profile, map[string]string{"fitness-load-types": "-"}); err != nil ||
+		profile.FitnessLoadTypes != nil {
+		t.Fatal("- did not clear")
+	}
+	if err := icu.ValidateTrainingProfile(&icu.TrainingProfile{
+		LearnedFitnessLoadTypes: map[string]string{"Ride": "x"},
+	}); err == nil {
+		t.Fatal("invalid class validated")
+	}
+}

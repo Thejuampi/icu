@@ -198,7 +198,7 @@ func PlanProjectedDailyLoads(operations []CalendarOperation, events []Event) map
 
 // PlanProjectedDailyLoadsByModel is PlanProjectedDailyLoads split into the
 // ATL loads and the CTL (fitness) loads, which leave out sessions whose type
-// is in fitnessExcluded (see FitnessExcludedTypes). Events in completed
+// is in fitnessExcluded (see ResolveFitnessLoadTypes). Events in completed
 // (paired with a completed activity) and operations on them are skipped:
 // their load is already in the actual load.
 func PlanProjectedDailyLoadsByModel(
@@ -245,40 +245,6 @@ func PlanProjectedDailyLoadsByModel(
 	}
 
 	return loads, fitness
-}
-
-// FitnessExcludedTypes infers which activity types intervals.icu leaves out
-// of CTL for this athlete, from history: a type with load is excluded when it
-// never appears on a day whose wellness ctlLoad equals atlLoad (everything
-// counted) and appears on at least one day where ctlLoad < atlLoad.
-// Example (live, 2026): WeightTraining and Workout count toward ATL only.
-func FitnessExcludedTypes(wellness []Wellness, activities []Activity) map[string]bool {
-	const tolerance = 0.5
-	byDate := map[string]*Wellness{}
-	for index := range wellness {
-		byDate[wellness[index].ID] = &wellness[index]
-	}
-	included, short := map[string]bool{}, map[string]bool{}
-	for index := range activities {
-		activity := &activities[index]
-		row := byDate[activityDate(activity)]
-		if row == nil || activity.TrainingLoad <= 0 || activity.Type == "" {
-			continue
-		}
-		if math.Abs(row.CTLLoad-row.ATLLoad) <= tolerance {
-			included[activity.Type] = true
-		} else if row.CTLLoad < row.ATLLoad {
-			short[activity.Type] = true
-		}
-	}
-	excluded := map[string]bool{}
-	for sport := range short {
-		if !included[sport] {
-			excluded[sport] = true
-		}
-	}
-
-	return excluded
 }
 
 func dateOnly(value string) string {

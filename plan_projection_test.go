@@ -107,9 +107,37 @@ func TestProjectLoadReplaysRealWellness(t *testing.T) {
 
 	// 2. Activity loads, with the fitness-excluded types inferred from
 	// history, reproduce it too.
-	excluded := icu.FitnessExcludedTypes(wellness, activities)
-	if !excluded["WeightTraining"] || !excluded["Workout"] || excluded["Ride"] || excluded["VirtualRun"] {
-		t.Fatalf("excluded = %v", excluded)
+	classes, conflicts := icu.ClassifyFitnessLoadTypes(icu.LearnFitnessLoadTypes(wellness, activities))
+	excluded, _ := icu.ResolveFitnessLoadTypes(nil, classes, nil, conflicts, nil)
+	if !excluded["WeightTraining"] || !excluded["Workout"] || excluded["Ride"] || excluded["VirtualRun"] ||
+		len(conflicts) != 0 {
+		t.Fatalf("excluded = %v, conflicts %v", excluded, conflicts)
+	}
+	// Trimming the window start never turns a CTL type into ATL-only (the
+	// old whole-day heuristic flagged VirtualRun from 08-14/08-19 and
+	// learned nothing from 09-12).
+	for _, from := range []string{"2026-08-14", "2026-08-19", "2026-09-01", "2026-09-12"} {
+		var trimmedW []icu.Wellness
+		var trimmedA []icu.Activity
+		for _, row := range wellness {
+			if row.ID >= from {
+				trimmedW = append(trimmedW, row)
+			}
+		}
+		for _, activity := range activities {
+			if activity.StartDateLocal >= from {
+				trimmedA = append(trimmedA, activity)
+			}
+		}
+		got, gotConflicts := icu.ClassifyFitnessLoadTypes(icu.LearnFitnessLoadTypes(trimmedW, trimmedA))
+		for sport, class := range got {
+			if (class == icu.FitnessLoadATLOnly) != excluded[sport] {
+				t.Fatalf("from %s: %s classified %s, full window says excluded=%v", from, sport, class, excluded[sport])
+			}
+		}
+		if len(gotConflicts) != 0 {
+			t.Fatalf("from %s: conflicts %v", from, gotConflicts)
+		}
 	}
 	fitness := map[string]float64{}
 	for _, row := range rows {
@@ -293,20 +321,65 @@ func TestProjectLoadRampKnownGatesOverCap(t *testing.T) {
 	}
 }
 
-func TestFitnessExcludedTypesKeepsTypesSeenOnFullyCountedDays(t *testing.T) {
+func TestLearnFitnessLoadTypesSolvesMixedDays(t *testing.T) {
 	t.Parallel()
 	wellness := []icu.Wellness{
+		// Walk has no sport settings but intervals.icu counted it in CTL.
 		{ID: "2026-08-10", CTLLoad: 12, ATLLoad: 12},
-		{ID: "2026-09-11", CTLLoad: 0, ATLLoad: 42},
+		// VirtualRun + WeightTraining the same day: only the run's 2 feeds CTL.
+		{ID: "2026-08-30", CTLLoad: 2, ATLLoad: 14},
+		// Two types with equal loads, one counted: ambiguous, proves nothing.
+		{ID: "2026-09-01", CTLLoad: 10, ATLLoad: 20},
+		// Activity loads do not add up to atlLoad: skipped.
+		{ID: "2026-09-02", CTLLoad: 0, ATLLoad: 99},
 	}
 	activities := []icu.Activity{
-		// Walk has no sport settings but intervals.icu counted it in CTL.
 		{Type: "Walk", StartDateLocal: "2026-08-10T10:00:00", TrainingLoad: 12},
-		{Type: "WeightTraining", StartDateLocal: "2026-09-11T17:00:00", TrainingLoad: 42},
-		{Type: "Ride", StartDateLocal: "2026-09-12T17:00:00", TrainingLoad: 50},
+		{Type: "WeightTraining", StartDateLocal: "2026-08-30T17:00:00", TrainingLoad: 12},
+		{Type: "VirtualRun", StartDateLocal: "2026-08-30T07:00:00", TrainingLoad: 2},
+		{Type: "Yoga", StartDateLocal: "2026-09-01T07:00:00", TrainingLoad: 10},
+		{Type: "Pilates", StartDateLocal: "2026-09-01T08:00:00", TrainingLoad: 10},
+		{Type: "Ride", StartDateLocal: "2026-09-02T08:00:00", TrainingLoad: 50},
 	}
-	got := icu.FitnessExcludedTypes(wellness, activities)
-	if len(got) != 1 || !got["WeightTraining"] {
-		t.Fatalf("excluded = %v", got)
+	classes, conflicts := icu.ClassifyFitnessLoadTypes(icu.LearnFitnessLoadTypes(wellness, activities))
+	want := map[string]string{"Walk": "ctl", "VirtualRun": "ctl", "WeightTraining": "atl-only"}
+	if len(classes) != len(want) || len(conflicts) != 0 {
+		t.Fatalf("classes = %v, conflicts %v", classes, conflicts)
+	}
+	for sport, class := range want {
+		if classes[sport] != class {
+			t.Fatalf("classes = %v", classes)
+		}
+	}
+}
+
+func TestClassifyFitnessLoadTypesReportsConflicts(t *testing.T) {
+	t.Parallel()
+	classes, conflicts := icu.ClassifyFitnessLoadTypes(map[string]icu.FitnessLoadEvidence{
+		"Row": {CTLDays: 2, ATLOnlyDays: 1}, "Ride": {CTLDays: 3},
+	})
+	if classes["Ride"] != "ctl" || len(classes) != 1 || len(conflicts) != 1 || conflicts[0] != "Row" {
+		t.Fatalf("classes %v conflicts %v", classes, conflicts)
+	}
+}
+
+func TestResolveFitnessLoadTypesPrecedenceAndUnknown(t *testing.T) {
+	t.Parallel()
+	excluded, warnings := icu.ResolveFitnessLoadTypes(
+		map[string]string{"Workout": "ctl", "Row": "atl-only"},
+		map[string]string{"WeightTraining": "atl-only"},
+		map[string]string{"Workout": "atl-only", "Pilates": "atl-only"},
+		[]string{"Row", "Swim"},
+		[]string{"Yoga", "Yoga", "Ride", "", "WeightTraining"},
+	)
+	if !excluded["WeightTraining"] || !excluded["Pilates"] || !excluded["Row"] || excluded["Workout"] ||
+		excluded["Yoga"] || len(excluded) != 3 {
+		t.Fatalf("excluded = %v", excluded)
+	}
+	// Row is manually set, so only Swim's conflict is reported; Ride and Yoga
+	// have no class at all.
+	if len(warnings) != 3 || !strings.Contains(strings.Join(warnings, "|"), "Swim") ||
+		!strings.Contains(warnings[2], "Yoga") {
+		t.Fatalf("warnings = %v", warnings)
 	}
 }
