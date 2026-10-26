@@ -114,7 +114,7 @@ The activity field contract is fixed (D-8, wave-2) — see **`--fields`/`--activ
 - `volume`: time, distance, and elevation totals
 - `powerAnchors`: FTP, CP, W', Pmax, and rolling FTP when available
 - `environment`: temperature, wind, altitude, gradient, and strain context
-- `load`: total load, monotony, strain, acute/chronic view, CTL/ATL/TSB, per-channel breakdown, and daily load series — see **Tri-Load Channels** below
+- `load`: total load, monotony, strain, acute/chronic view, CTL/ATL/TSB, per-channel breakdown, and daily load series — see **Tri-Load Channels** below. `latestCtl`/`latestAtl`/`latestForm` come from the newest daily wellness row on or before the range end (clamped to today) when one exists, labeled `latestLoadSource: "wellness"` and `latestLoadDate`; otherwise they are the values recorded on the newest activity (no decay over later rest days, no load from other sports) and both labels are absent.
 - `intensity`: weighted intensity and zone totals
 - `durability`: decoupling, efficiency factor, and variability summaries
 - `anaerobic`: work above FTP, W' depletion, and repeatability support metrics
@@ -271,7 +271,7 @@ The CLI currently passes `Adaptation: nil`, even though the library supports ada
 ### Output Sections
 
 - `scope`: history window, plan window, event counts, and `timezone`/`timezoneSource` metadata
-- `history`: completed weekly load/hours, recent tolerance, current state, and completed-week series
+- `history`: completed weekly load/hours, recent tolerance, current state, and completed-week series. `currentCtl`/`currentAtl`/`currentTsb` prefer the latest wellness row at or before the history end (`currentLoadSource: "wellness"`, `currentLoadDate`), falling back to the newest activity (`currentLoadSource: "last_activity"`). Projected future wellness rows are ignored.
 - `anchors`: FTP, indoor FTP, LTHR, max HR, W', and Pmax from sport settings
 - `phase`: inferred block label, pattern, intent, confidence, and source
 - `load`: total planned load, weekly progression, peak week, lowest week, and deload percentage

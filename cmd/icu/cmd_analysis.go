@@ -323,6 +323,8 @@ func analysisCyclingCommand() *Command {
 				return err
 			}
 
+			fitnessRecords, fitnessNewest := readCurrentWellnessFitness(client, dateRange)
+
 			query := queryFromFlags(flags, "limit")
 			query["oldest"] = dateRange.Oldest
 			query["newest"] = dateRange.Newest
@@ -341,10 +343,34 @@ func analysisCyclingCommand() *Command {
 				TimezoneSource:        tzInfo.source,
 				MinIncludedActivities: IntFlag(flags, "min-included-activities", 0),
 			})
+			icu.ApplyWellnessFitness(&analysis.Load, fitnessRecords, fitnessNewest)
 
 			return writeJSON(analysis)
 		},
 	}
+}
+
+// currentFitnessLookbackDays bounds the wellness read used to find the newest
+// daily CTL/ATL row at or before the analysis end date.
+const currentFitnessLookbackDays = 7
+
+// readCurrentWellnessFitness reads the daily wellness rows used to replace
+// activity-frozen CTL/ATL with the state at the range end (clamped to today).
+// Wellness is optional context here: a failed read returns no rows, so the
+// activity-derived values stay, labeled latestLoadSource "last_activity".
+func readCurrentWellnessFitness(client *icu.Client, dateRange analysisRange) ([]icu.Wellness, string) {
+	newest := clampDateToToday(dateRange.Newest, time.Now())
+	oldest, err := addDays(newest, -currentFitnessLookbackDays)
+	if err != nil {
+		return nil, newest
+	}
+
+	var records []icu.Wellness
+	if err := client.Get("wellness", nil, map[string]string{"oldest": oldest, "newest": newest}, &records); err != nil {
+		return nil, newest
+	}
+
+	return records, newest
 }
 
 func analysisPlanCommand() *Command {
@@ -376,7 +402,8 @@ func analysisPlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			wellnessRecords, wellnessWarnings, err := readWellnessRecordsForAnalysis(client, dateRanges.History.Oldest, dateRanges.History.Newest, nil)
+			wellnessNewest := clampDateToToday(dateRanges.History.Newest, time.Now())
+			wellnessRecords, wellnessWarnings, err := readWellnessRecordsForAnalysis(client, dateRanges.History.Oldest, wellnessNewest, nil)
 			if err != nil {
 				return err
 			}
@@ -384,7 +411,7 @@ func analysisPlanCommand() *Command {
 			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
 				StartDate:      dateRanges.History.Oldest,
-				EndDate:        dateRanges.History.Newest,
+				EndDate:        wellnessNewest,
 				Timezone:       tzInfo.timezone,
 				TimezoneSource: tzInfo.source,
 			})

@@ -133,6 +133,10 @@ type TrainingPlanHistory struct {
 	CurrentDecoupling    float64                     `json:"currentDecoupling,omitempty"`
 	CurrentHotSessions   int                         `json:"currentHotSessions,omitempty"`
 	CurrentStateSource   string                      `json:"currentStateSource,omitempty"`
+	// CurrentLoadSource labels CurrentCTL/ATL/TSB: "wellness" (daily row at
+	// the history end) or "last_activity" (frozen at the newest ride).
+	CurrentLoadSource string `json:"currentLoadSource,omitempty"`
+	CurrentLoadDate   string `json:"currentLoadDate,omitempty"`
 	PlannedLoadAlignment string                      `json:"plannedLoadAlignment,omitempty"`
 	Weeks                []TrainingPlanCompletedWeek `json:"weeks,omitempty"`
 }
@@ -373,7 +377,7 @@ func AnalyzeTrainingPlanWithContext(
 	}
 
 	analysis := accumulator.finish(options)
-	analysis.History = summarizeTrainingPlanHistory(activities, options)
+	analysis.History = summarizeTrainingPlanHistory(activities, options, context.Wellness)
 	analysis.History.PlannedLoadAlignment = plannedLoadAlignment(&analysis.History, &analysis.Load)
 	analysis.Anchors = trainingPlanSportAnchors(context.SportSettings, activities)
 	analysis.TargetStatus = trainingPlanTargetStatus(events, options, &analysis.History)
@@ -1243,7 +1247,7 @@ func trainingPlanLoad(weeks []TrainingPlanWeek) TrainingPlanLoad {
 	return load
 }
 
-func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOptions) TrainingPlanHistory {
+func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOptions, wellness *WellnessAnalysis) TrainingPlanHistory {
 	var history TrainingPlanHistory
 
 	weeks := map[string]trainingPlanHistoryWeek{}
@@ -1289,7 +1293,7 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 	}
 
 	finishTrainingPlanHistory(&history, weeks)
-	addCurrentTrainingStateToHistory(&history, activities, options)
+	addCurrentTrainingStateToHistory(&history, activities, options, wellness)
 
 	return history
 }
@@ -1363,7 +1367,12 @@ func completedWeekTolerance(load int, averageWeeklyLoad float64) string {
 	return planAlignmentWithin
 }
 
-func addCurrentTrainingStateToHistory(history *TrainingPlanHistory, activities []Activity, options TrainingPlanOptions) {
+func addCurrentTrainingStateToHistory(
+	history *TrainingPlanHistory,
+	activities []Activity,
+	options TrainingPlanOptions,
+	wellness *WellnessAnalysis,
+) {
 	analysis := AnalyzeCyclingActivities(activities, AnalysisOptions{
 		StartDate: options.HistoryStartDate,
 		EndDate:   options.HistoryEndDate,
@@ -1377,6 +1386,17 @@ func addCurrentTrainingStateToHistory(history *TrainingPlanHistory, activities [
 	history.CurrentDecoupling = analysis.Durability.AverageDecoupling
 	history.CurrentHotSessions = analysis.Environment.HotSessions
 	history.CurrentStateSource = analysis.State.Source
+	if history.CurrentCTL != 0 || history.CurrentATL != 0 {
+		history.CurrentLoadSource = latestLoadSourceActivity
+	}
+
+	if wellness != nil && (wellness.Load.CTL != 0 || wellness.Load.ATL != 0) {
+		history.CurrentCTL = wellness.Load.CTL
+		history.CurrentATL = wellness.Load.ATL
+		history.CurrentTSB = wellness.Load.TSB
+		history.CurrentLoadSource = latestLoadSourceWellness
+		history.CurrentLoadDate = wellness.Load.Date
+	}
 }
 
 func plannedLoadAlignment(history *TrainingPlanHistory, load *TrainingPlanLoad) string {

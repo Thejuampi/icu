@@ -844,3 +844,19 @@ func completedRide(date string, load, movingTime int) icu.Activity {
 
 	return activity
 }
+
+func TestAnalyzeTrainingPlanCurrentLoadPrefersWellness(t *testing.T) {
+	t.Parallel()
+
+	activities := []icu.Activity{{ID: "a1", StartDateLocal: "2026-10-20T08:00:00", Type: "Ride", TrainingLoad: 80, CTL: 29.57, ATL: 45.02}}
+	wellness := icu.AnalyzeWellness([]icu.Wellness{
+		{ID: "2026-10-26", CTL: 28.88, ATL: 39.03},
+		{ID: "2026-11-01", CTL: 25.03, ATL: 16.56},
+	}, icu.AnalysisOptions{StartDate: "2026-10-01", EndDate: "2026-10-26"})
+	options := icu.TrainingPlanOptions{HistoryStartDate: "2026-10-01", HistoryEndDate: "2026-10-26", PlanStartDate: "2026-10-27", PlanEndDate: "2026-11-09"}
+
+	got := icu.AnalyzeTrainingPlanWithContext(activities, nil, options, icu.TrainingPlanContext{Wellness: &wellness}).History
+	if got.CurrentTSB != -10.15 || got.CurrentLoadSource != "wellness" || got.CurrentLoadDate != "2026-10-26" {
+		t.Fatalf("current tsb=%v source=%q date=%q, want -10.15 wellness 2026-10-26", got.CurrentTSB, got.CurrentLoadSource, got.CurrentLoadDate)
+	}
+}
