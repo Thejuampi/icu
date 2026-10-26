@@ -503,7 +503,7 @@ func saveLearnedFitnessLoadTypes(learned map[string]string) error {
 		return err
 	}
 	if cfg == nil {
-		return nil // no local config to persist into
+		cfg = &icu.Config{}
 	}
 	if cfg.Profile == nil {
 		cfg.Profile = &icu.TrainingProfile{}

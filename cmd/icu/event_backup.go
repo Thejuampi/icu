@@ -333,7 +333,7 @@ func eventsDeleteCommand() *Command {
 
 // checkNotRecreated aborts a recreate that already happened: the backup
 // records a restored id, or the calendar already has an event on the same
-// date with the same uid, or the same name and category.
+// date with the same uid, or the same name, category, type and start time.
 func checkNotRecreated(client *icu.Client, backup *eventBackup) error {
 	if backup.RestoredEventID != 0 {
 		return fmt.Errorf("backup of event %d was already restored as event %d (use --force to create another copy)",
@@ -355,9 +355,12 @@ func checkNotRecreated(client *icu.Client, backup *eventBackup) error {
 	for index := range events {
 		event := &events[index]
 		sameUID := stored.UID != "" && event.UID == stored.UID
-		sameName := stored.Name != "" && event.Name == stored.Name && event.Category == stored.Category
-		if sameUID || sameName {
-			return fmt.Errorf("event %d on %s already matches backup of event %d (uid or name); "+
+		// Name alone false-positives on a day with two similar sessions; a
+		// copy must also share the category, type and start time.
+		sameEvent := stored.Name != "" && event.Name == stored.Name && event.Category == stored.Category &&
+			event.Type == stored.Type && event.StartDateLocal == stored.StartDateLocal
+		if sameUID || sameEvent {
+			return fmt.Errorf("event %d on %s already matches backup of event %d (uid, or name/category/type/start); "+
 				"not recreating (use --force to create another copy)", event.ID, day, backup.EventID)
 		}
 	}
@@ -370,9 +373,44 @@ func rewriteEventBackup(path string, backup *eventBackup) error {
 	if err != nil {
 		return fmt.Errorf("marshal event backup: %w", err)
 	}
-	if err := os.WriteFile(filepath.Clean(path), data, eventBackupFileMode); err != nil { //nolint:gosec // path is a backup file listed or named by the user
+	if err := writeFileAtomic(filepath.Clean(path), data); err != nil {
 		return fmt.Errorf("record restored id in %s: %w", path, err)
 	}
+
+	return nil
+}
+
+// writeFileAtomic replaces path with data via a synced temp file in the same
+// directory and a rename, so a crash never leaves a truncated backup.
+func writeFileAtomic(path string, data []byte) error {
+	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	name := temp.Name()
+	ok := false
+	defer func() {
+		if !ok {
+			_ = temp.Close()
+			_ = os.Remove(name)
+		}
+	}()
+	if err := temp.Chmod(eventBackupFileMode); err != nil {
+		return fmt.Errorf("chmod %s: %w", name, err)
+	}
+	if _, err := temp.Write(data); err != nil {
+		return fmt.Errorf("write %s: %w", name, err)
+	}
+	if err := temp.Sync(); err != nil {
+		return fmt.Errorf("sync %s: %w", name, err)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", name, err)
+	}
+	if err := os.Rename(name, path); err != nil {
+		return fmt.Errorf("rename %s: %w", name, err)
+	}
+	ok = true
 
 	return nil
 }

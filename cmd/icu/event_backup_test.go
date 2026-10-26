@@ -303,14 +303,63 @@ func TestEventsRevertRecreateIsIdempotent(t *testing.T) {
 	if err := rewriteEventBackup(paths[0], &backup); err != nil {
 		t.Fatal(err)
 	}
+	// A second, similar session that day (same name, other start time or
+	// type) is not a copy: the recreate goes ahead.
+	calendar = `[{"id":50,"name":"Z2","category":"WORKOUT","start_date_local":"2026-10-27T17:00:00"},` +
+		`{"id":51,"name":"Z2","category":"WORKOUT","type":"Run","start_date_local":"2026-10-27T07:00:00"}]`
+	if _, err := captureStdout(t, func() error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	}); err != nil || posts != 2 {
+		t.Fatalf("sibling revert: posts=%d err=%v", posts, err)
+	}
+	backup, _ = readEventBackup(paths[0])
+	backup.RestoredEventID = 0
+	if err := rewriteEventBackup(paths[0], &backup); err != nil {
+		t.Fatal(err)
+	}
 	calendar = `[{"id":99,"name":"Z2","category":"WORKOUT","start_date_local":"2026-10-27T07:00:00"}]`
 	err = eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
-	if err == nil || !strings.Contains(err.Error(), "already matches backup") || posts != 1 {
+	if err == nil || !strings.Contains(err.Error(), "already matches backup") || posts != 2 {
 		t.Fatalf("lookup revert: posts=%d err=%v", posts, err)
 	}
 	if _, err := captureStdout(t, func() error {
 		return eventsRevertCommand().Run(nil, map[string]string{"id": "8", "force": "true"}, client)
-	}); err != nil || posts != 2 {
+	}); err != nil || posts != 3 {
 		t.Fatalf("forced revert: posts=%d err=%v", posts, err)
+	}
+}
+
+func TestWriteFileAtomicReplacesWithoutLeftovers(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "backup.json")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFileAtomic(path, []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(dir)
+	data, _ := os.ReadFile(path)
+	info, _ := os.Stat(path)
+	if len(entries) != 1 || string(data) != "new" || info.Mode().Perm() != eventBackupFileMode {
+		t.Fatalf("entries %v data %q mode %v", entries, data, info.Mode())
+	}
+	if err := writeFileAtomic(filepath.Join(dir, "missing", "x.json"), []byte("x")); err == nil {
+		t.Fatal("write into a missing dir succeeded")
+	}
+	// Renaming over a non-empty directory fails and leaves no temp file.
+	target := filepath.Join(dir, "busy")
+	if err := os.MkdirAll(filepath.Join(target, "child"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFileAtomic(target, []byte("x")); err == nil {
+		t.Fatal("rename over a directory succeeded")
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
+		t.Fatalf("leftovers: %v", entries)
+	}
+	if err := rewriteEventBackup(filepath.Join(dir, "missing", "b.json"), &eventBackup{}); err == nil {
+		t.Fatal("rewrite into a missing dir succeeded")
 	}
 }

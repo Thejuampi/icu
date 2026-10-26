@@ -776,3 +776,24 @@ func TestApplyFitnessLoadTypesFlag(t *testing.T) {
 		t.Fatal("invalid class validated")
 	}
 }
+
+func TestSaveLearnedFitnessLoadTypesKeepsOtherConfig(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	if err := saveLearnedFitnessLoadTypes(map[string]string{"Ride": "ctl"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := icu.SaveConfigWithAction(&icu.Config{AthleteID: "i1", Profile: &icu.TrainingProfile{
+		FitnessLoadTypes: map[string]string{"Yoga": "atl-only"},
+	}}, "config_set"); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveLearnedFitnessLoadTypes(map[string]string{"Ride": "ctl"}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := icu.LoadConfig()
+	if cfg.AthleteID != "i1" || cfg.Profile.LearnedFitnessLoadTypes["Ride"] != "ctl" ||
+		cfg.Profile.FitnessLoadTypes["Yoga"] != "atl-only" {
+		t.Fatalf("config = %+v profile %+v", cfg, cfg.Profile)
+	}
+}

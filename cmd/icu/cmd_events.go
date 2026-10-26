@@ -350,8 +350,10 @@ func eventsDownloadCommand() *Command {
 
 // upsertSearchDays bounds the uid search around the new event's date.
 // intervals.icu matches upsertOnUid across the whole calendar, but the
-// events list needs a range; two years either side covers real calendars.
-const upsertSearchDays = 730
+// events list needs a range. A uid names one planned session, and an upsert
+// re-sends a plan for dates near it; 90 days either side covers a training
+// block's re-plans while keeping the read small.
+const upsertSearchDays = 90
 
 // backupUpsertTargets backs up the events an upsert would overwrite:
 // POST events?upsertOnUid=true updates the event whose uid equals the body's
