@@ -421,6 +421,7 @@ func readRebalanceWellness(client *icu.Client, oldest, newest string, flags map[
 		return nil, err
 	}
 	analysis := analyzeWellness(records, warnings, icu.AnalysisOptions{
+		Thresholds:     profileThresholds(),
 		StartDate:      wellnessOldest,
 		EndDate:        newest,
 		Timezone:       icu.DefaultAnalysisTimezone,
@@ -551,6 +552,7 @@ func readRebalanceInputFromScope(client *icu.Client, startDate, endDate string, 
 	wellnessOldest := rebalanceWellnessStart(startDate, rebalanceWellnessLookbackDays)
 	if wellnessRecords, warnings, err := readWellnessRecordsForAnalysis(client, wellnessOldest, endDate, nil); err == nil {
 		analysis := analyzeWellness(wellnessRecords, warnings, icu.AnalysisOptions{
+			Thresholds:     profileThresholds(),
 			StartDate:      wellnessOldest,
 			EndDate:        endDate,
 			Timezone:       icu.DefaultAnalysisTimezone,

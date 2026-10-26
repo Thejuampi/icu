@@ -164,3 +164,31 @@ func TestPlanUsesIntervalsIndoorFTPWithoutTypeFlag(t *testing.T) {
 		t.Fatalf("sessions = %+v, validation = %+v", proposal.Sessions, proposal.Validation)
 	}
 }
+
+//nolint:paralleltest // swaps the process-wide config store and stdout.
+func TestProfileSetThresholdsJSON(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+
+	if _, err := captureStdout(t, func() error {
+		return profileSetCommand().Run(nil, map[string]string{"thresholds": `{"watchZ":2,"redZ":3,"sleepWatch":72}`}, nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := profileThresholds()
+	if got == nil || got.WatchZ != 2 || got.SleepWatch == nil || *got.SleepWatch != 72 {
+		t.Fatalf("thresholds = %+v", got)
+	}
+	for _, bad := range []string{`{"watchZ":3,"redZ":2}`, `{"unknown":1}`, `not json`} {
+		if _, err := captureStdout(t, func() error {
+			return profileSetCommand().Run(nil, map[string]string{"thresholds": bad}, nil)
+		}); err == nil {
+			t.Fatalf("thresholds %s accepted", bad)
+		}
+	}
+	if _, err := captureStdout(t, func() error {
+		return profileSetCommand().Run(nil, map[string]string{"thresholds": "-"}, nil)
+	}); err != nil || profileThresholds() != nil {
+		t.Fatalf("clear err = %v, thresholds = %+v", err, profileThresholds())
+	}
+}

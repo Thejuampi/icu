@@ -2,6 +2,7 @@ package icu_test
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -98,8 +99,9 @@ func TestAnalyzeWellnessComputesPhysiologyState(t *testing.T) {
 	second.ATL = 67
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first, second}, icu.AnalysisOptions{
-		StartDate: testWellnessStartDate,
-		EndDate:   testWellnessSecondDate,
+		Thresholds: pinnedThresholds(),
+		StartDate:  testWellnessStartDate,
+		EndDate:    testWellnessSecondDate,
 	})
 
 	if got.State.State != "WATCH" || got.State.Confidence != "high" || got.Load.TSB != -14 {
@@ -240,8 +242,9 @@ func TestAnalyzeWellnessLactateStateHigh(t *testing.T) {
 	first.Lactate = 5.0
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first}, icu.AnalysisOptions{
-		StartDate: testWellnessStartDate,
-		EndDate:   "2026-05-01",
+		Thresholds: pinnedThresholds(),
+		StartDate:  testWellnessStartDate,
+		EndDate:    "2026-05-01",
 	})
 
 	if got.Lactate.State != "high" {
@@ -257,8 +260,9 @@ func TestAnalyzeWellnessLactateStateBaseline(t *testing.T) {
 	first.Lactate = 1.0
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first}, icu.AnalysisOptions{
-		StartDate: testWellnessStartDate,
-		EndDate:   "2026-05-01",
+		Thresholds: pinnedThresholds(),
+		StartDate:  testWellnessStartDate,
+		EndDate:    "2026-05-01",
 	})
 
 	if got.Lactate.State != "baseline" {
@@ -347,8 +351,9 @@ func TestAnalyzeWellnessComputesLactateCalibration(t *testing.T) {
 	second.Lactate = 3.1
 
 	got := icu.AnalyzeWellness([]icu.Wellness{first, second}, icu.AnalysisOptions{
-		StartDate: testWellnessStartDate,
-		EndDate:   "2026-05-04",
+		Thresholds: pinnedThresholds(),
+		StartDate:  testWellnessStartDate,
+		EndDate:    "2026-05-04",
 	})
 	want := icu.WellnessLactateCalibration{
 		Mean:            2.15,
@@ -358,9 +363,10 @@ func TestAnalyzeWellnessComputesLactateCalibration(t *testing.T) {
 		CoveragePercent: 50,
 		State:           "watch",
 		Source:          "wellness_lactate",
+		Threshold:       &icu.DerivedThreshold{Watch: 2.5, Red: 4, Source: "profile"},
 	}
 
-	if got.Lactate != want {
+	if !reflect.DeepEqual(got.Lactate, want) {
 		t.Fatalf("Lactate = %+v, want %+v", got.Lactate, want)
 	}
 }

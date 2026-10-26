@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -37,7 +38,7 @@ func profileSetCommand() *Command {
 		Name: "",
 		Usage: "profile set [--target-ftp W] [--outdoor-ftp W] [--indoor-ftp W] [--max-ramp CTL/WEEK] " +
 			"[--min-z2-minutes N] [--z2-low PCT --z2-high PCT] [--usual-days mon,wed,...] [--usual-times HH:MM,...] " +
-			"[--max-similar-sessions N] [--ctl-days N] [--atl-days N]",
+			"[--max-similar-sessions N] [--ctl-days N] [--atl-days N] [--thresholds JSON|-]",
 		Description: "Update the local training profile. Pass an empty value (e.g. --max-ramp \"\") to keep, " +
 			"or 0 / \"-\" to clear a field. Local config only; nothing is sent to Intervals.icu.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
@@ -111,6 +112,29 @@ func applyProfileFlags(profile *icu.TrainingProfile, flags map[string]string) er
 		profile.UsualStartTimes = splitProfileList(value)
 	}
 
+	return applyThresholdsFlag(profile, flags)
+}
+
+// applyThresholdsFlag replaces the threshold overrides with a JSON object
+// (e.g. '{"watchZ":2,"sleepWatch":72}'); "-" clears them.
+func applyThresholdsFlag(profile *icu.TrainingProfile, flags map[string]string) error {
+	value := flags["thresholds"]
+	switch value {
+	case "":
+		return nil
+	case "-":
+		profile.Thresholds = nil
+
+		return nil
+	}
+	var thresholds icu.TrainingThresholds
+	decoder := json.NewDecoder(strings.NewReader(value))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&thresholds); err != nil {
+		return fmt.Errorf("%w: --thresholds: %w", errInvalidValue, err)
+	}
+	profile.Thresholds = &thresholds
+
 	return nil
 }
 
@@ -141,4 +165,15 @@ func splitProfileList(value string) []string {
 	}
 
 	return out
+}
+
+// profileThresholds returns the profile's threshold overrides for analysis;
+// without a readable profile every bound is derived from history.
+func profileThresholds() *icu.TrainingThresholds {
+	profile, err := loadTrainingProfile()
+	if err != nil || profile == nil {
+		return nil
+	}
+
+	return profile.Thresholds
 }

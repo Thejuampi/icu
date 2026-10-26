@@ -15,6 +15,9 @@ type TrainingProfile struct {
 	TargetFTP  int `json:"targetFtp,omitempty"`
 	OutdoorFTP int `json:"outdoorFtp,omitempty"`
 	IndoorFTP  int `json:"indoorFtp,omitempty"`
+	// Thresholds pin readiness bounds or tune the robust baseline method;
+	// unset bounds are derived from the athlete's own history.
+	Thresholds *TrainingThresholds `json:"thresholds,omitempty"`
 	// MaxRampPerWeek caps the projected CTL rise per 7 days.
 	MaxRampPerWeek float64 `json:"maxRampPerWeek,omitempty"`
 	// MinZ2MinutesPerWeek is the weekly endurance-zone volume floor.
@@ -76,6 +79,20 @@ func ValidateTrainingProfile(profile *TrainingProfile) error {
 		if _, err := time.Parse("15:04", clock); err != nil {
 			return fmt.Errorf("profile usual start time %q must be HH:MM", clock)
 		}
+	}
+
+	return validateTrainingThresholds(profile.Thresholds)
+}
+
+func validateTrainingThresholds(thresholds *TrainingThresholds) error {
+	if thresholds == nil {
+		return nil
+	}
+	if thresholds.WatchZ < 0 || thresholds.RedZ < 0 || thresholds.MinSamples < 0 {
+		return errors.New("profile thresholds watchZ/redZ/minSamples must not be negative")
+	}
+	if thresholds.WatchZ > 0 && thresholds.RedZ > 0 && thresholds.RedZ < thresholds.WatchZ {
+		return errors.New("profile thresholds redZ must be >= watchZ")
 	}
 
 	return nil

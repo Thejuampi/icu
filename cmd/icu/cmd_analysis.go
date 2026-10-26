@@ -191,6 +191,7 @@ func readCoachingContextInputs(
 
 	tzInfo := analysisTimezone(explicit)
 	cycling := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
+		Thresholds:     profileThresholds(),
 		StartDate:      dateRanges.History.Oldest,
 		EndDate:        dateRanges.History.Newest,
 		Timezone:       tzInfo.timezone,
@@ -199,6 +200,7 @@ func readCoachingContextInputs(
 	inputs.Cycling = &cycling
 
 	wellness := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
+		Thresholds:     profileThresholds(),
 		StartDate:      dateRanges.History.Oldest,
 		EndDate:        dateRanges.History.Newest,
 		Timezone:       tzInfo.timezone,
@@ -215,6 +217,7 @@ func readCoachingContextInputs(
 	}
 
 	plan := icu.AnalyzeTrainingPlanWithContext(activities, events, icu.TrainingPlanOptions{
+		Thresholds:       profileThresholds(),
 		HistoryStartDate: dateRanges.History.Oldest,
 		HistoryEndDate:   dateRanges.History.Newest,
 		PlanStartDate:    dateRanges.Plan.Oldest,
@@ -306,6 +309,7 @@ func readCoachingAdaptation(
 		activities,
 		wellness,
 		icu.AnalysisOptions{
+			Thresholds:     profileThresholds(),
 			StartDate:      dateRange.Oldest,
 			EndDate:        dateRange.Newest,
 			Timezone:       tzInfo.timezone,
@@ -344,6 +348,7 @@ func analysisCyclingCommand() *Command {
 
 			tzInfo := analysisTimezone(explicit)
 			analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
+				Thresholds:            profileThresholds(),
 				StartDate:             dateRange.Oldest,
 				EndDate:               dateRange.Newest,
 				Timezone:              tzInfo.timezone,
@@ -417,6 +422,7 @@ func analysisPlanCommand() *Command {
 
 			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
+				Thresholds:     profileThresholds(),
 				StartDate:      dateRanges.History.Oldest,
 				EndDate:        wellnessNewest,
 				Timezone:       tzInfo.timezone,
@@ -436,6 +442,7 @@ func analysisPlanCommand() *Command {
 			}
 
 			analysis := icu.AnalyzeTrainingPlanWithContext(activities, events, icu.TrainingPlanOptions{
+				Thresholds:       profileThresholds(),
 				HistoryStartDate: dateRanges.History.Oldest,
 				HistoryEndDate:   dateRanges.History.Newest,
 				PlanStartDate:    dateRanges.Plan.Oldest,
@@ -472,6 +479,7 @@ func analysisWellnessCommand() *Command {
 
 			tzInfo := analysisTimezone(explicit)
 			analysis := analyzeWellness(records, warnings, icu.AnalysisOptions{
+				Thresholds:     profileThresholds(),
 				StartDate:      dateRange.Oldest,
 				EndDate:        dateRange.Newest,
 				Timezone:       tzInfo.timezone,
@@ -682,6 +690,7 @@ func analysisAdaptationCommand() *Command {
 
 			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
+				Thresholds:     profileThresholds(),
 				StartDate:      dateRange.Oldest,
 				EndDate:        dateRange.Newest,
 				Timezone:       tzInfo.timezone,
@@ -695,6 +704,7 @@ func analysisAdaptationCommand() *Command {
 				activities,
 				&wellnessAnalysis,
 				icu.AnalysisOptions{
+					Thresholds:     profileThresholds(),
 					StartDate:      dateRange.Oldest,
 					EndDate:        dateRange.Newest,
 					Timezone:       tzInfo.timezone,
@@ -1099,6 +1109,7 @@ func readMicrocycleWellness(
 	}
 
 	analysis := analyzeWellness(wellnessRecords, warnings, icu.AnalysisOptions{
+		Thresholds:     profileThresholds(),
 		StartDate:      lookbackStart,
 		EndDate:        newest,
 		Timezone:       timezone,

@@ -47,8 +47,6 @@ const (
 	planZ2CooldownSeconds      = 600
 	planForecastCtlTauDays     = 42
 	planForecastAtlTauDays     = 7
-	planForecastWatchTSB       = -10
-	planForecastRedTSB         = -20
 	planForecastStatusRed      = "red"
 	planForecastStatusWatch    = "watch"
 	planTargetRaceA            = "RACE_A"
@@ -68,7 +66,6 @@ const (
 	planDecisionPeakPenalty    = 20
 	planDecisionAdaptPenalty   = 15
 	planHeatSessionWatch       = 1
-	planDriftWatchThreshold    = 5
 	plannedClassificationRest  = "rest"
 	plannedClassificationNote  = "note"
 	plannedClassificationHigh  = "high_intensity"
@@ -84,6 +81,8 @@ type TrainingPlanOptions struct {
 	HistoryEndDate   string `json:"historyEndDate,omitempty"`
 	PlanStartDate    string `json:"planStartDate,omitempty"`
 	PlanEndDate      string `json:"planEndDate,omitempty"`
+	// Thresholds are profile overrides for baseline-derived bounds.
+	Thresholds *TrainingThresholds `json:"-"`
 }
 
 type TrainingPlanAnalysis struct {
@@ -132,8 +131,12 @@ type TrainingPlanHistory struct {
 	CurrentATL          float64 `json:"currentAtl,omitempty"`
 	CurrentTSB          float64 `json:"currentTsb,omitempty"`
 	CurrentDecoupling   float64 `json:"currentDecoupling,omitempty"`
-	CurrentHotSessions  int     `json:"currentHotSessions,omitempty"`
-	CurrentStateSource  string  `json:"currentStateSource,omitempty"`
+	// RecentDecoupling is the newest history week's mean decoupling, judged
+	// against DecouplingThreshold derived from the earlier rides.
+	RecentDecoupling    float64           `json:"recentDecoupling,omitempty"`
+	DecouplingThreshold *DerivedThreshold `json:"decouplingThreshold,omitempty"`
+	CurrentHotSessions  int               `json:"currentHotSessions,omitempty"`
+	CurrentStateSource  string            `json:"currentStateSource,omitempty"`
 	// CurrentLoadSource labels CurrentCTL/ATL/TSB: "wellness" (daily row at
 	// the history end) or "last_activity" (frozen at the newest ride).
 	CurrentLoadSource    string                      `json:"currentLoadSource,omitempty"`
@@ -184,6 +187,9 @@ type TrainingPlanForecast struct {
 	Status     string                      `json:"status,omitempty"`
 	Source     string                      `json:"source,omitempty"`
 	Points     []TrainingPlanForecastPoint `json:"points,omitempty"`
+	// Threshold is the TSB bound pair from the athlete's own TSB history
+	// (wellness) or profile; nil leaves Status "no_baseline".
+	Threshold *DerivedThreshold `json:"threshold,omitempty"`
 }
 
 type TrainingPlanForecastPoint struct {
@@ -388,6 +394,7 @@ func AnalyzeTrainingPlanWithContext(
 	analysis.Anchors = trainingPlanSportAnchors(context.SportSettings, activities)
 	analysis.TargetStatus = trainingPlanTargetStatus(events, options, &analysis.History)
 	analysis.Forecast = trainingPlanForecast(&analysis)
+	applyForecastThreshold(&analysis.Forecast, context.Wellness, options.Thresholds)
 	analysis.DayAdjustments = trainingPlanDayAdjustments(&analysis, context.Wellness)
 	analysis.Decision = trainingPlanDecisionGuidance(&analysis, context.Wellness, context.Adaptation)
 	analysis.Warnings = trainingPlanWarnings(&analysis)
@@ -1307,8 +1314,41 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 	if historyDecoupling.count > 0 {
 		history.CurrentDecoupling = round2(historyDecoupling.average())
 	}
+	history.RecentDecoupling, history.DecouplingThreshold = recentDecouplingVsBaseline(weeks, options.Thresholds)
 
 	return history
+}
+
+// recentDecouplingVsBaseline returns the newest week's mean decoupling and a
+// high-side bound derived from the rides in the earlier weeks (robust median
+// and MAD after outlier filtering), or the profile's decouplingWatchPct.
+func recentDecouplingVsBaseline(
+	weeks map[string]trainingPlanHistoryWeek, overrides *TrainingThresholds,
+) (float64, *DerivedThreshold) {
+	keys := make([]string, 0, len(weeks))
+	for key := range weeks {
+		if weeks[key].decoupling.count > 0 {
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		return 0, nil
+	}
+	sort.Strings(keys)
+	recentKey := keys[len(keys)-1]
+	var earlier []float64
+	for _, key := range keys[:len(keys)-1] {
+		earlier = append(earlier, weeks[key].decouplingValues...)
+	}
+	if len(earlier) > 0 {
+		earlier = robustFilteredFloats(earlier)
+	}
+	watch := overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.DecouplingWatchPct })
+
+	recent := weeks[recentKey].decoupling
+
+	return round2(recent.average()),
+		deriveThreshold(earlier, baselineHighIsBad, thresholdMethod(overrides), watch, nil)
 }
 
 // filterHistoryDecoupling drops per-ride decoupling outliers before weekly
@@ -1688,9 +1728,22 @@ func trainingPlanForecast(analysis *TrainingPlanAnalysis) TrainingPlanForecast {
 	forecast.EndCTL = round2(ctl)
 	forecast.EndATL = round2(atl)
 	forecast.EndTSB = round2(ctl - atl)
-	forecast.Status = forecastStatus(forecast.LowestTSB)
 
 	return forecast
+}
+
+// applyForecastThreshold judges the forecast's lowest TSB against the
+// athlete's own TSB baseline from wellness, else the profile's TSB bounds.
+func applyForecastThreshold(forecast *TrainingPlanForecast, wellness *WellnessAnalysis, overrides *TrainingThresholds) {
+	if wellness != nil && wellness.Load.Threshold != nil {
+		forecast.Threshold = wellness.Load.Threshold
+	} else if overrides != nil {
+		forecast.Threshold = profilePartialThreshold(overrides.TSBWatch, overrides.TSBRed)
+		if overrides.TSBWatch != nil && overrides.TSBRed != nil {
+			forecast.Threshold.Red = *overrides.TSBRed
+		}
+	}
+	forecast.Status = forecastStatus(forecast.LowestTSB, forecast.Threshold)
 }
 
 func initialForecastTSB(history *TrainingPlanHistory) float64 {
@@ -1728,16 +1781,17 @@ func ewmaLoadStep(previous, todayLoad float64, tauDays int) float64 {
 	return previous + ((todayLoad - previous) / float64(tauDays))
 }
 
-func forecastStatus(lowestTSB float64) string {
-	if lowestTSB <= planForecastRedTSB {
+func forecastStatus(lowestTSB float64, threshold *DerivedThreshold) string {
+	switch thresholdLevel(lowestTSB, threshold, baselineLowIsBad) {
+	case BaselineLevelRed:
 		return planForecastStatusRed
-	}
-
-	if lowestTSB <= planForecastWatchTSB {
+	case BaselineLevelWatch:
 		return planForecastStatusWatch
+	case BaselineLevelOK:
+		return "stable"
+	default:
+		return "no_baseline"
 	}
-
-	return "stable"
 }
 
 func trainingPlanDayAdjustments(
@@ -1759,12 +1813,12 @@ func trainingPlanDayAdjustments(
 		}
 
 		if point, ok := forecastByDate[session.Date]; ok {
-			if rule, valid := adjustmentRuleForForecast(&session, point); valid {
+			if rule, valid := adjustmentRuleForForecast(&session, point, analysis.Forecast.Threshold); valid {
 				rules = append(rules, rule)
 			}
 		}
 
-		if rule, valid := adjustmentRuleForDurability(&session, analysis.History.CurrentDecoupling); valid {
+		if rule, valid := adjustmentRuleForDurability(&session, &analysis.History); valid {
 			rules = append(rules, rule)
 		}
 
@@ -1791,12 +1845,14 @@ func trainingPlanDayAdjustments(
 func adjustmentRuleForForecast(
 	session *TrainingPlanSession,
 	point TrainingPlanForecastPoint,
+	threshold *DerivedThreshold,
 ) (TrainingPlanDayAdjustment, bool) {
 	if !isIntensityClassification(session.Classification) {
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
-	if point.TSB <= planForecastRedTSB {
+	level := thresholdLevel(point.TSB, threshold, baselineLowIsBad)
+	if level == BaselineLevelRed {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1808,7 +1864,7 @@ func adjustmentRuleForForecast(
 		}, true
 	}
 
-	if point.TSB <= planForecastWatchTSB {
+	if level == BaselineLevelWatch {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1825,13 +1881,14 @@ func adjustmentRuleForForecast(
 
 func adjustmentRuleForDurability(
 	session *TrainingPlanSession,
-	meanDecoupling float64,
+	history *TrainingPlanHistory,
 ) (TrainingPlanDayAdjustment, bool) {
 	if session.Classification != plannedClassificationLong {
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
-	if meanDecoupling < planDriftWatchThreshold {
+	level := thresholdLevel(history.RecentDecoupling, history.DecouplingThreshold, baselineHighIsBad)
+	if level != BaselineLevelWatch && level != BaselineLevelRed {
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
@@ -1906,7 +1963,7 @@ func adjustmentRuleForSleep(
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
-	if wellness.Sleep.Latest < sleepRedScore {
+	if wellness.Sleep.Level == BaselineLevelRed {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1918,7 +1975,7 @@ func adjustmentRuleForSleep(
 		}, true
 	}
 
-	if wellness.Sleep.Latest < sleepWatchScore {
+	if wellness.Sleep.Level == BaselineLevelWatch {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1941,7 +1998,7 @@ func adjustmentRuleForRestingHR(
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
-	if wellness.RestingHR.Delta >= restingHRRedDelta {
+	if wellness.RestingHR.Level == BaselineLevelRed {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1953,7 +2010,7 @@ func adjustmentRuleForRestingHR(
 		}, true
 	}
 
-	if wellness.RestingHR.Delta >= restingHRWatchDelta {
+	if wellness.RestingHR.Level == BaselineLevelWatch {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,

@@ -46,7 +46,9 @@ func TestAnalyzeCyclingAdaptationComparesPowerCurves(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		icu.AnalysisOptions{StartDate: "2026-04-21", EndDate: "2026-06-01"},
+		icu.AnalysisOptions{
+			Thresholds: pinnedThresholds(), StartDate: "2026-04-21", EndDate: "2026-06-01",
+		},
 	)
 	wantAnchors := icu.AdaptationPowerAnchors{
 		FTP:           290,
@@ -228,7 +230,9 @@ func TestAnalyzeCyclingAdaptationClassifiesDecliningCurveAndRecoveryPhase(t *tes
 		nil,
 		[]icu.Activity{peakWeek, recoveryWeek},
 		nil,
-		icu.AnalysisOptions{StartDate: "2026-05-04", EndDate: "2026-05-17"},
+		icu.AnalysisOptions{
+			Thresholds: pinnedThresholds(), StartDate: "2026-05-04", EndDate: "2026-05-17",
+		},
 	)
 
 	if got.SystemStatus.Status != "declining" || got.SystemStatus.PrimarySignal != "45s_declined" ||

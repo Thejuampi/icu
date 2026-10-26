@@ -231,7 +231,7 @@ func AnalyzeMicrocycle(
 		Load:              microcycleLoad(&cycling, activities, options),
 		Intensity:         microcycleIntensity(&cycling),
 		Wellness:          microcycleWellness(wellness, options),
-		FatigueDurability: microcycleFatigueDurability(&cycling),
+		FatigueDurability: microcycleFatigueDurability(&cycling, wellness),
 		SideEffects: MicrocycleSideEffects{
 			MutatedPlan:        false,
 			MutatedConfig:      false,
@@ -465,7 +465,7 @@ func microcycleWellness(wellness *WellnessAnalysis, options *MicrocycleOptions) 
 	if wellness.RestingHR.Samples > 0 && wellness.RestingHR.Delta <= 0 {
 		result.PositiveSignals = append(result.PositiveSignals, "resting_hr_not_elevated")
 	}
-	if wellness.Sleep.Samples > 0 && wellness.Sleep.Latest >= sleepWatchScore {
+	if wellness.Sleep.Samples > 0 && wellness.Sleep.Level == BaselineLevelOK {
 		result.PositiveSignals = append(result.PositiveSignals, "sleep_score_ok")
 	}
 	if wellness.HRV.Samples == 0 {
@@ -482,7 +482,9 @@ func microcycleWellness(wellness *WellnessAnalysis, options *MicrocycleOptions) 
 	return result
 }
 
-func microcycleFatigueDurability(cycling *CyclingAnalysis) MicrocycleFatigueDurability {
+// microcycleFatigueDurability flags load pressure when today's form is below
+// the athlete's own TSB baseline (wellness Load.Level), not a fixed TSB.
+func microcycleFatigueDurability(cycling *CyclingAnalysis, wellness *WellnessAnalysis) MicrocycleFatigueDurability {
 	state := microcycleStatusDataLimited
 	var evidence []string
 	if cycling.Scope.CyclingActivities > 0 {
@@ -493,7 +495,7 @@ func microcycleFatigueDurability(cycling *CyclingAnalysis) MicrocycleFatigueDura
 		state = "fatigue_watch"
 		evidence = append(evidence, "high decoupling activities detected")
 	}
-	if cycling.Load.LatestForm <= negativeFormWatchThreshold && cycling.Load.LatestForm != 0 {
+	if wellness != nil && (wellness.Load.Level == BaselineLevelWatch || wellness.Load.Level == BaselineLevelRed) {
 		state = stateLoadPressure
 		evidence = append(evidence, "latest form is meaningfully negative")
 	}
