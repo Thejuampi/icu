@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -80,6 +82,7 @@ func TestPlanProfileWarningsIncludeMonotonyWithoutProfile(t *testing.T) {
 	warnings := planProfileWarnings(&icu.PlanProposalFile{Sessions: []icu.PlanResolvedSession{
 		{Date: "2026-11-02", Name: "A", Action: icu.CalendarActionCreate, Desc: "- 20m 90%"},
 		{Date: "2026-11-04", Name: "B", Action: icu.CalendarActionCreate, Desc: "- 20m 90%"},
+		{Date: "2026-11-06", Name: "C", Action: icu.CalendarActionCreate, Desc: "- 20m 90%"},
 	}}, nil)
 	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], "monotony:") {
 		t.Fatalf("warnings = %v", warnings)
@@ -106,5 +109,58 @@ func TestReadPlanSportSettingsFillsIndoorFTPFromProfile(t *testing.T) {
 	rebalance, err := readRebalanceSportSettings(client, map[string]string{"type": "Ride"})
 	if err != nil || rebalance.IndoorFTP != 250 {
 		t.Fatalf("rebalance settings = %+v, %v", rebalance, err)
+	}
+}
+
+// Regression: the live sport-settings shape (snake_case indoor_ftp) must reach
+// indoor sessions, and a plan without --type must still fetch sport settings.
+//
+//nolint:paralleltest // swaps the process-wide config store.
+func TestPlanUsesIntervalsIndoorFTPWithoutTypeFlag(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	var settingsPaths []string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet {
+			t.Errorf("unexpected %s %s", request.Method, request.URL.Path)
+		}
+		if strings.Contains(request.URL.Path, "sport-settings") {
+			settingsPaths = append(settingsPaths, request.URL.Path)
+			_, _ = response.Write([]byte(`{"id":1858902,"types":["Ride","VirtualRide","MountainBikeRide","GravelRide","TrackRide","Cyclocross"],"ftp":266,"indoor_ftp":250}`))
+
+			return
+		}
+		_, _ = response.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	intent := `{"sessions":[` +
+		`{"date":"2026-11-03","name":"VR","type":"VirtualRide","startTime":"07:00","desc":"- 60m 70%"},` +
+		`{"date":"2026-11-04","name":"Road","type":"Ride","startTime":"07:00","desc":"- 60m 75%"},` +
+		`{"date":"2026-11-05","name":"Trainer","type":"Ride","indoor":true,"startTime":"07:00","desc":"- 45m 80%"}]}`
+	file := filepath.Join(t.TempDir(), "intent.json")
+	if err := os.WriteFile(file, []byte(intent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	input, err := readPlanInput(map[string]string{"intent-file": file, "now-date": "2026-10-26"}, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(settingsPaths) != 1 || !strings.HasSuffix(settingsPaths[0], "/sport-settings/VirtualRide") {
+		t.Fatalf("sport-settings requests = %v", settingsPaths)
+	}
+	if input.SportSettings.FTP != 266 || input.SportSettings.IndoorFTP != 250 || len(input.Warnings) != 0 {
+		t.Fatalf("settings = %+v, warnings = %v", input.SportSettings, input.Warnings)
+	}
+	proposal := icu.BuildPlanProposal(&input)
+	want := map[string]int{"VR": 250, "Road": 266, "Trainer": 250}
+	for _, session := range proposal.Sessions {
+		if session.FTPApplied != want[session.Name] {
+			t.Errorf("%s ftpApplied = %d, want %d", session.Name, session.FTPApplied, want[session.Name])
+		}
+	}
+	if len(proposal.Sessions) != len(want) {
+		t.Fatalf("sessions = %+v, validation = %+v", proposal.Sessions, proposal.Validation)
 	}
 }

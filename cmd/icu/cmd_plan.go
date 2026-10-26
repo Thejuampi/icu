@@ -196,7 +196,7 @@ func readPlanInput(flags map[string]string, client *icu.Client) (icu.PlanInput, 
 	if err != nil {
 		return icu.PlanInput{}, err
 	}
-	sportType := icu.StringFlag(flags, "type", intent.Constraints.DefaultType)
+	sportType := planSettingsSportType(icu.StringFlag(flags, "type", intent.Constraints.DefaultType), &intent)
 	sportSettings, ftpWarnings, err := readPlanSportSettings(client, sportType)
 	if err != nil {
 		return icu.PlanInput{}, err
@@ -213,6 +213,23 @@ func readPlanInput(flags map[string]string, client *icu.Client) (icu.PlanInput, 
 		AllowToday:    BoolFlag(flags, "allow-today"),
 		AllowPast:     BoolFlag(flags, "allow-past"),
 	}, nil
+}
+
+// planSettingsSportType picks the sport whose settings price the plan. Without
+// --type or constraints.defaultType it falls back to the first typed session,
+// so sport-settings (ftp and indoor_ftp) are still fetched instead of
+// leaving every session with no FTP.
+func planSettingsSportType(explicit string, intent *icu.PlanIntent) string {
+	if explicit != "" {
+		return explicit
+	}
+	for index := range intent.Sessions {
+		if intent.Sessions[index].Type != "" {
+			return intent.Sessions[index].Type
+		}
+	}
+
+	return ""
 }
 
 func readPlanSportSettings(client *icu.Client, sportType string) (*icu.SportSettings, []string, error) {
