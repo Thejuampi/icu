@@ -958,12 +958,15 @@ func sanitizePlanID(name string) string {
 			return '-'
 		}
 	}, name)
+	for strings.Contains(cleaned, "--") {
+		cleaned = strings.ReplaceAll(cleaned, "--", "-")
+	}
 	cleaned = strings.Trim(cleaned, "-")
 	if cleaned == "" {
 		return "session"
 	}
 	if len(cleaned) > 32 {
-		return cleaned[:32]
+		return strings.TrimRight(cleaned[:32], "-")
 	}
 
 	return cleaned
