@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -793,7 +794,13 @@ func missingArg(name, resource, action string) commandCase {
 	return commandFlow(name, resource, action, nil, nil, "", "", "")
 }
 
+// flags builds a flag map from key/value pairs. It runs while the case
+// tables are built, before any *testing.T exists, so a malformed table
+// panics, which fails the test binary at once.
 func flags(values ...string) map[string]string {
+	if len(values)%2 != 0 {
+		panic(fmt.Sprintf("flags: odd number of arguments %q", values))
+	}
 	result := map[string]string{}
 
 	for index := 0; index+1 < len(values); index += 2 {
