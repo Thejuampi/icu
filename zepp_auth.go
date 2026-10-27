@@ -211,7 +211,7 @@ func encryptPayload(data []byte) ([]byte, error) {
 	padded := pkcs7Pad(data, aes.BlockSize)
 	ciphertext := make([]byte, len(padded))
 
-	mode := cipher.NewCBCEncrypter(block, iv) //nolint:gosec // G407: protocol-mandated IV, see above.
+	mode := cipher.NewCBCEncrypter(block, iv) //nolint:gosec // G407: protocol-mandated IV; this gives no confidentiality (key and IV are public constants), the login relies on HTTPS.
 	mode.CryptBlocks(ciphertext, padded)
 
 	return ciphertext, nil
