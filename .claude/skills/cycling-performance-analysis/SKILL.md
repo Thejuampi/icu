@@ -1,6 +1,6 @@
 ---
 name: cycling-performance-analysis
-description: Use when coaching from the icu CLI — weekly reports, 4-week plans, daily "should I train" decisions, calendar NOTE review, post-illness/surgery/injury or off-bike weeks, load pressure, recovery, CTL/ATL/TSB, HRV, wellness, adaptation, planned events, or a missing analysis metric.
+description: Use when coaching from the icu CLI — completed rides from original FIT and full samples, weekly reports, 4-week plans, daily "should I train" decisions, calendar NOTE review, post-illness/surgery/injury or off-bike weeks, load pressure, recovery, CTL/ATL/TSB, HRV, wellness, adaptation, planned events, or a missing analysis metric.
 compatibility: opencode, claude
 metadata:
   cli: icu
@@ -12,7 +12,9 @@ metadata:
 
 Prefer measured `icu` data over model inference. Read calendar NOTE events before coaching. Preserve the existing plan until it is actually wrong.
 
-Power targets are **%FTP**. Read outdoor `ftp` and indoor `indoorFtp` from Ride sport settings. HR caps come from those zones, or a tighter ceiling on the calendar notes / recent durable rides.
+For completed sessions, reconstruct execution from the original recording and full time series. Intervals-detected intervals and the execution context derived from them are not coaching evidence; do not fetch or consume them in this workflow. Intent comes from the athlete and the planned WORKOUT / NOTE events. Device laps are recorded boundaries, not proof of intended work/recovery steps.
+
+Power targets are **%FTP**. For current prescriptions, read outdoor `ftp` and indoor `indoorFtp` from Ride sport settings and apply explicitly scoped athlete constraints. Completed-session attribution uses the anchor applicable to that session's date and environment; follow [completed-session.md](./completed-session.md#resolve-the-training-anchor), which applies the repository's [durable rules and scoped evidence policy](../../../AGENTS.md#durable-rules-and-scoped-evidence). HR caps come from applicable zones, or a tighter ceiling on the calendar notes / recent durable rides.
 
 Do not invent a missing metric. Name it, mark the section unavailable, and add CLI support only when the user asks to build it.
 
@@ -23,9 +25,11 @@ Load a file only when the job needs it. Do not load the whole pack for a daily d
 | File | Load when |
 |------|-----------|
 | [athlete.md](./athlete.md) | How to resolve FTP, zones, timezone, and language from the CLI |
+| [completed-session.md](./completed-session.md) | Any completed-ride review, full recording, or sample-by-sample execution analysis |
+| [anchor-aging-checks.md](./anchor-aging-checks.md) | Editing anchor guidance or checking reused evidence across dates, sessions, environments, or source updates |
 | [session-library.md](./session-library.md) | Writing or rewriting workouts |
 | [report-data-contract.md](./report-data-contract.md) | Full weekly or 4-week report |
-| **intervals-icu** skill | Auth diagnose, event writes, desc parser, `plan` / `rebalance`, power-fill, load repair |
+| **intervals-icu** skill | Original-file / stream downloads, auth diagnose, event writes, desc parser, `plan` / `rebalance`, power-fill, load repair |
 
 CLI mechanics live in **intervals-icu**. Do not copy them here.
 
@@ -38,10 +42,10 @@ Classify the ask, then fetch only that row.
 | Today / "should I…?" / read this week's notes | This week's NOTE events, today's event, wellness last 3–7 days, last completed activity | 12-week history, 4-week plan dump, adaptation, session library |
 | Weekly review | `icu analysis coaching` for that ISO week with explicit dates | Adaptation unless they ask about fitness change |
 | Rewrite / 4-week plan | 12-week history + next 4 weeks + [athlete.md](./athlete.md) + [session-library.md](./session-library.md) | Full report prose before the calendar is understood |
-| One completed ride | `icu analysis workout ACTIVITY_ID` plus surrounding notes | A new plan |
+| One completed ride | Activity metadata + planned WORKOUT / surrounding NOTE events + sport settings + original recording + complete streams; load [completed-session.md](./completed-session.md) | Detected intervals, `analysis workout` execution/comparison, a new plan, or 12-week history |
 | Missing metric + "build it" | Development loop below | Coaching prose that pretends the number exists |
 
-`analysis coaching` is the primary contract for weekly and planning work. `analysis workout` is the contract for one completed session.
+`analysis coaching` is the primary contract for weekly and planning work. The original-recording workflow in [completed-session.md](./completed-session.md) is the contract for one completed session. `analysis workout` remains a CLI diagnostic surface, not the default coaching context. Do not present its detected rep counts, warmup/cooldown boundaries, or derived execution labels as observed facts.
 
 ## Resolve athlete and dates
 
@@ -91,6 +95,8 @@ Match the question. Do not dump the full report on a daily call.
 
 **Daily / same-day:** plan vs the athlete's idea vs the limiter vs what to do in the next hour. One reflection question.
 
+**Completed session:** purpose vs observed execution, chronological phases, representative efforts / continuous best windows, power + HR + cadence response, data-quality limits, and the consequence for the existing week. Offer the full sample CSV and an interactive timeline when detailed inspection helps; keep every sample available without pasting thousands of rows into chat.
+
 **Weekly / 4-week:** load [report-data-contract.md](./report-data-contract.md). Use REPORT CONTEXT, TRAINING LOAD, PHYSIOLOGY, PERFORMANCE SIGNALS, ADAPTATION (if requested), PLANNED BLOCK, DECISION GUIDANCE. Separate raw metrics from interpretation. Check `dataQuality.missing` and `dataQuality.warnings` first.
 
 Chat language follows the user. Calendar NOTE language follows existing notes, then the athlete locale.
@@ -100,13 +106,14 @@ Chat language follows the user. Calendar NOTE language follows existing notes, t
 - HRV: use `recentMean`, `baselineMean`, `baselineMad`, `zScore`, `zScoreSource`. Treat raw `ratio` as context, not a stop/go rule.
 - Recovery score: `analyses.wellness.sleep.scoreName` is the source of truth. Prefer Zepp BioCharge / `zepp_hybridcharge`. Intervals `sleepScore` is fallback. Read `fallbackScoreName` and `warnings`.
 - Today's empty wellness record means "not logged yet," not a red flag. Use the latest complete day and say so.
-- `ftpApplied` `confidence: medium` is usable. Mention it only when the session environment looks wrong. `confidence: high` needs no mention.
+- `ftpApplied` provenance/confidence describes that resolver result's scope, not measured fitness or validity for another date/environment. `confidence: medium` is usable with applicable evidence. Disclose material scope/source disagreements even with `confidence: high`; completed-session reviews report their chosen anchor and basis.
 - When `context.timeAccounting.loadAccounting` is `partial`, say the weekly load excludes the enumerated non-cycling sessions. Do not present that total as complete.
 
 ## Metric policy
 
 - `TrainingLoad` ← `icu_training_load`. `Intensity` ← `icu_intensity`. `WeightedAvgPower` ← `icu_weighted_avg_watts`. `LatestForm` ← CTL − ATL. ACWR ← `acuteChronicWorkRatio`.
 - Label locally derived fields as local or heuristic.
+- Descriptive calculations from downloaded samples are allowed in a session review when their source, time basis, missing-value handling, and method are explicit. They are not new CLI output fields or evidence for an unmeasured physiological metric. Build reusable CLI support only when requested.
 - `analysis cycling` / `coaching` / `microcycle` already drop STRAVA stubs. A low `scope.activities` is the real-activity count.
 - Credit `icu_ignore_*` filtering only when `validity.excluded > 0` on that run.
 - `analysis workout` `match.compliance` is absent when `match.eventId` is 0. That is "no pairing," not 0% compliant.
@@ -117,11 +124,11 @@ Field-by-field support: [report-data-contract.md](./report-data-contract.md).
 
 Only when the user asks to add a missing metric:
 
-1. Failing test in the functional core when possible.
-2. Extend the type in `types.go` or `analysis.go`.
-3. Touch `analysis cycling` only for cycling-specific read-only metrics.
-4. Keep CLI JSON stable and additive.
-5. `go test ./... -count=1`, `go vet ./...`, `golangci-lint run ./...`.
+1. Design the contract, types, wanted results, and edge cases first; follow `AGENTS.md`'s testing policy, without an agent-loop failing-test-first ritual.
+2. Implement in the functional core when possible; extend `types.go` or `analysis.go` only as needed.
+3. Add meaningful tests for changed behavior, including missing values and realistic replay cases for decision rules.
+4. Touch `analysis cycling` only for cycling-specific read-only metrics; keep CLI JSON stable and additive.
+5. Update matching docs and complete all `AGENTS.md` quality gates, including build, formatting, tests, vet, lint, and coverage.
 
 A coaching question is not permission to start a CLI change.
 
@@ -134,3 +141,7 @@ A coaching question is not permission to start a CLI change.
 | "I should write a NOTE so the next agent sees this" | Write only if the decision changes the week or a gate needs a new fact. |
 | "UTC in scope means I used the wrong timezone" | Explicit calendar dates + `timezoneSource: explicit` is correct. |
 | "The metric would help, I'll add it while coaching" | Mark unavailable. Build it only when asked. |
+| "Detected intervals provide useful execution context" | Reconstruct from the recording. Athlete intent and planned notes provide context; detected boundaries and labels do not. |
+| "No intervals were detected, so there was no quality work" | Inspect the complete power, HR, cadence, timestamps, and device laps. |
+| "Time in Z5 proves time at VO2max" | A power-zone count is not an oxygen-consumption measurement. |
+| "The athlete once rejected that device FTP, so keep using the replacement" | Check the confirmation's session, date/period, athlete, environment, and purpose. Preserve old attribution and resolve each new context. |
