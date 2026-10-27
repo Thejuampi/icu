@@ -114,7 +114,7 @@ icu activity i123 intervals
 icu activity i123 streams
 ```
 
-Use `icu activity <id> show --intervals` when the task needs the full activity payload plus interval data in a single response. Use `icu activity <id> intervals` when only the interval block is needed.
+`icu activity <id> show --intervals` (activity payload plus detected intervals) and `icu activity <id> intervals` (interval block only) expose the CLI's interval detector. They are detector diagnostics and do not apply to reviewing a completed session: that review uses the original recording and full streams, see [completed-session.md](../cycling-performance-analysis/completed-session.md).
 
 Useful activity fields: `id`, `name`, `start_date_local`, `type`, `moving_time`, `elapsed_time`, `distance`, `total_elevation_gain`, `average_heartrate`, `max_heartrate`, `icu_average_watts`, `icu_weighted_avg_watts`, `calories`, `icu_training_load`, `hr_load`, `hr_load_type`, `trimp`, `icu_intensity`, `icu_ftp`, `icu_pm_cp`, `icu_pm_w_prime`, `icu_pm_p_max`, `icu_rolling_cp`, `icu_rolling_w_prime`, `icu_rolling_ftp`, `decoupling`, `icu_efficiency_factor`, `icu_variability_index`, `icu_power_hr`, `icu_rpe`, `feel`, `perceived_exertion`, `session_rpe`, `compliance`, `average_speed`, `average_temp`, `average_wind_speed`, `headwind_percent`, `tailwind_percent`, `prevailing_wind_deg`, `average_altitude`, `source`, `external_id`, `tags`, `description`, `device_name`, `gear`.
 

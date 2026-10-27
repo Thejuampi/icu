@@ -75,7 +75,7 @@ It then runs the existing deterministic analyzers: `AnalyzeCyclingActivities`, `
 - Prefer this command for weekly reports and planning reviews when the goal is to minimize CLI calls.
 - The command bundles existing analysis outputs; it does not add a hidden coaching recommender or new readiness thresholds.
 - NOTE events are first-class in the output because they often contain block intent, decision rules, and athlete communication.
-- Use `analysis workout` as a second call when reviewing one specific completed activity against its planned session.
+- `analysis workout` is a detector diagnostic: run it only when the task is to inspect what the CLI's interval detector found for one activity. It is not part of coaching review of a completed session; that review starts from the original recording (see [Recording-Based Coaching Review](#recording-based-coaching-review)).
 
 ### Current Limitations
 
