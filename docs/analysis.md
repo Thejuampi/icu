@@ -36,7 +36,7 @@ Defaults:
 - `--history-days 84`
 - `--plan-days 28`
 - `--sport-type Ride`
-- `--adaptation-curves 42d,365d` when `--include-adaptation` is set
+- `--adaptation-curves` default: `r.OLDEST.NEWEST,r.PRIOR_START.PRIOR_END` (the scope plus the equally long window just before it) when `--include-adaptation` is set
 - history window ends on the current UTC date
 - plan window starts on the next ISO block boundary used by the CLI
 - explicit `--plan-oldest` and `--plan-newest` dates are aligned to the enclosing ISO week boundaries (Monday/Sunday)
@@ -114,7 +114,7 @@ The activity field contract is fixed (D-8, wave-2) — see **`--fields`/`--activ
 - `volume`: time, distance, and elevation totals
 - `powerAnchors`: FTP, CP, W', Pmax, and rolling FTP when available
 - `environment`: temperature, wind, altitude, gradient, and strain context
-- `load`: total load, monotony, strain, acute/chronic view, CTL/ATL/TSB, per-channel breakdown, and daily load series — see **Tri-Load Channels** below
+- `load`: total load, monotony, strain, acute/chronic view, CTL/ATL/TSB, per-channel breakdown, and daily load series — see **Tri-Load Channels** below. `latestCtl`/`latestAtl`/`latestForm` come from the newest daily wellness row on or before the range end (clamped to today) when one exists, labeled `latestLoadSource: "wellness"` and `latestLoadDate`; otherwise they are the values recorded on the newest activity (no decay over later rest days, no load from other sports) and both labels are absent.
 - `intensity`: weighted intensity and zone totals
 - `durability`: decoupling, efficiency factor, and variability summaries
 - `anaerobic`: work above FTP, W' depletion, and repeatability support metrics
@@ -271,7 +271,7 @@ The CLI currently passes `Adaptation: nil`, even though the library supports ada
 ### Output Sections
 
 - `scope`: history window, plan window, event counts, and `timezone`/`timezoneSource` metadata
-- `history`: completed weekly load/hours, recent tolerance, current state, and completed-week series
+- `history`: completed weekly load/hours, recent tolerance, current state, and completed-week series. `currentCtl`/`currentAtl`/`currentTsb` prefer the latest wellness row at or before the history end (`currentLoadSource: "wellness"`, `currentLoadDate`), falling back to the newest activity (`currentLoadSource: "last_activity"`). Projected future wellness rows are ignored. Every full ISO week inside the history range is counted, with zero-load weeks included in `weeks`, `completedWeeks`, and the weekly averages; partial weeks at the range edges count only when they have rides. History load and hours are cycling-only (`Ride`-family activities); CTL/ATL include all sports. Weekly `meanDecoupling` and `currentDecoupling` exclude per-ride decoupling outliers detected with a MAD robust z-score against the history's own rides (needs at least 5 rides; otherwise all are kept); `weeks[].decouplingExcluded` counts dropped rides.
 - `anchors`: FTP, indoor FTP, LTHR, max HR, W', and Pmax from sport settings
 - `phase`: inferred block label, pattern, intent, confidence, and source
 - `load`: total planned load, weekly progression, peak week, lowest week, and deload percentage
@@ -318,7 +318,7 @@ Defaults:
 
 - `--days 28`
 - `--type Ride`
-- `--curves 42d,365d`
+- `--curves` default: `r.OLDEST.NEWEST,r.PRIOR_START.PRIOR_END` (the scope plus the equally long window just before it)
 
 ### Upstream Data
 
@@ -344,7 +344,8 @@ It then runs `AnalyzeWellness` and passes the result into `AnalyzeCyclingAdaptat
 
 ### Interpretation
 
-- With the default `--curves 42d,365d`, the analyzer treats the shorter window as the current curve and the longer window as the baseline.
+- By default the analyzer compares the scope window (current) against the equally long, non-overlapping window right before it (baseline), so the baseline never contains the current period. The current curve is the one with the latest end date (ties: fewer days), the baseline the one with the earliest end date (ties: more days); nested overrides such as `--curves 42d,365d` keep the old shorter-is-current behaviour.
+- `systemStatus` counts only the anchor durations 5s, 15s, 30s, 1m, 2m, 5m, 10m, 20m, 30m and 60m, not every per-second point; `primarySignal` still considers all deltas.
 - Power anchors prefer the MMP model when available and fall back to sport settings otherwise.
 - `phaseSummary` provides the recent load-segment context needed to interpret whether curve changes look productive or stale.
 
@@ -382,9 +383,13 @@ microcycle. `--date` and `--week` select the ISO week containing the supplied
 date. `--from` and `--to` select an explicit custom range and must be supplied
 together. Conflicting date selectors and inverted ranges are rejected.
 
-If `--timezone` is omitted, the CLI uses the system timezone and emits a
-data-quality warning because the current config and athlete types do not
-expose a reliable athlete timezone field.
+Timezone precedence is `--timezone`, then the athlete profile `timezone`
+(`timezoneSource: "athlete"`), then the system timezone. Only the system
+fallback emits the "missing athlete timezone" data-quality warning.
+
+Wellness is read only up to today (in the resolved timezone), never up to the
+end of the selected week: Intervals.icu returns projected CTL/ATL rows for
+future dates, and the latest row drives the readiness state.
 
 ### Upstream Data
 
@@ -443,8 +448,7 @@ decide how to present coaching guidance.
   before this is treated as a stable contract.
 - Planned-vs-actual matching is date-level in the MVP; it does not deeply
   compare workout structure.
-- Timezone comes from `--timezone` or system fallback because no reliable
-  athlete timezone source exists in the current local types/config.
+- Timezone comes from `--timezone`, the athlete profile, or system fallback.
 - The command reads API data but does not sync external services or read
   local caches.
 - Missing plan, wellness, FTP, zones, HR, or power data lowers confidence

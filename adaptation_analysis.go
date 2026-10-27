@@ -1,6 +1,7 @@
 package icu
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"time"
@@ -207,13 +208,23 @@ func adaptationPowerCurveDeltas(curves []DataCurve) []PowerCurveDelta {
 	return deltas
 }
 
+// adaptationComparableCurves picks the current curve (latest end date, then
+// fewest days) and the baseline curve (earliest end date, then most days).
+// With the default non-overlapping windows the baseline is the period before
+// the analysis scope; with nested windows such as "42d,365d" both end today
+// and the shorter curve is current, as before.
 func adaptationComparableCurves(curves []DataCurve) adaptationCurvePair {
 	if len(curves) < adaptationMinimumCurves {
 		return adaptationCurvePair{current: nil, baseline: nil, ok: false}
 	}
 
 	sortedCurves := append([]DataCurve(nil), curves...)
-	sort.Slice(sortedCurves, func(left, right int) bool {
+	sort.SliceStable(sortedCurves, func(left, right int) bool {
+		leftEnd, rightEnd := curveEndDay(&sortedCurves[left]), curveEndDay(&sortedCurves[right])
+		if leftEnd != rightEnd {
+			return leftEnd > rightEnd
+		}
+
 		return curveDays(&sortedCurves[left]) < curveDays(&sortedCurves[right])
 	})
 
@@ -222,6 +233,38 @@ func adaptationComparableCurves(curves []DataCurve) adaptationCurvePair {
 		baseline: &sortedCurves[len(sortedCurves)-1],
 		ok:       true,
 	}
+}
+
+func curveEndDay(curve *DataCurve) string {
+	if len(curve.EndDate) >= len(analysisDateLayout) {
+		return curve.EndDate[:len(analysisDateLayout)]
+	}
+
+	return curve.EndDate
+}
+
+// AdaptationCurveWindows returns the intervals.icu custom-range curve IDs
+// ("r.START.END") for the analysis scope and for the equally long window
+// immediately before it, so the baseline never contains the current period.
+func AdaptationCurveWindows(oldest, newest string) (string, error) {
+	start, err := time.Parse(analysisDateLayout, oldest)
+	if err != nil {
+		return "", fmt.Errorf("invalid oldest date %q: %w", oldest, err)
+	}
+	end, err := time.Parse(analysisDateLayout, newest)
+	if err != nil {
+		return "", fmt.Errorf("invalid newest date %q: %w", newest, err)
+	}
+	if end.Before(start) {
+		return "", fmt.Errorf("newest %s is before oldest %s", newest, oldest)
+	}
+
+	days := int(end.Sub(start).Hours()/hoursPerDay) + 1
+	baselineEnd := start.AddDate(0, 0, -1)
+	baselineStart := baselineEnd.AddDate(0, 0, -(days - 1))
+
+	return "r." + oldest + "." + newest + ",r." + baselineStart.Format(analysisDateLayout) + "." +
+		baselineEnd.Format(analysisDateLayout), nil
 }
 
 func curveDays(curve *DataCurve) int {
@@ -273,11 +316,34 @@ func curveLabel(curve *DataCurve) string {
 	return curve.ID
 }
 
+// isAdaptationAnchorDuration reports whether secs is on the duration grid
+// systemStatus counts: one signal per standard power-curve anchor rather than
+// every per-second point, which are strongly correlated neighbours.
+func isAdaptationAnchorDuration(secs int) bool {
+	switch secs {
+	case 5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600: //nolint:mnd // standard power-curve anchor grid in seconds.
+		return true
+	default:
+		return false
+	}
+}
+
 func adaptationSystemStatus(deltas []PowerCurveDelta) AdaptationSystemStatus {
 	status := emptyAdaptationSystemStatus()
 
+	anchors := make([]PowerCurveDelta, 0, len(deltas))
 	for index := range deltas {
-		switch deltas[index].Status {
+		if isAdaptationAnchorDuration(deltas[index].DurationSecs) {
+			anchors = append(anchors, deltas[index])
+		}
+	}
+	counted := deltas
+	if len(anchors) > 0 {
+		counted = anchors
+	}
+
+	for index := range counted {
+		switch counted[index].Status {
 		case "improved":
 			status.Improved++
 		case "declined":

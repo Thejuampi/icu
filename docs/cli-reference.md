@@ -179,7 +179,7 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `coaching`
   Invocation: `icu analysis coaching [--history-oldest DATE --history-newest DATE] [--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve BOOL] [--activity-fields CSV] [--limit N] [--include-adaptation BOOL] [--adaptation-curves CSV]`
-  Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`, `--adaptation-curves 42d,365d` when adaptation is requested
+  Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`, `--adaptation-curves r.OLDEST.NEWEST,r.<prior equal window>` when adaptation is requested
   Notes: Read-only JSON facade for coaching/report workflows. Fetches athlete, sport settings, history activities, wellness, plan-range events, NOTE events, and optional adaptation inputs, then bundles existing cycling, wellness, plan, and adaptation analyses into one payload. `--activity-fields` is **deprecated and ignored** (D-8, wave-2): the activity fetch always uses its own fixed field list. Wellness-backed readiness prefers Zepp `HybridCharge`/`BioCharge` when Zepp auth is available and falls back to Intervals wellness `sleepScore` otherwise. Parsing is strict: unknown flags, positional arguments, missing values, malformed dates/integers, and invalid booleans fail before auth or HTTP. Booleans accept bare/`true`/`false`/`1`/`0`; explicit date pairs cannot be mixed with their day flags; day counts and `--limit` must be positive. `--limit` caps only history activities. Plan ranges are validated before and after ISO-week alignment. Empty calendar collections are `[]`; top-level warnings include stable, prefixed, exact-deduplicated analyzer warnings. `analyses.cycling` carries wave-2's `validity`/`load.byChannel` contract; see `docs/analysis.md`.
   Example: `icu analysis coaching --history-oldest 2026-04-06 --history-newest 2026-06-28 --plan-oldest 2026-06-29 --plan-newest 2026-07-26 --resolve`
 
@@ -203,13 +203,13 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `adaptation`
   Invocation: `icu analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride] [--curves 42d,365d] [--filters FILTERS] [--newest DATE] [--limit N] [--activity-fields CSV]`
-  Defaults: `--days 28`, `--type Ride`, `--curves 42d,365d`
+  Defaults: `--days 28`, `--type Ride`, `--curves r.OLDEST.NEWEST,r.<prior equal window>` (non-overlapping)
   Notes: `--activity-fields` is **deprecated and ignored** (D-8, wave-2): the activity fetch always uses its own fixed field list. `--newest` applies to the power-curve fetch; `--limit` applies to activity history fetch. `--days` must be a positive integer; invalid values are errors. Explicit dates must use `YYYY-MM-DD`, be chronological, and cannot be combined with `--days`. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`. `scope.activities` here is not yet filtered against STRAVA stubs (see `docs/analysis.md` Current Limitations for `analysis adaptation`).
   Example: `icu analysis adaptation --days 42 --type Ride --curves 42d,365d`
 
 - `microcycle`
   Invocation: `icu analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]`
-  Defaults: current Monday-Sunday microcycle, `--sport-type Ride`, system timezone fallback when `--timezone` is omitted.
+  Defaults: current Monday-Sunday microcycle, `--sport-type Ride`, timezone from `--timezone`, else the athlete profile timezone, else the system timezone; wellness is read only up to today.
   Notes: Experimental read-only diagnostic contract for LLM/skill consumers. Reads activities with a 90-day lookback, planned events, wellness, and sport settings. When wellness is enabled, the readiness sleep/recovery signal prefers Zepp `HybridCharge`/`BioCharge` and falls back to `sleepScore` when needed. JSON is the primary contract; human output is a brief inspection view.
   Example: `icu analysis microcycle --from 2026-06-08 --to 2026-06-14 --json`
 
@@ -526,13 +526,15 @@ Invoke these commands as `icu activity <id> <action>`.
 ## weather
 
 - `config`
-  Invocation: `icu weather config` or `icu weather config update --lat LAT --lon LON [--label NAME] [--location NAME] [--provider NAME] [--enabled true|false]`
-  Notes: update mode is triggered by any of `--lat`, `--lon`, `--label`, `--location`, `--provider`, or `--enabled`. The current forecast is fetched first and merged with the supplied flags, so `--enabled false` works without re-specifying coordinates.
+  Invocation: `icu weather config` or `icu weather config update [--id ID] [--lat LAT --lon LON] [--label NAME] [--location NAME] [--provider NAME] [--enabled true|false]`
+  Notes: update mode is triggered by any of `--id`, `--lat`, `--lon`, `--label`, `--location`, `--provider`, or `--enabled`. The full forecast list is fetched first; only the selected entry is changed and every other location is sent back unchanged. The entry is chosen by `--id`, or is the only entry when exactly one exists (with several entries `--id` is required). An empty config or an `--id` that does not exist creates a new entry, which requires `--lat` and `--lon` and defaults to `--provider OPEN_WEATHER` and `--enabled true`. Coordinates must be numeric within ±90/±180. The command fails if the update response contains no forecasts.
   Example: `icu weather config --lat -34.60 --lon -58.38 --label "Buenos Aires" --enabled true`
   Example: `icu weather config --enabled false`
+  Example: `icu weather config --id 1 --label Work`
 
 - `forecast`
   Invocation: `icu weather forecast`
+  Notes: Returns each configured location (`id`, `provider`, `label`, `location`, `lat`, `lon`) with the provider's `daily` (about 14 days) and `hourly` (about 40 rows) forecast arrays passed through verbatim, plus `error` when the provider reported one. These arrays are not in the OpenAPI snapshot.
   Example: `icu weather forecast`
 
 ## wellness
@@ -776,7 +778,7 @@ the raw components.
 
 - `calculate`
   Invocation: `icu workouts calculate --ftp N --desc DESC`
-  Notes: Calculates planned cycling duration, average power, normalized power, IF, and TSS locally without writing to Intervals.icu. Supported description grammar is line-oriented: `- 10m 55-75%`, `- 5m 90%`, and repeat blocks such as `3x` with indented child steps. Power targets are interpreted as `%ftp`.
+  Notes: Calculates planned cycling duration, average power, normalized power, IF, and TSS locally without writing to Intervals.icu. Supported description grammar is line-oriented: `- 10m 55-75%`, `- 5m 90%`, compound durations such as `- 2m30s 80%` or `- 1h30m 60%` (units in h, m, s order), and repeat blocks such as `3x` followed by either indented child steps or the intervals.icu native form (un-indented `-` steps closed by a blank line). Power targets are interpreted as `%ftp`.
   Example: `icu workouts calculate --ftp 300 --desc "- 60m 70%"`
 
 - `create`

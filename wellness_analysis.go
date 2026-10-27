@@ -94,6 +94,8 @@ type WellnessLoadState struct {
 	CTL float64 `json:"ctl,omitempty"`
 	ATL float64 `json:"atl,omitempty"`
 	TSB float64 `json:"tsb,omitempty"`
+	// Date is the wellness day CTL/ATL/TSB were read from.
+	Date string `json:"date,omitempty"`
 }
 
 type PhysiologyState struct {
@@ -231,10 +233,17 @@ func (accumulator *wellnessAccumulator) addLoad(record *Wellness) {
 		return
 	}
 
+	// Intervals.icu returns projected CTL/ATL for future days; a row after
+	// the analysis end date is a forecast, not the current state.
+	if end := accumulator.analysis.Scope.EndDate; end != "" && record.ID > end {
+		return
+	}
+
 	accumulator.latestLoad = record.ID
 	accumulator.analysis.Load.CTL = record.CTL
 	accumulator.analysis.Load.ATL = record.ATL
 	accumulator.analysis.Load.TSB = round2(record.CTL - record.ATL)
+	accumulator.analysis.Load.Date = record.ID
 }
 
 func (accumulator *wellnessAccumulator) finish() WellnessAnalysis {

@@ -246,7 +246,7 @@ estimate := icu.EstimatePlannedLoad(doc, 300)
 fmt.Println(estimate.TrainingLoad)
 ```
 
-The parser intentionally supports the explicit line-oriented grammar used by the CLI planning workflow: single steps like `- 10m 55-75%`, steady targets like `- 5m 90%`, and repeat blocks like `3x` with indented child steps. Unsupported text returns `ErrWorkoutDescriptionUnsupported` instead of guessing.
+The parser intentionally supports the explicit line-oriented grammar used by the CLI planning workflow: single steps like `- 10m 55-75%`, steady targets like `- 5m 90%`, compound durations like `- 2m30s 80%` (units in h, m, s order), and repeat blocks like `3x` followed by either indented child steps or the intervals.icu native form (un-indented `-` steps closed by a blank line). Unsupported text returns `ErrWorkoutDescriptionUnsupported` instead of guessing.
 
 ### FTP Selection
 

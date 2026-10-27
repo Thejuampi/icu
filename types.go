@@ -1,5 +1,7 @@
 package icu
 
+import "encoding/json"
+
 type Athlete struct {
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`
@@ -692,18 +694,32 @@ type WeatherConfig struct {
 	Forecasts []Forecast `json:"forecasts,omitempty"`
 }
 
+// Forecast is one weather-config entry. ID, Lat, and Lon are never omitted:
+// Intervals.icu uses id 0 for the first entry, and 0 is a valid coordinate,
+// so omitempty would silently drop them from a PUT.
 type Forecast struct {
-	ID       int     `json:"id,omitempty"`
+	ID       int     `json:"id"`
 	Provider string  `json:"provider,omitempty"`
 	Label    string  `json:"label,omitempty"`
 	Location string  `json:"location,omitempty"`
-	Lat      float64 `json:"lat,omitempty"`
-	Lon      float64 `json:"lon,omitempty"`
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
 	Enabled  *bool   `json:"enabled,omitempty"`
 }
 
+// WeatherForecast is a configured location plus the forecast data returned
+// by GET /weather-forecast. Daily, Hourly, and Error are emit-only: they are
+// not in the OpenAPI snapshot, are passed through verbatim for callers, and
+// no code path in this repository consumes them.
+type WeatherForecast struct {
+	Forecast
+	Error  *string           `json:"error,omitempty"`
+	Daily  []json.RawMessage `json:"daily,omitempty"`
+	Hourly []json.RawMessage `json:"hourly,omitempty"`
+}
+
 type WeatherDTO struct {
-	Forecasts []Forecast `json:"forecasts,omitempty"`
+	Forecasts []WeatherForecast `json:"forecasts,omitempty"`
 }
 
 type DoomedEvent struct {

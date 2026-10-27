@@ -2,6 +2,7 @@ package icu
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -120,19 +121,23 @@ type TrainingPlanScope struct {
 }
 
 type TrainingPlanHistory struct {
-	CompletedWeeks       int                         `json:"completedWeeks"`
-	AverageWeeklyLoad    float64                     `json:"averageWeeklyLoad"`
-	PeakWeeklyLoad       int                         `json:"peakWeeklyLoad"`
-	RecentWeeklyLoad     int                         `json:"recentWeeklyLoad"`
-	AverageWeeklyHours   float64                     `json:"averageWeeklyHours"`
-	CurrentStateLabel    string                      `json:"currentStateLabel,omitempty"`
-	CurrentLoadPressure  float64                     `json:"currentLoadPressure,omitempty"`
-	CurrentCTL           float64                     `json:"currentCtl,omitempty"`
-	CurrentATL           float64                     `json:"currentAtl,omitempty"`
-	CurrentTSB           float64                     `json:"currentTsb,omitempty"`
-	CurrentDecoupling    float64                     `json:"currentDecoupling,omitempty"`
-	CurrentHotSessions   int                         `json:"currentHotSessions,omitempty"`
-	CurrentStateSource   string                      `json:"currentStateSource,omitempty"`
+	CompletedWeeks      int     `json:"completedWeeks"`
+	AverageWeeklyLoad   float64 `json:"averageWeeklyLoad"`
+	PeakWeeklyLoad      int     `json:"peakWeeklyLoad"`
+	RecentWeeklyLoad    int     `json:"recentWeeklyLoad"`
+	AverageWeeklyHours  float64 `json:"averageWeeklyHours"`
+	CurrentStateLabel   string  `json:"currentStateLabel,omitempty"`
+	CurrentLoadPressure float64 `json:"currentLoadPressure,omitempty"`
+	CurrentCTL          float64 `json:"currentCtl,omitempty"`
+	CurrentATL          float64 `json:"currentAtl,omitempty"`
+	CurrentTSB          float64 `json:"currentTsb,omitempty"`
+	CurrentDecoupling   float64 `json:"currentDecoupling,omitempty"`
+	CurrentHotSessions  int     `json:"currentHotSessions,omitempty"`
+	CurrentStateSource  string  `json:"currentStateSource,omitempty"`
+	// CurrentLoadSource labels CurrentCTL/ATL/TSB: "wellness" (daily row at
+	// the history end) or "last_activity" (frozen at the newest ride).
+	CurrentLoadSource    string                      `json:"currentLoadSource,omitempty"`
+	CurrentLoadDate      string                      `json:"currentLoadDate,omitempty"`
 	PlannedLoadAlignment string                      `json:"plannedLoadAlignment,omitempty"`
 	Weeks                []TrainingPlanCompletedWeek `json:"weeks,omitempty"`
 }
@@ -219,7 +224,13 @@ type TrainingPlanCompletedWeek struct {
 	LongEnduranceSessions int     `json:"longEnduranceSessions"`
 	MeanIntensity         float64 `json:"meanIntensity,omitempty"`
 	MeanDecoupling        float64 `json:"meanDecoupling,omitempty"`
-	Tolerance             string  `json:"tolerance,omitempty"`
+	// DecouplingExcluded counts rides whose decoupling was dropped from
+	// MeanDecoupling as a robust (MAD z-score) outlier vs. the history.
+	DecouplingExcluded int `json:"decouplingExcluded,omitempty"`
+	// Partial marks an edge week only partly inside the history range. It is
+	// listed but excluded from the averages, peak and recent-week load.
+	Partial   bool   `json:"partial,omitempty"`
+	Tolerance string `json:"tolerance,omitempty"`
 }
 
 type TrainingPlanPhase struct {
@@ -342,6 +353,10 @@ type trainingPlanHistoryWeek struct {
 	longEnduranceSessions int
 	intensity             numericAccumulator
 	decoupling            numericAccumulator
+	decouplingValues      []float64
+	decouplingSeconds     []int
+	decouplingExcluded    int
+	partial               bool
 	startDate             string
 	endDate               string
 }
@@ -373,7 +388,7 @@ func AnalyzeTrainingPlanWithContext(
 	}
 
 	analysis := accumulator.finish(options)
-	analysis.History = summarizeTrainingPlanHistory(activities, options)
+	analysis.History = summarizeTrainingPlanHistory(activities, options, context.Wellness)
 	analysis.History.PlannedLoadAlignment = plannedLoadAlignment(&analysis.History, &analysis.Load)
 	analysis.Anchors = trainingPlanSportAnchors(context.SportSettings, activities)
 	analysis.TargetStatus = trainingPlanTargetStatus(events, options, &analysis.History)
@@ -1243,7 +1258,7 @@ func trainingPlanLoad(weeks []TrainingPlanWeek) TrainingPlanLoad {
 	return load
 }
 
-func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOptions) TrainingPlanHistory {
+func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOptions, wellness *WellnessAnalysis) TrainingPlanHistory {
 	var history TrainingPlanHistory
 
 	weeks := map[string]trainingPlanHistoryWeek{}
@@ -1275,7 +1290,10 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		week.startDate = weekStart.Format(analysisDateLayout)
 		week.endDate = weekEnd.Format(analysisDateLayout)
 		week.intensity.addIfNonZero(activity.Intensity)
-		week.decoupling.addIfNonZero(activity.Decoupling)
+		if activity.Decoupling != 0 {
+			week.decouplingValues = append(week.decouplingValues, activity.Decoupling)
+			week.decouplingSeconds = append(week.decouplingSeconds, activity.MovingTime)
+		}
 
 		if activity.Intensity >= highIntensityThreshold {
 			week.highIntensityDays++
@@ -1288,14 +1306,149 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		weeks[key] = week
 	}
 
+	zeroFillHistoryWeeks(weeks, options.HistoryStartDate, options.HistoryEndDate)
+	historyDecoupling := filterHistoryDecoupling(weeks)
 	finishTrainingPlanHistory(&history, weeks)
-	addCurrentTrainingStateToHistory(&history, activities, options)
+	addCurrentTrainingStateToHistory(&history, activities, options, wellness)
+	if historyDecoupling.count > 0 {
+		history.CurrentDecoupling = round2(historyDecoupling.average())
+	}
 
 	return history
 }
 
+// Decoupling filter method parameters. A ride is too short to measure
+// aerobic decoupling when its moving time is below BOTH the athlete's own
+// decouplingFloorPercentile moving time and decouplingFloorMedianFraction of
+// their median moving time; the two-sided rule only removes rides that are
+// short for this athlete, so it never drops a fixed share of rides. The
+// remaining values are then screened with the MAD robust z-score
+// (robustFilteredFloats), which needs its own minimum sample count.
+const (
+	decouplingFloorPercentile     = 0.25
+	decouplingFloorMedianFraction = 0.5
+)
+
+// decouplingDurationFloor is the moving-time floor (seconds) described above,
+// derived from every ride that reported decoupling. The percentile uses
+// linear interpolation (percentileLinear).
+func decouplingDurationFloor(weeks map[string]trainingPlanHistoryWeek) float64 {
+	var seconds []float64
+	for key := range weeks {
+		for _, value := range weeks[key].decouplingSeconds {
+			seconds = append(seconds, float64(value))
+		}
+	}
+	if len(seconds) == 0 {
+		return 0
+	}
+
+	return math.Min(percentileLinear(seconds, decouplingFloorPercentile), decouplingFloorMedianFraction*medianFloat64(seconds))
+}
+
+// percentileLinear is the p-quantile (0..1) with linear interpolation between
+// order statistics, so small samples are not snapped to their minimum.
+func percentileLinear(values []float64, p float64) float64 {
+	sorted := append([]float64(nil), values...)
+	sort.Float64s(sorted)
+	position := p * float64(len(sorted)-1)
+	lower := int(math.Floor(position))
+	upper := int(math.Ceil(position))
+
+	return sorted[lower] + (position-float64(lower))*(sorted[upper]-sorted[lower])
+}
+
+// filterHistoryDecoupling drops per-ride decoupling outliers before weekly
+// means are taken. Short or unsteady rides (e.g. a 6-minute spin at -74%)
+// produce implausible values that dominate a 3-ride mean. Rides under the
+// athlete-relative duration floor are dropped first; the rest are screened
+// with a MAD robust z-score against the athlete's own history. It fills each
+// week's decoupling accumulator and excluded count and returns the
+// accumulator over all kept rides.
+func filterHistoryDecoupling(weeks map[string]trainingPlanHistoryWeek) numericAccumulator {
+	floor := decouplingDurationFloor(weeks)
+	long := func(week *trainingPlanHistoryWeek, index int) bool {
+		return index >= len(week.decouplingSeconds) || float64(week.decouplingSeconds[index]) >= floor
+	}
+
+	var all []float64
+	for key := range weeks {
+		week := weeks[key]
+		for index, value := range week.decouplingValues {
+			if long(&week, index) {
+				all = append(all, value)
+			}
+		}
+	}
+
+	var kept numericAccumulator
+	low, high := math.Inf(1), math.Inf(-1)
+	for _, value := range robustFilteredFloats(all) {
+		low = math.Min(low, value)
+		high = math.Max(high, value)
+	}
+
+	for key := range weeks {
+		week := weeks[key]
+		for index, value := range week.decouplingValues {
+			if !long(&week, index) || value < low || value > high {
+				week.decouplingExcluded++
+
+				continue
+			}
+			week.decoupling.add(value)
+			kept.add(value)
+		}
+		weeks[key] = week
+	}
+
+	return kept
+}
+
+// zeroFillHistoryWeeks adds an empty entry for every ISO week that overlaps
+// the history range and has no cycling activity, so weekly averages and
+// tolerance labels count rest/off-bike weeks as zero load instead of skipping
+// them. Partial weeks at either edge of the range (for example the week still
+// in progress) are only kept when they already have activity, and are marked
+// partial so they are listed but not averaged as if they were complete.
+func zeroFillHistoryWeeks(weeks map[string]trainingPlanHistoryWeek, startDate, endDate string) {
+	start, startErr := time.Parse(analysisDateLayout, startDate)
+	end, endErr := time.Parse(analysisDateLayout, endDate)
+	if startErr != nil || endErr != nil || end.Before(start) {
+		return
+	}
+
+	for weekStart := isoWeekStart(start); !weekStart.After(end); weekStart = weekStart.AddDate(0, 0, planWeekDays) {
+		weekEnd := weekStart.AddDate(0, 0, planWeekDays-1)
+		key := isoWeekKey(weekStart)
+		partial := weekStart.Before(start) || weekEnd.After(end)
+		if week, ok := weeks[key]; ok {
+			week.partial = partial
+			weeks[key] = week
+
+			continue
+		}
+		if partial {
+			continue
+		}
+		weeks[key] = trainingPlanHistoryWeek{
+			startDate: weekStart.Format(analysisDateLayout),
+			endDate:   weekEnd.Format(analysisDateLayout),
+		}
+	}
+}
+
 func finishTrainingPlanHistory(history *TrainingPlanHistory, weeks map[string]trainingPlanHistoryWeek) {
-	keys := sortedHistoryWeekKeys(weeks)
+	allKeys := sortedHistoryWeekKeys(weeks)
+	keys := make([]string, 0, len(allKeys))
+	for _, key := range allKeys {
+		if !weeks[key].partial {
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		keys = allKeys
+	}
 	history.CompletedWeeks = len(keys)
 
 	if len(keys) == 0 {
@@ -1320,7 +1473,7 @@ func finishTrainingPlanHistory(history *TrainingPlanHistory, weeks map[string]tr
 	history.AverageWeeklyLoad = round2(float64(totalLoad) / float64(len(keys)))
 	history.AverageWeeklyHours = round2(float64(totalSeconds) / secondsPerHour / float64(len(keys)))
 	history.RecentWeeklyLoad = weeks[keys[len(keys)-1]].load
-	history.Weeks = completedHistoryWeeks(keys, weeks, history.AverageWeeklyLoad)
+	history.Weeks = completedHistoryWeeks(allKeys, weeks, history.AverageWeeklyLoad)
 }
 
 func completedHistoryWeeks(keys []string, weeks map[string]trainingPlanHistoryWeek, averageWeeklyLoad float64) []TrainingPlanCompletedWeek {
@@ -1340,6 +1493,8 @@ func completedHistoryWeeks(keys []string, weeks map[string]trainingPlanHistoryWe
 			LongEnduranceSessions: week.longEnduranceSessions,
 			MeanIntensity:         round3(week.intensity.average()),
 			MeanDecoupling:        round2(week.decoupling.average()),
+			DecouplingExcluded:    week.decouplingExcluded,
+			Partial:               week.partial,
 			Tolerance:             completedWeekTolerance(week.load, averageWeeklyLoad),
 		})
 	}
@@ -1363,7 +1518,12 @@ func completedWeekTolerance(load int, averageWeeklyLoad float64) string {
 	return planAlignmentWithin
 }
 
-func addCurrentTrainingStateToHistory(history *TrainingPlanHistory, activities []Activity, options TrainingPlanOptions) {
+func addCurrentTrainingStateToHistory(
+	history *TrainingPlanHistory,
+	activities []Activity,
+	options TrainingPlanOptions,
+	wellness *WellnessAnalysis,
+) {
 	analysis := AnalyzeCyclingActivities(activities, AnalysisOptions{
 		StartDate: options.HistoryStartDate,
 		EndDate:   options.HistoryEndDate,
@@ -1377,6 +1537,17 @@ func addCurrentTrainingStateToHistory(history *TrainingPlanHistory, activities [
 	history.CurrentDecoupling = analysis.Durability.AverageDecoupling
 	history.CurrentHotSessions = analysis.Environment.HotSessions
 	history.CurrentStateSource = analysis.State.Source
+	if history.CurrentCTL != 0 || history.CurrentATL != 0 {
+		history.CurrentLoadSource = latestLoadSourceActivity
+	}
+
+	if wellness != nil && (wellness.Load.CTL != 0 || wellness.Load.ATL != 0) {
+		history.CurrentCTL = wellness.Load.CTL
+		history.CurrentATL = wellness.Load.ATL
+		history.CurrentTSB = wellness.Load.TSB
+		history.CurrentLoadSource = latestLoadSourceWellness
+		history.CurrentLoadDate = wellness.Load.Date
+	}
 }
 
 func plannedLoadAlignment(history *TrainingPlanHistory, load *TrainingPlanLoad) string {

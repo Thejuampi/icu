@@ -685,7 +685,6 @@ func planOperationFromSession(session *PlanResolvedSession) CalendarOperation {
 		TrainingLoad:   session.TrainingLoad,
 		MovingTime:     session.MovingTimeSecs,
 		Target:         session.Target,
-		ExternalID:     session.UID,
 		// D-25/T1b.11: carry the resolved environment so an UPDATE cannot
 		// wipe the server's indoor flag by building a fresh EventEx{}. nil
 		// and false both map to the omitted key (D-25's truth table) — only
@@ -958,12 +957,15 @@ func sanitizePlanID(name string) string {
 			return '-'
 		}
 	}, name)
+	for strings.Contains(cleaned, "--") {
+		cleaned = strings.ReplaceAll(cleaned, "--", "-")
+	}
 	cleaned = strings.Trim(cleaned, "-")
 	if cleaned == "" {
 		return "session"
 	}
 	if len(cleaned) > 32 {
-		return cleaned[:32]
+		return strings.TrimRight(cleaned[:32], "-")
 	}
 
 	return cleaned

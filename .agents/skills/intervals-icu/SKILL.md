@@ -26,7 +26,7 @@ Use this skill when the task is about reading, changing, importing, exporting, o
 
 ```bash
 # Install or update the CLI
-go install github.com/Thejuampi/icu@latest
+go install github.com/Thejuampi/icu/cmd/icu@latest
 
 # One-time local setup
 icu config set --api-key YOUR_API_KEY

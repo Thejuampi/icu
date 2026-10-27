@@ -197,6 +197,12 @@ type CyclingLoad struct {
 	LatestCTL             float64 `json:"latestCtl,omitempty"`
 	LatestATL             float64 `json:"latestAtl,omitempty"`
 	LatestForm            float64 `json:"latestForm,omitempty"`
+	// LatestLoadDate and LatestLoadSource are set only by
+	// ApplyWellnessFitness ("wellness": the daily Intervals.icu fitness row
+	// for LatestLoadDate). When absent, LatestCTL/ATL/Form are the values
+	// recorded on the newest activity, with no decay over later rest days.
+	LatestLoadDate   string `json:"latestLoadDate,omitempty"`
+	LatestLoadSource string `json:"latestLoadSource,omitempty"`
 	// NIncluded is D-3's per-section inclusion count (T2.3): AveragePerActivity
 	// and PerHour divide by this, not by Scope.CyclingActivities, so an
 	// icu_ignore_power/icu_ignore_time exclusion never silently dilutes the
@@ -807,6 +813,43 @@ func (accumulator *cyclingAnalysisAccumulator) updateLatestLoad(activity *Activi
 	accumulator.analysis.Load.LatestCTL = activity.CTL
 	accumulator.analysis.Load.LatestATL = activity.ATL
 	accumulator.analysis.Load.LatestForm = round2(activity.CTL - activity.ATL)
+}
+
+const (
+	latestLoadSourceActivity = "last_activity"
+	latestLoadSourceWellness = "wellness"
+)
+
+// ApplyWellnessFitness replaces activity-derived LatestCTL/ATL/Form with the
+// newest daily wellness fitness row dated on or before endDate. Activity
+// values are frozen at the last workout and ignore decay on later rest days
+// and load from other sports, so the daily row is the current state. Rows
+// after endDate (Intervals.icu projects future CTL/ATL) and rows without
+// CTL/ATL are ignored; when none qualify the load is left unchanged.
+func ApplyWellnessFitness(load *CyclingLoad, records []Wellness, endDate string) {
+	best := -1
+	for index := range records {
+		record := &records[index]
+		if record.ID == "" || (endDate != "" && record.ID > endDate) {
+			continue
+		}
+		if record.CTL == 0 && record.ATL == 0 {
+			continue
+		}
+		if best < 0 || record.ID > records[best].ID {
+			best = index
+		}
+	}
+	if best < 0 {
+		return
+	}
+
+	record := &records[best]
+	load.LatestCTL = record.CTL
+	load.LatestATL = record.ATL
+	load.LatestForm = round2(record.CTL - record.ATL)
+	load.LatestLoadDate = record.ID
+	load.LatestLoadSource = latestLoadSourceWellness
 }
 
 func (accumulator *cyclingAnalysisAccumulator) finish(options AnalysisOptions) CyclingAnalysis {

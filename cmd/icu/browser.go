@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -28,7 +29,7 @@ func openBrowserURL(rawURL string) error {
 		args = []string{rawURL}
 	}
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("opening browser: %w", err)
 	}
