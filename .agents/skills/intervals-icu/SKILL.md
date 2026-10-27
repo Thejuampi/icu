@@ -21,6 +21,17 @@ Use this skill when the task is about reading, changing, importing, exporting, o
 - Prefer narrow reads with date ranges, `--fields`, and resource-specific filters.
 - Never print, store, or invent API keys. Use `icu config diagnose` for safe credential checks.
 - For destructive or broad writes, confirm intent unless the user already gave explicit instructions.
+- After every write (`events create/update/delete/revert`, `plan accept`, `rebalance accept`, `sports update`, `wellness update`, `activity update`, ...), re-read what you wrote (`icu events get <id>`, `icu events list --oldest D --newest D`, `icu sports get TYPE`, ...) and verify type, date, name, description line breaks, `moving_time` and `icu_training_load` match what you intended. Intervals.icu may recalculate or normalize fields. Report any mismatch; do not assume a write succeeded as sent.
+- Put multi-line descriptions in a file and pass `--desc-file PATH`. The CLI rejects literal `\n`, `\r`, `\t` sequences in descriptions. For non-cycling workouts (`WeightTraining`, `Run`, ...) set `--type` and give `--moving-time`/`--training-load`; `--calculate-load` is FTP-based and cycling-only.
+
+## Validate Numbers And Challenge Requests
+
+- Treat CLI analysis output as derived data. Before you state a number that drives a decision (FTP, CTL/ATL/TSB, ramp, weekly load, decoupling, power-curve deltas), check it against the raw API values: `icu sports get Ride` for `ftp`/`indoor_ftp`, `icu wellness list --oldest D --newest D` for daily `ctl`/`atl`, and `icu activities list` / `icu events get <id>` for per-session load. Say which source each number comes from and its date. If the derived and raw numbers disagree, report both and do not guess.
+- Use today's wellness for current fitness, not the last activity. Ignore projected future wellness rows.
+- Price each session at the right FTP: indoor (`VirtualRide` or `"indoor": true` in the intent) at indoor FTP, outdoor at outdoor FTP. If Intervals.icu has no `indoor_ftp`, the CLI uses the local profile (`icu profile show`) and says so in an `ftp:` warning.
+- Challenge athlete requests that do not make sense before you write anything. Examples: a weekly CTL ramp above the athlete's `maxRampPerWeek`, intensity stacked on consecutive days while TSB is already very negative, an intent FTP above the current or target FTP, several identical sessions in one week (`monotony:` warnings), sessions outside the athlete's usual days/times, or a week below their Z2 floor. Explain the concern with the numbers, propose an alternative, and only proceed when the athlete confirms.
+- Do not invent thresholds. Use the athlete's profile (`icu profile set ...`) and Intervals.icu settings; when a cap is not configured, say so instead of assuming one.
+- Before writing, run `icu plan preview --file plan.json` and read `projection` (end-of-period CTL/ATL/TSB, weekly ramp) and every warning. `plan accept` and `events update` save a local backup of each changed event; if a change was wrong, `icu events revert --id ID --dry-run` and then without `--dry-run` restore it.
 
 ## Setup And Diagnostics
 
@@ -207,7 +218,7 @@ Useful wellness fields: `id`, `weight`, `restingHR`, `hrv`, `hrvSDNN`, `sleepSec
 ```bash
 icu events list --oldest 2026-05-20 --newest 2026-05-31
 icu events list --oldest 2026-05-20 --newest 2026-05-31 --category WORKOUT
-icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc "- 15m Ramp 55-72% FTP\n- 4x8m 105% FTP\n- 10m Ramp 55-50% FTP"
+icu events create --category WORKOUT --type Ride --name "Morning Intervals" --start-date "2026-05-25T07:00:00" --moving-time 3600 --training-load 90 --desc $'- 15m Ramp 55-72% FTP\n- 4x8m 105% FTP\n- 10m Ramp 55-50% FTP'
 ```
 
 **Prefer `icu plan` for multi-session calendar writes.** Build an intent JSON with explicit sessions, then:
@@ -272,17 +283,17 @@ When planning day-by-day decisions based on recovery markers (HRV, resting HR, s
 
 ```bash
 # Primary session: contributes to projected load
-icu events create --category WORKOUT --type Ride --name "4x5 VO2Max" --start-date "2026-06-16T07:00:00" --moving-time 4380 --training-load 91 --desc "- 15m Ramp 55-72% FTP\n4x\n  - 5m 112-115% FTP\n  - 4m 60% FTP\n- 22m Ramp 68-55% FTP"
+icu events create --category WORKOUT --type Ride --name "4x5 VO2Max" --start-date "2026-06-16T07:00:00" --moving-time 4380 --training-load 91 --desc $'- 15m Ramp 55-72% FTP\n4x\n  - 5m 112-115% FTP\n  - 4m 60% FTP\n- 22m Ramp 68-55% FTP'
 
 # Alternative session: does NOT contribute to projected load
-# Note: the CLI treats the two characters '\n' literally. Use your shell's real newline mechanism
+# Note: the CLI rejects the two characters '\n' in descriptions. Use --desc-file or your shell's real newline mechanism
 # (e.g. PowerShell backtick-n: `n, bash $'...\n...') so the description renders with line breaks.
 icu events create --category NOTE --type Ride --name "ALT B — 90m Z2" --start-date "2026-06-16T07:00:00" --desc "Do if HRV <= baseline, resting HR elevated, or legs flat.`n- 15m 55-70%`n- 60m 68-72%`n- 15m 55-60%"
 ```
 
 Decision rules commonly used:
 - HRV below personal baseline or resting HR elevated → choose the NOTE alternative.
-- Sleep score < 70 or high subjective fatigue → choose the NOTE alternative or take the OFF day.
+- Sleep below its own baseline (`analysis wellness` sleep level WATCH/RED) or high subjective fatigue → choose the NOTE alternative or take the OFF day.
 - If the alternative is chosen consistently for several days, consider converting it into the new WORKOUT and deleting/re-scheduling the harder primary session rather than accumulating skipped workouts.
 
 This keeps projected fitness/fatigue curves clean while preserving fallback options in the calendar.

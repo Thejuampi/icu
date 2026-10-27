@@ -11,6 +11,13 @@ import (
 const preferredWellnessScoreName = "zepp_hybridcharge"
 
 func readWellnessRecordsForAnalysis(client *icu.Client, oldest, newest string, query map[string]string) ([]icu.Wellness, []string, error) {
+	// Always read the full baseline window (icu.WellnessBaselineDays before
+	// newest) so a short --oldest does not truncate the baselines; rows
+	// before oldest feed only the baselines (AnalyzeWellness scopes by
+	// AnalysisOptions.StartDate).
+	if baselineOldest, err := addDays(newest, -icu.WellnessBaselineDays); err == nil && baselineOldest < oldest {
+		oldest = baselineOldest
+	}
 	var records []icu.Wellness
 	if query == nil {
 		query = map[string]string{}

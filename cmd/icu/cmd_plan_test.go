@@ -3,10 +3,14 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"math"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -547,4 +551,282 @@ func readPlanTestProposal(t *testing.T, file string) icu.PlanProposalFile {
 	}
 
 	return proposal
+}
+
+//nolint:paralleltest // swaps the process-wide config store.
+func TestPlanLoadProjectionStartsFromWellness(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	if err := icu.SaveConfig(&icu.Config{Profile: &icu.TrainingProfile{MaxRampPerWeek: 50}}); err != nil {
+		t.Fatal(err)
+	}
+
+	var methods []string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		methods = append(methods, request.Method)
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-10-25","ctl":40,"atl":45},` +
+				`{"id":"2026-10-26","ctl":41,"atl":47},{"id":"2026-11-01","ctl":30,"atl":10}]`))
+		case strings.HasSuffix(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[{"id":9,"category":"WORKOUT","start_date_local":"2026-10-28T07:00:00",` +
+				`"icu_training_load":70}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	proposal := &icu.PlanProposalFile{
+		Scope: icu.PlanScope{EndDate: "2026-11-01"},
+		Operations: []icu.CalendarOperation{{
+			Action: icu.CalendarActionCreate, ExpectedLoad: 300,
+			Body: icu.EventEx{StartDateLocal: "2026-10-27T07:00:00"},
+		}},
+	}
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+
+	got, err := planLoadProjection(client, proposal, map[string]string{"timezone": "UTC"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Starts from yesterday's row so today's load is projected too.
+	if got.StartDate != "2026-10-25" || got.StartCTL != 40 || got.StartSource != "wellness" ||
+		got.EndDate != "2026-11-01" || got.MaxRampPerWeek != 50 || len(got.Warnings) != 0 {
+		t.Fatalf("projection = %+v", got)
+	}
+	capped, err := planLoadProjection(client, proposal, map[string]string{"max-ramp": "1", "timezone": "UTC"}, now)
+	if err != nil || len(capped.Warnings) != 1 || !strings.Contains(capped.Warnings[0], "exceeds the 1.00/week cap") {
+		t.Fatalf("capped = %+v, %v", capped, err)
+	}
+	for _, method := range methods {
+		if method != http.MethodGet {
+			t.Fatalf("projection issued %s", method)
+		}
+	}
+
+	empty := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		_, _ = response.Write([]byte(`[]`))
+	}))
+	t.Cleanup(empty.Close)
+	emptyClient := icu.NewClient("k", "i1", icu.WithHTTPClient(empty.Client()), icu.WithBaseURL(empty.URL))
+	if _, err := planLoadProjection(emptyClient, proposal, nil, now); err == nil {
+		t.Fatal("projection without wellness succeeded")
+	}
+}
+
+func TestPlanLoadProjectionUsesNowDateAndActualLoads(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+
+	var activityQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet {
+			t.Errorf("unexpected %s", request.Method)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-10-20","ctl":40,"atl":45}]`))
+		case strings.HasSuffix(request.URL.Path, "/activities"):
+			activityQuery = request.URL.Query().Get("oldest") + ".." + request.URL.Query().Get("newest")
+			_, _ = response.Write([]byte(`[{"id":"a1","start_date_local":"2026-10-21T08:00:00","icu_training_load":60},` +
+				`{"id":"a2","start_date_local":"2026-10-21T18:00:00","icu_training_load":40}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	proposal := &icu.PlanProposalFile{Scope: icu.PlanScope{EndDate: "2026-10-23"}}
+
+	got, err := planLoadProjection(client, proposal, map[string]string{"now-date": "2026-10-22"},
+		time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activityQuery != "2026-07-24..2026-10-22" || got.StartDate != "2026-10-20" || got.Weeks[0].Load != 100 {
+		t.Fatalf("query=%s projection=%+v", activityQuery, got)
+	}
+	if _, err := planLoadProjection(client, proposal, map[string]string{"now-date": "bad"}, time.Now()); err == nil {
+		t.Fatal("expected --now-date validation error")
+	}
+}
+
+func TestPlanLoadProjectionSplitsFitnessAndFatigueLoads(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			// 09-11: strength only, CTL load 0, ATL load 42 (live shape).
+			_, _ = response.Write([]byte(`[{"id":"2026-09-10","ctl":40,"atl":40},` +
+				`{"id":"2026-09-11","ctl":39,"atl":44,"ctlLoad":0,"atlLoad":42}]`))
+		case strings.HasSuffix(request.URL.Path, "/activities"):
+			if !strings.Contains(request.URL.Query().Get("fields"), "paired_event_id") {
+				t.Error("activities read must request paired_event_id")
+			}
+			_, _ = response.Write([]byte(`[{"id":"a","type":"WeightTraining","start_date_local":"2026-09-11T17:00:00",` +
+				`"icu_training_load":42},{"id":"b","type":"Ride","start_date_local":"2026-09-12T07:00:00",` +
+				`"icu_training_load":50,"paired_event_id":7}]`))
+		case strings.HasSuffix(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[{"id":7,"category":"WORKOUT","type":"Ride","start_date_local":"2026-09-12T07:00:00",` +
+				`"icu_training_load":50},{"id":8,"category":"WORKOUT","type":"WeightTraining",` +
+				`"start_date_local":"2026-09-13T17:00:00","icu_training_load":30}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	proposal := &icu.PlanProposalFile{Scope: icu.PlanScope{EndDate: "2026-09-13"}}
+
+	got, err := planLoadProjection(client, proposal, map[string]string{"now-date": "2026-09-12"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Start 09-11 (last row before today). Today: completed ride 50, its
+	// paired event not added again. 09-13: strength 30 is ATL-only.
+	k42, k7 := 1-math.Exp(-1.0/42), 1-math.Exp(-1.0/7)
+	ctl, atl := 39.0, 44.0
+	ctl += (50 - ctl) * k42
+	atl += (50 - atl) * k7
+	ctl += (0 - ctl) * k42
+	atl += (30 - atl) * k7
+	if got.StartDate != "2026-09-11" || math.Abs(got.EndCTL-ctl) > 0.01 || math.Abs(got.EndATL-atl) > 0.01 {
+		t.Fatalf("projection = %+v, want CTL %.2f ATL %.2f", got, ctl, atl)
+	}
+}
+
+func TestPlanLoadProjectionPersistsLearnedTypesAndHonorsOverrides(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	if err := icu.SaveConfigWithAction(&icu.Config{AthleteID: "i1", Profile: &icu.TrainingProfile{
+		FitnessLoadTypes: map[string]string{"Yoga": "atl-only"},
+	}}, "config_set"); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			_, _ = response.Write([]byte(`[{"id":"2026-09-11","ctl":39,"atl":44,"ctlLoad":0,"atlLoad":42}]`))
+		case strings.HasSuffix(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[{"id":"a","type":"WeightTraining","start_date_local":"2026-09-11T17:00:00",` +
+				`"icu_training_load":42}]`))
+		case strings.HasSuffix(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[{"id":8,"category":"WORKOUT","type":"Yoga",` +
+				`"start_date_local":"2026-09-13T07:00:00","icu_training_load":30},` +
+				`{"id":9,"category":"WORKOUT","type":"Rowing","start_date_local":"2026-09-13T17:00:00","icu_training_load":0}]`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	proposal := &icu.PlanProposalFile{Scope: icu.PlanScope{EndDate: "2026-09-13"}}
+
+	// Without --save-learned the learned types are used in memory only.
+	if _, err := planLoadProjection(client, proposal, map[string]string{"now-date": "2026-09-12"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := icu.LoadConfig(); cfg.Profile.LearnedFitnessLoadTypes != nil {
+		t.Fatalf("preview wrote config without --save-learned: %+v", cfg.Profile)
+	}
+	got, err := planLoadProjection(client, proposal,
+		map[string]string{"now-date": "2026-09-12", "save-learned": "true"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	k42 := 1 - math.Exp(-1.0/42)
+	ctl := 39 * (1 - k42) * (1 - k42) // Yoga is manually ATL-only
+	if math.Abs(got.EndCTL-ctl) > 0.01 {
+		t.Fatalf("CTL %.3f, want %.3f", got.EndCTL, ctl)
+	}
+	if !strings.Contains(strings.Join(got.Warnings, "|"), "whether Rowing counts toward CTL") {
+		t.Fatalf("warnings = %v", got.Warnings)
+	}
+	cfg, err := icu.LoadConfig()
+	if err != nil || cfg.Profile.LearnedFitnessLoadTypes["WeightTraining"] != "atl-only" ||
+		cfg.Profile.FitnessLoadTypes["Yoga"] != "atl-only" {
+		t.Fatalf("persisted profile = %+v, %v", cfg.Profile, err)
+	}
+}
+
+func TestApplyFitnessLoadTypesFlag(t *testing.T) {
+	t.Parallel()
+	profile := icu.TrainingProfile{FitnessLoadTypes: map[string]string{"Yoga": "ctl"}}
+	if err := applyFitnessLoadTypesFlag(&profile, map[string]string{
+		"fitness-load-types": "WeightTraining=atl-only, Yoga=-",
+	}); err != nil || len(profile.FitnessLoadTypes) != 1 || profile.FitnessLoadTypes["WeightTraining"] != "atl-only" {
+		t.Fatalf("%v %v", profile.FitnessLoadTypes, err)
+	}
+	for _, bad := range []string{"Yoga", "=ctl", "Yoga=maybe"} {
+		if err := applyFitnessLoadTypesFlag(&profile, map[string]string{"fitness-load-types": bad}); err == nil {
+			t.Fatalf("%q accepted", bad)
+		}
+	}
+	_ = applyFitnessLoadTypesFlag(&profile, map[string]string{"fitness-load-types": "WeightTraining=-"})
+	if profile.FitnessLoadTypes != nil {
+		t.Fatal("empty overrides not cleared")
+	}
+	_ = applyFitnessLoadTypesFlag(&profile, map[string]string{"fitness-load-types": "Yoga=ctl"})
+	if err := applyFitnessLoadTypesFlag(&profile, map[string]string{"fitness-load-types": "-"}); err != nil ||
+		profile.FitnessLoadTypes != nil {
+		t.Fatal("- did not clear")
+	}
+	if err := icu.ValidateTrainingProfile(&icu.TrainingProfile{
+		LearnedFitnessLoadTypes: map[string]string{"Ride": "x"},
+	}); err == nil {
+		t.Fatal("invalid class validated")
+	}
+}
+
+func TestSaveLearnedFitnessLoadTypesKeepsOtherConfig(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	if err := saveLearnedFitnessLoadTypes(map[string]string{"Ride": "ctl"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := icu.SaveConfigWithAction(&icu.Config{AthleteID: "i1", Profile: &icu.TrainingProfile{
+		FitnessLoadTypes: map[string]string{"Yoga": "atl-only"},
+	}}, "config_set"); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveLearnedFitnessLoadTypes(map[string]string{"Ride": "ctl"}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := icu.LoadConfig()
+	if cfg.AthleteID != "i1" || cfg.Profile.LearnedFitnessLoadTypes["Ride"] != "ctl" ||
+		cfg.Profile.FitnessLoadTypes["Yoga"] != "atl-only" {
+		t.Fatalf("config = %+v profile %+v", cfg, cfg.Profile)
+	}
+}
+
+func TestPlanFitnessLoadTypesClearsConflictedSavedClass(t *testing.T) {
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	profile := &icu.TrainingProfile{LearnedFitnessLoadTypes: map[string]string{"Swim": "ctl", "Ride": "ctl"}}
+	if err := icu.SaveConfigWithAction(&icu.Config{AthleteID: "i1", Profile: profile}, "config_set"); err != nil {
+		t.Fatal(err)
+	}
+	records := []icu.Wellness{
+		{ID: "2026-09-01", CTLLoad: 20, ATLLoad: 20},
+		{ID: "2026-09-02", CTLLoad: 0, ATLLoad: 20},
+	}
+	activities := []icu.Activity{
+		{Type: "Swim", StartDateLocal: "2026-09-01T07:00:00", TrainingLoad: 20},
+		{Type: "Swim", StartDateLocal: "2026-09-02T07:00:00", TrainingLoad: 20},
+	}
+	_, warnings := planFitnessLoadTypes(profile, records, activities, nil, nil, "2026-09-03", true)
+	if !strings.Contains(strings.Join(warnings, "|"), "Swim counted toward CTL on some days") {
+		t.Fatalf("warnings = %v", warnings)
+	}
+	cfg, _ := icu.LoadConfig()
+	if _, ok := cfg.Profile.LearnedFitnessLoadTypes["Swim"]; ok || cfg.Profile.LearnedFitnessLoadTypes["Ride"] != "ctl" {
+		t.Fatalf("saved = %v", cfg.Profile.LearnedFitnessLoadTypes)
+	}
 }

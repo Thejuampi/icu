@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	icu "github.com/Thejuampi/icu"
@@ -35,6 +36,18 @@ func applyCalendarOperation(client *icu.Client, operation *icu.CalendarOperation
 
 		return result
 	}
+	if operation.Action == icu.CalendarActionUpdate || operation.Action == icu.CalendarActionCancel {
+		path, err := backupEvent(client, operation.EventID, "calendar "+operation.Action)
+		if err != nil {
+			operation.Status = icu.CalendarStatusFailed
+			operation.Error = err.Error()
+			result.Status = icu.CalendarStatusFailed
+			result.Error = err.Error()
+
+			return result
+		}
+		result.BackupPath = path
+	}
 	var event icu.Event
 	err := applyCalendarMutation(client, operation, &event)
 	if err != nil {
@@ -44,6 +57,15 @@ func applyCalendarOperation(client *icu.Client, operation *icu.CalendarOperation
 		result.Error = err.Error()
 
 		return result
+	}
+	if operation.Action == icu.CalendarActionUpdate {
+		// The update is already applied; a failed hash record only means the
+		// next update/revert of this event will need --force.
+		if err := recordPostWrite(result.BackupPath, &event); err != nil {
+			result.Warning = fmt.Sprintf("event %d updated, but saving its post-write hash in %s failed (%v); "+
+				"its next events update/revert will require --force", operation.EventID, result.BackupPath, err)
+			fmt.Fprintln(os.Stderr, "warning: "+result.Warning)
+		}
 	}
 	operation.Status = icu.CalendarStatusApplied
 	operation.AppliedEventID = appliedCalendarEventID(operation, &event)
@@ -126,13 +148,33 @@ func runCalendarOpsPreview(
 	blockingErr error,
 	liveCheck func() []string,
 ) error {
+	return runCalendarOpsPreviewWith(flags, operations, validation, blocking, blockingErr,
+		func(*icu.CalendarOpsPreview) []string {
+			if liveCheck == nil {
+				return nil
+			}
+
+			return liveCheck()
+		})
+}
+
+// runCalendarOpsPreviewWith is runCalendarOpsPreview with a live check that
+// can also attach data (such as a load projection) to the preview.
+func runCalendarOpsPreviewWith(
+	flags map[string]string,
+	operations []icu.CalendarOperation,
+	validation *icu.CalendarOpsValidation,
+	blocking bool,
+	blockingErr error,
+	liveCheck func(*icu.CalendarOpsPreview) []string,
+) error {
 	preview := icu.PreviewCalendarOperations(operations)
 	preview.Validation = validation
 	if validation != nil {
 		preview.Warnings = appendUniquePreviewWarnings(preview.Warnings, validation.Warnings...)
 	}
 	if !blocking && !BoolFlag(flags, "no-live-check") && liveCheck != nil {
-		preview.Warnings = append(preview.Warnings, liveCheck()...)
+		preview.Warnings = append(preview.Warnings, liveCheck(&preview)...)
 	}
 	if err := writeJSON(preview); err != nil {
 		return err

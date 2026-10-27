@@ -7,22 +7,14 @@ import (
 	"time"
 )
 
+// Window sizes for trend summaries (method parameters, not thresholds):
+// a 7-day recent window compared with the 7 days before it. Readiness
+// levels are derived from the athlete's own baseline in
+// baseline_thresholds.go.
 const (
-	recentWellnessDays         = 7
-	minimumTrendSamples        = 14
-	hoursPerDay                = 24
-	hrvWatchZScoreThreshold    = -1.5
-	hrvRedZScoreThreshold      = -2.5
-	hrvWatchMovingRatio        = 0.9
-	hrvRedMovingRatio          = 0.8
-	restingHRWatchDelta        = 5
-	restingHRRedDelta          = 8
-	sleepWatchScore            = 75
-	sleepRedScore              = 65
-	lactateWatchThreshold      = 2.5
-	lactateHighThreshold       = 4.0
-	negativeFormWatchThreshold = -10
-	negativeFormRedThreshold   = -25
+	recentWellnessDays  = 7
+	minimumTrendSamples = 14
+	hoursPerDay         = 24
 )
 
 type WellnessAnalysis struct {
@@ -39,13 +31,14 @@ type WellnessAnalysis struct {
 }
 
 type WellnessLactateCalibration struct {
-	Mean            float64 `json:"mean,omitempty"`
-	Latest          float64 `json:"latest,omitempty"`
-	Trend7Day       float64 `json:"trend7d,omitempty"`
-	Samples         int     `json:"samples"`
-	CoveragePercent float64 `json:"coveragePercent"`
-	State           string  `json:"state,omitempty"`
-	Source          string  `json:"source,omitempty"`
+	Mean            float64           `json:"mean,omitempty"`
+	Latest          float64           `json:"latest,omitempty"`
+	Trend7Day       float64           `json:"trend7d,omitempty"`
+	Samples         int               `json:"samples"`
+	CoveragePercent float64           `json:"coveragePercent"`
+	State           string            `json:"state,omitempty"`
+	Source          string            `json:"source,omitempty"`
+	Threshold       *DerivedThreshold `json:"threshold,omitempty"`
 }
 
 type WellnessScope struct {
@@ -79,6 +72,10 @@ type WellnessSignal struct {
 	FallbackScoreName string  `json:"fallbackScoreName,omitempty"`
 	Samples           int     `json:"samples"`
 	CoveragePercent   float64 `json:"coveragePercent"`
+	// Level is OK/WATCH/RED against Threshold, or "" when there is not
+	// enough of the athlete's own history to judge.
+	Level     string            `json:"level,omitempty"`
+	Threshold *DerivedThreshold `json:"threshold,omitempty"`
 }
 
 type SubjectiveWellness struct {
@@ -96,6 +93,9 @@ type WellnessLoadState struct {
 	TSB float64 `json:"tsb,omitempty"`
 	// Date is the wellness day CTL/ATL/TSB were read from.
 	Date string `json:"date,omitempty"`
+	// Level/Threshold judge TSB against the athlete's own TSB history.
+	Level     string            `json:"level,omitempty"`
+	Threshold *DerivedThreshold `json:"threshold,omitempty"`
 }
 
 type PhysiologyState struct {
@@ -126,14 +126,30 @@ type wellnessAccumulator struct {
 	sleepFallbackName  string
 	sleepPreferredDays int
 	sleepFallbackDays  int
+	tsb                []wellnessSample
+	thresholds         *TrainingThresholds
+	// history holds pre-scope samples used only for baselines.
+	history struct {
+		hrv, restingHR, sleep, lactate, tsb []wellnessSample
+	}
+	earliest string
 }
 
 func AnalyzeWellness(records []Wellness, options AnalysisOptions) WellnessAnalysis {
 	accumulator := newWellnessAccumulator(records, options)
 
+	inScope := 0
 	for index := range records {
-		accumulator.add(&records[index])
+		record := &records[index]
+		if options.StartDate != "" && record.ID != "" && record.ID < options.StartDate {
+			accumulator.addBaselineOnly(record)
+
+			continue
+		}
+		inScope++
+		accumulator.add(record)
 	}
+	accumulator.analysis.Scope.Records = inScope
 
 	return accumulator.finish()
 }
@@ -147,11 +163,34 @@ func newWellnessAccumulator(records []Wellness, options AnalysisOptions) wellnes
 	accumulator.analysis.Scope.TotalDays = analysisTotalDays(records, options)
 	accumulator.analysis.Scope.Timezone = options.Timezone
 	accumulator.analysis.Scope.TimezoneSource = options.TimezoneSource
+	accumulator.thresholds = options.Thresholds
 
 	return accumulator
 }
 
+// addBaselineOnly records a row from before the analysis scope: it extends
+// the fixed baseline windows but not the scope's means, coverage or latest
+// values.
+func (accumulator *wellnessAccumulator) addBaselineOnly(record *Wellness) {
+	history := &accumulator.history
+	addWellnessSample(record.HRV, &history.hrv, record.ID)
+	addWellnessSample(float64(record.RestingHR), &history.restingHR, record.ID)
+	if score, _ := preferredWellnessScore(record); score.Value != 0 {
+		addWellnessSample(score.Value, &history.sleep, record.ID)
+	}
+	addWellnessSample(record.Lactate, &history.lactate, record.ID)
+	if record.CTL != 0 || record.ATL != 0 {
+		history.tsb = append(history.tsb, wellnessSample{date: record.ID, value: round2(record.CTL - record.ATL)})
+	}
+	if accumulator.earliest == "" || record.ID < accumulator.earliest {
+		accumulator.earliest = record.ID
+	}
+}
+
 func (accumulator *wellnessAccumulator) add(record *Wellness) {
+	if record.ID != "" && (accumulator.earliest == "" || record.ID < accumulator.earliest) {
+		accumulator.earliest = record.ID
+	}
 	addWellnessSample(record.HRV, &accumulator.hrv, record.ID)
 	addWellnessSample(float64(record.RestingHR), &accumulator.restingHR, record.ID)
 	accumulator.addSleepScore(record)
@@ -229,13 +268,14 @@ func (accumulator *wellnessAccumulator) addLoad(record *Wellness) {
 		return
 	}
 
-	if record.ID < accumulator.latestLoad {
-		return
-	}
-
 	// Intervals.icu returns projected CTL/ATL for future days; a row after
 	// the analysis end date is a forecast, not the current state.
 	if end := accumulator.analysis.Scope.EndDate; end != "" && record.ID > end {
+		return
+	}
+
+	accumulator.tsb = append(accumulator.tsb, wellnessSample{date: record.ID, value: round2(record.CTL - record.ATL)})
+	if record.ID < accumulator.latestLoad {
 		return
 	}
 
@@ -252,9 +292,17 @@ func (accumulator *wellnessAccumulator) finish() WellnessAnalysis {
 	accumulator.analysis.Sleep = wellnessSignal(accumulator.sleep, accumulator.analysis.Scope.TotalDays)
 	accumulator.annotateSleepSignal()
 	accumulator.analysis.Lactate = lactateCalibration(accumulator.lactate, accumulator.analysis.Scope.TotalDays)
+	accumulator.judgeAgainstBaselines()
 	accumulator.analysis.Coverage = accumulator.coverage()
 	accumulator.analysis.Subjective = accumulator.subjectiveSummary()
 	accumulator.analysis.State = physiologyState(&accumulator.analysis)
+	if accumulator.analysis.State.State == PhysiologyInsufficient && accumulator.analysis.Scope.Records > 0 {
+		accumulator.analysis.Warnings = append(accumulator.analysis.Warnings,
+			"no wellness signal has enough baseline history to judge; state is INSUFFICIENT")
+	}
+	if warning := accumulator.baselineTruncationWarning(); warning != "" {
+		accumulator.analysis.Warnings = append(accumulator.analysis.Warnings, warning)
+	}
 
 	if accumulator.analysis.Scope.Records == 0 {
 		accumulator.analysis.Warnings = append(accumulator.analysis.Warnings, "no wellness records found")
@@ -302,21 +350,8 @@ func lactateCalibration(samples []wellnessSample, totalDays int) WellnessLactate
 		Trend7Day:       wellnessTrend7Day(samples),
 		Samples:         len(samples),
 		CoveragePercent: coveragePercent(len(samples), totalDays),
-		State:           lactateState(latest),
 		Source:          "wellness_lactate",
 	}
-}
-
-func lactateState(latest float64) string {
-	if latest >= lactateHighThreshold {
-		return "high"
-	}
-
-	if latest >= lactateWatchThreshold {
-		return "watch"
-	}
-
-	return "baseline"
 }
 
 func (accumulator *wellnessAccumulator) coverage() WellnessCoverage {
@@ -510,17 +545,40 @@ func physiologyState(analysis *WellnessAnalysis) PhysiologyState {
 		state   = "OK"
 	)
 
-	updatePhysiologyState(&state, &reasons, hrvPhysiologyState(&analysis.HRV))
-	updatePhysiologyState(&state, &reasons, restingHRPhysiologyState(analysis.RestingHR.Delta))
-	updatePhysiologyState(&state, &reasons, sleepPhysiologyState(analysis.Sleep.Latest))
-	updatePhysiologyState(&state, &reasons, loadPhysiologyState(analysis.Load.TSB))
+	updatePhysiologyState(&state, &reasons, levelPhysiologyState(analysis.HRV.Level, "hrv_below_baseline"))
+	updatePhysiologyState(&state, &reasons, levelPhysiologyState(analysis.RestingHR.Level, "resting_hr_above_baseline"))
+	updatePhysiologyState(&state, &reasons, levelPhysiologyState(analysis.Sleep.Level, "sleep_below_baseline"))
+	updatePhysiologyState(&state, &reasons, levelPhysiologyState(analysis.Load.Level, "form_below_baseline"))
+
+	if !anySignalJudged(analysis) {
+		return PhysiologyState{
+			State:      PhysiologyInsufficient,
+			Confidence: "low",
+			Source:     "athlete_baseline_robust_z",
+			Reasons:    []string{"no_signal_has_baseline"},
+		}
+	}
 
 	return PhysiologyState{
 		State:      state,
 		Confidence: physiologyConfidence(analysis),
-		Source:     "local_wellness_heuristic",
+		Source:     "athlete_baseline_robust_z",
 		Reasons:    reasons,
 	}
+}
+
+// PhysiologyInsufficient is the aggregate state when no signal has enough
+// of the athlete's own history to be judged.
+const PhysiologyInsufficient = "INSUFFICIENT"
+
+func anySignalJudged(analysis *WellnessAnalysis) bool {
+	for _, level := range []string{analysis.HRV.Level, analysis.RestingHR.Level, analysis.Sleep.Level, analysis.Load.Level} {
+		if level != "" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func updatePhysiologyState(current *string, reasons *[]string, next PhysiologyState) {
@@ -535,73 +593,17 @@ func updatePhysiologyState(current *string, reasons *[]string, next PhysiologySt
 	}
 }
 
-func hrvPhysiologyState(hrv *WellnessSignal) PhysiologyState {
-	if hrv.Samples == 0 || hrv.RecentMean == 0 || hrv.BaselineMean == 0 {
-		return newPhysiologyState("")
-	}
-
-	if hrv.ZScoreSource != "" {
-		if hrv.ZScore <= hrvRedZScoreThreshold {
-			return newPhysiologyState("RED", "hrv_zscore_red")
-		}
-
-		if hrv.ZScore <= hrvWatchZScoreThreshold {
-			return newPhysiologyState("WATCH", "hrv_zscore_watch")
-		}
-
+func levelPhysiologyState(level, reason string) PhysiologyState {
+	switch level {
+	case BaselineLevelRed:
+		return newPhysiologyState("RED", reason+"_red")
+	case BaselineLevelWatch:
+		return newPhysiologyState("WATCH", reason+"_watch")
+	case BaselineLevelOK:
 		return newPhysiologyState("OK")
-	}
-
-	movingRatio := hrv.RecentMean / hrv.BaselineMean
-	if movingRatio < hrvRedMovingRatio {
-		return newPhysiologyState("RED", "hrv_moving_ratio_red")
-	}
-
-	if movingRatio < hrvWatchMovingRatio {
-		return newPhysiologyState("WATCH", "hrv_moving_ratio_watch")
-	}
-
-	return newPhysiologyState("OK")
-}
-
-func restingHRPhysiologyState(restingHRDelta float64) PhysiologyState {
-	if restingHRDelta >= restingHRRedDelta {
-		return newPhysiologyState("RED", "resting_hr_delta_red")
-	}
-
-	if restingHRDelta >= restingHRWatchDelta {
-		return newPhysiologyState("WATCH", "resting_hr_delta_watch")
-	}
-
-	return newPhysiologyState("OK")
-}
-
-func sleepPhysiologyState(sleepScore float64) PhysiologyState {
-	if sleepScore == 0 {
+	default:
 		return newPhysiologyState("")
 	}
-
-	if sleepScore < sleepRedScore {
-		return newPhysiologyState("RED", "sleep_score_red")
-	}
-
-	if sleepScore < sleepWatchScore {
-		return newPhysiologyState("WATCH", "sleep_score_watch")
-	}
-
-	return newPhysiologyState("OK")
-}
-
-func loadPhysiologyState(tsb float64) PhysiologyState {
-	if tsb <= negativeFormRedThreshold {
-		return newPhysiologyState("RED", "negative_form_red")
-	}
-
-	if tsb <= negativeFormWatchThreshold {
-		return newPhysiologyState("WATCH", "negative_form_watch")
-	}
-
-	return newPhysiologyState("OK")
 }
 
 func newPhysiologyState(state string, reasons ...string) PhysiologyState {
@@ -655,4 +657,161 @@ func uniqueWellnessDays(records []Wellness) int {
 	}
 
 	return len(dates)
+}
+
+// judgeAgainstBaselines sets each signal's Level/Threshold from the
+// athlete's own history (see baseline_thresholds.go). The judged value is the
+// latest sample (the 7-day recent mean for HRV), compared with the samples
+// before it.
+func (accumulator *wellnessAccumulator) judgeAgainstBaselines() {
+	overrides := accumulator.thresholds
+	method := thresholdMethod(overrides)
+	analysis := &accumulator.analysis
+
+	history := &accumulator.history
+	if values := hrvBaselineValues(withHistory(history.hrv, accumulator.hrv)); analysis.HRV.RecentMean != 0 {
+		analysis.HRV.Threshold = deriveThreshold(values, baselineLowIsBad, method,
+			overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.HRVWatch }),
+			overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.HRVRed }))
+		analysis.HRV.Level = thresholdLevel(analysis.HRV.RecentMean, analysis.HRV.Threshold, baselineLowIsBad)
+	}
+	judgeLatest(&analysis.RestingHR, withHistory(history.restingHR, accumulator.restingHR), baselineHighIsBad, method,
+		overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.RestingHRWatch }),
+		overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.RestingHRRed }))
+	judgeLatest(&analysis.Sleep, withHistory(history.sleep, accumulator.sleep), baselineLowIsBad, method,
+		overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.SleepWatch }),
+		overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.SleepRed }))
+
+	var lactate WellnessSignal
+	judgeLatest(&lactate, withHistory(history.lactate, accumulator.lactate), baselineHighIsBad, method,
+		overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.LactateWatch }),
+		overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.LactateHigh }))
+	analysis.Lactate.Threshold = lactate.Threshold
+	analysis.Lactate.State = lactateStateFromLevel(lactate.Level, len(accumulator.lactate))
+
+	if len(accumulator.tsb) > 0 {
+		tsb := withHistory(history.tsb, accumulator.tsb)
+		sortWellnessSamples(tsb)
+		baseline := priorWindowValues(tsb)
+		analysis.Load.Threshold = deriveThreshold(baseline, baselineLowIsBad, method,
+			overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.TSBWatch }),
+			overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.TSBRed }))
+		analysis.Load.Level = thresholdLevel(analysis.Load.TSB, analysis.Load.Threshold, baselineLowIsBad)
+	}
+}
+
+// baselineTruncationWarning reports when the data does not reach back to the
+// start of the fixed baseline window, so thresholds rest on fewer days.
+func (accumulator *wellnessAccumulator) baselineTruncationWarning() string {
+	newest := accumulator.latestSampleDate()
+	if newest == "" || accumulator.earliest == "" {
+		return ""
+	}
+	date, err := time.Parse(analysisDateLayout, newest)
+	if err != nil {
+		return ""
+	}
+	needed := date.AddDate(0, 0, -WellnessBaselineDays+1).Format(analysisDateLayout)
+	if accumulator.earliest <= needed {
+		return ""
+	}
+
+	return fmt.Sprintf("wellness baseline needs history from %s but data starts %s; thresholds use a shorter baseline",
+		needed, accumulator.earliest)
+}
+
+func (accumulator *wellnessAccumulator) latestSampleDate() string {
+	latest := ""
+	for _, samples := range [][]wellnessSample{
+		accumulator.hrv, accumulator.restingHR, accumulator.sleep, accumulator.lactate, accumulator.tsb,
+	} {
+		for _, sample := range samples {
+			if sample.date > latest {
+				latest = sample.date
+			}
+		}
+	}
+
+	return latest
+}
+
+// withHistory returns pre-scope samples followed by in-scope ones, without
+// aliasing either slice.
+func withHistory(history, samples []wellnessSample) []wellnessSample {
+	if len(history) == 0 {
+		return samples
+	}
+	out := make([]wellnessSample, 0, len(history)+len(samples))
+
+	return append(append(out, history...), samples...)
+}
+
+func judgeLatest(
+	signal *WellnessSignal, samples []wellnessSample, direction int, method baselineMethod, watch, red *float64,
+) {
+	if len(samples) == 0 {
+		return
+	}
+	sortWellnessSamples(samples)
+	signal.Threshold = deriveThreshold(priorWindowValues(samples), direction, method, watch, red)
+	signal.Level = thresholdLevel(samples[len(samples)-1].value, signal.Threshold, direction)
+}
+
+// hrvBaselineValues is the HRV history before the recent window, which the
+// recent mean is judged against.
+func hrvBaselineValues(samples []wellnessSample) []float64 {
+	if len(samples) == 0 {
+		return nil
+	}
+	sortWellnessSamples(samples)
+
+	return priorWindowValues(samples)
+}
+
+// baselineWindowDays is the fixed baseline length: the 42 days that end
+// before the last recentWellnessDays of data. Fixing it by date (not by
+// "every sample before the latest") keeps a threshold from moving with
+// --oldest and keeps the recent week out of its own baseline.
+const baselineWindowDays = 42
+
+// WellnessBaselineDays is how far before the newest day the baselines reach;
+// callers fetch at least this much history.
+const WellnessBaselineDays = recentWellnessDays + baselineWindowDays
+
+// priorWindowValues returns the values dated in the baselineWindowDays
+// window that ends recentWellnessDays before the newest sample. samples must
+// be sorted by date.
+func priorWindowValues(samples []wellnessSample) []float64 {
+	if len(samples) == 0 {
+		return nil
+	}
+	newest, err := time.Parse(analysisDateLayout, samples[len(samples)-1].date)
+	if err != nil {
+		return nil
+	}
+	end := newest.AddDate(0, 0, -recentWellnessDays).Format(analysisDateLayout)
+	start := newest.AddDate(0, 0, -recentWellnessDays-baselineWindowDays).Format(analysisDateLayout)
+	var values []float64
+	for _, sample := range samples {
+		if sample.date > start && sample.date <= end {
+			values = append(values, sample.value)
+		}
+	}
+
+	return values
+}
+
+func lactateStateFromLevel(level string, samples int) string {
+	switch {
+	case samples == 0:
+		return ""
+	case level == BaselineLevelRed:
+		return "high"
+	case level == BaselineLevelWatch:
+		return "watch"
+	case level == BaselineLevelOK:
+		return "baseline"
+	default:
+		return "insufficient_history"
+	}
 }

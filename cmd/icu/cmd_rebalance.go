@@ -405,8 +405,13 @@ func readRebalanceSportSettings(client *icu.Client, flags map[string]string) (*i
 	if err := client.Get("sport-settings", []string{sport}, nil, &settings); err != nil {
 		return nil, wrapCommandError(err)
 	}
+	profile, err := loadTrainingProfile()
+	if err != nil {
+		return nil, err
+	}
+	merged, _ := icu.MergeProfileFTP(&settings, profile)
 
-	return &settings, nil
+	return merged, nil
 }
 
 func readRebalanceWellness(client *icu.Client, oldest, newest string, flags map[string]string) (*icu.WellnessAnalysis, error) {
@@ -416,6 +421,7 @@ func readRebalanceWellness(client *icu.Client, oldest, newest string, flags map[
 		return nil, err
 	}
 	analysis := analyzeWellness(records, warnings, icu.AnalysisOptions{
+		Thresholds:     profileThresholds(),
 		StartDate:      wellnessOldest,
 		EndDate:        newest,
 		Timezone:       icu.DefaultAnalysisTimezone,
@@ -546,6 +552,7 @@ func readRebalanceInputFromScope(client *icu.Client, startDate, endDate string, 
 	wellnessOldest := rebalanceWellnessStart(startDate, rebalanceWellnessLookbackDays)
 	if wellnessRecords, warnings, err := readWellnessRecordsForAnalysis(client, wellnessOldest, endDate, nil); err == nil {
 		analysis := analyzeWellness(wellnessRecords, warnings, icu.AnalysisOptions{
+			Thresholds:     profileThresholds(),
 			StartDate:      wellnessOldest,
 			EndDate:        endDate,
 			Timezone:       icu.DefaultAnalysisTimezone,

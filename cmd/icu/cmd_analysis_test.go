@@ -498,8 +498,8 @@ func TestAnalysisWellnessCommandPrefersZeppHybridCharge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Unmarshal error = %v", err)
 	}
-	if got.Sleep.ScoreName != "zepp_hybridcharge" || got.Sleep.Latest != 88 || got.State.State != "OK" {
-		t.Fatalf("Sleep = %+v State = %+v, want zepp_hybridcharge latest 88 state OK", got.Sleep, got.State)
+	if got.Sleep.ScoreName != "zepp_hybridcharge" || got.Sleep.Latest != 88 || got.State.State != icu.PhysiologyInsufficient {
+		t.Fatalf("Sleep = %+v State = %+v, want zepp_hybridcharge latest 88 state INSUFFICIENT", got.Sleep, got.State)
 	}
 }
 
@@ -544,8 +544,8 @@ func TestAnalysisCoachingCommandPropagatesPreferredWellnessScore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Unmarshal error = %v", err)
 	}
-	if got.Analyses.Wellness == nil || got.Analyses.Wellness.Sleep.ScoreName != "zepp_hybridcharge" || got.Analyses.Wellness.State.State != "OK" {
-		t.Fatalf("wellness = %+v, want zepp_hybridcharge state OK", got.Analyses.Wellness)
+	if got.Analyses.Wellness == nil || got.Analyses.Wellness.Sleep.ScoreName != "zepp_hybridcharge" || got.Analyses.Wellness.State.State != icu.PhysiologyInsufficient {
+		t.Fatalf("wellness = %+v, want zepp_hybridcharge state INSUFFICIENT", got.Analyses.Wellness)
 	}
 }
 
@@ -595,6 +595,16 @@ func TestAnalysisPlanCommandPrefersHybridChargeForWellnessRules(t *testing.T) {
 
 //nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAnalysisMicrocycleCommandPrefersHybridChargeInWellnessSummary(t *testing.T) {
+	// Two HybridCharge days are not enough history for a derived sleep
+	// baseline, so the profile pins the bound (exercises profileThresholds).
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	sleepWatch, sleepRed := 75.0, 65.0
+	if err := icu.SaveConfig(&icu.Config{Profile: &icu.TrainingProfile{
+		Thresholds: &icu.TrainingThresholds{SleepWatch: &sleepWatch, SleepRed: &sleepRed},
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	withHybridChargeZeppTestServer(t, `{"items":[{"timestamp":1780272000000,"value":90},{"timestamp":1780358400000,"value":88}]}`)
 
 	out := runMicrocycleCommandJSONTest(t, map[string]string{

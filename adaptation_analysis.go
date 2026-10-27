@@ -8,27 +8,34 @@ import (
 )
 
 const (
-	adaptationDeltaThresholdPct = 3
-	adaptationMinimumCurves     = 2
-	adaptationSourceMMP         = "mmp_model"
-	adaptationSourceSport       = "sport_settings"
-	adaptationSourceCurves      = "power_curve_comparison"
-	adaptationSourcePhase       = "activity_weekly_load_segments"
-	adaptationStatusImproving   = "improving"
-	adaptationStatusDeclining   = "declining"
-	adaptationStatusStable      = "stable"
-	adaptationTrendIncreasing   = "increasing"
-	adaptationTrendDecreasing   = "decreasing"
+	adaptationMinimumCurves = 2
+	// adaptationMinDeltaSamples is the fewest curve durations needed for a
+	// median/MAD noise estimate (method parameter).
+	adaptationMinDeltaSamples = 3
+	adaptationSourceMMP       = "mmp_model"
+	adaptationSourceSport     = "sport_settings"
+	adaptationSourceCurves    = "power_curve_comparison"
+	adaptationSourcePhase     = "activity_weekly_load_segments"
+	adaptationStatusImproving = "improving"
+	adaptationStatusDeclining = "declining"
+	adaptationStatusStable    = "stable"
+	adaptationTrendIncreasing = "increasing"
+	adaptationTrendDecreasing = "decreasing"
 )
 
 type CyclingAdaptationAnalysis struct {
-	Scope            AdaptationScope            `json:"scope"`
-	PowerAnchors     AdaptationPowerAnchors     `json:"powerAnchors"`
-	PowerCurveDeltas []PowerCurveDelta          `json:"powerCurveDeltas,omitempty"`
-	SystemStatus     AdaptationSystemStatus     `json:"systemStatus"`
-	Lactate          WellnessLactateCalibration `json:"lactate"`
-	PhaseSummary     AdaptationPhaseSummary     `json:"phaseSummary"`
-	Warnings         []string                   `json:"warnings,omitempty"`
+	Scope            AdaptationScope        `json:"scope"`
+	PowerAnchors     AdaptationPowerAnchors `json:"powerAnchors"`
+	PowerCurveDeltas []PowerCurveDelta      `json:"powerCurveDeltas,omitempty"`
+	// PowerCurveChangeThreshold is the ±% beyond which a duration counts as
+	// improved/declined: WatchZ × the robust spread (MAD × 1.4826) of this
+	// athlete's own deltas across durations, or the profile's
+	// adaptationChangePct.
+	PowerCurveChangeThreshold *DerivedThreshold          `json:"powerCurveChangeThreshold,omitempty"`
+	SystemStatus              AdaptationSystemStatus     `json:"systemStatus"`
+	Lactate                   WellnessLactateCalibration `json:"lactate"`
+	PhaseSummary              AdaptationPhaseSummary     `json:"phaseSummary"`
+	Warnings                  []string                   `json:"warnings,omitempty"`
 }
 
 type AdaptationScope struct {
@@ -118,6 +125,8 @@ func AnalyzeCyclingAdaptation(
 		PhaseSummary:     adaptationPhaseSummary(activities, options),
 		Warnings:         nil,
 	}
+	analysis.PowerCurveChangeThreshold = adaptationChangeThreshold(analysis.PowerCurveDeltas, options.Thresholds)
+	applyAdaptationDeltaStatus(analysis.PowerCurveDeltas, analysis.PowerCurveChangeThreshold)
 	analysis.SystemStatus = adaptationSystemStatus(analysis.PowerCurveDeltas)
 
 	if len(analysis.PowerCurveDeltas) == 0 {
@@ -199,7 +208,6 @@ func adaptationPowerCurveDeltas(curves []DataCurve) []PowerCurveDelta {
 			BaselineWatts: baselineWatts,
 			DeltaWatts:    deltaWatts,
 			DeltaPercent:  deltaPercent,
-			Status:        adaptationDeltaStatus(deltaPercent),
 			CurrentCurve:  curveLabel(pair.current),
 			BaselineCurve: curveLabel(pair.baseline),
 		})
@@ -296,16 +304,44 @@ func curveValuesByDuration(curve *DataCurve) map[int]int {
 	return values
 }
 
-func adaptationDeltaStatus(deltaPercent float64) string {
-	if deltaPercent >= adaptationDeltaThresholdPct {
-		return "improved"
+// adaptationChangeThreshold derives the change bound from the spread of
+// the athlete's own curve deltas (noise across durations), or the profile.
+func adaptationChangeThreshold(deltas []PowerCurveDelta, overrides *TrainingThresholds) *DerivedThreshold {
+	if pinned := overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.AdaptationChangePct }); pinned != nil {
+		return &DerivedThreshold{Watch: *pinned, Red: *pinned, Source: thresholdSourceProfile}
 	}
-
-	if deltaPercent <= -adaptationDeltaThresholdPct {
-		return "declined"
+	if len(deltas) < adaptationMinDeltaSamples {
+		return nil
 	}
+	values := make([]float64, 0, len(deltas))
+	for index := range deltas {
+		values = append(values, deltas[index].DeltaPercent)
+	}
+	_, scale, source := robustScale(values)
+	if scale == 0 {
+		return nil
+	}
+	bound := round2(thresholdMethod(overrides).watchZ * scale)
 
-	return adaptationStatusStable
+	return &DerivedThreshold{Watch: bound, Red: bound, Scale: round2(scale), Samples: len(values), Source: source}
+}
+
+// applyAdaptationDeltaStatus labels each delta against threshold; without a
+// threshold the status is "insufficient_history".
+func applyAdaptationDeltaStatus(deltas []PowerCurveDelta, threshold *DerivedThreshold) {
+	for index := range deltas {
+		delta := &deltas[index]
+		switch {
+		case threshold == nil:
+			delta.Status = "insufficient_history"
+		case delta.DeltaPercent >= threshold.Watch:
+			delta.Status = "improved"
+		case delta.DeltaPercent <= -threshold.Watch:
+			delta.Status = "declined"
+		default:
+			delta.Status = adaptationStatusStable
+		}
+	}
 }
 
 func curveLabel(curve *DataCurve) string {

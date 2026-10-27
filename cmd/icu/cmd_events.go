@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -64,8 +67,10 @@ func registerEventsCommands(registry *CommandRegistry) {
 		eventsUpdateCommand(),
 	)
 
-	registry.Register("events", "delete", deleteByIDCommand("events", "events delete <id>", "Delete calendar event.", "event id"))
+	registry.Register("events", "delete", eventsDeleteCommand())
 	registry.Register("events", "download", eventsDownloadCommand())
+	registry.Register("events", "revert", eventsRevertCommand())
+	registry.Register("events", "backups", eventsBackupsCommand())
 	registry.Register("events", "tags", listAllCommand[[]string]("event-tags", "events tags", "List event tags."))
 }
 
@@ -73,7 +78,7 @@ func eventsCreateCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--desc DESC] [--calculate-load --ftp N] [--upsert]",
+			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert]",
 		Description: "Create calendar event.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			request, err := buildEventCreate(flags)
@@ -81,9 +86,21 @@ func eventsCreateCommand() *Command {
 				return wrapCommandError(err)
 			}
 
+			var targets upsertTargets
+			if BoolFlag(flags, "upsert") {
+				if request.Body.UID == "" {
+					return fmt.Errorf("%w: --upsert updates the event with the same --uid; pass --uid", errInvalidValue)
+				}
+				if targets, err = backupUpsertTargets(client, &request.Body); err != nil {
+					return err
+				}
+			}
 			var result icu.Event
 			if err := client.Post("events", nil, eventsCreateQuery(flags), request.Body, &result); err != nil {
 				return wrapCommandError(err)
+			}
+			if err := targets.check(&result); err != nil {
+				return err
 			}
 			if request.Estimate != nil {
 				return writeJSON(calculatedEventOutput(&result, request.Estimate))
@@ -97,14 +114,37 @@ func eventsCreateCommand() *Command {
 func eventsUpdateCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "events update <id> --name NAME [--desc DESC] [--calculate-load --ftp N]",
+		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--force]",
 		Description: "Update calendar event.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
 
-			request, err := buildEventUpdate(flags)
+			eventID, err := strconv.Atoi(args[0])
+			if err != nil {
+				return fmt.Errorf("%w: event id %q", errInvalidValue, args[0])
+			}
+
+			if _, err := eventDescription(flags); err != nil {
+				return wrapCommandError(err)
+			}
+			last, err := findLastWrite(eventID)
+			if err != nil {
+				return err
+			}
+			path, raw, err := backupEventChecked(client, eventID, "events update", func(current json.RawMessage) error {
+				return checkThirdPartyEdit(eventID, last, current, BoolFlag(flags, "force"))
+			})
+			if err != nil {
+				return err
+			}
+			var current icu.Event
+			if err := json.Unmarshal(raw, &current); err != nil {
+				return fmt.Errorf("decode event %d: %w", eventID, err)
+			}
+
+			request, err := buildEventUpdate(flags, current.Type)
 			if err != nil {
 				return wrapCommandError(err)
 			}
@@ -112,6 +152,9 @@ func eventsUpdateCommand() *Command {
 			var result icu.Event
 			if err := client.Put("events", []string{args[0]}, nil, request.Body, &result); err != nil {
 				return wrapCommandError(err)
+			}
+			if err := recordPostWrite(path, &result); err != nil {
+				return err
 			}
 			if request.Estimate != nil {
 				return writeJSON(calculatedEventOutput(&result, request.Estimate))
@@ -122,7 +165,35 @@ func eventsUpdateCommand() *Command {
 	}
 }
 
+// eventDescription reads --desc/--description or --desc-file (verbatim, real
+// line breaks preserved) and rejects literal escape sequences.
+func eventDescription(flags map[string]string) (string, error) {
+	description := stringFlagAlias(flags, "desc", "description")
+	if path := flags["desc-file"]; path != "" {
+		if description != "" {
+			return "", fmt.Errorf("%w: use either --desc or --desc-file", errInvalidValue)
+		}
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // G703: the user names their own local description file
+		if err != nil {
+			return "", fmt.Errorf("read --desc-file: %w", err)
+		}
+		description = strings.TrimRight(string(data), "\r\n")
+		if strings.TrimSpace(description) == "" {
+			return "", fmt.Errorf("%w: --desc-file %s is empty", errInvalidValue, path)
+		}
+	}
+	if err := icu.ValidateDescriptionText(description); err != nil {
+		return "", err
+	}
+
+	return description, nil
+}
+
 func buildEventCreate(flags map[string]string) (calculatedEventRequest, error) {
+	description, err := eventDescription(flags)
+	if err != nil {
+		return calculatedEventRequest{}, err
+	}
 	body := icu.EventEx{
 		Category:       icu.StringFlag(flags, "category", "WORKOUT"),
 		Type:           icu.StringFlag(flags, "type", "Ride"),
@@ -130,24 +201,32 @@ func buildEventCreate(flags map[string]string) (calculatedEventRequest, error) {
 		StartDateLocal: icu.StringFlag(flags, "start-date", ""),
 		MovingTime:     IntFlag(flags, "moving-time", 0),
 		TrainingLoad:   IntFlag(flags, "training-load", 0),
-		Description:    stringFlagAlias(flags, "desc", "description"),
+		Description:    description,
 		Color:          icu.StringFlag(flags, "color", ""),
 		Indoor:         BoolFlag(flags, "indoor"),
 		ExternalID:     icu.StringFlag(flags, "external-id", ""),
+		UID:            icu.StringFlag(flags, "uid", ""),
 	}
 
-	return applyCalculatedEventLoad(flags, &body)
+	return applyCalculatedEventLoad(flags, &body, body.Type)
 }
 
-func buildEventUpdate(flags map[string]string) (calculatedEventRequest, error) {
+// buildEventUpdate builds the PUT body. currentType is the stored event type,
+// used to decide FTP pricing when --type is not given.
+func buildEventUpdate(flags map[string]string, currentType string) (calculatedEventRequest, error) {
 	var body icu.EventEx
 	if v := flags["name"]; v != "" {
 		body.Name = v
 	}
-
-	if v := stringFlagAlias(flags, "desc", "description"); v != "" {
-		body.Description = v
+	if v := flags["type"]; v != "" {
+		body.Type = v
 	}
+
+	description, err := eventDescription(flags)
+	if err != nil {
+		return calculatedEventRequest{}, err
+	}
+	body.Description = description
 
 	if v := flags["training-load"]; v != "" {
 		body.TrainingLoad = IntFlag(flags, "training-load", 0)
@@ -157,13 +236,25 @@ func buildEventUpdate(flags map[string]string) (calculatedEventRequest, error) {
 		body.MovingTime = IntFlag(flags, "moving-time", 0)
 	}
 
-	return applyCalculatedEventLoad(flags, &body)
+	eventType := body.Type
+	if eventType == "" {
+		eventType = currentType
+	}
+
+	return applyCalculatedEventLoad(flags, &body, eventType)
 }
 
-func applyCalculatedEventLoad(flags map[string]string, body *icu.EventEx) (calculatedEventRequest, error) {
+func applyCalculatedEventLoad(flags map[string]string, body *icu.EventEx, eventType string) (calculatedEventRequest, error) {
 	request := calculatedEventRequest{Body: *body}
 	if !BoolFlag(flags, "calculate-load") {
 		return request, nil
+	}
+	if !icu.IsCyclingActivityType(eventType) {
+		return request, fmt.Errorf(
+			"%w: --calculate-load prices power steps against FTP and only applies to cycling types; "+
+				"%q is not FTP-priced, pass --moving-time/--training-load instead",
+			errInvalidValue, eventType,
+		)
 	}
 	if body.Description == "" {
 		return request, errMissing("desc")
@@ -268,4 +359,84 @@ func eventsDownloadCommand() *Command {
 			return writeOutput(data)
 		},
 	}
+}
+
+// upsertSearchDays is how far either side of the new event's date the uid
+// search reads. intervals.icu matches upsertOnUid across the whole calendar
+// and the events list needs a range, so the read spans ten years each way;
+// upsertTargets.check catches a match outside it after the POST.
+const upsertSearchDays = 3650
+
+// upsertTargets records what the pre-upsert search saw.
+type upsertTargets struct {
+	backedUp map[int]string // event id -> backup path
+	maxID    int
+	searched bool
+}
+
+// check fails loudly when the upsert updated an event that existed before
+// (its id is not newer than every id the search saw) but was not backed up.
+// intervals.icu event ids increase, so a freshly created event has an id
+// above maxID.
+func (targets *upsertTargets) check(result *icu.Event) error {
+	if !targets.searched || result.ID == 0 {
+		return nil
+	}
+	if path, ok := targets.backedUp[result.ID]; ok {
+		return recordPostWrite(path, result)
+	}
+	if result.ID > targets.maxID {
+		return nil
+	}
+
+	return fmt.Errorf("upsert ALREADY OVERWROTE existing event %d (now dated %s, named %q, uid %q) and NO BACKUP "+
+		"was taken: its uid was not found within %d days of the new date, so its previous content is lost; "+
+		"check it in Intervals.icu", result.ID, eventDay(result.StartDateLocal), result.Name, result.UID,
+		upsertSearchDays)
+}
+
+// backupUpsertTargets backs up the events an upsert would overwrite:
+// POST events?upsertOnUid=true updates the event whose uid equals the body's
+// uid (intervals.icu API docs; external_id is only used by events/bulk
+// ?upsert=true), so the same uid is searched here.
+func backupUpsertTargets(client *icu.Client, body *icu.EventEx) (upsertTargets, error) {
+	targets := upsertTargets{backedUp: map[int]string{}}
+	if body.UID == "" || len(body.StartDateLocal) < len("2006-01-02") {
+		return targets, nil
+	}
+	day := body.StartDateLocal[:len("2006-01-02")]
+	oldest, err := addDays(day, -upsertSearchDays)
+	if err != nil {
+		return targets, err
+	}
+	newest, err := addDays(day, upsertSearchDays)
+	if err != nil {
+		return targets, err
+	}
+	events, err := readRebalanceEvents(client, oldest, newest)
+	if err != nil {
+		return targets, err
+	}
+	targets.searched = true
+	for index := range events {
+		targets.maxID = max(targets.maxID, events[index].ID)
+		if events[index].UID == body.UID {
+			path, err := backupEvent(client, events[index].ID, "events create --upsert")
+			if err != nil {
+				return targets, err
+			}
+			targets.backedUp[events[index].ID] = path
+		}
+	}
+
+	return targets, nil
+}
+
+// eventDay is the YYYY-MM-DD part of a local start date ("" if missing).
+func eventDay(startDateLocal string) string {
+	if len(startDateLocal) < len("2006-01-02") {
+		return startDateLocal
+	}
+
+	return startDateLocal[:len("2006-01-02")]
 }

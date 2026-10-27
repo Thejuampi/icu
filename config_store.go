@@ -64,7 +64,7 @@ var (
 func NewFileConfigStore() *FileConfigStore {
 	return &FileConfigStore{
 		readFile:    os.ReadFile,
-		writeFile:   os.WriteFile,
+		writeFile:   writeFileAtomic,
 		appendFile:  appendFile,
 		mkdirAll:    os.MkdirAll,
 		userHomeDir: os.UserHomeDir,
@@ -388,6 +388,7 @@ func buildConfigAuditEntry(action, configPath, auditPath string, previous, next 
 	appendSecretMutation(&secretMutations, previous.ZeppAppToken, next.ZeppAppToken, "zeppAppToken")
 	appendChangedField(&changedFields, previous.ZeppUserID, next.ZeppUserID, "zeppUserId")
 	appendChangedField(&changedFields, previous.ZeppCountryCode, next.ZeppCountryCode, "zeppCountryCode")
+	appendChangedField(&changedFields, profileFingerprint(previous.Profile), profileFingerprint(next.Profile), "profile")
 
 	return ConfigAuditEntry{
 		Timestamp:       now.UTC().Format(time.RFC3339),
@@ -446,4 +447,51 @@ func currentConfigStore() ConfigStore {
 	defer activeConfigStoreMu.RUnlock()
 
 	return activeConfigStore
+}
+
+func profileFingerprint(profile *TrainingProfile) string {
+	if profile == nil {
+		return ""
+	}
+	data, err := json.Marshal(profile)
+	if err != nil {
+		return ""
+	}
+
+	return string(data)
+}
+
+// writeFileAtomic replaces path with data through a synced temp file in the
+// same directory and a rename, so a crash never leaves a truncated config.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	name := temp.Name()
+	done := false
+	defer func() {
+		if !done {
+			_ = temp.Close()
+			_ = os.Remove(name)
+		}
+	}()
+	if err := temp.Chmod(perm); err != nil {
+		return fmt.Errorf("chmod %s: %w", name, err)
+	}
+	if _, err := temp.Write(data); err != nil {
+		return fmt.Errorf("write %s: %w", name, err)
+	}
+	if err := temp.Sync(); err != nil {
+		return fmt.Errorf("sync %s: %w", name, err)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", name, err)
+	}
+	if err := os.Rename(name, path); err != nil {
+		return fmt.Errorf("rename %s: %w", name, err)
+	}
+	done = true
+
+	return nil
 }

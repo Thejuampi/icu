@@ -82,9 +82,12 @@ type PlanInput struct {
 	Activities    []Activity
 	Events        []Event
 	SportSettings *SportSettings
-	Intent        PlanIntent
-	AllowToday    bool
-	AllowPast     bool
+	// Warnings are shell-side notes (e.g. where an FTP number came from)
+	// copied into the proposal's validation warnings.
+	Warnings   []string
+	Intent     PlanIntent
+	AllowToday bool
+	AllowPast  bool
 }
 
 type PlanProposalFile struct {
@@ -226,6 +229,7 @@ func BuildPlanProposal(input *PlanInput) PlanProposalFile {
 	preview := PreviewCalendarOperations(operations)
 	proposal.Preview = &preview
 	proposal.Validation.Warnings = appendUniqueStrings(proposal.Validation.Warnings, context.Warnings...)
+	proposal.Validation.Warnings = appendUniqueStrings(proposal.Validation.Warnings, working.Warnings...)
 	proposal.Validation = ValidatePlanProposal(&proposal)
 
 	return proposal
@@ -768,6 +772,9 @@ func matchPlanEvent(events []Event, draft *PlanSessionDraft, matched map[int]boo
 
 func estimatePlanSessionLoad(description string, selection FTPSelection, category string) (PlannedLoadEstimate, string, planSessionIssue) {
 	requiresLoad := planCategoryRequiresLoad(category)
+	if err := ValidateDescriptionText(description); err != nil {
+		return PlannedLoadEstimate{}, "", planSessionIssue{errMsg: err.Error()}
+	}
 	if description == "" {
 		if requiresLoad {
 			return PlannedLoadEstimate{}, "", planSessionIssue{errMsg: "workout session requires a parseable description with expectedLoad > 0"}

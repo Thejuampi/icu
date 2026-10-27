@@ -61,6 +61,9 @@ type AnalysisOptions struct {
 	// Validity.Included falls below it. Input-only: never part of the
 	// analysis wire contract.
 	MinIncludedActivities int `json:"-"`
+	// Thresholds are the athlete's profile overrides for baseline-derived
+	// readiness levels (nil derives everything from history).
+	Thresholds *TrainingThresholds `json:"-"`
 }
 
 type CyclingAnalysis struct {

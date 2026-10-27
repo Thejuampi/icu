@@ -471,6 +471,7 @@ func TestAnalyzeTrainingPlanBuildsLoadForecast(t *testing.T) {
 	)
 
 	got := icu.AnalyzeTrainingPlan([]icu.Activity{current}, events, icu.TrainingPlanOptions{
+		Thresholds:       pinnedThresholds(),
 		HistoryStartDate: "2026-05-01",
 		HistoryEndDate:   "2026-05-31",
 		PlanStartDate:    "2026-06-01",
@@ -531,11 +532,13 @@ func TestAnalyzeTrainingPlanBuildsDayRulesAndDecisionGuidance(t *testing.T) {
 	secondWellness.SleepScore = 70
 
 	wellness := icu.AnalyzeWellness([]icu.Wellness{firstWellness, secondWellness}, icu.AnalysisOptions{
-		StartDate: "2026-05-29",
-		EndDate:   "2026-05-31",
+		Thresholds: pinnedThresholds(),
+		StartDate:  "2026-05-29",
+		EndDate:    "2026-05-31",
 	})
 
 	got := icu.AnalyzeTrainingPlanWithContext([]icu.Activity{current}, events, icu.TrainingPlanOptions{
+		Thresholds:       pinnedThresholds(),
 		HistoryStartDate: "2026-05-01",
 		HistoryEndDate:   "2026-05-31",
 		PlanStartDate:    "2026-06-01",
@@ -564,11 +567,13 @@ func TestAnalyzeTrainingPlanAddsExplicitSleepAndRestingHRRules(t *testing.T) {
 	latest.SleepScore = 70
 
 	wellness := icu.AnalyzeWellness([]icu.Wellness{baseline, latest}, icu.AnalysisOptions{
-		StartDate: "2026-05-30",
-		EndDate:   "2026-05-31",
+		Thresholds: pinnedThresholds(),
+		StartDate:  "2026-05-30",
+		EndDate:    "2026-05-31",
 	})
 
 	got := icu.AnalyzeTrainingPlanWithContext(nil, []icu.Event{event}, icu.TrainingPlanOptions{
+		Thresholds:       pinnedThresholds(),
 		HistoryStartDate: "2026-05-01",
 		HistoryEndDate:   "2026-05-31",
 		PlanStartDate:    "2026-06-01",
