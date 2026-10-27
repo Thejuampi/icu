@@ -252,7 +252,7 @@ func TestRebalanceDryRunPrefersHybridChargeForWellnessContext(t *testing.T) {
 			return
 		}
 
-		_, _ = response.Write([]byte(functionalJSONResponse(request.Method, request.URL.Path)))
+		_, _ = response.Write([]byte(functionalJSONResponse(request.Method, request.URL.Path))) //nolint:gosec // G705: httptest server answering the test client, not a browser.
 	}))
 	t.Cleanup(server.Close)
 	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
@@ -555,7 +555,7 @@ func rebalanceTestRegistryClient(t *testing.T) (*CommandRegistry, *icu.Client) {
 	registerAllCommands(registry)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
-		_, _ = response.Write([]byte(functionalJSONResponse(request.Method, request.URL.Path)))
+		_, _ = response.Write([]byte(functionalJSONResponse(request.Method, request.URL.Path))) //nolint:gosec // G705: httptest server answering the test client, not a browser.
 	}))
 	t.Cleanup(server.Close)
 	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))

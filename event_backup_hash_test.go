@@ -63,3 +63,44 @@ func TestEventBackupHashDetectsEveryEditableField(t *testing.T) {
 		t.Error("server-computed fields changed the hash")
 	}
 }
+
+func TestEventBackupHashIgnoresComputedWorkoutDocFields(t *testing.T) {
+	t.Parallel()
+	doc := func(ftp, watts, stepSecs, stepPct float64) map[string]any {
+		return map[string]any{
+			"ftp": ftp, "average_watts": watts, "normalized_power": watts + 5, "zoneTimes": []any{watts},
+			"strain_score": watts / 2, "duration": 3600.0,
+			"steps": []any{map[string]any{
+				"duration": stepSecs, "power": map[string]any{"units": "%ftp", "value": stepPct},
+				"_power": map[string]any{"value": ftp * 0.9},
+			}},
+			"description": "4x8",
+		}
+	}
+	hash := func(d map[string]any) string {
+		return icu.EventBackupHash(&icu.Event{ID: 1, Name: "SST", WorkoutDoc: d})
+	}
+	before := hash(doc(280, 230, 600, 90))
+	if before != hash(doc(300, 246, 600, 90)) { // FTP changed, nobody edited it
+		t.Fatal("FTP-derived workout_doc fields counted as an edit")
+	}
+	if before == hash(doc(280, 230, 600, 95)) {
+		t.Fatal("edited step target not detected")
+	}
+	if before == hash(doc(280, 230, 900, 90)) {
+		t.Fatal("edited step duration not detected")
+	}
+}
+
+func TestEventBackupHashTreatsEmptyListsAsMissing(t *testing.T) {
+	t.Parallel()
+	missing := icu.Event{ID: 1}
+	empty := icu.Event{ID: 1, Tags: []string{}, CanTrainSports: []string{}}
+	if icu.EventBackupHash(&missing) != icu.EventBackupHash(&empty) {
+		t.Fatal("tags [] vs null changed the hash")
+	}
+	tagged := icu.Event{ID: 1, Tags: []string{"a"}}
+	if icu.EventBackupHash(&missing) == icu.EventBackupHash(&tagged) {
+		t.Fatal("adding a tag not detected")
+	}
+}

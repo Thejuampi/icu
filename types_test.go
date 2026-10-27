@@ -17,7 +17,7 @@ func TestAthleteJSONRoundtrip(t *testing.T) {
 	a.Weight = 81
 	a.Height = 1.81
 
-	b, err := json.Marshal(a)
+	b, err := json.Marshal(a) //nolint:gosec // G117: test round-trips a fake key.
 	if err != nil {
 		t.Fatal(err)
 	}

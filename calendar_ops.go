@@ -105,9 +105,9 @@ func EventBackupHash(event *Event) string {
 	}{
 		event.ID, event.StartDateLocal, event.EndDateLocal, event.Category, event.Type, event.Name,
 		event.Description, event.TrainingLoad, event.MovingTime, event.Distance, event.Color, event.Indoor,
-		event.Target, event.UID, event.Tags, event.ExternalID, event.HideFromAthlete, event.AthleteCannotEdit,
+		event.Target, event.UID, nilIfEmpty(event.Tags), event.ExternalID, event.HideFromAthlete, event.AthleteCannotEdit,
 		event.LoadTarget, event.TimeTarget, event.DistanceTarget, event.TrainingAvailability,
-		event.MaxTrainingTime, event.CanTrainSports, event.WorkoutDoc,
+		event.MaxTrainingTime, nilIfEmpty(event.CanTrainSports), userWorkoutDoc(event.WorkoutDoc),
 	}
 	data, err := json.Marshal(snapshot)
 	if err != nil {
@@ -116,6 +116,63 @@ func EventBackupHash(event *Event) string {
 	sum := sha256.Sum256(data)
 
 	return hex.EncodeToString(sum[:])
+}
+
+// nilIfEmpty treats [] like a missing list: Intervals.icu returns either for
+// "no tags", and neither is an edit.
+func nilIfEmpty(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	return values
+}
+
+// workoutDocComputedKeys are workout_doc fields Intervals.icu derives from
+// the steps and the athlete's sport settings (FTP, LTHR, zones). They change
+// when, say, FTP changes, without anyone editing the workout. Keys starting
+// with "_" (per-step resolved targets such as "_power") are derived too.
+var workoutDocComputedKeys = map[string]bool{ //nolint:gochecknoglobals // read-only lookup table
+	"average_watts": true, "normalized_power": true, "zoneTimes": true, "strain_score": true,
+	"duration": true, "distance": true, "ftp": true, "lthr": true, "threshold_pace": true,
+	"polarization_index": true, "variability_index": true, "intensity": true, "load": true,
+	"training_load": true, "power_zones": true, "hr_zones": true, "pace_zones": true,
+	"max_watts": true, "work": true, "calories": true, "time_in_zones": true,
+}
+
+// userWorkoutDoc copies a decoded workout_doc without its computed fields,
+// so only what a person wrote (steps, targets, text, options) is hashed.
+// workoutDocComputedKeys apply to the top level only (a step's own
+// "duration" or "distance" is user-written); "_" keys are dropped at any
+// depth.
+// A computed field missing from workoutDocComputedKeys errs on the safe
+// side: it makes the edit check report a change (and ask for --force).
+func userWorkoutDoc(value any) any {
+	return stripWorkoutDoc(value, true)
+}
+
+func stripWorkoutDoc(value any, top bool) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			if (top && workoutDocComputedKeys[key]) || strings.HasPrefix(key, "_") {
+				continue
+			}
+			out[key] = stripWorkoutDoc(item, false)
+		}
+
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for index, item := range typed {
+			out[index] = stripWorkoutDoc(item, false)
+		}
+
+		return out
+	default:
+		return value
+	}
 }
 
 func PreviewCalendarOperations(operations []CalendarOperation) CalendarOpsPreview {

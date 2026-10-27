@@ -135,7 +135,7 @@ func planPreviewSchema() *CommandSchema {
 	return &CommandSchema{
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
-			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
+			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
 			{Name: "no-live-check", ValueName: "BOOL", Description: "Skip live source-hash, baseline drift and load projection.", Kind: commandFlagBoolean},
 			{Name: "max-ramp", ValueName: "CTL/WEEK", Description: "Projected CTL ramp cap; overrides profile maxRampPerWeek."},
 			{Name: "now-date", ValueName: "DATE", Description: "Projection 'today' (YYYY-MM-DD); default is today in the athlete timezone."},
@@ -149,7 +149,7 @@ func planAcceptSchema() *CommandSchema {
 	return &CommandSchema{
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
-			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
+			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
 		}, commonAuthFlags()...),
 	}
 }
@@ -256,7 +256,7 @@ func readPlanIntent(flags map[string]string) (icu.PlanIntent, error) {
 	if file == "" {
 		return icu.PlanIntent{}, errMissing("intent-file")
 	}
-	data, err := os.ReadFile(file)
+	data, err := os.ReadFile(file) //nolint:gosec // G703: the user names this file on the command line; using it is the point.
 	if err != nil {
 		return icu.PlanIntent{}, fmt.Errorf("read plan intent file: %w", err)
 	}
@@ -276,7 +276,7 @@ func readPlanProposal(flags map[string]string) (icu.PlanProposalFile, error) {
 	if file == "" {
 		return icu.PlanProposalFile{}, errMissing("file")
 	}
-	data, err := os.ReadFile(file)
+	data, err := os.ReadFile(file) //nolint:gosec // G703: the user names this file on the command line; using it is the point.
 	if err != nil {
 		return icu.PlanProposalFile{}, fmt.Errorf("read plan file: %w", err)
 	}
@@ -297,7 +297,7 @@ func writePlanProposal(flags map[string]string, proposal *icu.PlanProposalFile) 
 	if err != nil {
 		return fmt.Errorf("marshal plan file: %w", err)
 	}
-	if err := os.WriteFile(file, data, 0o600); err != nil {
+	if err := os.WriteFile(file, data, 0o600); err != nil { //nolint:gosec // G703: the user names this file on the command line; using it is the point.
 		return fmt.Errorf("write plan file: %w", err)
 	}
 

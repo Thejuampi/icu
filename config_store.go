@@ -225,7 +225,7 @@ func (store *FileConfigStore) Save(cfg *Config, action string) error {
 	}
 
 	var data []byte
-	data, err = json.MarshalIndent(cfg, "", "  ")
+	data, err = json.MarshalIndent(cfg, "", "  ") //nolint:gosec // G117: the API key belongs in this 0600 config file.
 	if err != nil {
 		return fmt.Errorf("encoding config: %w", err)
 	}

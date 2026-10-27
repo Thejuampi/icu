@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -357,17 +359,16 @@ func TestRegisteredCommandsValidateRequiredArgs(t *testing.T) {
 }
 
 func functionalCommandCases(uploadFile, wellnessCSV, wellnessBulk string) []commandCase {
-	var cases []commandCase
-	cases = append(cases, activityListCommandCases(uploadFile)...)
-	cases = append(cases, activityDetailCommandCases()...)
-	cases = append(cases, athleteAndAnalysisCommandCases()...)
-	cases = append(cases, wellnessCommandCases(wellnessCSV, wellnessBulk)...)
-	cases = append(cases, eventCommandCases()...)
-	cases = append(cases, libraryCommandCases()...)
-	cases = append(cases, sportCommandCases()...)
-	cases = append(cases, utilityCommandCases()...)
-
-	return cases
+	return slices.Concat(
+		activityListCommandCases(uploadFile),
+		activityDetailCommandCases(),
+		athleteAndAnalysisCommandCases(),
+		wellnessCommandCases(wellnessCSV, wellnessBulk),
+		eventCommandCases(),
+		libraryCommandCases(),
+		sportCommandCases(),
+		utilityCommandCases(),
+	)
 }
 
 func errorCommandCases() []commandCase {
@@ -658,13 +659,12 @@ func sportCommandCases() []commandCase {
 }
 
 func utilityCommandCases() []commandCase {
-	var cases []commandCase
-	cases = append(cases, curveCommandCases()...)
-	cases = append(cases, gearAndRouteCommandCases()...)
-	cases = append(cases, weatherAndChatCommandCases()...)
-	cases = append(cases, customAndMiscCommandCases()...)
-
-	return cases
+	return slices.Concat(
+		curveCommandCases(),
+		gearAndRouteCommandCases(),
+		weatherAndChatCommandCases(),
+		customAndMiscCommandCases(),
+	)
 }
 
 func curveCommandCases() []commandCase {
@@ -794,10 +794,16 @@ func missingArg(name, resource, action string) commandCase {
 	return commandFlow(name, resource, action, nil, nil, "", "", "")
 }
 
+// flags builds a flag map from key/value pairs. It runs while the case
+// tables are built, before any *testing.T exists, so a malformed table
+// panics, which fails the test binary at once.
 func flags(values ...string) map[string]string {
+	if len(values)%2 != 0 {
+		panic(fmt.Sprintf("flags: odd number of arguments %q", values))
+	}
 	result := map[string]string{}
 
-	for index := 0; index < len(values); index += 2 {
+	for index := 0; index+1 < len(values); index += 2 {
 		result[values[index]] = values[index+1]
 	}
 
@@ -872,7 +878,7 @@ func (server *commandServer) handle(response http.ResponseWriter, request *http.
 	}
 
 	response.Header().Set("Content-Type", "application/json")
-	_, _ = response.Write([]byte(functionalJSONResponse(request.Method, request.URL.Path)))
+	_, _ = response.Write([]byte(functionalJSONResponse(request.Method, request.URL.Path))) //nolint:gosec // G705: httptest server answering the test client, not a browser.
 }
 
 func isDownloadRequest(request *http.Request) bool {

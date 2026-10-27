@@ -2158,10 +2158,11 @@ func trainingPlanDecisionGuidance(
 	decision.PrimaryDirective = primaryDirective(analysis, wellness, adaptation)
 	decision.ADEScore = planDecisionBaseScore
 
-	if analysis.Forecast.Status == planForecastStatusRed {
+	switch analysis.Forecast.Status {
+	case planForecastStatusRed:
 		decision.ADEScore -= planDecisionRedPenalty
 		decision.Penalties = append(decision.Penalties, "forecast_red")
-	} else if analysis.Forecast.Status == planForecastStatusWatch {
+	case planForecastStatusWatch:
 		decision.ADEScore -= planDecisionWatchPenalty
 		decision.Penalties = append(decision.Penalties, "forecast_watch")
 	}
