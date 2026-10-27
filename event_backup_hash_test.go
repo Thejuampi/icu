@@ -91,3 +91,16 @@ func TestEventBackupHashIgnoresComputedWorkoutDocFields(t *testing.T) {
 		t.Fatal("edited step duration not detected")
 	}
 }
+
+func TestEventBackupHashTreatsEmptyListsAsMissing(t *testing.T) {
+	t.Parallel()
+	missing := icu.Event{ID: 1}
+	empty := icu.Event{ID: 1, Tags: []string{}, CanTrainSports: []string{}}
+	if icu.EventBackupHash(&missing) != icu.EventBackupHash(&empty) {
+		t.Fatal("tags [] vs null changed the hash")
+	}
+	tagged := icu.Event{ID: 1, Tags: []string{"a"}}
+	if icu.EventBackupHash(&missing) == icu.EventBackupHash(&tagged) {
+		t.Fatal("adding a tag not detected")
+	}
+}

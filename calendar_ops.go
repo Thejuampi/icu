@@ -105,9 +105,9 @@ func EventBackupHash(event *Event) string {
 	}{
 		event.ID, event.StartDateLocal, event.EndDateLocal, event.Category, event.Type, event.Name,
 		event.Description, event.TrainingLoad, event.MovingTime, event.Distance, event.Color, event.Indoor,
-		event.Target, event.UID, event.Tags, event.ExternalID, event.HideFromAthlete, event.AthleteCannotEdit,
+		event.Target, event.UID, nilIfEmpty(event.Tags), event.ExternalID, event.HideFromAthlete, event.AthleteCannotEdit,
 		event.LoadTarget, event.TimeTarget, event.DistanceTarget, event.TrainingAvailability,
-		event.MaxTrainingTime, event.CanTrainSports, userWorkoutDoc(event.WorkoutDoc),
+		event.MaxTrainingTime, nilIfEmpty(event.CanTrainSports), userWorkoutDoc(event.WorkoutDoc),
 	}
 	data, err := json.Marshal(snapshot)
 	if err != nil {
@@ -116,6 +116,16 @@ func EventBackupHash(event *Event) string {
 	sum := sha256.Sum256(data)
 
 	return hex.EncodeToString(sum[:])
+}
+
+// nilIfEmpty treats [] like a missing list: Intervals.icu returns either for
+// "no tags", and neither is an edit.
+func nilIfEmpty(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	return values
 }
 
 // workoutDocComputedKeys are workout_doc fields Intervals.icu derives from
