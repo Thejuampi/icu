@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v0.1.0 — proposed, not yet tagged
+## v0.1.0 — 2026-10-26
 
 First tagged release (the repo has no tags yet). It is pre-1.0, so the breaking output changes listed below go out in a minor release; upgrade notes are under "Breaking changes". To release: merge #17 into master, then #18, then the lint-cleanup PR (`chore/lint-cleanup`, stacked on #18; retarget it to master after #18 merges), run the gates (including a full-repo `golangci-lint run ./...`, which reports 0 issues), then tag `v0.1.0` on the final merge commit.
 
