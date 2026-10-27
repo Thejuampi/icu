@@ -359,10 +359,10 @@ func (c *ZeppClient) StressDays(ctx context.Context, oldest, newest string) ([]S
 	}
 
 	query := url.Values{
-		"from":      {strconv.FormatInt(from, 10)},
-		"to":        {strconv.FormatInt(to, 10)},
-		"eventType": {"all_day_stress"},
-		"limit":     {"1000"},
+		"from":             {strconv.FormatInt(from, 10)},
+		"to":               {strconv.FormatInt(to, 10)},
+		zeppParamEventType: {"all_day_stress"},
+		zeppParamLimit:     {"1000"},
 	}
 
 	resp, err := c.doGetEvents(ctx, query)
@@ -445,10 +445,10 @@ func (c *ZeppClient) SpO2Readings(ctx context.Context, oldest, newest string) ([
 	}
 
 	query := url.Values{
-		"from":      {strconv.FormatInt(from, 10)},
-		"to":        {strconv.FormatInt(to, 10)},
-		"eventType": {"blood_oxygen"},
-		"limit":     {"1000"},
+		"from":             {strconv.FormatInt(from, 10)},
+		"to":               {strconv.FormatInt(to, 10)},
+		zeppParamEventType: {"blood_oxygen"},
+		zeppParamLimit:     {"1000"},
 	}
 
 	resp, err := c.doGetEvents(ctx, query)
@@ -531,10 +531,10 @@ func (c *ZeppClient) PAIDays(ctx context.Context, oldest, newest string) ([]PAID
 	}
 
 	query := url.Values{
-		"from":      {strconv.FormatInt(from, 10)},
-		"to":        {strconv.FormatInt(to, 10)},
-		"eventType": {"PaiHealthInfo"},
-		"limit":     {"1000"},
+		"from":             {strconv.FormatInt(from, 10)},
+		"to":               {strconv.FormatInt(to, 10)},
+		zeppParamEventType: {"PaiHealthInfo"},
+		zeppParamLimit:     {"1000"},
 	}
 
 	resp, err := c.doGetEvents(ctx, query)

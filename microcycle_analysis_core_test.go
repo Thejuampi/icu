@@ -242,8 +242,17 @@ func TestAnalyzeMicrocycleLoadPressureRisk(t *testing.T) {
 	activity := microcycleActivity("i1", "2026-06-08T07:00:00", 80, 0.7)
 	activity.CTL = 50
 	activity.ATL = 70
+	// Today's form (-20) is judged against the athlete's own TSB baseline
+	// (-4..-6), not a fixed TSB.
+	tsb := append(repeatPattern([]float64{-4, -5, -6}, 20), -20)
+	records := make([]icu.Wellness, 0, len(tsb))
+	for index, value := range tsb {
+		day := time.Date(2026, time.May, 20, 0, 0, 0, 0, time.UTC).AddDate(0, 0, index)
+		records = append(records, icu.Wellness{ID: day.Format("2006-01-02"), CTL: 50, ATL: 50 - value})
+	}
+	wellness := icu.AnalyzeWellness(records, icu.AnalysisOptions{})
 
-	got := icu.AnalyzeMicrocycle([]icu.Activity{activity}, nil, nil, &icu.SportSettings{FTP: 285, PowerZones: []int{55}}, &icu.MicrocycleOptions{
+	got := icu.AnalyzeMicrocycle([]icu.Activity{activity}, nil, &wellness, &icu.SportSettings{FTP: 285, PowerZones: []int{55}}, &icu.MicrocycleOptions{
 		StartDate:        "2026-06-08",
 		EndDate:          "2026-06-14",
 		Timezone:         "UTC",
@@ -339,7 +348,9 @@ func TestAnalyzeMicrocyclePrefersNamedRecoveryScoreOverSleepScore(t *testing.T) 
 				Value: 88,
 			},
 		},
-	}, icu.AnalysisOptions{StartDate: "2026-06-08", EndDate: "2026-06-14"})
+	}, icu.AnalysisOptions{
+		Thresholds: pinnedThresholds(), StartDate: "2026-06-08", EndDate: "2026-06-14",
+	})
 
 	got := icu.AnalyzeMicrocycle(
 		[]icu.Activity{microcycleActivity("i1", "2026-06-08T07:00:00", 60, 0.7)},

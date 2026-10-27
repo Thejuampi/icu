@@ -225,8 +225,7 @@ func runEstimatePowerShow(client *icu.Client, activityID string, flags map[strin
 		return icu.PowerFillResult{}, fmt.Errorf("normalize streams: %w", err)
 	}
 
-	var refillWarnings []string
-	streams, refillWarnings, err = applyEstimatePowerRefillMask(streams, flags)
+	streams, refillWarnings, err := applyEstimatePowerRefillMask(streams, flags)
 	if err != nil {
 		return icu.PowerFillResult{}, err
 	}
@@ -679,7 +678,7 @@ func writeEstimatePowerFile(path string, result *icu.PowerFillResult) error {
 	if err != nil {
 		return fmt.Errorf("marshal estimate-power file: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil { //nolint:gosec // G703: the user names this file on the command line; using it is the point.
 		return fmt.Errorf("write estimate-power file: %w", err)
 	}
 
@@ -687,7 +686,7 @@ func writeEstimatePowerFile(path string, result *icu.PowerFillResult) error {
 }
 
 func readEstimatePowerFile(path string) (icu.PowerFillResult, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G703: the user names this file on the command line; using it is the point.
 	if err != nil {
 		return icu.PowerFillResult{}, fmt.Errorf("read estimate-power file: %w", err)
 	}

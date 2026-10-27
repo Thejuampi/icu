@@ -1,33 +1,41 @@
 package icu
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"time"
 )
 
 const (
-	adaptationDeltaThresholdPct = 3
-	adaptationMinimumCurves     = 2
-	adaptationSourceMMP         = "mmp_model"
-	adaptationSourceSport       = "sport_settings"
-	adaptationSourceCurves      = "power_curve_comparison"
-	adaptationSourcePhase       = "activity_weekly_load_segments"
-	adaptationStatusImproving   = "improving"
-	adaptationStatusDeclining   = "declining"
-	adaptationStatusStable      = "stable"
-	adaptationTrendIncreasing   = "increasing"
-	adaptationTrendDecreasing   = "decreasing"
+	adaptationMinimumCurves = 2
+	// adaptationMinDeltaSamples is the fewest curve durations needed for a
+	// median/MAD noise estimate (method parameter).
+	adaptationMinDeltaSamples = 3
+	adaptationSourceMMP       = "mmp_model"
+	adaptationSourceSport     = "sport_settings"
+	adaptationSourceCurves    = "power_curve_comparison"
+	adaptationSourcePhase     = "activity_weekly_load_segments"
+	adaptationStatusImproving = "improving"
+	adaptationStatusDeclining = "declining"
+	adaptationStatusStable    = "stable"
+	adaptationTrendIncreasing = "increasing"
+	adaptationTrendDecreasing = "decreasing"
 )
 
 type CyclingAdaptationAnalysis struct {
-	Scope            AdaptationScope            `json:"scope"`
-	PowerAnchors     AdaptationPowerAnchors     `json:"powerAnchors"`
-	PowerCurveDeltas []PowerCurveDelta          `json:"powerCurveDeltas,omitempty"`
-	SystemStatus     AdaptationSystemStatus     `json:"systemStatus"`
-	Lactate          WellnessLactateCalibration `json:"lactate"`
-	PhaseSummary     AdaptationPhaseSummary     `json:"phaseSummary"`
-	Warnings         []string                   `json:"warnings,omitempty"`
+	Scope            AdaptationScope        `json:"scope"`
+	PowerAnchors     AdaptationPowerAnchors `json:"powerAnchors"`
+	PowerCurveDeltas []PowerCurveDelta      `json:"powerCurveDeltas,omitempty"`
+	// PowerCurveChangeThreshold is the ±% beyond which a duration counts as
+	// improved/declined: WatchZ × the robust spread (MAD × 1.4826) of this
+	// athlete's own deltas across durations, or the profile's
+	// adaptationChangePct.
+	PowerCurveChangeThreshold *DerivedThreshold          `json:"powerCurveChangeThreshold,omitempty"`
+	SystemStatus              AdaptationSystemStatus     `json:"systemStatus"`
+	Lactate                   WellnessLactateCalibration `json:"lactate"`
+	PhaseSummary              AdaptationPhaseSummary     `json:"phaseSummary"`
+	Warnings                  []string                   `json:"warnings,omitempty"`
 }
 
 type AdaptationScope struct {
@@ -117,6 +125,8 @@ func AnalyzeCyclingAdaptation(
 		PhaseSummary:     adaptationPhaseSummary(activities, options),
 		Warnings:         nil,
 	}
+	analysis.PowerCurveChangeThreshold = adaptationChangeThreshold(analysis.PowerCurveDeltas, options.Thresholds)
+	applyAdaptationDeltaStatus(analysis.PowerCurveDeltas, analysis.PowerCurveChangeThreshold)
 	analysis.SystemStatus = adaptationSystemStatus(analysis.PowerCurveDeltas)
 
 	if len(analysis.PowerCurveDeltas) == 0 {
@@ -198,7 +208,6 @@ func adaptationPowerCurveDeltas(curves []DataCurve) []PowerCurveDelta {
 			BaselineWatts: baselineWatts,
 			DeltaWatts:    deltaWatts,
 			DeltaPercent:  deltaPercent,
-			Status:        adaptationDeltaStatus(deltaPercent),
 			CurrentCurve:  curveLabel(pair.current),
 			BaselineCurve: curveLabel(pair.baseline),
 		})
@@ -207,13 +216,23 @@ func adaptationPowerCurveDeltas(curves []DataCurve) []PowerCurveDelta {
 	return deltas
 }
 
+// adaptationComparableCurves picks the current curve (latest end date, then
+// fewest days) and the baseline curve (earliest end date, then most days).
+// With the default non-overlapping windows the baseline is the period before
+// the analysis scope; with nested windows such as "42d,365d" both end today
+// and the shorter curve is current, as before.
 func adaptationComparableCurves(curves []DataCurve) adaptationCurvePair {
 	if len(curves) < adaptationMinimumCurves {
 		return adaptationCurvePair{current: nil, baseline: nil, ok: false}
 	}
 
 	sortedCurves := append([]DataCurve(nil), curves...)
-	sort.Slice(sortedCurves, func(left, right int) bool {
+	sort.SliceStable(sortedCurves, func(left, right int) bool {
+		leftEnd, rightEnd := curveEndDay(&sortedCurves[left]), curveEndDay(&sortedCurves[right])
+		if leftEnd != rightEnd {
+			return leftEnd > rightEnd
+		}
+
 		return curveDays(&sortedCurves[left]) < curveDays(&sortedCurves[right])
 	})
 
@@ -222,6 +241,38 @@ func adaptationComparableCurves(curves []DataCurve) adaptationCurvePair {
 		baseline: &sortedCurves[len(sortedCurves)-1],
 		ok:       true,
 	}
+}
+
+func curveEndDay(curve *DataCurve) string {
+	if len(curve.EndDate) >= len(analysisDateLayout) {
+		return curve.EndDate[:len(analysisDateLayout)]
+	}
+
+	return curve.EndDate
+}
+
+// AdaptationCurveWindows returns the intervals.icu custom-range curve IDs
+// ("r.START.END") for the analysis scope and for the equally long window
+// immediately before it, so the baseline never contains the current period.
+func AdaptationCurveWindows(oldest, newest string) (string, error) {
+	start, err := time.Parse(analysisDateLayout, oldest)
+	if err != nil {
+		return "", fmt.Errorf("invalid oldest date %q: %w", oldest, err)
+	}
+	end, err := time.Parse(analysisDateLayout, newest)
+	if err != nil {
+		return "", fmt.Errorf("invalid newest date %q: %w", newest, err)
+	}
+	if end.Before(start) {
+		return "", fmt.Errorf("newest %s is before oldest %s", newest, oldest)
+	}
+
+	days := int(end.Sub(start).Hours()/hoursPerDay) + 1
+	baselineEnd := start.AddDate(0, 0, -1)
+	baselineStart := baselineEnd.AddDate(0, 0, -(days - 1))
+
+	return "r." + oldest + "." + newest + ",r." + baselineStart.Format(analysisDateLayout) + "." +
+		baselineEnd.Format(analysisDateLayout), nil
 }
 
 func curveDays(curve *DataCurve) int {
@@ -253,16 +304,44 @@ func curveValuesByDuration(curve *DataCurve) map[int]int {
 	return values
 }
 
-func adaptationDeltaStatus(deltaPercent float64) string {
-	if deltaPercent >= adaptationDeltaThresholdPct {
-		return "improved"
+// adaptationChangeThreshold derives the change bound from the spread of
+// the athlete's own curve deltas (noise across durations), or the profile.
+func adaptationChangeThreshold(deltas []PowerCurveDelta, overrides *TrainingThresholds) *DerivedThreshold {
+	if pinned := overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.AdaptationChangePct }); pinned != nil {
+		return &DerivedThreshold{Watch: *pinned, Red: *pinned, Source: thresholdSourceProfile}
 	}
-
-	if deltaPercent <= -adaptationDeltaThresholdPct {
-		return "declined"
+	if len(deltas) < adaptationMinDeltaSamples {
+		return nil
 	}
+	values := make([]float64, 0, len(deltas))
+	for index := range deltas {
+		values = append(values, deltas[index].DeltaPercent)
+	}
+	_, scale, source := robustScale(values)
+	if scale == 0 {
+		return nil
+	}
+	bound := round2(thresholdMethod(overrides).watchZ * scale)
 
-	return adaptationStatusStable
+	return &DerivedThreshold{Watch: bound, Red: bound, Scale: round2(scale), Samples: len(values), Source: source}
+}
+
+// applyAdaptationDeltaStatus labels each delta against threshold; without a
+// threshold the status is "insufficient_history".
+func applyAdaptationDeltaStatus(deltas []PowerCurveDelta, threshold *DerivedThreshold) {
+	for index := range deltas {
+		delta := &deltas[index]
+		switch {
+		case threshold == nil:
+			delta.Status = "insufficient_history"
+		case delta.DeltaPercent >= threshold.Watch:
+			delta.Status = "improved"
+		case delta.DeltaPercent <= -threshold.Watch:
+			delta.Status = "declined"
+		default:
+			delta.Status = adaptationStatusStable
+		}
+	}
 }
 
 func curveLabel(curve *DataCurve) string {
@@ -273,11 +352,34 @@ func curveLabel(curve *DataCurve) string {
 	return curve.ID
 }
 
+// isAdaptationAnchorDuration reports whether secs is on the duration grid
+// systemStatus counts: one signal per standard power-curve anchor rather than
+// every per-second point, which are strongly correlated neighbours.
+func isAdaptationAnchorDuration(secs int) bool {
+	switch secs {
+	case 5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600: //nolint:mnd // standard power-curve anchor grid in seconds.
+		return true
+	default:
+		return false
+	}
+}
+
 func adaptationSystemStatus(deltas []PowerCurveDelta) AdaptationSystemStatus {
 	status := emptyAdaptationSystemStatus()
 
+	anchors := make([]PowerCurveDelta, 0, len(deltas))
 	for index := range deltas {
-		switch deltas[index].Status {
+		if isAdaptationAnchorDuration(deltas[index].DurationSecs) {
+			anchors = append(anchors, deltas[index])
+		}
+	}
+	counted := deltas
+	if len(anchors) > 0 {
+		counted = anchors
+	}
+
+	for index := range counted {
+		switch counted[index].Status {
 		case "improved":
 			status.Improved++
 		case "declined":

@@ -179,7 +179,7 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `coaching`
   Invocation: `icu analysis coaching [--history-oldest DATE --history-newest DATE] [--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve BOOL] [--activity-fields CSV] [--limit N] [--include-adaptation BOOL] [--adaptation-curves CSV]`
-  Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`, `--adaptation-curves 42d,365d` when adaptation is requested
+  Defaults: `--history-days 84`, `--plan-days 28`, `--sport-type Ride`, `--adaptation-curves r.OLDEST.NEWEST,r.<prior equal window>` when adaptation is requested
   Notes: Read-only JSON facade for coaching/report workflows. Fetches athlete, sport settings, history activities, wellness, plan-range events, NOTE events, and optional adaptation inputs, then bundles existing cycling, wellness, plan, and adaptation analyses into one payload. `--activity-fields` is **deprecated and ignored** (D-8, wave-2): the activity fetch always uses its own fixed field list. Wellness-backed readiness prefers Zepp `HybridCharge`/`BioCharge` when Zepp auth is available and falls back to Intervals wellness `sleepScore` otherwise. Parsing is strict: unknown flags, positional arguments, missing values, malformed dates/integers, and invalid booleans fail before auth or HTTP. Booleans accept bare/`true`/`false`/`1`/`0`; explicit date pairs cannot be mixed with their day flags; day counts and `--limit` must be positive. `--limit` caps only history activities. Plan ranges are validated before and after ISO-week alignment. Empty calendar collections are `[]`; top-level warnings include stable, prefixed, exact-deduplicated analyzer warnings. `analyses.cycling` carries wave-2's `validity`/`load.byChannel` contract; see `docs/analysis.md`.
   Example: `icu analysis coaching --history-oldest 2026-04-06 --history-newest 2026-06-28 --plan-oldest 2026-06-29 --plan-newest 2026-07-26 --resolve`
 
@@ -203,13 +203,13 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `adaptation`
   Invocation: `icu analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride] [--curves 42d,365d] [--filters FILTERS] [--newest DATE] [--limit N] [--activity-fields CSV]`
-  Defaults: `--days 28`, `--type Ride`, `--curves 42d,365d`
+  Defaults: `--days 28`, `--type Ride`, `--curves r.OLDEST.NEWEST,r.<prior equal window>` (non-overlapping)
   Notes: `--activity-fields` is **deprecated and ignored** (D-8, wave-2): the activity fetch always uses its own fixed field list. `--newest` applies to the power-curve fetch; `--limit` applies to activity history fetch. `--days` must be a positive integer; invalid values are errors. Explicit dates must use `YYYY-MM-DD`, be chronological, and cannot be combined with `--days`. Default date ranges are calculated in UTC; use explicit dates in the athlete's local timezone for daily-accurate boundaries. Output scope includes `timezone` and `timezoneSource`. `scope.activities` here is not yet filtered against STRAVA stubs (see `docs/analysis.md` Current Limitations for `analysis adaptation`).
   Example: `icu analysis adaptation --days 42 --type Ride --curves 42d,365d`
 
 - `microcycle`
   Invocation: `icu analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]`
-  Defaults: current Monday-Sunday microcycle, `--sport-type Ride`, system timezone fallback when `--timezone` is omitted.
+  Defaults: current Monday-Sunday microcycle, `--sport-type Ride`, timezone from `--timezone`, else the athlete profile timezone, else the system timezone; wellness is read only up to today.
   Notes: Experimental read-only diagnostic contract for LLM/skill consumers. Reads activities with a 90-day lookback, planned events, wellness, and sport settings. When wellness is enabled, the readiness sleep/recovery signal prefers Zepp `HybridCharge`/`BioCharge` and falls back to `sleepScore` when needed. JSON is the primary contract; human output is a brief inspection view.
   Example: `icu analysis microcycle --from 2026-06-08 --to 2026-06-14 --json`
 
@@ -228,18 +228,38 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `show`
   Invocation: `icu plan show --file PATH --intent-file PATH [--allow-today] [--allow-past] [--now-date DATE] [--type SPORT] [--session-environment indoor|outdoor]`
-  Notes: Dry-run command. Reads an explicit multi-session intent JSON (`icu.plan.intent.v1`), fetches activities/events for the intent range and optional sport settings when `--type` is set, builds an editable `icu.plan.v2` proposal, and writes pretty JSON to `--file` (mode `0600`). Does not mutate Intervals.icu. Sessions are matched to existing events by `uid` or by date+name. `desc` is written to the event body; `descLocal` (else `desc`) is used for local planned-load calculation. Cancel defaults off; weekly targets warn unless `strictTargets` is true. No embedded session library or coach heuristics. `--session-environment` overrides the intent file's own `constraints.sessionEnvironment` and decides which FTP number a session with no per-record signal is priced at; it is distinct from `--indoor` on `events create`/`ftp update` and `--indoor-ftp` on `sports update`, which set a record's own stored value rather than deciding pricing for this run. See `docs/plan.md`.
+  Notes: Dry-run command. Reads an explicit multi-session intent JSON (`icu.plan.intent.v1`), fetches activities/events for the intent range and sport settings for `--type`, else `constraints.defaultType`, else the first typed session (so `ftp` and `indoor_ftp` are always read when a session has a type), builds an editable `icu.plan.v2` proposal, and writes pretty JSON to `--file` (mode `0600`). Does not mutate Intervals.icu. Sessions are matched to existing events by `uid` or by date+name. `desc` is written to the event body; `descLocal` (else `desc`) is used for local planned-load calculation. Cancel defaults off; weekly targets warn unless `strictTargets` is true. No embedded session library or coach heuristics. `--session-environment` overrides the intent file's own `constraints.sessionEnvironment` and decides which FTP number a session with no per-record signal is priced at; it is distinct from `--indoor` on `events create`/`ftp update` and `--indoor-ftp` on `sports update`, which set a record's own stored value rather than deciding pricing for this run. See `docs/plan.md`.
   Example: `icu plan show --file plan.json --intent-file intent.json --now-date 2026-07-27 --type Ride`
 
 - `preview`
-  Invocation: `icu plan preview --file PATH [--no-live-check]`
-  Notes: Validates the proposal and prints a non-mutating calendar operation preview (pending create/update/cancel counts, expected load, and `validation` blocking/errors/warnings). Exits non-zero when validation is blocking. Live-checks source hashes and baseline drift only when non-blocking, unless `--no-live-check` is set. Unknown flags are rejected.
-  Example: `icu plan preview --file plan.json`
+  Invocation: `icu plan preview --file PATH [--no-live-check] [--max-ramp CTL/WEEK] [--now-date DATE] [--timezone TZ] [--save-learned]`
+  Notes: Validates the proposal and prints a non-mutating calendar operation preview (pending create/update/cancel counts, expected load, and `validation` blocking/errors/warnings). Each operation includes `description` as it will render, one array entry per line; a description with literal `\n`/`\r`/`\t` escapes is a blocking validation error (also in `plan show`). Exits non-zero when validation is blocking. Live-checks source hashes and baseline drift only when non-blocking, unless `--no-live-check` is set. The live check also adds `projection`: CTL/ATL/TSB projected day by day with Intervals.icu's EWMA (`x += k·(load − x)`, `k = 1 − exp(−1/τ)`, τ = 42/7 days unless the profile sets `ctlDays`/`atlDays`) from the last wellness row before today (never the last activity) through the proposal end date. CTL and ATL get separate loads, as in Intervals.icu: past days use wellness `ctlLoad`/`atlLoad`; activity types that count toward ATL only (e.g. WeightTraining, Workout) are left out of planned CTL load. A type's class is learned per day from the subset of activity loads that sums exactly to that day's `ctlLoad`, used in memory (with `--save-learned`, also saved atomically in the local profile as `learnedFitnessLoadTypes`; a type later seen both ways drops its saved class; without the flag the preview writes nothing), and overridden by `profile set --fitness-load-types TYPE=ctl|atl-only`; a type with no or conflicting evidence is assumed to count toward CTL and warned. "Today" is `--now-date`, else today in `--timezone` / the athlete timezone. Today uses completed load plus planned sessions not paired with a completed activity; later days use existing calendar workouts not replaced by an operation plus pending create/update loads. `projection.weeks[].rampPerWeek` is the largest rolling 7-day CTL change ending in that week, seeded with real wellness CTL (no extrapolation of partial weeks); `rampKnown` is false when fewer than 7 prior days are known. A known ramp above `--max-ramp` (else the profile's `maxRampPerWeek`) is flagged `overCap` and warned. With no cap configured the ramp is reported but never flagged. All reads are GETs. Unknown flags are rejected.
+  Example: `icu plan preview --file plan.json --max-ramp 5`
 
 - `accept`
   Invocation: `icu plan accept --file PATH`
-  Notes: Re-validates the proposal (including stored blocking errors and `strictTargets` weekly misses) and hard-fails before any API call when blocking. Then rejects baseline drift, applies pending `create`/`update`/`cancel` operations, writes apply results back to the same file, and prints the apply summary. Unknown flags are rejected.
+  Notes: Re-validates the proposal (including stored blocking errors and `strictTargets` weekly misses) and hard-fails before any API call when blocking. Then rejects baseline drift, applies pending `create`/`update`/`cancel` operations (each update/cancel first saves a local backup of the event; its path is in the result's `backupPath`, and a failed backup fails that operation without touching the event), writes apply results back to the same file, and prints the apply summary. After each update the post-write hash is saved in its backup; if that fails, the result carries a `warning` (also on stderr) and the event's next `events update`/`revert` needs `--force`. Unknown flags are rejected.
   Example: `icu plan accept --file plan.json`
+
+## profile
+
+Local training profile stored in the config file under `profile`. Nothing here is sent to Intervals.icu. Every field is optional; an unset field disables its check instead of falling back to a built-in number.
+
+- `show`
+  Invocation: `icu profile show`
+  Notes: Prints the profile JSON (`{}` when none is configured).
+
+- `set`
+  Invocation: `icu profile set [--target-ftp W] [--outdoor-ftp W] [--indoor-ftp W] [--max-ramp CTL/WEEK] [--min-z2-minutes N] [--z2-low PCT --z2-high PCT] [--usual-days mon,wed,...] [--usual-times HH:MM,...] [--max-similar-sessions N] [--ctl-days N] [--atl-days N] [--thresholds JSON|-] [--fitness-load-types TYPE=ctl|atl-only,...|-]`
+  Notes: Merges the given fields into the stored profile; `-` clears a field. Days are `sun`..`sat`. The Z2 band defaults to the sport settings' power zones (Z2 = zone 1 upper bound, zone 2 upper bound] when `--z2-low/--z2-high` are not set.
+  Example: `icu profile set --target-ftp 280 --indoor-ftp 250 --max-ramp 5 --usual-days tue,thu,sat --usual-times 07:00`
+
+  `plan show` and `plan preview` add `profile:` warnings for sessions on unusual days or start times, an intent `ftp` above `targetFtp`, and weeks whose planned Z2 minutes are below `minZ2MinutesPerWeek`. `plan preview` has no sport settings offline, so it only knows the Z2 band from the profile.
+
+  Readiness thresholds (B7): no fixed readiness numbers are built in. Each WATCH/RED bound is derived from the athlete's own history in the analysis window: baseline = median of the earlier samples, scale = MAD × 1.4826 (standard deviation if the MAD is 0), WATCH at `watchZ` (default 1.5) and RED at `redZ` (default 2.5) robust z in the bad direction, and no level at all (`""`, lactate `insufficient_history`, forecast `no_baseline`, power-curve deltas `insufficient_history`) with fewer than `minSamples` (default 14) baseline samples. Applies to HRV (7-day recent mean vs earlier days, low is bad), resting HR (latest, high is bad), sleep/recovery score (latest, low), lactate (latest, high), TSB from wellness (today, low; also the plan forecast's lowest TSB), plan durability (newest week's mean decoupling vs earlier rides, high) and power-curve adaptation (±`watchZ` × the robust spread of the athlete's own deltas across durations, needs ≥ 3 durations). Each signal reports its `level` and `threshold` (`watch`, `red`, `baseline`, `scale`, `samples`, `source`). `--thresholds` stores overrides as JSON: `watchZ`, `redZ`, `minSamples` tune the method; `hrvWatch`/`hrvRed`, `restingHrWatch`/`restingHrRed`, `sleepWatch`/`sleepRed`, `lactateWatch`/`lactateHigh`, `tsbWatch`/`tsbRed`, `decouplingWatchPct`, `adaptationChangePct` pin absolute bounds (source `profile`). Example: `icu profile set --thresholds '{"watchZ":2,"sleepWatch":72}'`; `--thresholds -` clears them. Baselines use the 42 days ending 7 days before the newest sample; wellness reads always fetch that history even with a short `--oldest`. With no signal judgeable the aggregate `state` is `INSUFFICIENT` (confidence `low`) plus a warning.
+  FTP per session: `plan show` and `rebalance` read outdoor and indoor FTP (`GET /athlete/{id}/sport-settings/{type}`) from the Intervals.icu sport settings (`ftp`, `indoor_ftp`). When Intervals.icu has no number, the profile's `outdoorFtp`/`indoorFtp` fills the gap (an `ftp:` warning says so); a non-zero Intervals.icu value always wins, with a warning if the profile disagrees. Each session is then priced at indoor FTP when its type is indoor (e.g. `VirtualRide`) or its intent draft sets `"indoor": true`, otherwise at outdoor FTP; `--session-environment` still overrides ambiguous sessions.
+
+  Both commands also run a monotony check (with or without a profile): a `monotony:` warning lists weeks where more than `maxSimilarSessionsPerWeek` (default 2, so the third session with the same structure in a week warns) non-cancelled sessions share the same structure. Structure is the parsed step sequence (durations, %FTP targets, repeats), so indentation and spacing do not matter; unsupported descriptions are compared as normalised text, and sessions without a description are ignored.
 
 ## rebalance
 
@@ -391,20 +411,33 @@ Invoke these commands as `icu activity <id> <action>`.
   Example: `icu events get 123`
 
 - `create`
-  Invocation: `icu events create [--category WORKOUT] [--type Ride] --name NAME --start-date DATE [--moving-time SECS] [--training-load N] [--desc DESC] [--calculate-load --ftp N] [--color VALUE] [--indoor] [--external-id ID] [--upsert]`
+  Invocation: `icu events create [--category WORKOUT] [--type Ride] --name NAME --start-date DATE [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--color VALUE] [--indoor] [--external-id ID] [--uid UID --upsert]`
   Defaults: `--category WORKOUT`, `--type Ride`
-  Notes: `NOTE` events behave like all-day calendar notes in Intervals.icu; the date is preserved, but the time-of-day portion of `--start-date` may be normalized away. Long `NOTE` descriptions can also fail upstream with HTTP 500, so prefer shorter notes or split large guidance across multiple notes. With `--calculate-load`, the CLI parses `--desc`, calculates `moving_time` and `icu_training_load` locally from power targets, sends those fields, and returns `{event, estimate, warnings}` so server values can be compared against the local estimate.
+  Notes: `NOTE` events behave like all-day calendar notes in Intervals.icu; the date is preserved, but the time-of-day portion of `--start-date` may be normalized away. Long `NOTE` descriptions can also fail upstream with HTTP 500, so prefer shorter notes or split large guidance across multiple notes. With `--calculate-load`, the CLI parses `--desc`, calculates `moving_time` and `icu_training_load` locally from power targets, sends those fields, and returns `{event, estimate, warnings}` so server values can be compared against the local estimate. `--calculate-load` prices power steps against FTP and is rejected for non-cycling types (`WeightTraining`, `Run`, `Workout`, …); for those set `--type` and pass `--moving-time`/`--training-load` directly. `--desc-file PATH` reads the description verbatim (real line breaks kept, trailing newline trimmed), must not be empty, and cannot be combined with `--desc`. `--upsert` requires `--uid`: Intervals.icu's `upsertOnUid` updates the event with the same `uid` (`external_id` is not used); that event is backed up locally before the POST (the uid search spans ten years either side of the date). If the POST updates an existing event that was not backed up (an id not newer than every id the search saw), the command fails loudly. Any description containing literal `\n`, `\r` or `\t` escape sequences is rejected before any request, because Intervals.icu would store them as text.
+  Example: `icu events create --type WeightTraining --name "Strength A" --start-date 2026-06-03 --moving-time 2700 --training-load 30 --desc-file strength.txt`
   Example: `icu events create --name "Threshold" --start-date 2026-06-03 --training-load 90 --indoor`
   Example: `icu events create --name "Endurance" --start-date 2026-06-03 --desc "- 60m 70%" --calculate-load --ftp 300`
 
 - `update`
-  Invocation: `icu events update <id> [--name NAME] [--desc DESC] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N]`
-  Notes: `--calculate-load` is explicit only; descriptions are not parsed unless the flag is present. When enabled, calculated `moving_time` and `icu_training_load` override manual values for the request body.
+  Invocation: `icu events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N] [--force]`
+  Notes: `--calculate-load` is explicit only; descriptions are not parsed unless the flag is present. When enabled, calculated `moving_time` and `icu_training_load` override manual values for the request body. FTP pricing applies only to cycling types: `--type`, else the stored event type read by the backup GET. `--desc-file` and the literal-escape check behave as on `create`.
   Example: `icu events update 123 --name "Threshold 4x8" --training-load 92`
   Example: `icu events update 123 --desc "- 60m 70%" --calculate-load --ftp 300`
 
+  Backup: before the PUT, the current event is fetched and saved to the local backup directory (`$ICU_BACKUP_DIR`, else `backups/events/` next to the config file). If the backup fails, the update is not sent. After the PUT the backup records `postWriteHash` (and `postWriteAt`) of the event returned. Before the next update or revert, the current event is compared with the newest backup's `postWriteHash`: if it changed outside this CLI the command aborts with no PUT and no new backup, unless `--force`. A newest backup without `postWriteHash` (written by an older version) is also refused until `--force`. Delete/cancel backups are not compared. The hash (`icu.EventBackupHash`) covers every user-editable field (name, type, category, start/end, description, load, moving time, distance, workout doc, indoor, color, target, tags, uid, external id, targets, availability). Workout-doc fields Intervals.icu computes from FTP/LTHR/zones (top-level `ftp`, `average_watts`, `normalized_power`, `zoneTimes`, `strain_score`, `duration`, … and `_`-prefixed keys like a step's `_power`) are not hashed, so an FTP change alone is not an edit; a computed field not on that list makes the check report a change (safe side, use `--force`). Empty `tags` equal missing `tags`. The GET → compare → PUT sequence is not atomic: an edit made in Intervals.icu between the GET and the PUT is overwritten, though the pre-write backup still holds the state that was compared.
+
+- `backups`
+  Invocation: `icu events backups [--id ID]`
+  Notes: Lists local event backups newest first (`path`, `eventId`, `reason`, `takenAt`). Local only.
+
+- `revert`
+  Invocation: `icu events revert (--backup PATH | --id ID) [--recreate] [--force] [--dry-run]`
+  Notes: Restores an event from a backup (`--id` uses its newest backup that is not a pre-revert snapshot, so reverting twice does not undo the first revert). One GET serves both the pre-revert backup and the check: if the event already matches the backup, or it was edited outside this CLI since the newest backup's `postWriteHash` (or that backup predates the hash), the command aborts unless `--force`; the revert records `postWriteHash` in its pre-revert snapshot. By default it backs up the event's current state, then PUTs the backed-up JSON (every field, including ones the CLI does not model). Backups taken for a cancel or `events delete`, or `--recreate`, POST the event again without its old id: **reverting a cancel recreates the event under a new id** (Intervals.icu cannot restore a deleted id), so any external reference to the old id (plan files, trainer-platform sync, notes) must be updated to the new `id` printed by the command. A recreate records `restoredEventId` in the backup file and is refused when it was already done, or when an event with the same uid (or the same name, category, type and start time) exists on that date, unless `--force`. `--dry-run` prints what would happen without calling the API.
+  Example: `icu events revert --id 12345 --dry-run`
+
 - `delete`
   Invocation: `icu events delete <id>`
+  Notes: Backs the event up locally first (aborts if the backup fails), then DELETEs it and prints `{deleted, backupPath}`. Undo with `icu events revert --id ID` (recreated under a new id).
   Example: `icu events delete 123`
 
 - `download`
@@ -526,13 +559,15 @@ Invoke these commands as `icu activity <id> <action>`.
 ## weather
 
 - `config`
-  Invocation: `icu weather config` or `icu weather config update --lat LAT --lon LON [--label NAME] [--location NAME] [--provider NAME] [--enabled true|false]`
-  Notes: update mode is triggered by any of `--lat`, `--lon`, `--label`, `--location`, `--provider`, or `--enabled`. The current forecast is fetched first and merged with the supplied flags, so `--enabled false` works without re-specifying coordinates.
+  Invocation: `icu weather config` or `icu weather config update [--id ID] [--lat LAT --lon LON] [--label NAME] [--location NAME] [--provider NAME] [--enabled true|false]`
+  Notes: update mode is triggered by any of `--id`, `--lat`, `--lon`, `--label`, `--location`, `--provider`, or `--enabled`. The full forecast list is fetched first; only the selected entry is changed and every other location is sent back unchanged. The entry is chosen by `--id`, or is the only entry when exactly one exists (with several entries `--id` is required). An empty config or an `--id` that does not exist creates a new entry, which requires `--lat` and `--lon` and defaults to `--provider OPEN_WEATHER` and `--enabled true`. Coordinates must be numeric within ±90/±180. The command fails if the update response contains no forecasts.
   Example: `icu weather config --lat -34.60 --lon -58.38 --label "Buenos Aires" --enabled true`
   Example: `icu weather config --enabled false`
+  Example: `icu weather config --id 1 --label Work`
 
 - `forecast`
   Invocation: `icu weather forecast`
+  Notes: Returns each configured location (`id`, `provider`, `label`, `location`, `lat`, `lon`) with the provider's `daily` (about 14 days) and `hourly` (about 40 rows) forecast arrays passed through verbatim, plus `error` when the provider reported one. These arrays are not in the OpenAPI snapshot.
   Example: `icu weather forecast`
 
 ## wellness
@@ -776,7 +811,7 @@ the raw components.
 
 - `calculate`
   Invocation: `icu workouts calculate --ftp N --desc DESC`
-  Notes: Calculates planned cycling duration, average power, normalized power, IF, and TSS locally without writing to Intervals.icu. Supported description grammar is line-oriented: `- 10m 55-75%`, `- 5m 90%`, and repeat blocks such as `3x` with indented child steps. Power targets are interpreted as `%ftp`.
+  Notes: Calculates planned cycling duration, average power, normalized power, IF, and TSS locally without writing to Intervals.icu. Supported description grammar is line-oriented: `- 10m 55-75%`, `- 5m 90%`, compound durations such as `- 2m30s 80%` or `- 1h30m 60%` (units in h, m, s order), and repeat blocks such as `3x` followed by either indented child steps or the intervals.icu native form (un-indented `-` steps closed by a blank line). Power targets are interpreted as `%ftp`.
   Example: `icu workouts calculate --ftp 300 --desc "- 60m 70%"`
 
 - `create`

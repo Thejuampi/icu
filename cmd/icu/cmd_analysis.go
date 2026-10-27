@@ -52,7 +52,7 @@ type analysisTimezoneInfo struct {
 func analysisTimezone(explicit bool) analysisTimezoneInfo {
 	source := icu.DefaultAnalysisTimezoneSource
 	if explicit {
-		source = "explicit"
+		source = timezoneSourceExplicit
 	}
 
 	return analysisTimezoneInfo{
@@ -191,6 +191,7 @@ func readCoachingContextInputs(
 
 	tzInfo := analysisTimezone(explicit)
 	cycling := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
+		Thresholds:     profileThresholds(),
 		StartDate:      dateRanges.History.Oldest,
 		EndDate:        dateRanges.History.Newest,
 		Timezone:       tzInfo.timezone,
@@ -199,6 +200,7 @@ func readCoachingContextInputs(
 	inputs.Cycling = &cycling
 
 	wellness := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
+		Thresholds:     profileThresholds(),
 		StartDate:      dateRanges.History.Oldest,
 		EndDate:        dateRanges.History.Newest,
 		Timezone:       tzInfo.timezone,
@@ -215,6 +217,7 @@ func readCoachingContextInputs(
 	}
 
 	plan := icu.AnalyzeTrainingPlanWithContext(activities, events, icu.TrainingPlanOptions{
+		Thresholds:       profileThresholds(),
 		HistoryStartDate: dateRanges.History.Oldest,
 		HistoryEndDate:   dateRanges.History.Newest,
 		PlanStartDate:    dateRanges.Plan.Oldest,
@@ -277,7 +280,14 @@ func readCoachingAdaptation(
 ) (*icu.CyclingAdaptationAnalysis, error) {
 	curveQuery := map[string]string{
 		"type":   sportType,
-		"curves": icu.StringFlag(flags, "adaptation-curves", "42d,365d"),
+		"curves": icu.StringFlag(flags, "adaptation-curves", ""),
+	}
+	if curveQuery["curves"] == "" {
+		windows, err := icu.AdaptationCurveWindows(dateRange.Oldest, dateRange.Newest)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", errInvalidValue, err)
+		}
+		curveQuery["curves"] = windows
 	}
 
 	var curveResponse struct {
@@ -299,6 +309,7 @@ func readCoachingAdaptation(
 		activities,
 		wellness,
 		icu.AnalysisOptions{
+			Thresholds:     profileThresholds(),
 			StartDate:      dateRange.Oldest,
 			EndDate:        dateRange.Newest,
 			Timezone:       tzInfo.timezone,
@@ -323,6 +334,11 @@ func analysisCyclingCommand() *Command {
 				return err
 			}
 
+			fitnessRecords, fitnessNewest, fitnessWarning, err := readCurrentWellnessFitness(client, flags, dateRange)
+			if err != nil {
+				return err
+			}
+
 			query := queryFromFlags(flags, "limit")
 			query["oldest"] = dateRange.Oldest
 			query["newest"] = dateRange.Newest
@@ -335,16 +351,59 @@ func analysisCyclingCommand() *Command {
 
 			tzInfo := analysisTimezone(explicit)
 			analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
+				Thresholds:            profileThresholds(),
 				StartDate:             dateRange.Oldest,
 				EndDate:               dateRange.Newest,
 				Timezone:              tzInfo.timezone,
 				TimezoneSource:        tzInfo.source,
 				MinIncludedActivities: IntFlag(flags, "min-included-activities", 0),
 			})
+			icu.ApplyWellnessFitness(&analysis.Load, fitnessRecords, fitnessNewest)
+			if fitnessWarning != "" {
+				analysis.Warnings = append(analysis.Warnings, fitnessWarning)
+			}
 
 			return writeJSON(analysis)
 		},
 	}
+}
+
+// currentFitnessLookbackDays bounds the wellness read used to find the newest
+// daily CTL/ATL row at or before the analysis end date.
+const currentFitnessLookbackDays = 7
+
+// readCurrentWellnessFitness reads the daily wellness rows used to replace
+// activity-frozen CTL/ATL with the state at the range end, clamped to today
+// in the athlete's timezone. Wellness is optional context here: a failed read
+// returns no rows plus a warning for the JSON output, so the activity-derived
+// values stay, labeled latestLoadSource "last_activity".
+func readCurrentWellnessFitness(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Wellness, string, string, error) {
+	newest, err := clampDateToAthleteToday(client, flags, dateRange.Newest, time.Now())
+	if err != nil {
+		return nil, "", "", err
+	}
+	oldest, err := addDays(newest, -currentFitnessLookbackDays)
+	if err != nil {
+		return nil, newest, "", err
+	}
+
+	var records []icu.Wellness
+	if err := client.Get("wellness", nil, dateRangeQuery(oldest, newest), &records); err != nil {
+		return nil, newest, "wellness unavailable, CTL/ATL/TSB are from the last activity: " + err.Error(), nil //nolint:nilerr // wellness is optional context; the failure is reported as a warning
+	}
+
+	return records, newest, "", nil
+}
+
+// clampDateToAthleteToday clamps date to today in the athlete's timezone
+// (--timezone, else the athlete profile, else the system zone).
+func clampDateToAthleteToday(client *icu.Client, flags map[string]string, date string, now time.Time) (string, error) {
+	location, _, err := resolveMicrocycleLocation(client, flags)
+	if err != nil {
+		return "", err
+	}
+
+	return clampDateToToday(date, now.In(location)), nil
 }
 
 func analysisPlanCommand() *Command {
@@ -376,15 +435,20 @@ func analysisPlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			wellnessRecords, wellnessWarnings, err := readWellnessRecordsForAnalysis(client, dateRanges.History.Oldest, dateRanges.History.Newest, nil)
+			wellnessNewest, err := clampDateToAthleteToday(client, flags, dateRanges.History.Newest, time.Now())
+			if err != nil {
+				return err
+			}
+			wellnessRecords, wellnessWarnings, err := readWellnessRecordsForAnalysis(client, dateRanges.History.Oldest, wellnessNewest, nil)
 			if err != nil {
 				return err
 			}
 
 			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
+				Thresholds:     profileThresholds(),
 				StartDate:      dateRanges.History.Oldest,
-				EndDate:        dateRanges.History.Newest,
+				EndDate:        wellnessNewest,
 				Timezone:       tzInfo.timezone,
 				TimezoneSource: tzInfo.source,
 			})
@@ -402,6 +466,7 @@ func analysisPlanCommand() *Command {
 			}
 
 			analysis := icu.AnalyzeTrainingPlanWithContext(activities, events, icu.TrainingPlanOptions{
+				Thresholds:       profileThresholds(),
 				HistoryStartDate: dateRanges.History.Oldest,
 				HistoryEndDate:   dateRanges.History.Newest,
 				PlanStartDate:    dateRanges.Plan.Oldest,
@@ -438,6 +503,7 @@ func analysisWellnessCommand() *Command {
 
 			tzInfo := analysisTimezone(explicit)
 			analysis := analyzeWellness(records, warnings, icu.AnalysisOptions{
+				Thresholds:     profileThresholds(),
 				StartDate:      dateRange.Oldest,
 				EndDate:        dateRange.Newest,
 				Timezone:       tzInfo.timezone,
@@ -612,7 +678,14 @@ func analysisAdaptationCommand() *Command {
 
 			curveQuery := map[string]string{
 				"type":   sportType,
-				"curves": icu.StringFlag(flags, "curves", "42d,365d"),
+				"curves": icu.StringFlag(flags, "curves", ""),
+			}
+			if curveQuery["curves"] == "" {
+				windows, err := icu.AdaptationCurveWindows(dateRange.Oldest, dateRange.Newest)
+				if err != nil {
+					return fmt.Errorf("%w: %w", errInvalidValue, err)
+				}
+				curveQuery["curves"] = windows
 			}
 
 			var curveResponse struct {
@@ -641,6 +714,7 @@ func analysisAdaptationCommand() *Command {
 
 			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
+				Thresholds:     profileThresholds(),
 				StartDate:      dateRange.Oldest,
 				EndDate:        dateRange.Newest,
 				Timezone:       tzInfo.timezone,
@@ -654,6 +728,7 @@ func analysisAdaptationCommand() *Command {
 				activities,
 				&wellnessAnalysis,
 				icu.AnalysisOptions{
+					Thresholds:     profileThresholds(),
 					StartDate:      dateRange.Oldest,
 					EndDate:        dateRange.Newest,
 					Timezone:       tzInfo.timezone,
@@ -886,10 +961,15 @@ func analysisMicrocycleCommand() *Command {
 		Description: "[experimental] Analyze the selected training microcycle as a read-only, LLM-ready diagnostic contract.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
 			now := time.Now()
-			dateRange, location, err := microcycleDateRange(flags, now)
+			location, timezoneSource, err := resolveMicrocycleLocation(client, flags)
 			if err != nil {
 				return err
 			}
+			dateRange, location, err := microcycleDateRange(flags, now, location)
+			if err != nil {
+				return err
+			}
+			wellnessNewest := clampDateToToday(dateRange.Newest, now.In(location))
 
 			lookbackStart, err := addDays(dateRange.Oldest, -90)
 			if err != nil {
@@ -907,7 +987,8 @@ func analysisMicrocycleCommand() *Command {
 				includePlan,
 				includeWellness,
 				location.String(),
-				microcycleTimezoneSource(flags),
+				timezoneSource,
+				wellnessNewest,
 			)
 			if err != nil {
 				return err
@@ -918,7 +999,7 @@ func analysisMicrocycleCommand() *Command {
 				StartDate:        dateRange.Oldest,
 				EndDate:          dateRange.Newest,
 				Timezone:         location.String(),
-				TimezoneSource:   microcycleTimezoneSource(flags),
+				TimezoneSource:   timezoneSource,
 				Now:              now.In(location),
 				PlanIncluded:     includePlan,
 				WellnessIncluded: includeWellness,
@@ -951,6 +1032,7 @@ func readMicrocycleInputs(
 	includeWellness bool,
 	timezone string,
 	timezoneSource string,
+	wellnessNewest string,
 ) (microcycleInputs, error) {
 	var inputs microcycleInputs
 
@@ -969,7 +1051,7 @@ func readMicrocycleInputs(
 	}
 
 	if includeWellness {
-		wellness, err := readMicrocycleWellness(client, dateRange, lookbackStart, timezone, timezoneSource)
+		wellness, err := readMicrocycleWellness(client, wellnessNewest, lookbackStart, timezone, timezoneSource)
 		if err != nil {
 			return inputs, err
 		}
@@ -1035,21 +1117,25 @@ func readMicrocycleEvents(client *icu.Client, flags map[string]string, dateRange
 	return events, nil
 }
 
+// readMicrocycleWellness reads wellness only up to newest, which callers clamp
+// to today: Intervals.icu returns projected CTL/ATL rows for future dates, and
+// the latest row drives readiness state.
 func readMicrocycleWellness(
 	client *icu.Client,
-	dateRange analysisRange,
+	newest string,
 	lookbackStart string,
 	timezone string,
 	timezoneSource string,
 ) (*icu.WellnessAnalysis, error) {
-	wellnessRecords, warnings, err := readWellnessRecordsForAnalysis(client, lookbackStart, dateRange.Newest, nil)
+	wellnessRecords, warnings, err := readWellnessRecordsForAnalysis(client, lookbackStart, newest, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	analysis := analyzeWellness(wellnessRecords, warnings, icu.AnalysisOptions{
+		Thresholds:     profileThresholds(),
 		StartDate:      lookbackStart,
-		EndDate:        dateRange.Newest,
+		EndDate:        newest,
 		Timezone:       timezone,
 		TimezoneSource: timezoneSource,
 	})
@@ -1057,11 +1143,7 @@ func readMicrocycleWellness(
 	return &analysis, nil
 }
 
-func microcycleDateRange(flags map[string]string, now time.Time) (analysisRange, *time.Location, error) {
-	location, err := microcycleLocation(flags)
-	if err != nil {
-		return analysisRange{}, nil, err
-	}
+func microcycleDateRange(flags map[string]string, now time.Time, location *time.Location) (analysisRange, *time.Location, error) {
 	localNow := now.In(location)
 
 	from := icu.StringFlag(flags, "from", "")
@@ -1095,26 +1177,49 @@ func microcycleDateRange(flags map[string]string, now time.Time) (analysisRange,
 	return isoWeekRange(localNow.Format("2006-01-02"), location)
 }
 
-func microcycleLocation(flags map[string]string) (*time.Location, error) {
-	name := icu.StringFlag(flags, "timezone", "")
-	if name == "" {
-		return time.Now().Location(), nil
+// resolveMicrocycleLocation applies timezone precedence: --timezone flag,
+// then the athlete profile timezone, then the system timezone. The athlete
+// profile is only fetched when no flag is given; a failed or empty lookup
+// falls back to the system timezone so the source label stays truthful.
+func resolveMicrocycleLocation(client *icu.Client, flags map[string]string) (*time.Location, string, error) {
+	flagName := icu.StringFlag(flags, "timezone", "")
+	athleteName := ""
+	if flagName == "" {
+		var athlete icu.Athlete
+		if err := client.Get("athlete", nil, nil, &athlete); err == nil {
+			athleteName = athlete.Timezone
+		}
 	}
 
-	location, err := time.LoadLocation(name)
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid --timezone %s", errInvalidValue, name)
-	}
-
-	return location, nil
+	return microcycleLocation(flagName, athleteName, time.Now().Location())
 }
 
-func microcycleTimezoneSource(flags map[string]string) string {
-	if icu.StringFlag(flags, "timezone", "") != "" {
-		return "flag"
+func microcycleLocation(flagName, athleteName string, system *time.Location) (*time.Location, string, error) {
+	if flagName != "" {
+		location, err := time.LoadLocation(flagName)
+		if err != nil {
+			return nil, "", fmt.Errorf("%w: invalid --timezone %s", errInvalidValue, flagName)
+		}
+
+		return location, "flag", nil
+	}
+	if athleteName != "" {
+		if location, err := time.LoadLocation(athleteName); err == nil {
+			return location, "athlete", nil
+		}
 	}
 
-	return "system"
+	return system, "system", nil
+}
+
+// clampDateToToday returns the earlier of date and today's local date.
+func clampDateToToday(date string, localNow time.Time) string {
+	today := localNow.Format("2006-01-02")
+	if date > today {
+		return today
+	}
+
+	return date
 }
 
 func isoWeekRange(date string, location *time.Location) (analysisRange, *time.Location, error) {

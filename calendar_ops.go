@@ -1,6 +1,11 @@
 package icu
 
-import "strings"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"strings"
+)
 
 // Calendar operation types are aliases of the rebalance operation shape so
 // plan and rebalance proposal JSON stay identical for apply/preview.
@@ -34,6 +39,8 @@ type CalendarOpsPreview struct {
 	Operations             []CalendarOpsPreviewItem `json:"operations,omitempty"`
 	Warnings               []string                 `json:"warnings,omitempty"`
 	Validation             *CalendarOpsValidation   `json:"validation,omitempty"`
+	// Projection is filled by plan preview's live check only.
+	Projection *LoadProjection `json:"projection,omitempty"`
 }
 
 type CalendarOpsValidation struct {
@@ -51,10 +58,121 @@ type CalendarOpsPreviewItem struct {
 	Name         string `json:"name,omitempty"`
 	Date         string `json:"date,omitempty"`
 	ExpectedLoad int    `json:"expectedLoad,omitempty"`
+	// Description is the event description as it will render, one line per
+	// entry, so the preview shows exactly what will be written.
+	Description []string `json:"description,omitempty"`
 }
 
 func EventSourceHash(event *Event) string {
 	return RebalanceEventHash(event)
+}
+
+// EventBackupHash fingerprints every user-editable field of an event (the
+// fields a person can change in Intervals.icu), so the event-backup
+// third-party-edit check notices any such edit. Server-computed fields
+// (CTL, ATL, intensity, strain, created-by) are left out: they can change
+// without anyone editing the event.
+func EventBackupHash(event *Event) string {
+	if event == nil {
+		return ""
+	}
+	snapshot := struct {
+		ID                   int      `json:"id"`
+		StartDateLocal       string   `json:"startDateLocal"`
+		EndDateLocal         string   `json:"endDateLocal"`
+		Category             string   `json:"category"`
+		Type                 string   `json:"type"`
+		Name                 string   `json:"name"`
+		Description          string   `json:"description"`
+		TrainingLoad         int      `json:"trainingLoad"`
+		MovingTime           int      `json:"movingTime"`
+		Distance             float64  `json:"distance"`
+		Color                string   `json:"color"`
+		Indoor               *bool    `json:"indoor"`
+		Target               string   `json:"target"`
+		UID                  string   `json:"uid"`
+		Tags                 []string `json:"tags"`
+		ExternalID           string   `json:"externalId"`
+		HideFromAthlete      bool     `json:"hideFromAthlete"`
+		AthleteCannotEdit    bool     `json:"athleteCannotEdit"`
+		LoadTarget           int      `json:"loadTarget"`
+		TimeTarget           int      `json:"timeTarget"`
+		DistanceTarget       float64  `json:"distanceTarget"`
+		TrainingAvailability string   `json:"trainingAvailability"`
+		MaxTrainingTime      int      `json:"maxTrainingTime"`
+		CanTrainSports       []string `json:"canTrainSports"`
+		WorkoutDoc           any      `json:"workoutDoc"`
+	}{
+		event.ID, event.StartDateLocal, event.EndDateLocal, event.Category, event.Type, event.Name,
+		event.Description, event.TrainingLoad, event.MovingTime, event.Distance, event.Color, event.Indoor,
+		event.Target, event.UID, nilIfEmpty(event.Tags), event.ExternalID, event.HideFromAthlete, event.AthleteCannotEdit,
+		event.LoadTarget, event.TimeTarget, event.DistanceTarget, event.TrainingAvailability,
+		event.MaxTrainingTime, nilIfEmpty(event.CanTrainSports), userWorkoutDoc(event.WorkoutDoc),
+	}
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+
+	return hex.EncodeToString(sum[:])
+}
+
+// nilIfEmpty treats [] like a missing list: Intervals.icu returns either for
+// "no tags", and neither is an edit.
+func nilIfEmpty(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	return values
+}
+
+// workoutDocComputedKeys are workout_doc fields Intervals.icu derives from
+// the steps and the athlete's sport settings (FTP, LTHR, zones). They change
+// when, say, FTP changes, without anyone editing the workout. Keys starting
+// with "_" (per-step resolved targets such as "_power") are derived too.
+var workoutDocComputedKeys = map[string]bool{ //nolint:gochecknoglobals // read-only lookup table
+	"average_watts": true, "normalized_power": true, "zoneTimes": true, "strain_score": true,
+	"duration": true, "distance": true, "ftp": true, "lthr": true, "threshold_pace": true,
+	"polarization_index": true, "variability_index": true, "intensity": true, "load": true,
+	"training_load": true, "power_zones": true, "hr_zones": true, "pace_zones": true,
+	"max_watts": true, "work": true, "calories": true, "time_in_zones": true,
+}
+
+// userWorkoutDoc copies a decoded workout_doc without its computed fields,
+// so only what a person wrote (steps, targets, text, options) is hashed.
+// workoutDocComputedKeys apply to the top level only (a step's own
+// "duration" or "distance" is user-written); "_" keys are dropped at any
+// depth.
+// A computed field missing from workoutDocComputedKeys errs on the safe
+// side: it makes the edit check report a change (and ask for --force).
+func userWorkoutDoc(value any) any {
+	return stripWorkoutDoc(value, true)
+}
+
+func stripWorkoutDoc(value any, top bool) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			if (top && workoutDocComputedKeys[key]) || strings.HasPrefix(key, "_") {
+				continue
+			}
+			out[key] = stripWorkoutDoc(item, false)
+		}
+
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for index, item := range typed {
+			out[index] = stripWorkoutDoc(item, false)
+		}
+
+		return out
+	default:
+		return value
+	}
 }
 
 func PreviewCalendarOperations(operations []CalendarOperation) CalendarOpsPreview {
@@ -69,6 +187,7 @@ func PreviewCalendarOperations(operations []CalendarOperation) CalendarOpsPrevie
 			Name:         operation.Body.Name,
 			Date:         eventDateOnly(operation.Body.StartDateLocal),
 			ExpectedLoad: operation.ExpectedLoad,
+			Description:  RenderDescriptionLines(operation.Body.Description),
 		}
 		preview.Operations = append(preview.Operations, item)
 		status := operation.Status
@@ -118,6 +237,9 @@ func CalendarOperationErrors(operation *CalendarOperation) []string {
 	}
 	if operation.Action != CalendarActionCreate && operation.EventID == 0 {
 		errors = append(errors, "eventId is required for "+operation.Action)
+	}
+	if err := ValidateDescriptionText(operation.Body.Description); err != nil && operation.Action != CalendarActionCancel {
+		errors = append(errors, operation.ID+": "+err.Error())
 	}
 	if operation.Action != CalendarActionCancel && operation.Body.Name == "" {
 		errors = append(errors, "body.name is required for "+operation.Action)

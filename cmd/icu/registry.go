@@ -15,6 +15,7 @@ func registerAllCommands(registry *CommandRegistry) {
 	registerGearCommands(registry)
 	registerMiscCommands(registry)
 	registerPlanCommands(registry)
+	registerProfileCommands(registry)
 	registerRebalanceCommands(registry)
 	registerRoutesCommands(registry)
 	registerSportsCommands(registry)

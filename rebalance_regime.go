@@ -40,10 +40,7 @@ func DetectRebalanceRegime(samples []float64) (RebalanceRegime, bool) {
 	disturbance := false
 	discardedShare := 0.0
 	currentEnd := samplesLen - 1
-	for {
-		if len(changePoints) == 0 {
-			break
-		}
+	for len(changePoints) > 0 {
 		lastSplit := changePoints[len(changePoints)-1]
 		segLen := currentEnd - lastSplit + 1
 		if segLen >= rebalanceRegimeMinRecent {
@@ -103,10 +100,11 @@ func segmentRegimeL1MDL(samples []float64, start, end int) []int {
 	}
 	left := segmentRegimeL1MDL(samples, start, bestSplit-1)
 	right := segmentRegimeL1MDL(samples, bestSplit, end)
-	var combined []int
+	combined := make([]int, 0, len(left)+1+len(right))
 	combined = append(combined, left...)
 	combined = append(combined, bestSplit)
 	combined = append(combined, right...)
+
 	return combined
 }
 

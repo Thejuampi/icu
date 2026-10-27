@@ -569,3 +569,35 @@ func TestAnalyzeCyclingActivitiesWarnsBelowMinIncludedActivities(t *testing.T) {
 		t.Fatalf("Warnings = %v, want to contain %q", got.Warnings, wantWarning)
 	}
 }
+
+func TestApplyWellnessFitness(t *testing.T) {
+	t.Parallel()
+
+	records := []icu.Wellness{
+		{ID: "2026-10-24", CTL: 29.2, ATL: 44.0},
+		{ID: "2026-10-26", CTL: 28.88, ATL: 39.03},
+		{ID: "2026-11-01", CTL: 25.03, ATL: 16.56},
+		{ID: "2026-10-25"},
+	}
+	cases := []struct {
+		name     string
+		records  []icu.Wellness
+		end      string
+		wantTSB  float64
+		wantDate string
+	}{
+		{"uses end-date row, ignores projected future row", records, "2026-10-26", -10.15, "2026-10-26"},
+		{"skips rows without fitness fields", records, "2026-10-25", -14.8, "2026-10-24"},
+		{"leaves activity values when no rows", nil, "2026-10-26", -15.45, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			load := icu.CyclingLoad{LatestCTL: 29.57, LatestATL: 45.02, LatestForm: -15.45}
+			icu.ApplyWellnessFitness(&load, tc.records, tc.end)
+			if load.LatestForm != tc.wantTSB || load.LatestLoadDate != tc.wantDate {
+				t.Fatalf("form=%v date=%q, want %v %q", load.LatestForm, load.LatestLoadDate, tc.wantTSB, tc.wantDate)
+			}
+		})
+	}
+}

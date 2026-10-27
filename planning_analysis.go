@@ -2,6 +2,7 @@ package icu
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -46,8 +47,6 @@ const (
 	planZ2CooldownSeconds      = 600
 	planForecastCtlTauDays     = 42
 	planForecastAtlTauDays     = 7
-	planForecastWatchTSB       = -10
-	planForecastRedTSB         = -20
 	planForecastStatusRed      = "red"
 	planForecastStatusWatch    = "watch"
 	planTargetRaceA            = "RACE_A"
@@ -67,7 +66,6 @@ const (
 	planDecisionPeakPenalty    = 20
 	planDecisionAdaptPenalty   = 15
 	planHeatSessionWatch       = 1
-	planDriftWatchThreshold    = 5
 	plannedClassificationRest  = "rest"
 	plannedClassificationNote  = "note"
 	plannedClassificationHigh  = "high_intensity"
@@ -83,6 +81,8 @@ type TrainingPlanOptions struct {
 	HistoryEndDate   string `json:"historyEndDate,omitempty"`
 	PlanStartDate    string `json:"planStartDate,omitempty"`
 	PlanEndDate      string `json:"planEndDate,omitempty"`
+	// Thresholds are profile overrides for baseline-derived bounds.
+	Thresholds *TrainingThresholds `json:"-"`
 }
 
 type TrainingPlanAnalysis struct {
@@ -120,19 +120,27 @@ type TrainingPlanScope struct {
 }
 
 type TrainingPlanHistory struct {
-	CompletedWeeks       int                         `json:"completedWeeks"`
-	AverageWeeklyLoad    float64                     `json:"averageWeeklyLoad"`
-	PeakWeeklyLoad       int                         `json:"peakWeeklyLoad"`
-	RecentWeeklyLoad     int                         `json:"recentWeeklyLoad"`
-	AverageWeeklyHours   float64                     `json:"averageWeeklyHours"`
-	CurrentStateLabel    string                      `json:"currentStateLabel,omitempty"`
-	CurrentLoadPressure  float64                     `json:"currentLoadPressure,omitempty"`
-	CurrentCTL           float64                     `json:"currentCtl,omitempty"`
-	CurrentATL           float64                     `json:"currentAtl,omitempty"`
-	CurrentTSB           float64                     `json:"currentTsb,omitempty"`
-	CurrentDecoupling    float64                     `json:"currentDecoupling,omitempty"`
-	CurrentHotSessions   int                         `json:"currentHotSessions,omitempty"`
-	CurrentStateSource   string                      `json:"currentStateSource,omitempty"`
+	CompletedWeeks      int     `json:"completedWeeks"`
+	AverageWeeklyLoad   float64 `json:"averageWeeklyLoad"`
+	PeakWeeklyLoad      int     `json:"peakWeeklyLoad"`
+	RecentWeeklyLoad    int     `json:"recentWeeklyLoad"`
+	AverageWeeklyHours  float64 `json:"averageWeeklyHours"`
+	CurrentStateLabel   string  `json:"currentStateLabel,omitempty"`
+	CurrentLoadPressure float64 `json:"currentLoadPressure,omitempty"`
+	CurrentCTL          float64 `json:"currentCtl,omitempty"`
+	CurrentATL          float64 `json:"currentAtl,omitempty"`
+	CurrentTSB          float64 `json:"currentTsb,omitempty"`
+	CurrentDecoupling   float64 `json:"currentDecoupling,omitempty"`
+	// RecentDecoupling is the mean decoupling of the last 7 days of history,
+	// judged against DecouplingThreshold derived from the rides before them.
+	RecentDecoupling    float64           `json:"recentDecoupling,omitempty"`
+	DecouplingThreshold *DerivedThreshold `json:"decouplingThreshold,omitempty"`
+	CurrentHotSessions  int               `json:"currentHotSessions,omitempty"`
+	CurrentStateSource  string            `json:"currentStateSource,omitempty"`
+	// CurrentLoadSource labels CurrentCTL/ATL/TSB: "wellness" (daily row at
+	// the history end) or "last_activity" (frozen at the newest ride).
+	CurrentLoadSource    string                      `json:"currentLoadSource,omitempty"`
+	CurrentLoadDate      string                      `json:"currentLoadDate,omitempty"`
 	PlannedLoadAlignment string                      `json:"plannedLoadAlignment,omitempty"`
 	Weeks                []TrainingPlanCompletedWeek `json:"weeks,omitempty"`
 }
@@ -179,6 +187,9 @@ type TrainingPlanForecast struct {
 	Status     string                      `json:"status,omitempty"`
 	Source     string                      `json:"source,omitempty"`
 	Points     []TrainingPlanForecastPoint `json:"points,omitempty"`
+	// Threshold is the TSB bound pair from the athlete's own TSB history
+	// (wellness) or profile; nil leaves Status "no_baseline".
+	Threshold *DerivedThreshold `json:"threshold,omitempty"`
 }
 
 type TrainingPlanForecastPoint struct {
@@ -219,7 +230,13 @@ type TrainingPlanCompletedWeek struct {
 	LongEnduranceSessions int     `json:"longEnduranceSessions"`
 	MeanIntensity         float64 `json:"meanIntensity,omitempty"`
 	MeanDecoupling        float64 `json:"meanDecoupling,omitempty"`
-	Tolerance             string  `json:"tolerance,omitempty"`
+	// DecouplingExcluded counts rides whose decoupling was dropped from
+	// MeanDecoupling as a robust (MAD z-score) outlier vs. the history.
+	DecouplingExcluded int `json:"decouplingExcluded,omitempty"`
+	// Partial marks an edge week only partly inside the history range. It is
+	// listed but excluded from the averages, peak and recent-week load.
+	Partial   bool   `json:"partial,omitempty"`
+	Tolerance string `json:"tolerance,omitempty"`
 }
 
 type TrainingPlanPhase struct {
@@ -342,8 +359,17 @@ type trainingPlanHistoryWeek struct {
 	longEnduranceSessions int
 	intensity             numericAccumulator
 	decoupling            numericAccumulator
-	startDate             string
-	endDate               string
+	decouplingValues      []float64
+	decouplingSeconds     []int
+	decouplingDates       []string
+	// decouplingKept are the rides long enough to measure decoupling (the
+	// duration floor only). The history-wide MAD screen is not applied: it
+	// would drop a genuinely high recent block as an outlier of itself.
+	decouplingKept     []datedDecoupling
+	decouplingExcluded int
+	partial            bool
+	startDate          string
+	endDate            string
 }
 
 func AnalyzeTrainingPlan(activities []Activity, events []Event, options TrainingPlanOptions) TrainingPlanAnalysis {
@@ -373,11 +399,12 @@ func AnalyzeTrainingPlanWithContext(
 	}
 
 	analysis := accumulator.finish(options)
-	analysis.History = summarizeTrainingPlanHistory(activities, options)
+	analysis.History = summarizeTrainingPlanHistory(activities, options, context.Wellness)
 	analysis.History.PlannedLoadAlignment = plannedLoadAlignment(&analysis.History, &analysis.Load)
 	analysis.Anchors = trainingPlanSportAnchors(context.SportSettings, activities)
 	analysis.TargetStatus = trainingPlanTargetStatus(events, options, &analysis.History)
 	analysis.Forecast = trainingPlanForecast(&analysis)
+	applyForecastThreshold(&analysis.Forecast, context.Wellness, options.Thresholds)
 	analysis.DayAdjustments = trainingPlanDayAdjustments(&analysis, context.Wellness)
 	analysis.Decision = trainingPlanDecisionGuidance(&analysis, context.Wellness, context.Adaptation)
 	analysis.Warnings = trainingPlanWarnings(&analysis)
@@ -1243,7 +1270,7 @@ func trainingPlanLoad(weeks []TrainingPlanWeek) TrainingPlanLoad {
 	return load
 }
 
-func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOptions) TrainingPlanHistory {
+func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOptions, wellness *WellnessAnalysis) TrainingPlanHistory {
 	var history TrainingPlanHistory
 
 	weeks := map[string]trainingPlanHistoryWeek{}
@@ -1275,7 +1302,11 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		week.startDate = weekStart.Format(analysisDateLayout)
 		week.endDate = weekEnd.Format(analysisDateLayout)
 		week.intensity.addIfNonZero(activity.Intensity)
-		week.decoupling.addIfNonZero(activity.Decoupling)
+		if activity.Decoupling != 0 {
+			week.decouplingValues = append(week.decouplingValues, activity.Decoupling)
+			week.decouplingSeconds = append(week.decouplingSeconds, activity.MovingTime)
+			week.decouplingDates = append(week.decouplingDates, date)
+		}
 
 		if activity.Intensity >= highIntensityThreshold {
 			week.highIntensityDays++
@@ -1288,14 +1319,211 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		weeks[key] = week
 	}
 
+	zeroFillHistoryWeeks(weeks, options.HistoryStartDate, options.HistoryEndDate)
+	historyDecoupling := filterHistoryDecoupling(weeks)
 	finishTrainingPlanHistory(&history, weeks)
-	addCurrentTrainingStateToHistory(&history, activities, options)
+	addCurrentTrainingStateToHistory(&history, activities, options, wellness)
+	if historyDecoupling.count > 0 {
+		history.CurrentDecoupling = round2(historyDecoupling.average())
+	}
+	history.RecentDecoupling, history.DecouplingThreshold = recentDecouplingVsBaseline(weeks, options.HistoryEndDate, options.Thresholds)
 
 	return history
 }
 
+// recentDecouplingWindowDays is the judged window: rides in the last 7 days
+// of the history range.
+const recentDecouplingWindowDays = 7
+
+type datedDecoupling struct {
+	date  string
+	value float64
+}
+
+// recentDecouplingVsBaseline returns the mean decoupling of the long-enough
+// rides in the last recentDecouplingWindowDays up to endDate, and a high-side
+// bound derived from the rides strictly before that window (MAD-screened on
+// their own, then robust median and MAD), or the profile's decouplingWatchPct. The baseline window is fixed by
+// date, so the recent rides never sit in their own baseline and an old week
+// is never judged as "recent". No recent rides means no judgement.
+func recentDecouplingVsBaseline(
+	weeks map[string]trainingPlanHistoryWeek, endDate string, overrides *TrainingThresholds,
+) (float64, *DerivedThreshold) {
+	var rides []datedDecoupling
+	for key := range weeks {
+		rides = append(rides, weeks[key].decouplingKept...)
+	}
+	if len(rides) == 0 {
+		return 0, nil
+	}
+	if endDate == "" {
+		for _, ride := range rides {
+			endDate = max(endDate, ride.date)
+		}
+	}
+	end, err := time.Parse(analysisDateLayout, endDate)
+	if err != nil {
+		return 0, nil
+	}
+	cutoff := end.AddDate(0, 0, -recentDecouplingWindowDays).Format(analysisDateLayout)
+	var recent numericAccumulator
+	var earlier []float64
+	for _, ride := range rides {
+		switch {
+		case ride.date > endDate:
+		case ride.date > cutoff:
+			recent.add(ride.value)
+		default:
+			earlier = append(earlier, ride.value)
+		}
+	}
+	if recent.count == 0 {
+		return 0, nil
+	}
+	if len(earlier) > 0 {
+		earlier = robustFilteredFloats(earlier)
+	}
+	watch := overrideOf(overrides, func(t *TrainingThresholds) *float64 { return t.DecouplingWatchPct })
+
+	return round2(recent.average()),
+		deriveThreshold(earlier, baselineHighIsBad, thresholdMethod(overrides), watch, nil)
+}
+
+// Decoupling filter method parameters. A ride is too short to measure
+// aerobic decoupling when its moving time is below BOTH the athlete's own
+// decouplingFloorPercentile moving time and decouplingFloorMedianFraction of
+// their median moving time; the two-sided rule only removes rides that are
+// short for this athlete, so it never drops a fixed share of rides. The
+// remaining values are then screened with the MAD robust z-score
+// (robustFilteredFloats), which needs its own minimum sample count.
+const (
+	decouplingFloorPercentile     = 0.25
+	decouplingFloorMedianFraction = 0.5
+)
+
+// decouplingDurationFloor is the moving-time floor (seconds) described above,
+// derived from every ride that reported decoupling. The percentile uses
+// linear interpolation (percentileLinear).
+func decouplingDurationFloor(weeks map[string]trainingPlanHistoryWeek) float64 {
+	var seconds []float64
+	for key := range weeks {
+		for _, value := range weeks[key].decouplingSeconds {
+			seconds = append(seconds, float64(value))
+		}
+	}
+	if len(seconds) == 0 {
+		return 0
+	}
+
+	return math.Min(percentileLinear(seconds, decouplingFloorPercentile), decouplingFloorMedianFraction*medianFloat64(seconds))
+}
+
+// percentileLinear is the p-quantile (0..1) with linear interpolation between
+// order statistics, so small samples are not snapped to their minimum.
+func percentileLinear(values []float64, p float64) float64 {
+	sorted := append([]float64(nil), values...)
+	sort.Float64s(sorted)
+	position := p * float64(len(sorted)-1)
+	lower := int(math.Floor(position))
+	upper := int(math.Ceil(position))
+
+	return sorted[lower] + (position-float64(lower))*(sorted[upper]-sorted[lower])
+}
+
+// filterHistoryDecoupling drops per-ride decoupling outliers before weekly
+// means are taken. Short or unsteady rides (e.g. a 6-minute spin at -74%)
+// produce implausible values that dominate a 3-ride mean. Rides under the
+// athlete-relative duration floor are dropped first; the rest are screened
+// with a MAD robust z-score against the athlete's own history. It fills each
+// week's decoupling accumulator and excluded count and returns the
+// accumulator over all kept rides.
+func filterHistoryDecoupling(weeks map[string]trainingPlanHistoryWeek) numericAccumulator {
+	floor := decouplingDurationFloor(weeks)
+	long := func(week *trainingPlanHistoryWeek, index int) bool {
+		return index >= len(week.decouplingSeconds) || float64(week.decouplingSeconds[index]) >= floor
+	}
+
+	var all []float64
+	for key := range weeks {
+		week := weeks[key]
+		for index, value := range week.decouplingValues {
+			if long(&week, index) {
+				all = append(all, value)
+			}
+		}
+	}
+
+	var kept numericAccumulator
+	low, high := math.Inf(1), math.Inf(-1)
+	for _, value := range robustFilteredFloats(all) {
+		low = math.Min(low, value)
+		high = math.Max(high, value)
+	}
+
+	for key := range weeks {
+		week := weeks[key]
+		for index, value := range week.decouplingValues {
+			if long(&week, index) && index < len(week.decouplingDates) {
+				week.decouplingKept = append(week.decouplingKept, datedDecoupling{week.decouplingDates[index], value})
+			}
+			if !long(&week, index) || value < low || value > high {
+				week.decouplingExcluded++
+
+				continue
+			}
+			week.decoupling.add(value)
+			kept.add(value)
+		}
+		weeks[key] = week
+	}
+
+	return kept
+}
+
+// zeroFillHistoryWeeks adds an empty entry for every ISO week that overlaps
+// the history range and has no cycling activity, so weekly averages and
+// tolerance labels count rest/off-bike weeks as zero load instead of skipping
+// them. Partial weeks at either edge of the range (for example the week still
+// in progress) are only kept when they already have activity, and are marked
+// partial so they are listed but not averaged as if they were complete.
+func zeroFillHistoryWeeks(weeks map[string]trainingPlanHistoryWeek, startDate, endDate string) {
+	start, startErr := time.Parse(analysisDateLayout, startDate)
+	end, endErr := time.Parse(analysisDateLayout, endDate)
+	if startErr != nil || endErr != nil || end.Before(start) {
+		return
+	}
+
+	for weekStart := isoWeekStart(start); !weekStart.After(end); weekStart = weekStart.AddDate(0, 0, planWeekDays) {
+		weekEnd := weekStart.AddDate(0, 0, planWeekDays-1)
+		key := isoWeekKey(weekStart)
+		partial := weekStart.Before(start) || weekEnd.After(end)
+		if week, ok := weeks[key]; ok {
+			week.partial = partial
+			weeks[key] = week
+
+			continue
+		}
+		if partial {
+			continue
+		}
+		weeks[key] = trainingPlanHistoryWeek{
+			startDate: weekStart.Format(analysisDateLayout),
+			endDate:   weekEnd.Format(analysisDateLayout),
+		}
+	}
+}
+
 func finishTrainingPlanHistory(history *TrainingPlanHistory, weeks map[string]trainingPlanHistoryWeek) {
-	keys := sortedHistoryWeekKeys(weeks)
+	allKeys := sortedHistoryWeekKeys(weeks)
+	keys := make([]string, 0, len(allKeys))
+	for _, key := range allKeys {
+		if !weeks[key].partial {
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		keys = allKeys
+	}
 	history.CompletedWeeks = len(keys)
 
 	if len(keys) == 0 {
@@ -1320,7 +1548,7 @@ func finishTrainingPlanHistory(history *TrainingPlanHistory, weeks map[string]tr
 	history.AverageWeeklyLoad = round2(float64(totalLoad) / float64(len(keys)))
 	history.AverageWeeklyHours = round2(float64(totalSeconds) / secondsPerHour / float64(len(keys)))
 	history.RecentWeeklyLoad = weeks[keys[len(keys)-1]].load
-	history.Weeks = completedHistoryWeeks(keys, weeks, history.AverageWeeklyLoad)
+	history.Weeks = completedHistoryWeeks(allKeys, weeks, history.AverageWeeklyLoad)
 }
 
 func completedHistoryWeeks(keys []string, weeks map[string]trainingPlanHistoryWeek, averageWeeklyLoad float64) []TrainingPlanCompletedWeek {
@@ -1340,6 +1568,8 @@ func completedHistoryWeeks(keys []string, weeks map[string]trainingPlanHistoryWe
 			LongEnduranceSessions: week.longEnduranceSessions,
 			MeanIntensity:         round3(week.intensity.average()),
 			MeanDecoupling:        round2(week.decoupling.average()),
+			DecouplingExcluded:    week.decouplingExcluded,
+			Partial:               week.partial,
 			Tolerance:             completedWeekTolerance(week.load, averageWeeklyLoad),
 		})
 	}
@@ -1363,7 +1593,12 @@ func completedWeekTolerance(load int, averageWeeklyLoad float64) string {
 	return planAlignmentWithin
 }
 
-func addCurrentTrainingStateToHistory(history *TrainingPlanHistory, activities []Activity, options TrainingPlanOptions) {
+func addCurrentTrainingStateToHistory(
+	history *TrainingPlanHistory,
+	activities []Activity,
+	options TrainingPlanOptions,
+	wellness *WellnessAnalysis,
+) {
 	analysis := AnalyzeCyclingActivities(activities, AnalysisOptions{
 		StartDate: options.HistoryStartDate,
 		EndDate:   options.HistoryEndDate,
@@ -1377,6 +1612,17 @@ func addCurrentTrainingStateToHistory(history *TrainingPlanHistory, activities [
 	history.CurrentDecoupling = analysis.Durability.AverageDecoupling
 	history.CurrentHotSessions = analysis.Environment.HotSessions
 	history.CurrentStateSource = analysis.State.Source
+	if history.CurrentCTL != 0 || history.CurrentATL != 0 {
+		history.CurrentLoadSource = latestLoadSourceActivity
+	}
+
+	if wellness != nil && (wellness.Load.CTL != 0 || wellness.Load.ATL != 0) {
+		history.CurrentCTL = wellness.Load.CTL
+		history.CurrentATL = wellness.Load.ATL
+		history.CurrentTSB = wellness.Load.TSB
+		history.CurrentLoadSource = latestLoadSourceWellness
+		history.CurrentLoadDate = wellness.Load.Date
+	}
 }
 
 func plannedLoadAlignment(history *TrainingPlanHistory, load *TrainingPlanLoad) string {
@@ -1589,9 +1835,22 @@ func trainingPlanForecast(analysis *TrainingPlanAnalysis) TrainingPlanForecast {
 	forecast.EndCTL = round2(ctl)
 	forecast.EndATL = round2(atl)
 	forecast.EndTSB = round2(ctl - atl)
-	forecast.Status = forecastStatus(forecast.LowestTSB)
 
 	return forecast
+}
+
+// applyForecastThreshold judges the forecast's lowest TSB against the
+// athlete's own TSB baseline from wellness, else the profile's TSB bounds.
+func applyForecastThreshold(forecast *TrainingPlanForecast, wellness *WellnessAnalysis, overrides *TrainingThresholds) {
+	if wellness != nil && wellness.Load.Threshold != nil {
+		forecast.Threshold = wellness.Load.Threshold
+	} else if overrides != nil {
+		forecast.Threshold = profilePartialThreshold(overrides.TSBWatch, overrides.TSBRed)
+		if overrides.TSBWatch != nil && overrides.TSBRed != nil {
+			forecast.Threshold.Red = *overrides.TSBRed
+		}
+	}
+	forecast.Status = forecastStatus(forecast.LowestTSB, forecast.Threshold)
 }
 
 func initialForecastTSB(history *TrainingPlanHistory) float64 {
@@ -1629,16 +1888,17 @@ func ewmaLoadStep(previous, todayLoad float64, tauDays int) float64 {
 	return previous + ((todayLoad - previous) / float64(tauDays))
 }
 
-func forecastStatus(lowestTSB float64) string {
-	if lowestTSB <= planForecastRedTSB {
+func forecastStatus(lowestTSB float64, threshold *DerivedThreshold) string {
+	switch thresholdLevel(lowestTSB, threshold, baselineLowIsBad) {
+	case BaselineLevelRed:
 		return planForecastStatusRed
-	}
-
-	if lowestTSB <= planForecastWatchTSB {
+	case BaselineLevelWatch:
 		return planForecastStatusWatch
+	case BaselineLevelOK:
+		return "stable"
+	default:
+		return "no_baseline"
 	}
-
-	return "stable"
 }
 
 func trainingPlanDayAdjustments(
@@ -1660,12 +1920,12 @@ func trainingPlanDayAdjustments(
 		}
 
 		if point, ok := forecastByDate[session.Date]; ok {
-			if rule, valid := adjustmentRuleForForecast(&session, point); valid {
+			if rule, valid := adjustmentRuleForForecast(&session, point, analysis.Forecast.Threshold); valid {
 				rules = append(rules, rule)
 			}
 		}
 
-		if rule, valid := adjustmentRuleForDurability(&session, analysis.History.CurrentDecoupling); valid {
+		if rule, valid := adjustmentRuleForDurability(&session, &analysis.History); valid {
 			rules = append(rules, rule)
 		}
 
@@ -1692,12 +1952,14 @@ func trainingPlanDayAdjustments(
 func adjustmentRuleForForecast(
 	session *TrainingPlanSession,
 	point TrainingPlanForecastPoint,
+	threshold *DerivedThreshold,
 ) (TrainingPlanDayAdjustment, bool) {
 	if !isIntensityClassification(session.Classification) {
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
-	if point.TSB <= planForecastRedTSB {
+	level := thresholdLevel(point.TSB, threshold, baselineLowIsBad)
+	if level == BaselineLevelRed {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1709,7 +1971,7 @@ func adjustmentRuleForForecast(
 		}, true
 	}
 
-	if point.TSB <= planForecastWatchTSB {
+	if level == BaselineLevelWatch {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1726,13 +1988,14 @@ func adjustmentRuleForForecast(
 
 func adjustmentRuleForDurability(
 	session *TrainingPlanSession,
-	meanDecoupling float64,
+	history *TrainingPlanHistory,
 ) (TrainingPlanDayAdjustment, bool) {
 	if session.Classification != plannedClassificationLong {
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
-	if meanDecoupling < planDriftWatchThreshold {
+	level := thresholdLevel(history.RecentDecoupling, history.DecouplingThreshold, baselineHighIsBad)
+	if level != BaselineLevelWatch && level != BaselineLevelRed {
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
@@ -1807,7 +2070,7 @@ func adjustmentRuleForSleep(
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
-	if wellness.Sleep.Latest < sleepRedScore {
+	if wellness.Sleep.Level == BaselineLevelRed {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1819,7 +2082,7 @@ func adjustmentRuleForSleep(
 		}, true
 	}
 
-	if wellness.Sleep.Latest < sleepWatchScore {
+	if wellness.Sleep.Level == BaselineLevelWatch {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1842,7 +2105,7 @@ func adjustmentRuleForRestingHR(
 		return emptyTrainingPlanDayAdjustment(), false
 	}
 
-	if wellness.RestingHR.Delta >= restingHRRedDelta {
+	if wellness.RestingHR.Level == BaselineLevelRed {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1854,7 +2117,7 @@ func adjustmentRuleForRestingHR(
 		}, true
 	}
 
-	if wellness.RestingHR.Delta >= restingHRWatchDelta {
+	if wellness.RestingHR.Level == BaselineLevelWatch {
 		return TrainingPlanDayAdjustment{
 			Date:           session.Date,
 			SessionName:    session.Name,
@@ -1895,10 +2158,11 @@ func trainingPlanDecisionGuidance(
 	decision.PrimaryDirective = primaryDirective(analysis, wellness, adaptation)
 	decision.ADEScore = planDecisionBaseScore
 
-	if analysis.Forecast.Status == planForecastStatusRed {
+	switch analysis.Forecast.Status {
+	case planForecastStatusRed:
 		decision.ADEScore -= planDecisionRedPenalty
 		decision.Penalties = append(decision.Penalties, "forecast_red")
-	} else if analysis.Forecast.Status == planForecastStatusWatch {
+	case planForecastStatusWatch:
 		decision.ADEScore -= planDecisionWatchPenalty
 		decision.Penalties = append(decision.Penalties, "forecast_watch")
 	}

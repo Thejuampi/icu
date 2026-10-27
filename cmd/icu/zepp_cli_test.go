@@ -1044,3 +1044,30 @@ func TestZeppSpO2WindowsCommandRequiresDate(t *testing.T) {
 		t.Fatalf("expected error when date missing")
 	}
 }
+
+func TestRunZeppTokenPrintsTokensWithoutSaving(t *testing.T) {
+	tokensSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", "https://example.com/callback?access=atok&country_code=US")
+		w.WriteHeader(http.StatusSeeOther)
+	}))
+	t.Cleanup(tokensSrv.Close)
+	loginSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"result":"ok","token_info":{"login_token":"lt","app_token":"at","user_id":"u1"}}`))
+	}))
+	t.Cleanup(loginSrv.Close)
+	withZeppTestEnv(t)
+	t.Setenv("ZEPP_TOKENS_URL", tokensSrv.URL+"/v2/registrations/tokens")
+	t.Setenv("ZEPP_LOGIN_URL", loginSrv.URL+"/v2/client/login")
+
+	out, err := captureStdout(t, func() error { return runZeppToken("u@example.com", "secret") })
+	if err != nil || !strings.Contains(out, `"loginToken": "lt"`) {
+		t.Fatalf("out=%s err=%v", out, err)
+	}
+	if cfg, _ := icu.LoadConfig(); cfg != nil && cfg.ZeppLoginToken != "" {
+		t.Fatal("zepp token saved config")
+	}
+	t.Setenv("ZEPP_LOGIN_URL", tokensSrv.URL+"/missing")
+	if _, err := captureStdout(t, func() error { return runZeppToken("u@example.com", "secret") }); err == nil {
+		t.Fatal("failed login accepted")
+	}
+}

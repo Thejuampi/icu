@@ -99,6 +99,7 @@ func TestCalibrateCrrFromLowSpeedClimbs(t *testing.T) {
 	eta := params.DrivetrainEff.Value
 	cadPresent := make([]bool, n)
 	wattsPresent := make([]bool, n)
+	var prevDist, prevAlt float64
 	for i := range n {
 		times[i] = float64(i)
 		cad[i] = 75
@@ -113,13 +114,12 @@ func TestCalibrateCrrFromLowSpeedClimbs(t *testing.T) {
 			grade = 0.0
 		}
 		speed[i] = speedMS
-		if i == 0 {
-			dist[i] = 0
-			alt[i] = 0
-		} else {
-			dist[i] = dist[i-1] + speedMS
-			alt[i] = alt[i-1] + grade*speedMS
+		if i > 0 {
+			prevDist += speedMS
+			prevAlt += grade * speedMS
 		}
+		dist[i] = prevDist
+		alt[i] = prevAlt
 		denom := math.Sqrt(1 + grade*grade)
 		pGrav := mass * g * speedMS * (grade / denom)
 		pRoll := crrPlant * mass * g * speedMS / denom
@@ -515,18 +515,18 @@ func TestOutdoorEnsembleWithHRAndVaryingTerrain(t *testing.T) {
 	crr := params.Crr.Value
 	rho := params.AirDensity.Value
 	eta := params.DrivetrainEff.Value
+	var prevDist, prevAlt float64
 	for i := range n {
 		times[i] = float64(i)
 		// Vary speed/grade/HR across the ride.
 		speed[i] = 6 + 3*math.Sin(float64(i)/40)
 		grade := 0.02 * math.Sin(float64(i)/55)
-		if i == 0 {
-			dist[i] = 0
-			alt[i] = 0
-		} else {
-			dist[i] = dist[i-1] + speed[i]
-			alt[i] = alt[i-1] + grade*speed[i]
+		if i > 0 {
+			prevDist += speed[i]
+			prevAlt += grade * speed[i]
 		}
+		dist[i] = prevDist
+		alt[i] = prevAlt
 		hr[i] = 130 + 25*math.Sin(float64(i)/70)
 		denom := math.Sqrt(1 + grade*grade)
 		pGrav := mass * g * speed[i] * (grade / denom)

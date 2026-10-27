@@ -72,9 +72,9 @@ func V2EventsURL(base string, preset V2EventPreset, oldest, newest string) (stri
 	return buildZeppDateRangeURL(
 		base, "/v2/users/me/events", oldest, newest,
 		url.Values{
-			"eventType": {preset.EventType},
-			"subType":   {preset.SubType},
-			"limit":     {"1000"},
+			zeppParamEventType: {preset.EventType},
+			"subType":          {preset.SubType},
+			zeppParamLimit:     {"1000"},
 		},
 		"from", "to",
 		parseDateToMillis, parseDateEndOfDayMillis,
@@ -97,8 +97,8 @@ func UserHeartRateURL(base, userID, oldest, newest string) (string, error) {
 	return buildZeppDateRangeURL(
 		base, "/users/"+userID+"/heartRate", oldest, newest,
 		url.Values{
-			"limit": {"1000"},
-			"type":  {"2"},
+			zeppParamLimit: {"1000"},
+			"type":         {"2"},
 		},
 		"startTime", "endTime",
 		parseDateToSecondsUTC, parseDateEndOfDaySecondsUTC,
@@ -110,8 +110,8 @@ func WeightRecordsURL(base, userID, oldest, newest string) (string, error) {
 	return buildZeppDateRangeURL(
 		base, "/users/"+userID+"/members/-1/weightRecords", oldest, newest,
 		url.Values{
-			"limit":     {"300"},
-			"isForward": {"0"},
+			zeppParamLimit: {"300"},
+			"isForward":    {"0"},
 		},
 		"fromTime", "toTime",
 		parseDateToSecondsUTC, parseDateEndOfDaySecondsUTC,
@@ -134,9 +134,9 @@ func SecondHeartRateFilesURL(base, oldest, newest string) (string, error) {
 	return buildZeppDateRangeURL(
 		base, "/users/me/fileInfo/events", oldest, newest,
 		url.Values{
-			"eventType": {"second_heart_rate"},
-			"subType":   {"real_data"},
-			"limit":     {"200"},
+			zeppParamEventType: {"second_heart_rate"},
+			"subType":          {zeppSubTypeRealData},
+			zeppParamLimit:     {"200"},
 		},
 		"from", "to",
 		parseDateToMillis, parseDateEndOfDayMillis,
@@ -161,14 +161,14 @@ func SpO2WindowsURL(base, userID, date, tz string) (string, error) {
 	to := day.Add(24*time.Hour - time.Second).Format(time.RFC3339)
 
 	query := url.Values{
-		"eventType": {"blood_oxygen"},
-		"subType":   {"odi"},
-		"from":      {from},
-		"to":        {to},
-		"timeZone":  {tz},
-		"limit":     {"999"},
-		"reverse":   {"0"},
-		"userId":    {userID},
+		zeppParamEventType: {"blood_oxygen"},
+		"subType":          {"odi"},
+		"from":             {from},
+		"to":               {to},
+		"timeZone":         {tz},
+		zeppParamLimit:     {"999"},
+		"reverse":          {"0"},
+		"userId":           {userID},
 	}
 
 	return base + "/users/" + userID + "/events/dateString?" + query.Encode(), nil

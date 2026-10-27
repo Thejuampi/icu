@@ -498,8 +498,8 @@ func TestAnalysisWellnessCommandPrefersZeppHybridCharge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Unmarshal error = %v", err)
 	}
-	if got.Sleep.ScoreName != "zepp_hybridcharge" || got.Sleep.Latest != 88 || got.State.State != "OK" {
-		t.Fatalf("Sleep = %+v State = %+v, want zepp_hybridcharge latest 88 state OK", got.Sleep, got.State)
+	if got.Sleep.ScoreName != "zepp_hybridcharge" || got.Sleep.Latest != 88 || got.State.State != icu.PhysiologyInsufficient {
+		t.Fatalf("Sleep = %+v State = %+v, want zepp_hybridcharge latest 88 state INSUFFICIENT", got.Sleep, got.State)
 	}
 }
 
@@ -544,8 +544,8 @@ func TestAnalysisCoachingCommandPropagatesPreferredWellnessScore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Unmarshal error = %v", err)
 	}
-	if got.Analyses.Wellness == nil || got.Analyses.Wellness.Sleep.ScoreName != "zepp_hybridcharge" || got.Analyses.Wellness.State.State != "OK" {
-		t.Fatalf("wellness = %+v, want zepp_hybridcharge state OK", got.Analyses.Wellness)
+	if got.Analyses.Wellness == nil || got.Analyses.Wellness.Sleep.ScoreName != "zepp_hybridcharge" || got.Analyses.Wellness.State.State != icu.PhysiologyInsufficient {
+		t.Fatalf("wellness = %+v, want zepp_hybridcharge state INSUFFICIENT", got.Analyses.Wellness)
 	}
 }
 
@@ -595,6 +595,16 @@ func TestAnalysisPlanCommandPrefersHybridChargeForWellnessRules(t *testing.T) {
 
 //nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAnalysisMicrocycleCommandPrefersHybridChargeInWellnessSummary(t *testing.T) {
+	// Two HybridCharge days are not enough history for a derived sleep
+	// baseline, so the profile pins the bound (exercises profileThresholds).
+	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
+	t.Cleanup(restore)
+	sleepWatch, sleepRed := 75.0, 65.0
+	if err := icu.SaveConfig(&icu.Config{Profile: &icu.TrainingProfile{
+		Thresholds: &icu.TrainingThresholds{SleepWatch: &sleepWatch, SleepRed: &sleepRed},
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	withHybridChargeZeppTestServer(t, `{"items":[{"timestamp":1780272000000,"value":90},{"timestamp":1780358400000,"value":88}]}`)
 
 	out := runMicrocycleCommandJSONTest(t, map[string]string{
@@ -916,7 +926,7 @@ func TestMicrocycleDateRangeUsesExplicitRange(t *testing.T) {
 	got, _, err := microcycleDateRange(map[string]string{
 		"from": "2026-06-08",
 		"to":   "2026-06-14",
-	}, now)
+	}, now, time.UTC)
 
 	if err != nil || got.Oldest != microcycleTestWeekStart || got.Newest != microcycleTestWeekEnd {
 		t.Fatalf("microcycleDateRange explicit = %+v %v, want 2026-06-08 2026-06-14 nil", got, err)
@@ -930,7 +940,7 @@ func TestMicrocycleDateRangeRejectsConflicts(t *testing.T) {
 		"week": "2026-06-08",
 		"from": "2026-06-08",
 		"to":   "2026-06-14",
-	}, time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC))
+	}, time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC), time.UTC)
 
 	if err == nil {
 		t.Fatal("expected conflicting date selector error, got nil")
@@ -946,11 +956,10 @@ func TestMicrocycleDateRangeRejectsInvalidInputs(t *testing.T) {
 		{"from": "2026-06-15", "to": "2026-06-14"},
 		{"date": "not-a-date"},
 		{"week": "2026-06-08", "date": "2026-06-09"},
-		{"timezone": "Invalid/Zone"},
 	}
 
 	for _, flags := range cases {
-		_, _, err := microcycleDateRange(flags, now)
+		_, _, err := microcycleDateRange(flags, now, time.UTC)
 		if err == nil {
 			t.Fatalf("microcycleDateRange(%v) error = nil, want error", flags)
 		}
@@ -961,7 +970,7 @@ func TestMicrocycleDateRangeSelectsDateWeek(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC)
-	got, _, err := microcycleDateRange(map[string]string{"date": "2026-06-12", "timezone": "UTC"}, now)
+	got, _, err := microcycleDateRange(map[string]string{"date": "2026-06-12"}, now, time.UTC)
 	if err != nil || got.Oldest != microcycleTestWeekStart || got.Newest != microcycleTestWeekEnd {
 		t.Fatalf("microcycleDateRange date = %+v %v, want 2026-06-08 2026-06-14 nil", got, err)
 	}
@@ -970,9 +979,6 @@ func TestMicrocycleDateRangeSelectsDateWeek(t *testing.T) {
 func TestMicrocycleSmallHelpers(t *testing.T) {
 	t.Parallel()
 
-	if got := microcycleTimezoneSource(map[string]string{"timezone": "UTC"}); got != "flag" {
-		t.Fatalf("timezone source = %s, want flag", got)
-	}
 	if _, err := addDays("bad-date", 1); err == nil {
 		t.Fatal("addDays error = nil, want error")
 	}
@@ -988,7 +994,7 @@ func TestMicrocycleDateRangeDefaultsToISOWeek(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC)
-	got, _, err := microcycleDateRange(map[string]string{}, now)
+	got, _, err := microcycleDateRange(map[string]string{}, now, time.UTC)
 
 	if err != nil || got.Oldest != microcycleTestWeekStart || got.Newest != microcycleTestWeekEnd {
 		t.Fatalf("microcycleDateRange default = %+v %v, want 2026-06-08 2026-06-14 nil", got, err)
@@ -1512,6 +1518,7 @@ func TestReadMicrocycleInputsReturnsSourceErrors(t *testing.T) {
 				tc.includeWell,
 				"UTC",
 				"flag",
+				"2026-06-07",
 			)
 			if err == nil {
 				t.Fatal("readMicrocycleInputs error = nil, want source error")
@@ -1605,6 +1612,7 @@ func TestReadMicrocycleInputsAllowsMissingSportSettings(t *testing.T) {
 		false,
 		"UTC",
 		"flag",
+		"2026-06-07",
 	)
 	if err != nil {
 		t.Fatalf("readMicrocycleInputs error = %v, want nil on 404 sport-settings", err)
@@ -1642,5 +1650,226 @@ func TestWriteMicrocycleHuman(t *testing.T) {
 	}
 	if !strings.Contains(out, "Classification: on_track") {
 		t.Fatalf("human output = %q, want classification", out)
+	}
+}
+
+func TestMicrocycleLocationPrecedence(t *testing.T) {
+	t.Parallel()
+
+	system := time.FixedZone("SYS", 0)
+	cases := []struct {
+		name, flag, athlete, wantZone, wantSource string
+	}{
+		{"flag wins over athlete", "UTC", "America/New_York", "UTC", "flag"},
+		{"athlete when no flag", "", "America/New_York", "America/New_York", "athlete"},
+		{"system when athlete empty", "", "", "SYS", "system"},
+		{"system when athlete invalid", "", "Not/AZone", "SYS", "system"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			location, source, err := microcycleLocation(tc.flag, tc.athlete, system)
+			if err != nil || location.String() != tc.wantZone || source != tc.wantSource {
+				t.Fatalf("got %v %s %v, want %s %s", location, source, err, tc.wantZone, tc.wantSource)
+			}
+		})
+	}
+}
+
+func TestMicrocycleLocationRejectsInvalidFlag(t *testing.T) {
+	t.Parallel()
+
+	if _, _, err := microcycleLocation("Invalid/Zone", "", time.UTC); err == nil {
+		t.Fatal("error = nil, want invalid --timezone error")
+	}
+}
+
+func TestClampDateToToday(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 26, 23, 0, 0, 0, time.UTC)
+	cases := map[string]string{"2026-11-01": "2026-10-26", "2026-10-20": "2026-10-20", "2026-10-26": "2026-10-26"}
+	for in, want := range cases {
+		if got := clampDateToToday(in, now); got != want {
+			t.Fatalf("clampDateToToday(%s) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisMicrocycleCommandUsesAthleteTimezoneAndClampsWellness(t *testing.T) {
+	var wellnessNewest string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/events"):
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/wellness"):
+			wellnessNewest = request.URL.Query().Get("newest")
+			_, _ = response.Write([]byte(`[]`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		default:
+			_, _ = response.Write([]byte(`{"id":"0","timezone":"Pacific/Auckland"}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func() error {
+		return analysisMicrocycleCommand().Run(nil, map[string]string{"from": "2020-01-01", "to": "2999-12-31", "json": "true"}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	today := time.Now().In(mustLoadLocation(t, "Pacific/Auckland")).Format("2006-01-02")
+	if !strings.Contains(out, `"Pacific/Auckland"`) || !strings.Contains(out, `"athlete"`) || wellnessNewest != today {
+		t.Fatalf("wellness newest=%s want %s; output=%s", wellnessNewest, today, out)
+	}
+}
+
+func mustLoadLocation(t *testing.T, name string) *time.Location {
+	t.Helper()
+	location, err := time.LoadLocation(name)
+	if err != nil {
+		t.Fatalf("LoadLocation(%s): %v", name, err)
+	}
+
+	return location
+}
+
+//nolint:paralleltest // captureStdout redirects process-wide stdout.
+func TestAnalysisAdaptationCommandDefaultsToNonOverlappingCurves(t *testing.T) {
+	var curves []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(request.URL.Path, "/power-curves"):
+			curves = append(curves, request.URL.Query().Get("curves"))
+			_, _ = response.Write([]byte(`{"list":[]}`))
+		case strings.Contains(request.URL.Path, "/sport-settings"):
+			_, _ = response.Write([]byte(sportJSON()))
+		case strings.Contains(request.URL.Path, "/mmp-model"):
+			_, _ = response.Write([]byte(`{}`))
+		default:
+			_, _ = response.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	for _, flagSet := range []map[string]string{
+		{"oldest": "2026-04-06", "newest": "2026-06-28"},
+		{"oldest": "2026-04-06", "newest": "2026-06-28", "curves": "42d,365d"},
+	} {
+		if _, err := captureStdout(t, func() error {
+			return analysisAdaptationCommand().Run(nil, flagSet, client)
+		}); err != nil {
+			t.Fatalf("Run error = %v", err)
+		}
+	}
+
+	want := []string{"r.2026-04-06.2026-06-28,r.2026-01-12.2026-04-05", "42d,365d"}
+	if strings.Join(curves, "|") != strings.Join(want, "|") {
+		t.Fatalf("curves = %v, want %v", curves, want)
+	}
+}
+
+// TestAnalysisCyclingCommandUsesWellnessForCurrentLoad is B3 end to end: the
+// activity carries frozen CTL/ATL, the wellness row for the range end is
+// newer, and the command must report the wellness values.
+//
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisCyclingCommandUsesWellnessForCurrentLoad(t *testing.T) {
+	var wellnessQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[{"id":"a1","type":"Ride","start_date_local":"2026-06-02T08:00:00",` +
+				`"icu_training_load":80,"moving_time":3600,"icu_ctl":29.57,"icu_atl":45.02}]`))
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			wellnessQuery = request.URL.RawQuery
+			_, _ = response.Write([]byte(`[{"id":"2026-06-06","ctl":30.1,"atl":35.4},{"id":"2026-06-07","ctl":28.88,"atl":39.03}]`))
+		default:
+			_, _ = response.Write([]byte(`{"id":"0","timezone":"UTC"}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func() error {
+		return analysisCyclingCommand().Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.CyclingAnalysis
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	if got.Load.LatestLoadSource != "wellness" || got.Load.LatestLoadDate != "2026-06-07" ||
+		got.Load.LatestCTL != 28.88 || got.Load.LatestATL != 39.03 || !strings.Contains(wellnessQuery, "newest=2026-06-07") {
+		t.Fatalf("load = %+v query=%q, want wellness 2026-06-07 ctl 28.88 atl 39.03", got.Load, wellnessQuery)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisCyclingCommandWarnsWhenWellnessUnavailable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/activities"):
+			_, _ = response.Write([]byte(`[{"id":"a1","type":"Ride","start_date_local":"2026-06-02T08:00:00",` +
+				`"icu_training_load":80,"moving_time":3600,"icu_ctl":29.57,"icu_atl":45.02}]`))
+		case strings.HasSuffix(request.URL.Path, "/wellness"):
+			response.WriteHeader(http.StatusInternalServerError)
+		default:
+			_, _ = response.Write([]byte(`{"id":"0","timezone":"UTC"}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func() error {
+		return analysisCyclingCommand().Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, client)
+	})
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	var got icu.CyclingAnalysis
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+	found := false
+	for _, warning := range got.Warnings {
+		found = found || strings.HasPrefix(warning, "wellness unavailable")
+	}
+	if !found || got.Load.LatestLoadSource == "wellness" {
+		t.Fatalf("warnings=%v source=%q, want a wellness-unavailable warning", got.Warnings, got.Load.LatestLoadSource)
+	}
+}
+
+func TestClampDateToAthleteTodayUsesAthleteTimezone(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		_, _ = response.Write([]byte(`{"id":"0","timezone":"Pacific/Auckland"}`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	// 2026-06-07 20:00 UTC is already 2026-06-08 in Auckland.
+	now := time.Date(2026, 6, 7, 20, 0, 0, 0, time.UTC)
+	got, err := clampDateToAthleteToday(client, map[string]string{}, "2026-12-31", now)
+	if err != nil || got != "2026-06-08" {
+		t.Fatalf("clamp = %q err=%v, want 2026-06-08", got, err)
+	}
+	if _, err := clampDateToAthleteToday(client, map[string]string{"timezone": "Not/AZone"}, "2026-12-31", now); err == nil {
+		t.Fatal("invalid --timezone accepted")
 	}
 }
