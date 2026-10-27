@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## v0.1.0 — proposed, not yet tagged
+
+First tagged release (the repo has no tags yet). It is pre-1.0, so the breaking output changes listed below go out in a minor release; upgrade notes are under "Breaking changes". To release: merge #17 and then #18 into master, run the gates, then tag `v0.1.0` on the merge commit.
+
+Highlights:
+- CTL/ATL projection matches Intervals.icu (EWMA, CTL vs ATL-only load types learned per day; replay matches every day).
+- Wellness states use the athlete's own robust baselines.
+- Every event write is backed up locally first, `events revert` restores it, and a third-party-edit check (`postWriteHash`, `--force`) stops the CLI from overwriting changes made in Intervals.icu.
+- `--upsert` now matches on `uid`; an overwrite with no backup is reported loudly.
+- Config and backup files are written atomically.
+
 ### Improvements from `feat/icu-improvements` (#18)
 
 Breaking changes:
