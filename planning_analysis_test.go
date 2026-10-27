@@ -75,9 +75,7 @@ func TestAnalyzeTrainingPlanAerobicCuesAreTriggered(t *testing.T) {
 func TestAnalyzeTrainingPlanClassifiesBuildWithDeload(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(
-		events,
+	events := []icu.Event{
 		plannedWorkout("2026-06-02T08:00:00", "VO2 Re-Entry", 80, 4300, 0.82),
 		plannedWorkout("2026-06-04T08:00:00", "Tempo Durability", 100, 5700, 0.74),
 		plannedWorkout("2026-06-06T08:00:00", "Long Durability I", 140, 10380, 0.68),
@@ -90,7 +88,7 @@ func TestAnalyzeTrainingPlanClassifiesBuildWithDeload(t *testing.T) {
 		plannedWorkout("2026-06-23T08:00:00", "VO2 Openers", 65, 4140, 0.76),
 		plannedWorkout("2026-06-25T08:00:00", "Validation Tempo", 80, 5700, 0.71),
 		plannedWorkout("2026-06-27T08:00:00", "Endurance Validation", 110, 8400, 0.68),
-	)
+	}
 
 	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
 		HistoryStartDate: "",
@@ -114,15 +112,13 @@ func TestAnalyzeTrainingPlanClassifiesBuildWithDeload(t *testing.T) {
 func TestAnalyzeTrainingPlanSummarizesSessionStructure(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(
-		events,
+	events := []icu.Event{
 		plannedNote("2026-06-01T08:00:00", "OFF"),
 		plannedWorkout("2026-06-02T08:00:00", "VO2 Re-Entry", 80, 4300, 0.88),
 		plannedWorkout("2026-06-04T08:00:00", "Tempo Durability", 100, 5700, 0.74),
 		plannedWorkout("2026-06-06T08:00:00", "Long Durability I", 140, 10380, 0.68),
 		plannedWorkout("2026-06-07T08:00:00", "Easy Recovery", 45, 4200, 0.60),
-	)
+	}
 
 	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
 		HistoryStartDate: "",
@@ -151,22 +147,18 @@ func TestAnalyzeTrainingPlanSummarizesSessionStructure(t *testing.T) {
 func TestAnalyzeTrainingPlanComparesAgainstCompletedHistory(t *testing.T) {
 	t.Parallel()
 
-	var activities []icu.Activity
-	activities = append(
-		activities,
+	activities := []icu.Activity{
 		completedRide("2026-05-05T08:00:00", 440, 36000),
 		completedRide("2026-05-12T08:00:00", 450, 37000),
 		completedRide("2026-05-19T08:00:00", 490, 38500),
-	)
+	}
 
-	var events []icu.Event
-	events = append(
-		events,
+	events := []icu.Event{
 		plannedWorkout("2026-06-02T08:00:00", "VO2 Re-Entry", 80, 4300, 0.82),
 		plannedWorkout("2026-06-06T08:00:00", "Long Durability I", 140, 10380, 0.68),
 		plannedWorkout("2026-06-16T08:00:00", "VO2 Peak", 100, 4600, 0.88),
 		plannedWorkout("2026-06-20T08:00:00", "Long Durability III", 180, 12540, 0.69),
-	)
+	}
 
 	got := icu.AnalyzeTrainingPlan(activities, events, icu.TrainingPlanOptions{
 		HistoryStartDate: "2026-05-04",
@@ -311,8 +303,7 @@ func TestAnalyzeTrainingPlanIncludesCompletedWeekSeries(t *testing.T) {
 func TestAnalyzeTrainingPlanAddsExecutionGuidanceForKeyWorkout(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(events, plannedWorkout("2026-06-16T08:00:00", "Ride - VO2 Peak 4x5 Week 3", 91, 4620, 0.842))
+	events := []icu.Event{plannedWorkout("2026-06-16T08:00:00", "Ride - VO2 Peak 4x5 Week 3", 91, 4620, 0.842)}
 
 	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
 		HistoryStartDate: "",
@@ -330,8 +321,7 @@ func TestAnalyzeTrainingPlanAddsExecutionGuidanceForKeyWorkout(t *testing.T) {
 func TestAnalyzeTrainingPlanRecognizesThirtyFifteenAsHighIntensity(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(events, plannedWorkout("2026-07-21T08:00:00", "W30 Tue 2026-07-21 3x13 30/15 Deload", 73, 4335, 0.779))
+	events := []icu.Event{plannedWorkout("2026-07-21T08:00:00", "W30 Tue 2026-07-21 3x13 30/15 Deload", 73, 4335, 0.779)}
 
 	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
 		PlanStartDate: "2026-07-21",
@@ -347,8 +337,7 @@ func TestAnalyzeTrainingPlanRecognizesThirtyFifteenAsHighIntensity(t *testing.T)
 func TestAnalyzeTrainingPlanUsesThirtyFifteenRecommendedTitle(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(events, plannedWorkout("2026-07-21T08:00:00", "W30 Tue 2026-07-21 3x13 30/15 Deload", 73, 4335, 0.779))
+	events := []icu.Event{plannedWorkout("2026-07-21T08:00:00", "W30 Tue 2026-07-21 3x13 30/15 Deload", 73, 4335, 0.779)}
 
 	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
 		PlanStartDate: "2026-07-21",
@@ -364,8 +353,7 @@ func TestAnalyzeTrainingPlanUsesThirtyFifteenRecommendedTitle(t *testing.T) {
 func TestAnalyzeTrainingPlanUsesOverUnderRecommendedTitle(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(events, plannedWorkout("2026-07-02T08:00:00", "W27 Thu 2026-07-02 3x12 Over/Unders", 98, 5340, 0.813))
+	events := []icu.Event{plannedWorkout("2026-07-02T08:00:00", "W27 Thu 2026-07-02 3x12 Over/Unders", 98, 5340, 0.813)}
 
 	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
 		PlanStartDate: "2026-07-02",
@@ -417,16 +405,13 @@ func TestAnalyzeTrainingPlanUsesSportAnchorsFromContext(t *testing.T) {
 func TestAnalyzeTrainingPlanBuildsTargetEventStatus(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(
-		events,
+	events := []icu.Event{
 		plannedWorkout("2026-06-03T08:00:00", "Tempo", 80, 5400, 0.74),
 		plannedTarget("2026-06-20T08:00:00", "A Race", "RACE_A"),
 		plannedTarget("2026-06-28T08:00:00", "A Event", "TARGET"),
-	)
+	}
 
-	var rides []icu.Activity
-	rides = append(rides, completedRide("2026-05-28T08:00:00", 110, 7200))
+	rides := []icu.Activity{completedRide("2026-05-28T08:00:00", 110, 7200)}
 
 	got := icu.AnalyzeTrainingPlan(rides, events, icu.TrainingPlanOptions{
 		HistoryStartDate: "2026-05-01",
@@ -463,12 +448,10 @@ func TestAnalyzeTrainingPlanBuildsLoadForecast(t *testing.T) {
 	current.CTL = 70
 	current.ATL = 80
 
-	var events []icu.Event
-	events = append(
-		events,
+	events := []icu.Event{
 		plannedWorkout("2026-06-01T08:00:00", "VO2", 100, 3600, 0.9),
 		plannedWorkout("2026-06-02T08:00:00", "Easy", 50, 3600, 0.6),
-	)
+	}
 
 	got := icu.AnalyzeTrainingPlan([]icu.Activity{current}, events, icu.TrainingPlanOptions{
 		Thresholds:       pinnedThresholds(),
@@ -516,8 +499,7 @@ func TestAnalyzeTrainingPlanBuildsDayRulesAndDecisionGuidance(t *testing.T) {
 	current.Decoupling = 6.2
 	current.AverageTemp = 32
 
-	var events []icu.Event
-	events = append(events, plannedWorkout("2026-06-01T08:00:00", "VO2 Key", 110, 3600, 0.9))
+	events := []icu.Event{plannedWorkout("2026-06-01T08:00:00", "VO2 Key", 110, 3600, 0.9)}
 
 	var firstWellness icu.Wellness
 	firstWellness.ID = "2026-05-29"
@@ -684,8 +666,7 @@ func TestAnalyzeTrainingPlanUsesAdaptationInDecisionGuidance(t *testing.T) {
 func TestAnalyzeTrainingPlanUsesEncouragementOnlyWhenAppropriate(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(events, plannedWorkout("2026-06-07T08:00:00", "Ride - Easy Recovery", 46, 4200, 0.628))
+	events := []icu.Event{plannedWorkout("2026-06-07T08:00:00", "Ride - Easy Recovery", 46, 4200, 0.628)}
 
 	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
 		HistoryStartDate: "",
@@ -704,8 +685,7 @@ func TestAnalyzeTrainingPlanUsesEncouragementOnlyWhenAppropriate(t *testing.T) {
 func TestAnalyzeTrainingPlanRoundsLongEnduranceTitle(t *testing.T) {
 	t.Parallel()
 
-	var events []icu.Event
-	events = append(events, plannedWorkout("2026-06-06T08:00:00", "Ride - Long Durability I", 135, 10380, 0.684))
+	events := []icu.Event{plannedWorkout("2026-06-06T08:00:00", "Ride - Long Durability I", 135, 10380, 0.684)}
 
 	got := icu.AnalyzeTrainingPlan(nil, events, icu.TrainingPlanOptions{
 		HistoryStartDate: "",

@@ -717,10 +717,10 @@ func heartRateAvailability(activities []Activity) string {
 }
 
 func partialAvailability(samples, total int) string {
-	switch {
-	case samples == 0:
+	switch samples {
+	case 0:
 		return microcycleStatusMissing
-	case samples == total:
+	case total:
 		return microcycleStatusAvailable
 	default:
 		return microcycleStatusPartial

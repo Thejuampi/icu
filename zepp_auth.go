@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -198,6 +199,8 @@ func performLoginWithURL(loginURL, accessToken, countryCode string) (*ZeppAuthRe
 
 func encryptPayload(data []byte) ([]byte, error) {
 	key := []byte(zeppEncryptionKey)
+	// The fixed IV (and key) are part of Zepp's login protocol: the server
+	// decrypts with the same constants, so they cannot be randomised here.
 	iv := []byte(zeppEncryptionIV)
 
 	block, err := aes.NewCipher(key)
@@ -208,7 +211,7 @@ func encryptPayload(data []byte) ([]byte, error) {
 	padded := pkcs7Pad(data, aes.BlockSize)
 	ciphertext := make([]byte, len(padded))
 
-	mode := cipher.NewCBCEncrypter(block, iv)
+	mode := cipher.NewCBCEncrypter(block, iv) //nolint:gosec // G407: protocol-mandated IV, see above.
 	mode.CryptBlocks(ciphertext, padded)
 
 	return ciphertext, nil
@@ -216,10 +219,14 @@ func encryptPayload(data []byte) ([]byte, error) {
 
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - (len(data) % blockSize)
+	if padding <= 0 || padding > math.MaxUint8 {
+		panic(fmt.Sprintf("pkcs7Pad: invalid block size %d", blockSize))
+	}
+	padByte := uint8(padding)
 	padtext := make([]byte, padding)
 
 	for i := range padtext {
-		padtext[i] = byte(padding)
+		padtext[i] = padByte
 	}
 
 	return append(data, padtext...)

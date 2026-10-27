@@ -22,12 +22,11 @@ func TestNormalizeStreamsEmpty(t *testing.T) {
 func TestNormalizeStreamsSingleFloat64(t *testing.T) {
 	t.Parallel()
 
-	var raw []icu.ActivityStream
-	raw = append(raw, icu.ActivityStream{
+	raw := []icu.ActivityStream{{
 		Type: "watts",
 		Name: "Power",
 		Data: []float64{100, 200, 300},
-	})
+	}}
 
 	got, err := icu.NormalizeStreams(raw)
 	if err != nil {
@@ -80,12 +79,11 @@ func TestNormalizeStreamsMultipleTypes(t *testing.T) {
 func TestNormalizeStreamsIntData(t *testing.T) {
 	t.Parallel()
 
-	var raw []icu.ActivityStream
-	raw = append(raw, icu.ActivityStream{
+	raw := []icu.ActivityStream{{
 		Type: "watts",
 		Name: "Power",
 		Data: []int{150, 250, 350},
-	})
+	}}
 
 	got, err := icu.NormalizeStreams(raw)
 	if err != nil {
@@ -107,12 +105,11 @@ func TestNormalizeStreamsIntData(t *testing.T) {
 func TestNormalizeStreamsComplexData(t *testing.T) {
 	t.Parallel()
 
-	var raw []icu.ActivityStream
-	raw = append(raw, icu.ActivityStream{
+	raw := []icu.ActivityStream{{
 		Type: "watts",
 		Name: "Power",
 		Data: []any{float64(100), float64(200), float64(300)},
-	})
+	}}
 
 	got, err := icu.NormalizeStreams(raw)
 	if err != nil {

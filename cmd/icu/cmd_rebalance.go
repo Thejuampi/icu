@@ -11,6 +11,11 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
+const (
+	timezoneSourceExplicit  = "explicit"
+	proposalFileDescription = "Proposal JSON path."
+)
+
 const rebalanceWellnessLookbackDays = 42
 
 func registerRebalanceCommands(registry *CommandRegistry) {
@@ -211,7 +216,7 @@ func readRebalanceInput(flags map[string]string, client *icu.Client) (icu.Rebala
 			EndDate:        newest,
 			Week:           icu.StringFlag(flags, "week", ""),
 			Timezone:       icu.DefaultAnalysisTimezone,
-			TimezoneSource: "explicit",
+			TimezoneSource: timezoneSourceExplicit,
 		},
 		Request: icu.RebalanceRequest{
 			Strategy: icu.StringFlag(flags, "strategy", "target-preserving-z2"),
@@ -269,7 +274,7 @@ func rebalancePreviewSchema() *CommandSchema {
 	return &CommandSchema{
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
-			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
+			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
 			{Name: "no-live-check", ValueName: "BOOL", Description: "Skip live source-hash and baseline drift checks.", Kind: commandFlagBoolean},
 		}, commonAuthFlags()...),
 	}
@@ -279,7 +284,7 @@ func rebalanceAcceptSchema() *CommandSchema {
 	return &CommandSchema{
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
-			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
+			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
 		}, commonAuthFlags()...),
 	}
 }
@@ -288,7 +293,7 @@ func rebalanceApproveSchema() *CommandSchema {
 	return &CommandSchema{
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
-			{Name: "file", ValueName: "PATH", Description: "Proposal JSON path."},
+			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
 			{Name: "reason", ValueName: "TEXT", Description: "Approval rationale."},
 			{Name: "target-load", ValueName: "N", Description: "Approved target load."},
 			{Name: "level", ValueName: "X", Description: "Approved envelope level."},
@@ -425,7 +430,7 @@ func readRebalanceWellness(client *icu.Client, oldest, newest string, flags map[
 		StartDate:      wellnessOldest,
 		EndDate:        newest,
 		Timezone:       icu.DefaultAnalysisTimezone,
-		TimezoneSource: "explicit",
+		TimezoneSource: timezoneSourceExplicit,
 	})
 
 	return &analysis, nil
@@ -462,7 +467,7 @@ func readRebalanceProposal(flags map[string]string) (icu.RebalanceProposalFile, 
 	if file == "" {
 		return icu.RebalanceProposalFile{}, errMissing("file")
 	}
-	data, err := os.ReadFile(file)
+	data, err := os.ReadFile(file) //nolint:gosec // G703: the user names this file on the command line; using it is the point.
 	if err != nil {
 		return icu.RebalanceProposalFile{}, fmt.Errorf("read rebalance file: %w", err)
 	}
@@ -491,7 +496,7 @@ func writeRebalanceProposal(flags map[string]string, proposal *icu.RebalanceProp
 	if err != nil {
 		return fmt.Errorf("marshal rebalance file: %w", err)
 	}
-	if err := os.WriteFile(file, data, 0o600); err != nil {
+	if err := os.WriteFile(file, data, 0o600); err != nil { //nolint:gosec // G703: the user names this file on the command line; using it is the point.
 		return fmt.Errorf("write rebalance file: %w", err)
 	}
 
@@ -556,7 +561,7 @@ func readRebalanceInputFromScope(client *icu.Client, startDate, endDate string, 
 			StartDate:      wellnessOldest,
 			EndDate:        endDate,
 			Timezone:       icu.DefaultAnalysisTimezone,
-			TimezoneSource: "explicit",
+			TimezoneSource: timezoneSourceExplicit,
 		})
 		wellnessAnalysis = &analysis
 	}
@@ -573,7 +578,7 @@ func readRebalanceInputFromScope(client *icu.Client, startDate, endDate string, 
 			EndDate:        endDate,
 			Week:           "",
 			Timezone:       icu.DefaultAnalysisTimezone,
-			TimezoneSource: "explicit",
+			TimezoneSource: timezoneSourceExplicit,
 		},
 		Request: icu.RebalanceRequest{
 			Strategy: icu.RebalanceStrategyAdaptiveBidirectional,

@@ -211,9 +211,10 @@ func applyBalanceDeathGaps(
 		return
 	}
 	reason := "post_meter_death_moving"
-	if source == PowerDeathSourceBalance {
+	switch source {
+	case PowerDeathSourceBalance:
 		reason = "post_balance_death_moving"
-	} else if source == PowerDeathSourceCadence {
+	case PowerDeathSourceCadence:
 		reason = "post_cadence_death_moving"
 	}
 	for index := death; index < len(result.Labels); index++ {

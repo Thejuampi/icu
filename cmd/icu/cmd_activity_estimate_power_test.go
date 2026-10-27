@@ -42,7 +42,7 @@ func TestEstimatePowerShowDryRun(t *testing.T) {
 			_, _ = writer.Write([]byte(`{"id":"0","weight":75,"icuWeight":75}`))
 		default:
 			writer.WriteHeader(http.StatusNotFound)
-			_, _ = writer.Write([]byte(request.URL.Path))
+			_, _ = writer.Write([]byte(request.URL.Path)) //nolint:gosec // G705: httptest server answering the test client, not a browser.
 		}
 	}))
 	t.Cleanup(server.Close)

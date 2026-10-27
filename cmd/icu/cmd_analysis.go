@@ -52,7 +52,7 @@ type analysisTimezoneInfo struct {
 func analysisTimezone(explicit bool) analysisTimezoneInfo {
 	source := icu.DefaultAnalysisTimezoneSource
 	if explicit {
-		source = "explicit"
+		source = timezoneSourceExplicit
 	}
 
 	return analysisTimezoneInfo{

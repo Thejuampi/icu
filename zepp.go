@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+const (
+	zeppSubTypeRealData = "real_data"
+	zeppParamEventType  = "eventType"
+	zeppParamLimit      = "limit"
+)
+
 // Zepp DTOs reflect the real Zepp/Amazfit cloud API as reverse-engineered
 // from huami-token, bentasker/zepp_to_influxdb, and rolandsz/Mi-Fit-and-Zepp-workout-exporter.
 //
@@ -264,18 +270,18 @@ type ZeppV2Event struct {
 // v2EventPresets returns the registry of supported /v2/users/me/events presets.
 func v2EventPresets() map[string]V2EventPreset {
 	return map[string]V2EventPreset{
-		"hrv-sdnn":       {Name: "hrv-sdnn", EventType: "hrv_sdnn", SubType: "real_data"},
-		"hrv-rmssd":      {Name: "hrv-rmssd", EventType: "HRVRMSSD", SubType: "real_data"},
+		"hrv-sdnn":       {Name: "hrv-sdnn", EventType: "hrv_sdnn", SubType: zeppSubTypeRealData},
+		"hrv-rmssd":      {Name: "hrv-rmssd", EventType: "HRVRMSSD", SubType: zeppSubTypeRealData},
 		"readiness":      {Name: "readiness", EventType: "readiness", SubType: "watch_score"},
-		"body-battery":   {Name: "body-battery", EventType: "Charge", SubType: "real_data"},
+		"body-battery":   {Name: "body-battery", EventType: "Charge", SubType: zeppSubTypeRealData},
 		"hybridcharge":   {Name: "hybridcharge", EventType: "Charge", SubType: "insight_data"},
 		"biocharge":      {Name: "biocharge", EventType: "Charge", SubType: "insight_data"},
 		"stress-minute":  {Name: "stress-minute", EventType: "Charge", SubType: "stress_data"},
-		"respiratory":    {Name: "respiratory", EventType: "RespiratoryRate", SubType: "real_data"},
+		"respiratory":    {Name: "respiratory", EventType: "RespiratoryRate", SubType: zeppSubTypeRealData},
 		"daily-health":   {Name: "daily-health", EventType: "DailyHealth", SubType: "summary"},
-		"blood-pressure": {Name: "blood-pressure", EventType: "blood_pressure", SubType: "real_data"},
-		"emotion":        {Name: "emotion", EventType: "Emotion", SubType: "real_data"},
-		"skin-temp":      {Name: "skin-temp", EventType: "skinTemp", SubType: "real_data"},
+		"blood-pressure": {Name: "blood-pressure", EventType: "blood_pressure", SubType: zeppSubTypeRealData},
+		"emotion":        {Name: "emotion", EventType: "Emotion", SubType: zeppSubTypeRealData},
+		"skin-temp":      {Name: "skin-temp", EventType: "skinTemp", SubType: zeppSubTypeRealData},
 	}
 }
 
@@ -344,7 +350,7 @@ func DecodeV2Events(raw []byte) ([]ZeppV2Event, error) {
 
 		if t, ok := item["type"].(string); ok {
 			ev.Type = t
-		} else if t, ok := item["eventType"].(string); ok {
+		} else if t, ok := item[zeppParamEventType].(string); ok {
 			ev.Type = t
 		}
 
@@ -358,7 +364,7 @@ func DecodeV2Events(raw []byte) ([]ZeppV2Event, error) {
 
 		for k, v := range item {
 			switch k {
-			case zeppTimestampKey, "type", "eventType", "subType", "value":
+			case zeppTimestampKey, "type", zeppParamEventType, "subType", "value":
 				continue
 			default:
 				ev.Extra[k] = v

@@ -29,7 +29,7 @@ type calculatedEventResponse struct {
 }
 
 func osReadFile(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G703: the user names this file on the command line; using it is the point.
 	if err != nil {
 		return nil, fmt.Errorf("reading file %s: %w", path, err)
 	}
