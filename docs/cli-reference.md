@@ -238,7 +238,7 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `accept`
   Invocation: `icu plan accept --file PATH`
-  Notes: Re-validates the proposal (including stored blocking errors and `strictTargets` weekly misses) and hard-fails before any API call when blocking. Then rejects baseline drift, applies pending `create`/`update`/`cancel` operations (each update/cancel first saves a local backup of the event; its path is in the result's `backupPath`, and a failed backup fails that operation without touching the event), writes apply results back to the same file, and prints the apply summary. Unknown flags are rejected.
+  Notes: Re-validates the proposal (including stored blocking errors and `strictTargets` weekly misses) and hard-fails before any API call when blocking. Then rejects baseline drift, applies pending `create`/`update`/`cancel` operations (each update/cancel first saves a local backup of the event; its path is in the result's `backupPath`, and a failed backup fails that operation without touching the event), writes apply results back to the same file, and prints the apply summary. After each update the post-write hash is saved in its backup; if that fails, the result carries a `warning` (also on stderr) and the event's next `events update`/`revert` needs `--force`. Unknown flags are rejected.
   Example: `icu plan accept --file plan.json`
 
 ## profile
@@ -424,7 +424,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu events update 123 --name "Threshold 4x8" --training-load 92`
   Example: `icu events update 123 --desc "- 60m 70%" --calculate-load --ftp 300`
 
-  Backup: before the PUT, the current event is fetched and saved to the local backup directory (`$ICU_BACKUP_DIR`, else `backups/events/` next to the config file). If the backup fails, the update is not sent. After the PUT the backup records `postWriteHash` (and `postWriteAt`) of the event returned. Before the next update or revert, the current event is compared with the newest backup's `postWriteHash`: if it changed outside this CLI the command aborts with no PUT and no new backup, unless `--force`. A newest backup without `postWriteHash` (written by an older version) is also refused until `--force`. Delete/cancel backups are not compared.
+  Backup: before the PUT, the current event is fetched and saved to the local backup directory (`$ICU_BACKUP_DIR`, else `backups/events/` next to the config file). If the backup fails, the update is not sent. After the PUT the backup records `postWriteHash` (and `postWriteAt`) of the event returned. Before the next update or revert, the current event is compared with the newest backup's `postWriteHash`: if it changed outside this CLI the command aborts with no PUT and no new backup, unless `--force`. A newest backup without `postWriteHash` (written by an older version) is also refused until `--force`. Delete/cancel backups are not compared. The hash (`icu.EventBackupHash`) covers every user-editable field (name, type, category, start/end, description, load, moving time, distance, workout doc, indoor, color, target, tags, uid, external id, targets, availability). The GET → compare → PUT sequence is not atomic: an edit made in Intervals.icu between the GET and the PUT is overwritten, though the pre-write backup still holds the state that was compared.
 
 - `backups`
   Invocation: `icu events backups [--id ID]`

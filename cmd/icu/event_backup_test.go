@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -248,6 +249,62 @@ func TestEventsCreateUpsertBacksUpMatchingEvent(t *testing.T) {
 	}
 	if others, _ := listEventBackups(6); len(others) != 0 {
 		t.Fatalf("non-matching event backed up: %v", others)
+	}
+	// The upsert records the post-write hash of the event the POST returned.
+	backup, _ := readEventBackup(paths[0])
+	if want := icu.EventBackupHash(&icu.Event{ID: 5}); backup.PostWriteHash != want {
+		t.Fatalf("postWriteHash = %q, want %q", backup.PostWriteHash, want)
+	}
+}
+
+//nolint:paralleltest // sets ICU_BACKUP_DIR.
+func TestFindLastWriteSkipsDeleteAndCancelBackups(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	for index, reason := range []string{eventBackupReasonDelete, eventBackupReasonDrop} {
+		eventID := 40 + index
+		if _, err := writeEventBackup(&eventBackup{EventID: eventID, Reason: reason, Event: json.RawMessage(`{}`)},
+			time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		last, err := findLastWrite(eventID)
+		if err != nil || last != (lastWrite{}) {
+			t.Fatalf("%s backup counted as a write: %+v %v", reason, last, err)
+		}
+		// So a hashless delete/cancel backup never demands --force.
+		if err := checkThirdPartyEdit(eventID, last, json.RawMessage(`{}`), false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := writeEventBackup(&eventBackup{EventID: 50, Reason: "events update", Event: json.RawMessage(`{}`)},
+		time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if last, _ := findLastWrite(50); !last.legacy || last.path == "" {
+		t.Fatalf("update backup without hash not legacy: %+v", last)
+	}
+}
+
+//nolint:paralleltest // sets ICU_BACKUP_DIR.
+func TestApplyCalendarOperationsWarnsWhenPostWriteHashNotSaved(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(eventBackupDirEnv, dir)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		if request.Method == http.MethodPut {
+			// The backup disappears between the backup and the hash record.
+			_ = os.RemoveAll(dir)
+		}
+		_, _ = response.Write([]byte(`{"id":7,"name":"Changed"}`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	summary := applyCalendarOperations(client, []icu.CalendarOperation{{
+		ID: "u", Action: icu.CalendarActionUpdate, EventID: 7, Status: icu.CalendarStatusPending,
+		Body: icu.EventEx{Name: "Changed"},
+	}})
+	if summary.Applied != 1 || !strings.Contains(summary.Results[0].Warning, "post-write hash") ||
+		!strings.Contains(summary.Results[0].Warning, "--force") {
+		t.Fatalf("summary = %+v", summary)
 	}
 }
 

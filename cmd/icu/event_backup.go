@@ -35,7 +35,7 @@ type eventBackup struct {
 	// RestoredEventID is the id a recreate revert created from this backup,
 	// written back to the file so the revert is not repeated.
 	RestoredEventID int `json:"restoredEventId,omitempty"`
-	// PostWriteHash is icu.EventSourceHash of the event this CLI wrote right
+	// PostWriteHash is icu.EventBackupHash of the event this CLI wrote right
 	// after the backup (the PUT/POST response), so a later revert or update
 	// can tell whether someone else edited the event since.
 	PostWriteHash string `json:"postWriteHash,omitempty"`
@@ -52,7 +52,7 @@ func recordPostWrite(path string, written *icu.Event) error {
 	if err != nil {
 		return err
 	}
-	backup.PostWriteHash = icu.EventSourceHash(written)
+	backup.PostWriteHash = icu.EventBackupHash(written)
 	backup.PostWriteAt = time.Now().UTC().Format(time.RFC3339Nano)
 
 	return rewriteEventBackup(path, &backup)
@@ -98,7 +98,7 @@ func checkThirdPartyEdit(eventID int, last lastWrite, current json.RawMessage, f
 	if err := json.Unmarshal(current, &event); err != nil {
 		return fmt.Errorf("decode event %d: %w", eventID, err)
 	}
-	if got := icu.EventSourceHash(&event); got != last.hash {
+	if got := icu.EventBackupHash(&event); got != last.hash {
 		return fmt.Errorf("event %d was changed outside this CLI since it was last written (hash %s, expected %s "+
 			"from %s); not overwriting (use --force to overwrite)", eventID, got, last.hash, last.path)
 	}

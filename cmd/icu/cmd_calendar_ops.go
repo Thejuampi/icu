@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	icu "github.com/Thejuampi/icu"
@@ -58,8 +59,13 @@ func applyCalendarOperation(client *icu.Client, operation *icu.CalendarOperation
 		return result
 	}
 	if operation.Action == icu.CalendarActionUpdate {
-		// Best effort: a failed hash record only weakens a later edit check.
-		_ = recordPostWrite(result.BackupPath, &event)
+		// The update is already applied; a failed hash record only means the
+		// next update/revert of this event will need --force.
+		if err := recordPostWrite(result.BackupPath, &event); err != nil {
+			result.Warning = fmt.Sprintf("event %d updated, but saving its post-write hash in %s failed (%v); "+
+				"its next events update/revert will require --force", operation.EventID, result.BackupPath, err)
+			fmt.Fprintln(os.Stderr, "warning: "+result.Warning)
+		}
 	}
 	operation.Status = icu.CalendarStatusApplied
 	operation.AppliedEventID = appliedCalendarEventID(operation, &event)

@@ -1,6 +1,11 @@
 package icu
 
-import "strings"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"strings"
+)
 
 // Calendar operation types are aliases of the rebalance operation shape so
 // plan and rebalance proposal JSON stay identical for apply/preview.
@@ -60,6 +65,57 @@ type CalendarOpsPreviewItem struct {
 
 func EventSourceHash(event *Event) string {
 	return RebalanceEventHash(event)
+}
+
+// EventBackupHash fingerprints every user-editable field of an event (the
+// fields a person can change in Intervals.icu), so the event-backup
+// third-party-edit check notices any such edit. Server-computed fields
+// (CTL, ATL, intensity, strain, created-by) are left out: they can change
+// without anyone editing the event.
+func EventBackupHash(event *Event) string {
+	if event == nil {
+		return ""
+	}
+	snapshot := struct {
+		ID                   int      `json:"id"`
+		StartDateLocal       string   `json:"startDateLocal"`
+		EndDateLocal         string   `json:"endDateLocal"`
+		Category             string   `json:"category"`
+		Type                 string   `json:"type"`
+		Name                 string   `json:"name"`
+		Description          string   `json:"description"`
+		TrainingLoad         int      `json:"trainingLoad"`
+		MovingTime           int      `json:"movingTime"`
+		Distance             float64  `json:"distance"`
+		Color                string   `json:"color"`
+		Indoor               *bool    `json:"indoor"`
+		Target               string   `json:"target"`
+		UID                  string   `json:"uid"`
+		Tags                 []string `json:"tags"`
+		ExternalID           string   `json:"externalId"`
+		HideFromAthlete      bool     `json:"hideFromAthlete"`
+		AthleteCannotEdit    bool     `json:"athleteCannotEdit"`
+		LoadTarget           int      `json:"loadTarget"`
+		TimeTarget           int      `json:"timeTarget"`
+		DistanceTarget       float64  `json:"distanceTarget"`
+		TrainingAvailability string   `json:"trainingAvailability"`
+		MaxTrainingTime      int      `json:"maxTrainingTime"`
+		CanTrainSports       []string `json:"canTrainSports"`
+		WorkoutDoc           any      `json:"workoutDoc"`
+	}{
+		event.ID, event.StartDateLocal, event.EndDateLocal, event.Category, event.Type, event.Name,
+		event.Description, event.TrainingLoad, event.MovingTime, event.Distance, event.Color, event.Indoor,
+		event.Target, event.UID, event.Tags, event.ExternalID, event.HideFromAthlete, event.AthleteCannotEdit,
+		event.LoadTarget, event.TimeTarget, event.DistanceTarget, event.TrainingAvailability,
+		event.MaxTrainingTime, event.CanTrainSports, event.WorkoutDoc,
+	}
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+
+	return hex.EncodeToString(sum[:])
 }
 
 func PreviewCalendarOperations(operations []CalendarOperation) CalendarOpsPreview {
