@@ -75,7 +75,7 @@ It then runs the existing deterministic analyzers: `AnalyzeCyclingActivities`, `
 - Prefer this command for weekly reports and planning reviews when the goal is to minimize CLI calls.
 - The command bundles existing analysis outputs; it does not add a hidden coaching recommender or new readiness thresholds.
 - NOTE events are first-class in the output because they often contain block intent, decision rules, and athlete communication.
-- Use `analysis workout` as a second call when reviewing one specific completed activity against its planned session.
+- `analysis workout` is a detector diagnostic: run it only when the task is to inspect what the CLI's interval detector found for one activity. It is not part of coaching review of a completed session; that review starts from the original recording (see [Recording-Based Coaching Review](#recording-based-coaching-review)).
 
 ### Current Limitations
 
@@ -530,6 +530,47 @@ The CLI fetches:
   intervals when interval data exists.
 - The command degrades to session-level comparison when structured plan or
   interval/stream data is unavailable.
+
+### Recording-Based Coaching Review
+
+The cycling-performance-analysis skill reviews completed sessions from the
+original recording and complete timestamped streams. Intent comes from the
+athlete, planned WORKOUT, and surrounding NOTE events. Detected intervals and
+the execution/comparison context derived from them are excluded from that
+coaching workflow; `analysis workout` remains an available CLI diagnostic
+contract, with its behavior and JSON unchanged.
+
+Use `icu activity <activity-id> file` for the original recording and
+`icu activity <activity-id> streams` for all available channels. Preserve binary
+download bytes. `fit-file` is the processed export and may contain accepted
+stream corrections; identify which version each calculation uses.
+
+Review actual timestamps, timer events, device laps, power, HR, cadence, and
+available movement/terrain channels. Device laps are recorded boundaries,
+not automatically work/recovery reps. Resolve the session's applicable FTP
+and environment; a device setting may be stale. Preserve measured zeros and
+missing samples separately, keep pauses visible, and require complete measured
+coverage for continuous best-effort windows. Time in a configured power zone
+does not measure time at VO2max. Local calculations and reconstructed phases
+must state their sources, time basis, coverage, and methods.
+
+Anchor resolution applies the repository's
+[durable rules and scoped evidence policy](../AGENTS.md#durable-rules-and-scoped-evidence).
+Its domain scope includes athlete, activity or explicitly named period,
+sport/environment, and analysis purpose. Record the selected FTP reference,
+source/version, evidence date, and known effective period alongside derived
+results. Unresolved historical attribution leaves %FTP/zone conclusions
+provisional or unavailable. Label a deliberate common-reference comparison
+separately from historical execution; a reference change does not alter
+recorded watts or absolute-power best windows.
+
+This is a read-only skill workflow using existing downloads, not a new analysis
+command or output schema. It can deliver a sample CSV and an interactive
+timeline without adding CLI metrics, dependencies, or writes. See the
+[completed-session workflow](../.agents/skills/cycling-performance-analysis/completed-session.md)
+and the [CLI download procedure](../.agents/skills/intervals-icu/SKILL.md#original-recording-and-complete-streams).
+The [anchor aging checks](../.agents/skills/cycling-performance-analysis/anchor-aging-checks.md)
+provide replay scenarios for scope, historical attribution, and source changes.
 
 ### FTP Attribution
 

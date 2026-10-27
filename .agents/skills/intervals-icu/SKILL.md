@@ -114,9 +114,50 @@ icu activity i123 intervals
 icu activity i123 streams
 ```
 
-Use `icu activity <id> show --intervals` when the task needs the full activity payload plus interval data in a single response. Use `icu activity <id> intervals` when only the interval block is needed.
+`icu activity <id> show --intervals` (activity payload plus detected intervals) and `icu activity <id> intervals` (interval block only) expose the CLI's interval detector. They are detector diagnostics and do not apply to reviewing a completed session: that review uses the original recording and full streams, see [completed-session.md](../cycling-performance-analysis/completed-session.md).
 
 Useful activity fields: `id`, `name`, `start_date_local`, `type`, `moving_time`, `elapsed_time`, `distance`, `total_elevation_gain`, `average_heartrate`, `max_heartrate`, `icu_average_watts`, `icu_weighted_avg_watts`, `calories`, `icu_training_load`, `hr_load`, `hr_load_type`, `trimp`, `icu_intensity`, `icu_ftp`, `icu_pm_cp`, `icu_pm_w_prime`, `icu_pm_p_max`, `icu_rolling_cp`, `icu_rolling_w_prime`, `icu_rolling_ftp`, `decoupling`, `icu_efficiency_factor`, `icu_variability_index`, `icu_power_hr`, `icu_rpe`, `feel`, `perceived_exertion`, `session_rpe`, `compliance`, `average_speed`, `average_temp`, `average_wind_speed`, `headwind_percent`, `tailwind_percent`, `prevailing_wind_deg`, `average_altitude`, `source`, `external_id`, `tags`, `description`, `device_name`, `gear`.
+
+#### Original recording and complete streams
+
+For recording-based execution review, download through the CLI:
+
+```bash
+icu activity i123 show
+icu activity i123 streams
+icu activity i123 file
+```
+
+Omit `--types` to retrieve complete available streams; retain `time` alongside all channels. `file` downloads the original bytes. `fit-file` downloads the Intervals-processed FIT, which can contain stream edits and must be labeled separately. The original's format is not guaranteed to be FIT; inspect its header before choosing a parser or extension. Never send binary bytes through JSON conversion or text encoding.
+
+On Windows, preserve stdout bytes rather than relying on shell-version-dependent text redirection. With Python available, this example captures both the original and stream JSON into a private temporary directory (`i123` is a placeholder for the selected activity):
+
+```python
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+activity_id = "i123"
+icu_executable = shutil.which("icu")
+if icu_executable is None:
+    raise SystemExit("icu is not available on PATH")
+
+output_dir = Path(tempfile.mkdtemp(prefix="icu-session-"))
+for action, filename in (
+    ("file", "activity-original.bin"),
+    ("streams", "streams-full.json"),
+):
+    with (output_dir / filename).open("wb") as destination:
+        subprocess.run(
+            [icu_executable, "activity", activity_id, action],
+            stdout=destination,
+            check=True,
+        )
+print(output_dir)
+```
+
+Check completion, file integrity, timestamps, nulls, and channel coverage before analysis. A CLI summary or normalized execution payload is not a lossless substitute for the original. Detailed coaching rules live in [completed-session.md](../cycling-performance-analysis/completed-session.md); this download does not authorize activity updates, sensor-gap fills, or calendar writes.
 
 ### Power Meter Death / Estimate Power Gaps
 

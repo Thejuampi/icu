@@ -182,7 +182,7 @@ Treat JSON as the effective default output format unless a command explicitly do
 - [docs/plan.md](docs/plan.md): intent → show/preview/accept workflow for explicit multi-session calendar writes
 - [docs/library.md](docs/library.md): usage-oriented guide for `github.com/Thejuampi/icu`, including the `ZeppClient`
 - [docs/api/README.md](docs/api/README.md): OpenAPI snapshot provenance and usage notes
-- [AGENTS.md](AGENTS.md): contributor rules, quality gates, and the documentation gate
+- [AGENTS.md](AGENTS.md): contributor rules, evidence scope and temporal validity, quality gates, and the documentation gate
 
 ## CLI Surface
 
