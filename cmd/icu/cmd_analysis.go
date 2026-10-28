@@ -24,7 +24,7 @@ const defaultAnalysisFields = "id,name,start_date_local,type,moving_time,distanc
 	"headwind_percent,tailwind_percent,average_altitude,min_altitude,max_altitude," +
 	"average_gradient,average_lactate,min_lactate,max_lactate,average_yaw,route_id,strain_score," +
 	"icu_ctl,icu_atl,source,paired_event_id,compliance,hr_load,hr_load_type," +
-	"power_load,pace_load,pace_load_type,icu_ignore_power,icu_ignore_hr,icu_ignore_time"
+	"power_load,pace_load,pace_load_type,icu_ignore_power,icu_ignore_hr,icu_ignore_time,analyzed"
 
 // analysisActivityFields is D-8's choke point function: the wave's own
 // evidence (F-19) is that --fields/--activity-fields have never once

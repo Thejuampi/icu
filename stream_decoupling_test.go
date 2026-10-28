@@ -2,7 +2,6 @@ package icu_test
 
 import (
 	"encoding/json"
-	"errors"
 	"math"
 	"os"
 	"testing"
@@ -11,7 +10,7 @@ import (
 )
 
 // synthRide builds 1 Hz streams of the given length in minutes. power(sec)
-// and hr(sec) return the sample at second sec.
+// and hr(sec) return the sample at second sec; a negative HR is a null.
 func synthRide(minutes int, power, hr func(sec int) float64) icu.NullableStreamData {
 	n := minutes * 60
 	timeS := icu.NullableSeries{Values: make([]float64, n), Present: make([]bool, n)}
@@ -20,7 +19,9 @@ func synthRide(minutes int, power, hr func(sec int) float64) icu.NullableStreamD
 	for sec := range n {
 		timeS.Values[sec], timeS.Present[sec] = float64(sec), true
 		watts.Values[sec], watts.Present[sec] = power(sec), true
-		heart.Values[sec], heart.Present[sec] = hr(sec), true
+		if value := hr(sec); value >= 0 {
+			heart.Values[sec], heart.Present[sec] = value, true
+		}
 	}
 
 	return icu.NullableStreamData{"time": timeS, "watts": watts, "heartrate": heart}
@@ -28,11 +29,17 @@ func synthRide(minutes int, power, hr func(sec int) float64) icu.NullableStreamD
 
 func constant(value float64) func(int) float64 { return func(int) float64 { return value } }
 
+// fixed returns options with a manual 0/0 trim and 0 s lag, isolating the
+// rule under test from the derived trim and lag.
+func fixed(k float64) icu.DecouplingOptions {
+	return icu.DecouplingOptions{WarmupSeconds: new(0), CooldownSeconds: new(0), HRLagSeconds: new(0), IQRK: k}
+}
+
 func mustDecouple(t *testing.T, streams icu.NullableStreamData, options icu.DecouplingOptions) icu.StreamDecoupling {
 	t.Helper()
-	got, err := icu.ComputeStreamDecoupling(streams, options)
-	if err != nil {
-		t.Fatalf("ComputeStreamDecoupling: %v", err)
+	got := icu.ComputeStreamDecoupling(streams, options, icu.DecouplingContext{})
+	if got.Status != icu.DecouplingStatusMeasured || got.Value == nil {
+		t.Fatalf("status %q (%s), want measured", got.Status, got.Reason)
 	}
 
 	return got
@@ -41,11 +48,14 @@ func mustDecouple(t *testing.T, streams icu.NullableStreamData, options icu.Deco
 func TestStreamDecouplingSteadyRideIsZero(t *testing.T) {
 	t.Parallel()
 	got := mustDecouple(t, synthRide(90, constant(150), constant(135)), icu.DefaultDecouplingOptions())
-	if got.Value != 0 || got.Basis != icu.DecouplingBasisPowerHR {
+	if *got.Value != 0 || got.Basis != icu.DecouplingBasisPowerHR {
 		t.Fatalf("got %+v, want 0 power_hr", got)
 	}
-	if got.RangeStartMinute != 20 || got.RangeEndMinute != 78 || got.MinutesKept != 58 {
-		t.Fatalf("range %d-%d kept %d, want 20-78 kept 58", got.RangeStartMinute, got.RangeEndMinute, got.MinutesKept)
+	if got.Trim.Method != icu.DecouplingTrimSteadyState || got.Trim.WarmupSeconds != 0 || got.MinutesKept != 90 {
+		t.Fatalf("trim %+v kept %d, want steady_state 0 kept 90", got.Trim, got.MinutesKept)
+	}
+	if got.HRLagMethod != icu.DecouplingLagNone || got.HRLagSeconds != 0 {
+		t.Fatalf("lag %d %s, want 0 none (no output variance)", got.HRLagSeconds, got.HRLagMethod)
 	}
 }
 
@@ -53,178 +63,309 @@ func TestStreamDecouplingDetectsHRDrift(t *testing.T) {
 	t.Parallel()
 	// HR 5% higher in the second half at equal power: 1 - 1/1.05 = 4.76%.
 	hr := func(sec int) float64 {
-		if sec >= 49*60+23 { // second half starts at min 49; HR read 23 s later
+		if sec >= 45*60 {
 			return 140 * 1.05
 		}
 
 		return 140
 	}
 	got := mustDecouple(t, synthRide(90, constant(150), hr), icu.DefaultDecouplingOptions())
-	if math.Abs(got.Value-4.76) > 0.01 {
-		t.Fatalf("decoupling = %v, want 4.76", got.Value)
+	if math.Abs(*got.Value-4.76) > 0.01 {
+		t.Fatalf("decoupling = %v, want 4.76", *got.Value)
 	}
 }
 
-func TestStreamDecouplingTrimsWarmupAndCooldown(t *testing.T) {
+func TestStreamDecouplingManualTrim(t *testing.T) {
 	t.Parallel()
-	// Warm-up at a very different ratio must not leak into the first half.
+	options := fixed(0)
+	options.WarmupSeconds, options.CooldownSeconds = new(600), new(300)
+	got := mustDecouple(t, synthRide(90, constant(150), constant(135)), options)
+	if got.Trim.Method != icu.DecouplingTrimManual || got.MinutesInRange != 75 {
+		t.Fatalf("trim %+v in range %d, want manual 75", got.Trim, got.MinutesInRange)
+	}
+}
+
+func TestStreamDecouplingPlanTrimThenSteadyState(t *testing.T) {
+	t.Parallel()
+	// Plan says 10 min warm-up / 5 min cool-down; the ride also has 3 easy
+	// minutes after the plan's warm-up, which the steady-state rule drops.
 	power := func(sec int) float64 {
-		if sec < 20*60 || sec >= 78*60 {
-			return 300
+		if sec >= 10*60 && sec < 13*60 {
+			return 100
 		}
 
-		return 150
+		return 200
 	}
-	got := mustDecouple(t, synthRide(90, power, constant(135)), icu.DefaultDecouplingOptions())
-	if got.Value != 0 {
-		t.Fatalf("decoupling = %v, want 0 (warm-up/cool-down trimmed)", got.Value)
+	streams := synthRide(90, power, constant(140))
+	context := icu.DecouplingContext{Plan: &icu.DecouplingPlanTrim{WarmupSeconds: 600, CooldownSeconds: 300}}
+	got := icu.ComputeStreamDecoupling(streams, icu.DefaultDecouplingOptions(), context)
+	if got.Trim.Method != "workout_steps+steady_state" || got.Trim.WarmupSeconds != 780 || got.Trim.CooldownSeconds != 300 {
+		t.Fatalf("trim = %+v, want workout_steps+steady_state 780/300", got.Trim)
+	}
+	if got.MinutesInRange != 72 {
+		t.Fatalf("minutes in range = %d, want 72", got.MinutesInRange)
+	}
+}
+
+func TestStreamDecouplingSteadyStateTrimsEasyEdges(t *testing.T) {
+	t.Parallel()
+	power := func(sec int) float64 {
+		switch {
+		case sec < 10*60:
+			return 100
+		case sec >= 85*60:
+			return 90
+		default:
+			return 200
+		}
+	}
+	got := mustDecouple(t, synthRide(90, power, constant(140)), icu.DefaultDecouplingOptions())
+	if got.Trim.WarmupSeconds != 600 || got.Trim.CooldownSeconds != 300 || got.MinutesInRange != 75 {
+		t.Fatalf("trim %+v in range %d, want 600/300 and 75", got.Trim, got.MinutesInRange)
 	}
 }
 
 func TestStreamDecouplingExcludesCoastingMinutes(t *testing.T) {
 	t.Parallel()
-	// Second half has 6 minutes of coasting (0-20 W) with HR still elevated;
-	// unfiltered this reads as large drift.
+	// Minutes 30-34 pedal only 20 s of 60 at 210 W (mean 70 W, above the old
+	// fixed 50 W floor): coasting by the pedalling-fraction rule.
 	power := func(sec int) float64 {
-		minute := sec / 60
-		if minute >= 60 && minute < 66 {
-			return 20
+		if minute := sec / 60; minute >= 30 && minute < 35 && sec%60 >= 20 {
+			return 0
+		}
+		if sec/60 >= 30 && sec/60 < 35 {
+			return 210
 		}
 
 		return 150
 	}
-	options := icu.DefaultDecouplingOptions()
-	got := mustDecouple(t, synthRide(90, power, constant(135)), options)
-	if got.Value != 0 || got.Excluded[icu.DecouplingExcludedLowPower] != 6 || got.MinutesKept != 52 {
-		t.Fatalf("got value %v excluded %v kept %d, want 0 / low_power 6 / 52", got.Value, got.Excluded, got.MinutesKept)
+	got := mustDecouple(t, synthRide(90, power, constant(135)), fixed(0))
+	if got.Excluded[icu.DecouplingExcludedCoasting] != 5 || got.MinutesKept != 85 || *got.Value != 0 {
+		t.Fatalf("excluded %v kept %d value %v, want coasting 5, 85 kept, 0", got.Excluded, got.MinutesKept, *got.Value)
 	}
-
-	options.MinPowerWatts = 0
-	options.IQRK = 0
-	unfiltered := mustDecouple(t, synthRide(90, power, constant(135)), options)
-	if unfiltered.Value < 5 {
-		t.Fatalf("unfiltered decoupling = %v, want large positive drift from coasting", unfiltered.Value)
-	}
-}
-
-func TestStreamDecouplingExcludesRatioOutliers(t *testing.T) {
-	t.Parallel()
-	// Two sprint minutes (600 W) in the second half: IQR-flagged.
-	power := func(sec int) float64 {
-		minute := sec / 60
-		if minute == 55 || minute == 70 {
-			return 600
+	// Pedalling 40 of 60 s is not coasting.
+	half := func(sec int) float64 {
+		if sec/60 == 30 && sec%60 >= 40 {
+			return 0
 		}
 
 		return 150
 	}
-	options := icu.DefaultDecouplingOptions()
-	got := mustDecouple(t, synthRide(90, power, constant(135)), options)
-	if got.Value != 0 || got.Excluded[icu.DecouplingExcludedRatioOutlier] != 2 {
-		t.Fatalf("got value %v excluded %v, want 0 / ratio_outlier 2", got.Value, got.Excluded)
-	}
-	if got.RatioFenceLow == nil || got.RatioFenceHigh == nil {
-		t.Fatal("fences missing")
-	}
-
-	options.IQRK = 0
-	kept := mustDecouple(t, synthRide(90, power, constant(135)), options)
-	if kept.Value >= 0 || kept.Excluded[icu.DecouplingExcludedRatioOutlier] != 0 || kept.RatioFenceLow != nil {
-		t.Fatalf("k=0: got %+v, want negative value, no outliers, no fences", kept)
+	if got := mustDecouple(t, synthRide(90, half, constant(135)), fixed(0)); got.Excluded[icu.DecouplingExcludedCoasting] != 0 {
+		t.Fatalf("excluded %v, want no coasting", got.Excluded)
 	}
 }
 
-func TestStreamDecouplingAppliesHRLag(t *testing.T) {
-	t.Parallel()
-	// Power alternates every 90 s; HR is proportional to power 23 s earlier.
+// outlierRide: minute powers cycle 148/150/152/154 W at constant HR, one
+// minute at 162 W (between the k=1.5 and k=3 fences), and 20 coasting
+// minutes (20 s at 150 W) that would widen the fences if they were counted.
+func outlierRide() icu.NullableStreamData {
+	cycle := []float64{148, 150, 152, 154}
 	power := func(sec int) float64 {
-		if (sec/90)%2 == 0 {
-			return 120
+		minute := sec / 60
+		switch {
+		case minute == 60:
+			return 162
+		case minute >= 20 && minute < 40:
+			if sec%60 < 20 {
+				return 150
+			}
+
+			return 0
+		default:
+			return cycle[minute%len(cycle)]
+		}
+	}
+
+	return synthRide(90, power, constant(140))
+}
+
+func TestStreamDecouplingIQRFencesAfterPowerFilter(t *testing.T) {
+	t.Parallel()
+	got := mustDecouple(t, outlierRide(), fixed(icu.DefaultDecouplingIQRK))
+	if got.Excluded[icu.DecouplingExcludedRatioOutlier] != 1 || got.Excluded[icu.DecouplingExcludedCoasting] != 20 {
+		t.Fatalf("excluded = %v, want 1 ratio_outlier and 20 coasting", got.Excluded)
+	}
+	if got.RatioFenceHigh == nil || *got.RatioFenceHigh >= 162.0/140 {
+		t.Fatalf("high fence = %v, want below 162/140", got.RatioFenceHigh)
+	}
+	// k is honored: at k=3 the 162 W minute is inside the fences.
+	if wide := mustDecouple(t, outlierRide(), fixed(3)); wide.Excluded[icu.DecouplingExcludedRatioOutlier] != 0 {
+		t.Fatalf("k=3 excluded = %v, want no ratio_outlier", wide.Excluded)
+	}
+	// k=0 disables screening.
+	if off := mustDecouple(t, outlierRide(), fixed(0)); off.RatioFenceLow != nil || off.Excluded[icu.DecouplingExcludedRatioOutlier] != 0 {
+		t.Fatalf("k=0: %+v", off)
+	}
+}
+
+func TestStreamDecouplingCrossCorrelatesHRLag(t *testing.T) {
+	t.Parallel()
+	// 5-min square wave; HR follows power 30 s later.
+	power := func(sec int) float64 {
+		if (sec/300)%2 == 0 {
+			return 150
 		}
 
-		return 200
+		return 250
 	}
-	hr := func(sec int) float64 {
-		if sec < 23 {
-			return power(0) * 0.7
-		}
-
-		return power(sec-23) * 0.7
-	}
-	options := icu.DefaultDecouplingOptions()
-	options.IQRK = 0
+	hr := func(sec int) float64 { return 100 + 0.2*power(sec-30) }
+	options := fixed(0)
+	options.HRLagSeconds = nil
 	got := mustDecouple(t, synthRide(90, power, hr), options)
-	if math.Abs(got.Value) > 0.001 {
-		t.Fatalf("lag 23: decoupling = %v, want 0", got.Value)
+	if got.HRLagMethod != icu.DecouplingLagCorrelation || got.HRLagSeconds != 30 {
+		t.Fatalf("lag = %d (%s), want 30 cross_correlation", got.HRLagSeconds, got.HRLagMethod)
 	}
-	options.HRLagSeconds = 0
-	noLag := mustDecouple(t, synthRide(90, power, hr), options)
-	if noLag.Value == got.Value {
-		t.Fatalf("lag 0 should differ from lag 23 (both %v)", got.Value)
-	}
-}
-
-func TestStreamDecouplingDropsMissingSamples(t *testing.T) {
-	t.Parallel()
-	streams := synthRide(90, constant(150), constant(135))
-	heart := streams["heartrate"]
-	for sec := 40 * 60; sec < 45*60; sec++ { // 5 min HR dropout
-		heart.Present[sec] = false
-	}
-	got := mustDecouple(t, streams, icu.DefaultDecouplingOptions())
-	if got.Value != 0 || got.Excluded[icu.DecouplingExcludedMissingHR] < 4 {
-		t.Fatalf("got value %v excluded %v, want 0 and missing_hr minutes", got.Value, got.Excluded)
+	options.HRLagSeconds = new(5)
+	if manual := mustDecouple(t, synthRide(90, power, hr), options); manual.HRLagSeconds != 5 || manual.HRLagMethod != icu.DecouplingLagManual {
+		t.Fatalf("manual lag = %d %s", manual.HRLagSeconds, manual.HRLagMethod)
 	}
 }
 
-func TestStreamDecouplingPaceBasisWithoutPower(t *testing.T) {
+func TestStreamDecouplingMissingHRRule(t *testing.T) {
 	t.Parallel()
-	streams := synthRide(90, constant(0), constant(150))
+	// Minute 30 has HR for 20 of 60 s (missing_hr); minute 50 for 40 of 60
+	// (kept).
+	hr := func(sec int) float64 {
+		minute, second := sec/60, sec%60
+		if (minute == 30 && second >= 20) || (minute == 50 && second >= 40) {
+			return -1
+		}
+
+		return 135
+	}
+	got := mustDecouple(t, synthRide(90, constant(150), hr), fixed(0))
+	if got.Excluded[icu.DecouplingExcludedMissingHR] != 1 || len(got.ExcludedMinutes) != 1 || got.ExcludedMinutes[0].Minute != 30 {
+		t.Fatalf("excluded = %v %v, want missing_hr at minute 30 only", got.Excluded, got.ExcludedMinutes)
+	}
+}
+
+func TestStreamDecouplingGAPBasisAndStopSpeed(t *testing.T) {
+	t.Parallel()
+	streams := synthRide(60, constant(0), constant(150))
 	delete(streams, "watts")
-	speed := icu.NullableSeries{Values: make([]float64, 90*60), Present: make([]bool, 90*60)}
-	for sec := range speed.Values {
-		speed.Values[sec], speed.Present[sec] = 3.2, true
+	n := 60 * 60
+	gap := icu.NullableSeries{Values: make([]float64, n), Present: make([]bool, n)}
+	speed := icu.NullableSeries{Values: make([]float64, n), Present: make([]bool, n)}
+	for sec := range n {
+		value := 3.0
+		if sec >= 1800 && sec < 2100 { // 5-min stop
+			value = 0.2
+		}
+		gap.Values[sec], gap.Present[sec] = value*1.02, true
+		speed.Values[sec], speed.Present[sec] = value, true
 	}
-	streams["velocity_smooth"] = speed
-	got := mustDecouple(t, streams, icu.DefaultDecouplingOptions())
-	if got.Basis != icu.DecouplingBasisPaceHR || got.Value != 0 {
-		t.Fatalf("got %+v, want pace_hr 0", got)
+	streams["ga_velocity"], streams["velocity_smooth"] = gap, speed
+	got := icu.ComputeStreamDecoupling(streams, fixed(0), icu.DecouplingContext{MovingTimeSeconds: n - 300})
+	if got.Basis != icu.DecouplingBasisGAPHR || got.MovingSeconds != n-300 || got.StopSpeed == nil || *got.StopSpeed != 0.2 {
+		t.Fatalf("got basis %s moving %d stop %v, want gap_hr %d 0.2", got.Basis, got.MovingSeconds, got.StopSpeed, n-300)
+	}
+	delete(streams, "ga_velocity")
+	if pace := icu.ComputeStreamDecoupling(streams, fixed(0), icu.DecouplingContext{}); pace.Basis != icu.DecouplingBasisPaceHR || pace.StopSpeed != nil {
+		t.Fatalf("pace basis = %s stop %v", pace.Basis, pace.StopSpeed)
 	}
 }
 
-func TestStreamDecouplingInsufficientData(t *testing.T) {
+func TestStreamDecouplingNotMeasurable(t *testing.T) {
 	t.Parallel()
-	if _, err := icu.ComputeStreamDecoupling(synthRide(40, constant(150), constant(135)), icu.DefaultDecouplingOptions()); !errors.Is(err, icu.ErrDecouplingInsufficientStreams) {
-		t.Fatalf("short ride err = %v, want insufficient", err)
+	short := icu.ComputeStreamDecoupling(synthRide(6, constant(150), constant(135)), fixed(0), icu.DecouplingContext{})
+	if short.Status != icu.DecouplingStatusNotMeasurable || short.Value != nil || short.Reason == "" {
+		t.Fatalf("short = %+v", short)
 	}
 	streams := synthRide(90, constant(150), constant(135))
 	delete(streams, "heartrate")
-	if _, err := icu.ComputeStreamDecoupling(streams, icu.DefaultDecouplingOptions()); !errors.Is(err, icu.ErrDecouplingInsufficientStreams) {
-		t.Fatalf("no HR err = %v, want insufficient", err)
+	if got := icu.ComputeStreamDecoupling(streams, fixed(0), icu.DecouplingContext{}); got.Status != icu.DecouplingStatusNotMeasurable {
+		t.Fatalf("no HR = %+v", got)
+	}
+	options := fixed(0)
+	options.WarmupSeconds = new(90 * 60)
+	if got := icu.ComputeStreamDecoupling(synthRide(90, constant(150), constant(135)), options, icu.DecouplingContext{}); got.Value != nil {
+		t.Fatalf("over-trimmed = %+v", got)
+	}
+}
+
+func TestDecouplingVIGate(t *testing.T) {
+	t.Parallel()
+	if icu.DecouplingVICutoff([]float64{1.02, 1.05, 0}) != nil {
+		t.Fatal("cutoff from < 4 rides")
+	}
+	cutoff := icu.DecouplingVICutoff([]float64{1.00, 1.02, 1.04, 1.06, 1.08})
+	// Q1 1.02, Q3 1.06 -> 1.06 + 1.5*0.04 = 1.12.
+	if cutoff == nil || math.Abs(*cutoff-1.12) > 1e-9 {
+		t.Fatalf("cutoff = %v, want 1.12", cutoff)
+	}
+	result := mustDecouple(t, synthRide(90, constant(150), constant(135)), fixed(0))
+	result.ApplyVIGate(1.10, cutoff)
+	if result.Status != icu.DecouplingStatusMeasured {
+		t.Fatalf("VI below cutoff: %s", result.Status)
+	}
+	result.ApplyVIGate(1.20, cutoff)
+	if result.Status != icu.DecouplingStatusNotMeasurable || result.Reason == "" {
+		t.Fatalf("VI above cutoff: %+v", result)
+	}
+}
+
+func TestPlannedDecouplingTrim(t *testing.T) {
+	t.Parallel()
+	// i202545713's paired workout: 10' ramp 50-65%, 3x(5' 65, 5' 65,
+	// 5' 67), 25' 62, 10' 55. Duration-weighted median target 62%.
+	doc := &icu.WorkoutDoc{Steps: []icu.WorkoutStep{
+		{Duration: 600, Ramp: true, Power: &icu.WorkoutTarget{Start: 50, End: 65}},
+		{Reps: 3, Steps: []icu.WorkoutStep{
+			{Duration: 300, Power: &icu.WorkoutTarget{Value: 65}},
+			{Duration: 300, Power: &icu.WorkoutTarget{Value: 65}},
+			{Duration: 300, Power: &icu.WorkoutTarget{Value: 67}},
+		}},
+		{Duration: 1500, Power: &icu.WorkoutTarget{Value: 62}},
+		{Duration: 600, Power: &icu.WorkoutTarget{Value: 55}},
+	}}
+	trim, ok := icu.PlannedDecouplingTrim(doc)
+	if !ok || trim.WarmupSeconds != 600 || trim.CooldownSeconds != 600 {
+		t.Fatalf("trim = %+v %v, want 600/600", trim, ok)
+	}
+	labeled := &icu.WorkoutDoc{Steps: []icu.WorkoutStep{
+		{Duration: 300, Text: "Warmup", Power: &icu.WorkoutTarget{Value: 70}},
+		{Duration: 1200, Power: &icu.WorkoutTarget{Value: 70}},
+		{Duration: 300, Text: "Cooldown", Power: &icu.WorkoutTarget{Value: 70}},
+	}}
+	if trim, ok := icu.PlannedDecouplingTrim(labeled); !ok || trim.WarmupSeconds != 300 || trim.CooldownSeconds != 300 {
+		t.Fatalf("labeled trim = %+v", trim)
+	}
+	if _, ok := icu.PlannedDecouplingTrim(nil); ok {
+		t.Fatal("nil doc")
+	}
+	allRamp := &icu.WorkoutDoc{Steps: []icu.WorkoutStep{{Duration: 600, Ramp: true, Power: &icu.WorkoutTarget{Start: 50, End: 70}}}}
+	if _, ok := icu.PlannedDecouplingTrim(allRamp); ok {
+		t.Fatal("all-ramp doc should not yield a trim")
 	}
 }
 
 func TestActivityDecouplingSourceLabels(t *testing.T) {
 	t.Parallel()
-	activity := icu.Activity{Decoupling: 8.26}
-	activity.ApplyStreamDecoupling(&icu.StreamDecoupling{Value: 0, Basis: icu.DecouplingBasisPowerHR})
-	if !activity.HasDecoupling() || activity.Decoupling != 0 || activity.DecouplingSource != icu.DecouplingSourceStreams ||
-		activity.DecouplingAPI == nil || *activity.DecouplingAPI != 8.26 {
-		t.Fatalf("stream apply: %+v", activity)
+	zero := 0.0
+	streamResult := icu.StreamDecoupling{Status: icu.DecouplingStatusMeasured, Value: &zero, Basis: icu.DecouplingBasisPowerHR}
+
+	consumed := icu.Activity{Decoupling: 8.26}
+	consumed.AttachStreamDecoupling(&streamResult, true)
+	if !consumed.HasDecoupling() || consumed.Decoupling != 0 || consumed.DecouplingSource != icu.DecouplingSourceStreams ||
+		consumed.DecouplingAPI == nil || *consumed.DecouplingAPI != 8.26 || consumed.DecouplingStreams == nil {
+		t.Fatalf("consumed: %+v", consumed)
 	}
-	fallback := icu.Activity{Decoupling: 4.1}
-	fallback.MarkAPIDecouplingFallback("streams fetch failed")
-	if fallback.DecouplingSource != icu.DecouplingSourceAPI || fallback.Decoupling != 4.1 || fallback.DecouplingNote == "" {
-		t.Fatalf("fallback: %+v", fallback)
+	reported := icu.Activity{Decoupling: 8.26}
+	reported.AttachStreamDecoupling(&streamResult, false)
+	if reported.Decoupling != 8.26 || reported.DecouplingSource != icu.DecouplingSourceAPI || *reported.DecouplingStreams != 0 {
+		t.Fatalf("reported: %+v", reported)
+	}
+	// An API value of 0 is still labeled api (not skipped), with no API value.
+	absent := icu.Activity{}
+	absent.MarkAPIDecoupling("")
+	if absent.DecouplingSource != icu.DecouplingSourceAPI || absent.DecouplingAPI != nil || absent.HasDecoupling() {
+		t.Fatalf("absent: %+v", absent)
 	}
 }
 
-// TestStreamDecouplingReferenceRideI202545713 replays the recorded streams of
-// i202545713 (Z2, 2026-10-27; intervals.icu decoupling field: 8.26%).
-// Reference from B15: range min 20-95, HR lag 23 s, <50 W + IQR 1.5 ->
-// 71 of 75 minutes kept, ~2.7% (this implementation: 2.89%).
-func TestStreamDecouplingReferenceRideI202545713(t *testing.T) {
-	t.Parallel()
+func loadReferenceStreams(t *testing.T) icu.NullableStreamData {
+	t.Helper()
 	raw, err := os.ReadFile("testdata/streams_i202545713.json")
 	if err != nil {
 		t.Fatal(err)
@@ -238,24 +379,27 @@ func TestStreamDecouplingReferenceRideI202545713(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := mustDecouple(t, streams, icu.DefaultDecouplingOptions())
-	if got.RangeStartMinute != 20 || got.RangeEndMinute != 95 || got.MinutesInRange != 75 || got.MinutesKept != 71 {
-		t.Fatalf("range %d-%d in %d kept %d, want 20-95 / 75 / 71",
-			got.RangeStartMinute, got.RangeEndMinute, got.MinutesInRange, got.MinutesKept)
-	}
-	if got.Excluded[icu.DecouplingExcludedLowPower] != 4 {
-		t.Fatalf("excluded = %v, want low_power 4", got.Excluded)
-	}
-	if got.Value < 2.4 || got.Value > 3.2 {
-		t.Fatalf("decoupling = %v, want ~2.7 (2.4-3.2)", got.Value)
-	}
+	return streams
+}
 
-	// Same range without the coasting filter/lag/IQR reproduces the ~7%
-	// that is close to intervals.icu's 8.26%: the formula was never the bug.
-	options := icu.DefaultDecouplingOptions()
-	options.MinPowerWatts, options.HRLagSeconds, options.IQRK = 0, 0, 0
-	unfiltered := mustDecouple(t, streams, options)
-	if unfiltered.Value < 6 || unfiltered.Value > 8 {
-		t.Fatalf("unfiltered decoupling = %v, want ~7", unfiltered.Value)
+// TestStreamDecouplingReferenceRideI202545713 replays the recorded streams of
+// i202545713 (Z2, 2026-10-27). It asserts structure only: the method is not
+// tuned to any target number; the value is logged and reported in the PR.
+func TestStreamDecouplingReferenceRideI202545713(t *testing.T) {
+	t.Parallel()
+	streams := loadReferenceStreams(t)
+	plan := &icu.DecouplingPlanTrim{WarmupSeconds: 600, CooldownSeconds: 600}
+	got := icu.ComputeStreamDecoupling(streams, icu.DefaultDecouplingOptions(), icu.DecouplingContext{MovingTimeSeconds: 6086, Plan: plan})
+	if got.Status != icu.DecouplingStatusMeasured || got.Basis != icu.DecouplingBasisPowerHR {
+		t.Fatalf("got %+v", got)
 	}
+	excluded := 0
+	for _, count := range got.Excluded {
+		excluded += count
+	}
+	if got.MinutesKept+excluded != got.MinutesInRange || math.Abs(float64(got.MovingSeconds-6086)) > 0.01*6086 { // ties at the stop speed
+		t.Fatalf("kept %d + excluded %d != %d, moving %d", got.MinutesKept, excluded, got.MinutesInRange, got.MovingSeconds)
+	}
+	t.Logf("i202545713: %.2f%% trim %+v lag %d (%s) kept %d/%d excluded %v",
+		*got.Value, got.Trim, got.HRLagSeconds, got.HRLagMethod, got.MinutesKept, got.MinutesInRange, got.Excluded)
 }

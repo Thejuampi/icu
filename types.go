@@ -117,24 +117,31 @@ type Activity struct {
 	JoulesAboveFTP   int     `json:"icuJoulesAboveFtp,omitempty"`
 	MaxWbalDepletion int     `json:"icuMaxWbalDepletion,omitempty"`
 	Decoupling       float64 `json:"decoupling,omitempty"`
-	// DecouplingSource labels where Decoupling came from (B15): "streams"
-	// (recomputed by the CLI) or "api_fallback" (intervals.icu's field, used
-	// only when streams are unavailable). Empty = raw API value, not enriched.
+	// DecouplingSource labels the consumed Decoupling (B15): "api"
+	// (intervals.icu's field, the default) or "streams" (recomputed by the
+	// CLI with --decoupling-source streams). Empty = not enriched.
 	DecouplingSource string `json:"decouplingSource,omitempty"`
-	// DecouplingAPI keeps intervals.icu's original value for comparison.
-	DecouplingAPI     *float64 `json:"decouplingApi,omitempty"`
-	DecouplingBasis   string   `json:"decouplingBasis,omitempty"`
-	DecouplingNote    string   `json:"decouplingNote,omitempty"`
-	EfficiencyFactor  float64  `json:"icuEfficiencyFactor,omitempty"`
-	VariabilityIndex  float64  `json:"icuVariabilityIndex,omitempty"`
-	PowerHR           float64  `json:"icuPowerHr,omitempty"`
-	PowerHRZ2         float64  `json:"icuPowerHrZ2,omitempty"`
-	PowerHRZ2Mins     int      `json:"icuPowerHrZ2Mins,omitempty"`
-	CadenceZ2         int      `json:"icuCadenceZ2,omitempty"`
-	RPE               int      `json:"icuRpe,omitempty"`
-	Feel              int      `json:"feel,omitempty"`
-	PerceivedExertion float64  `json:"perceivedExertion,omitempty"`
-	SessionRPE        int      `json:"sessionRpe,omitempty"`
+	// DecouplingAPI keeps intervals.icu's original value (nil when absent).
+	DecouplingAPI *float64 `json:"decouplingApi,omitempty"`
+	// DecouplingStreams is the stream-method value, reported next to the API
+	// one; a real 0.0 is kept (pointer).
+	DecouplingStreams       *float64 `json:"decouplingStreams,omitempty"`
+	DecouplingStreamsStatus string   `json:"decouplingStreamsStatus,omitempty"`
+	DecouplingBasis         string   `json:"decouplingBasis,omitempty"`
+	DecouplingNote          string   `json:"decouplingNote,omitempty"`
+	// Analyzed is intervals.icu's last-analysis timestamp; it changes when
+	// the activity is edited/reprocessed and keys the decoupling cache.
+	Analyzed          string  `json:"analyzed,omitempty"`
+	EfficiencyFactor  float64 `json:"icuEfficiencyFactor,omitempty"`
+	VariabilityIndex  float64 `json:"icuVariabilityIndex,omitempty"`
+	PowerHR           float64 `json:"icuPowerHr,omitempty"`
+	PowerHRZ2         float64 `json:"icuPowerHrZ2,omitempty"`
+	PowerHRZ2Mins     int     `json:"icuPowerHrZ2Mins,omitempty"`
+	CadenceZ2         int     `json:"icuCadenceZ2,omitempty"`
+	RPE               int     `json:"icuRpe,omitempty"`
+	Feel              int     `json:"feel,omitempty"`
+	PerceivedExertion float64 `json:"perceivedExertion,omitempty"`
+	SessionRPE        int     `json:"sessionRpe,omitempty"`
 	// Compliance is pointer + omitempty (D-5): never fetched before wave-2
 	// (F-8), so it has zero existing consumers. F-18/D-21: 0.0 means
 	// "unpaired", not "0% adherence" — all 36 live zero-compliance activities

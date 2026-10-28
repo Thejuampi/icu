@@ -1,98 +1,127 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	icu "github.com/Thejuampi/icu"
 )
 
-// B15: intervals.icu's `decoupling` field is unreliable, so every analysis
-// command that consumes decoupling recomputes it from the activity streams
-// (icu.ComputeStreamDecoupling) before analysis. Streams are fetched with GET
-// only, at most once per activity: results (including "not measurable") are
-// cached on disk under <config dir>/cache/decoupling/, keyed by activity id,
-// algorithm version and options.
+// B15: intervals.icu's `decoupling` field stays the default consumed value
+// (--decoupling-source api). With --decoupling-source streams every analysis
+// command that consumes decoupling also recomputes it from the activity
+// streams (icu.ComputeStreamDecoupling), reports it next to the API value
+// and consumes it when measured. Streams are fetched with GET only, at most
+// once per activity edit: results are cached on disk under
+// <config dir>/cache/decoupling/, keyed by algorithm version, options, plan
+// trim, moving time and intervals.icu's `analyzed` timestamp (which changes
+// on every edit/reprocess). Not-measured results expire after
+// decouplingRetryTTL so they are retried.
 const (
 	decouplingSourceFlag   = "decoupling-source"
 	decouplingWarmupFlag   = "decoupling-warmup-min"
 	decouplingCooldownFlag = "decoupling-cooldown-min"
-	decouplingMinPowerFlag = "decoupling-min-power"
 	decouplingHRLagFlag    = "decoupling-hr-lag"
 	decouplingIQRKFlag     = "decoupling-iqr-k"
-	decouplingModeAPI      = "api"
+	decouplingModeAPI      = icu.DecouplingSourceAPI
+	decouplingModeStreams  = icu.DecouplingSourceStreams
 	decouplingWorkers      = 4
 	activityStreamsPath    = "streams"
 	secondsPerMinuteInt    = 60
+	decouplingRetryTTL     = 24 * time.Hour
+	// decouplingVIHistoryDays: the VI-cutoff history window of the
+	// single-activity command (the analysis commands use their own window).
+	decouplingVIHistoryDays = 84
+	dateLayout              = "2006-01-02"
+	queryOldest             = "oldest"
+	queryNewest             = "newest"
 )
 
 func decouplingSchemaFlags() []CommandFlag {
 	return []CommandFlag{
-		{Name: decouplingSourceFlag, ValueName: "streams|api", Description: "Decoupling source: streams (recompute Pa:HR " +
-			"from activity streams, default) or api (intervals.icu's decoupling field, no stream fetch).", Default: icu.DecouplingSourceStreams},
-		{Name: decouplingWarmupFlag, ValueName: "N", Description: "Warm-up minutes trimmed before stream decoupling.", Default: "20"},
-		{Name: decouplingCooldownFlag, ValueName: "N", Description: "Cool-down minutes trimmed before stream decoupling.", Default: "12"},
-		{Name: decouplingMinPowerFlag, ValueName: "W", Description: "Minutes averaging below this power are excluded as coasting/stops.", Default: "50"},
-		{Name: decouplingHRLagFlag, ValueName: "S", Description: "HR lag in seconds applied when pairing power with HR.", Default: "23"},
-		{Name: decouplingIQRKFlag, ValueName: "K", Description: "IQR multiplier for per-minute power/HR ratio outliers (0 disables).", Default: "1.5"},
+		{Name: decouplingSourceFlag, ValueName: "api|streams", Description: "Consumed decoupling: api (intervals.icu's " +
+			"field, default, no stream fetch) or streams (recompute from activity streams, report both, consume the stream " +
+			"value when measured).", Default: decouplingModeAPI},
+		{Name: decouplingWarmupFlag, ValueName: "N", Description: "Override the warm-up trim (whole moving minutes); " +
+			"default derived from the paired workout's steps, then steady-state detection."},
+		{Name: decouplingCooldownFlag, ValueName: "N", Description: "Override the cool-down trim (whole moving minutes); " +
+			"default derived like the warm-up."},
+		{Name: decouplingHRLagFlag, ValueName: "S", Description: "Override the HR lag (whole seconds); default " +
+			"measured by power/HR cross-correlation (0-120 s), 0 when uncorrelated."},
+		{Name: decouplingIQRKFlag, ValueName: "K", Description: "Tukey IQR multiplier for per-minute power/HR ratio " +
+			"outliers (0 disables).", Default: "1.5"},
 	}
 }
 
-func nonNegativeFloatFlag(flags map[string]string, name string, current float64) (float64, error) {
+func nonNegativeIntFlag(flags map[string]string, name string, scale int) (*int, error) {
 	raw, ok := flags[name]
 	if !ok || raw == "" {
-		return current, nil
+		return nil, nil //nolint:nilnil // nil = not overridden
 	}
-	value, err := strconv.ParseFloat(raw, 64)
+	value, err := strconv.Atoi(raw)
 	if err != nil || value < 0 {
-		return current, fmt.Errorf("--%s must be a non-negative number, got %q", name, raw)
+		return nil, fmt.Errorf("--%s must be a non-negative integer, got %q", name, raw)
 	}
+	value *= scale
 
-	return value, nil
+	return &value, nil
 }
 
 func decouplingOptionsFromFlags(flags map[string]string) (icu.DecouplingOptions, string, error) {
 	options := icu.DefaultDecouplingOptions()
-	mode := strings.ToLower(icu.StringFlag(flags, decouplingSourceFlag, icu.DecouplingSourceStreams))
-	if mode != icu.DecouplingSourceStreams && mode != decouplingModeAPI {
-		return options, mode, fmt.Errorf("--%s must be streams or api, got %q", decouplingSourceFlag, mode)
+	mode := strings.ToLower(icu.StringFlag(flags, decouplingSourceFlag, decouplingModeAPI))
+	if mode != decouplingModeStreams && mode != decouplingModeAPI {
+		return options, mode, fmt.Errorf("--%s must be api or streams, got %q", decouplingSourceFlag, mode)
 	}
-	warmup, err := nonNegativeFloatFlag(flags, decouplingWarmupFlag, float64(options.WarmupSeconds/secondsPerMinuteInt))
-	if err != nil {
+	var err error
+	if options.WarmupSeconds, err = nonNegativeIntFlag(flags, decouplingWarmupFlag, secondsPerMinuteInt); err != nil {
 		return options, mode, err
 	}
-	cooldown, err := nonNegativeFloatFlag(flags, decouplingCooldownFlag, float64(options.CooldownSeconds/secondsPerMinuteInt))
-	if err != nil {
+	if options.CooldownSeconds, err = nonNegativeIntFlag(flags, decouplingCooldownFlag, secondsPerMinuteInt); err != nil {
 		return options, mode, err
 	}
-	lag, err := nonNegativeFloatFlag(flags, decouplingHRLagFlag, float64(options.HRLagSeconds))
-	if err != nil {
+	if options.HRLagSeconds, err = nonNegativeIntFlag(flags, decouplingHRLagFlag, 1); err != nil {
 		return options, mode, err
 	}
-	if options.MinPowerWatts, err = nonNegativeFloatFlag(flags, decouplingMinPowerFlag, options.MinPowerWatts); err != nil {
-		return options, mode, err
+	if raw, ok := flags[decouplingIQRKFlag]; ok && raw != "" {
+		k, parseErr := strconv.ParseFloat(raw, 64)
+		if parseErr != nil || k < 0 {
+			return options, mode, fmt.Errorf("--%s must be a non-negative number, got %q", decouplingIQRKFlag, raw)
+		}
+		options.IQRK = k
 	}
-	if options.IQRK, err = nonNegativeFloatFlag(flags, decouplingIQRKFlag, options.IQRK); err != nil {
-		return options, mode, err
-	}
-	options.WarmupSeconds = int(warmup) * secondsPerMinuteInt
-	options.CooldownSeconds = int(cooldown) * secondsPerMinuteInt
-	options.HRLagSeconds = int(lag)
 
 	return options, mode, nil
 }
 
 type decouplingCacheEntry struct {
-	Version     int                   `json:"version"`
-	Options     icu.DecouplingOptions `json:"options"`
-	Result      *icu.StreamDecoupling `json:"result,omitempty"`
-	Unavailable string                `json:"unavailable,omitempty"`
+	Key       string               `json:"key"`
+	ExpiresAt string               `json:"expiresAt,omitempty"`
+	Result    icu.StreamDecoupling `json:"result"`
+}
+
+// decouplingCacheKey hashes every input of the stream computation.
+func decouplingCacheKey(activity *icu.Activity, options icu.DecouplingOptions, context icu.DecouplingContext) string {
+	data, err := json.Marshal(struct {
+		Version  int                   `json:"version"`
+		Options  icu.DecouplingOptions `json:"options"`
+		Context  icu.DecouplingContext `json:"context"`
+		Analyzed string                `json:"analyzed"`
+	}{icu.DecouplingAlgorithmVersion, options, context, activity.Analyzed})
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+
+	return hex.EncodeToString(sum[:])
 }
 
 func decouplingCacheDir() string {
@@ -116,21 +145,24 @@ func decouplingCachePath(activityID string) string {
 	return filepath.Join(dir, activityID+".json")
 }
 
-func readDecouplingCache(activityID string, options icu.DecouplingOptions) (decouplingCacheEntry, bool) {
+func readDecouplingCache(activityID, key string) (icu.StreamDecoupling, bool) {
 	var entry decouplingCacheEntry
 	path := decouplingCachePath(activityID)
 	if path == "" {
-		return entry, false
+		return entry.Result, false
 	}
 	data, err := os.ReadFile(path)
-	if err != nil || json.Unmarshal(data, &entry) != nil {
-		return entry, false
+	if key == "" || err != nil || json.Unmarshal(data, &entry) != nil || entry.Key != key {
+		return entry.Result, false
 	}
-	if entry.Version != icu.DecouplingAlgorithmVersion || entry.Options != options {
-		return entry, false
+	if entry.ExpiresAt != "" {
+		expires, err := time.Parse(time.RFC3339, entry.ExpiresAt)
+		if err != nil || !time.Now().Before(expires) {
+			return entry.Result, false
+		}
 	}
 
-	return entry, true
+	return entry.Result, true
 }
 
 func writeDecouplingCache(activityID string, entry *decouplingCacheEntry) {
@@ -160,48 +192,41 @@ func invalidateDecouplingCache(activityID string) {
 }
 
 // computeActivityDecoupling returns the stream decoupling for one activity,
-// from cache or a single GET of its streams.
-func computeActivityDecoupling(client *icu.Client, activityID string, options icu.DecouplingOptions) decouplingCacheEntry {
-	if entry, ok := readDecouplingCache(activityID, options); ok {
-		return entry
-	}
-	entry := decouplingCacheEntry{
-		Version: icu.DecouplingAlgorithmVersion,
-		Options: options,
+// from cache or a single GET of its streams. Fetch errors are returned and
+// never cached.
+func computeActivityDecoupling(
+	client *icu.Client,
+	activity *icu.Activity,
+	options icu.DecouplingOptions,
+	plan *icu.DecouplingPlanTrim,
+) (icu.StreamDecoupling, error) {
+	context := icu.DecouplingContext{MovingTimeSeconds: activity.MovingTime, Plan: plan}
+	key := decouplingCacheKey(activity, options, context)
+	if result, ok := readDecouplingCache(activity.ID, key); ok {
+		return result, nil
 	}
 
 	var raw []icu.ActivityStream
 	query := map[string]string{"types": icu.DecouplingStreamTypes}
-	if err := client.Get("activity", []string{activityID, activityStreamsPath}, query, &raw); err != nil {
-		// Network/API errors are not cached.
-		entry.Unavailable = "streams fetch failed: " + err.Error()
-
-		return entry
+	if err := client.Get("activity", []string{activity.ID, activityStreamsPath}, query, &raw); err != nil {
+		return icu.StreamDecoupling{}, fmt.Errorf("streams fetch failed: %w", err)
 	}
 	streams, err := icu.PreserveNullableStreams(raw)
 	if err != nil {
-		entry.Unavailable = "streams unreadable: " + err.Error()
-		writeDecouplingCache(activityID, &entry)
-
-		return entry
+		return icu.StreamDecoupling{}, fmt.Errorf("streams unreadable: %w", err)
 	}
-	result, err := icu.ComputeStreamDecoupling(streams, options)
-	if err != nil {
-		reason := err.Error()
-		if !errors.Is(err, icu.ErrDecouplingInsufficientStreams) {
-			reason = "stream decoupling failed: " + reason
-		}
-		entry.Unavailable = reason
-	} else {
-		entry.Result = &result
+	result := icu.ComputeStreamDecoupling(streams, options, context)
+	entry := decouplingCacheEntry{Key: key, Result: result}
+	if result.Status != icu.DecouplingStatusMeasured {
+		entry.ExpiresAt = time.Now().Add(decouplingRetryTTL).UTC().Format(time.RFC3339)
 	}
-	writeDecouplingCache(activityID, &entry)
+	writeDecouplingCache(activity.ID, &entry)
 
-	return entry
+	return result, nil
 }
 
 // decouplingCandidate: only activities whose decoupling anyone consumes
-// (cycling, plus runs for pace:HR) and that have HR are fetched, so the
+// (cycling, plus runs for GAP:HR) and that have HR are fetched, so the
 // stream request volume stays bounded by the analysis window.
 func decouplingCandidate(activity *icu.Activity) bool {
 	if activity.ID == "" || activity.IgnoreHR {
@@ -214,21 +239,90 @@ func decouplingCandidate(activity *icu.Activity) bool {
 	return activity.Decoupling != 0 || activity.AverageHeartRate > 0
 }
 
-// enrichActivitiesDecoupling replaces each candidate activity's API
-// decoupling with the stream-derived value. When streams are unavailable,
-// the API value is kept and labeled api_fallback with the reason.
+func activityDay(activity *icu.Activity) string {
+	if len(activity.StartDateLocal) < len(dateLayout) {
+		return ""
+	}
+
+	return activity.StartDateLocal[:len(dateLayout)]
+}
+
+// decouplingPlanTrims reads the paired workouts' warm-up/cool-down with a
+// single events GET over the candidates' date span. Errors fall back to
+// steady-state trimming (empty map).
+func decouplingPlanTrims(client *icu.Client, activities []icu.Activity, candidates []int) map[int]*icu.DecouplingPlanTrim {
+	trims := map[int]*icu.DecouplingPlanTrim{}
+	oldest, newest := "", ""
+	for _, index := range candidates {
+		activity := &activities[index]
+		day := activityDay(activity)
+		if activity.PairedEventID == nil || day == "" {
+			continue
+		}
+		if oldest == "" || day < oldest {
+			oldest = day
+		}
+		if day > newest {
+			newest = day
+		}
+	}
+	if oldest == "" {
+		return trims
+	}
+	var events []icu.Event
+	if err := client.Get("events", nil, map[string]string{queryOldest: oldest, queryNewest: newest}, &events); err != nil {
+		return trims
+	}
+	for index := range events {
+		addEventPlanTrim(trims, &events[index])
+	}
+
+	return trims
+}
+
+func addEventPlanTrim(trims map[int]*icu.DecouplingPlanTrim, event *icu.Event) {
+	doc, err := icu.DecodeWorkoutDoc(event.WorkoutDoc)
+	if err != nil {
+		return
+	}
+	if trim, ok := icu.PlannedDecouplingTrim(doc); ok {
+		trims[event.ID] = trim
+	}
+}
+
+// decouplingVIValues are the cycling VIs the cutoff is derived from.
+func decouplingVIValues(activities []icu.Activity) []float64 {
+	var values []float64
+	for index := range activities {
+		if icu.IsCyclingActivityType(activities[index].Type) && activities[index].VariabilityIndex > 0 {
+			values = append(values, activities[index].VariabilityIndex)
+		}
+	}
+
+	return values
+}
+
+// enrichActivitiesDecoupling labels every activity's decoupling source. In
+// streams mode it also attaches the stream value to each candidate and
+// consumes it when measured; otherwise the API value is kept, labeled api
+// with the reason.
 func enrichActivitiesDecoupling(client *icu.Client, activities []icu.Activity, flags map[string]string) error {
 	options, mode, err := decouplingOptionsFromFlags(flags)
 	if err != nil {
 		return err
 	}
-	if mode == decouplingModeAPI {
-		for index := range activities {
-			activities[index].MarkAPIDecouplingFallback("--decoupling-source api")
+	var candidates []int
+	for index := range activities {
+		activities[index].MarkAPIDecoupling("")
+		if mode == decouplingModeStreams && decouplingCandidate(&activities[index]) {
+			candidates = append(candidates, index)
 		}
-
+	}
+	if len(candidates) == 0 {
 		return nil
 	}
+	trims := decouplingPlanTrims(client, activities, candidates)
+	cutoff := icu.DecouplingVICutoff(decouplingVIValues(activities))
 
 	jobs := make(chan int)
 	var wg sync.WaitGroup
@@ -238,21 +332,24 @@ func enrichActivitiesDecoupling(client *icu.Client, activities []icu.Activity, f
 			defer wg.Done()
 			for index := range jobs {
 				activity := &activities[index]
-				entry := computeActivityDecoupling(client, activity.ID, options)
-				if entry.Result != nil {
-					activity.ApplyStreamDecoupling(entry.Result)
-				} else {
-					activity.MarkAPIDecouplingFallback(entry.Unavailable)
+				var plan *icu.DecouplingPlanTrim
+				if activity.PairedEventID != nil {
+					plan = trims[*activity.PairedEventID]
 				}
+				result, err := computeActivityDecoupling(client, activity, options, plan)
+				if err != nil {
+					activity.MarkAPIDecoupling(err.Error())
+					activity.DecouplingStreamsStatus = icu.DecouplingStatusUnavailable
+
+					continue
+				}
+				result.ApplyVIGate(activity.VariabilityIndex, cutoff)
+				activity.AttachStreamDecoupling(&result, true)
 			}
 		}()
 	}
-	for index := range activities {
-		if decouplingCandidate(&activities[index]) {
-			jobs <- index
-		} else {
-			activities[index].MarkAPIDecouplingFallback("not a stream-decoupling candidate")
-		}
+	for _, index := range candidates {
+		jobs <- index
 	}
 	close(jobs)
 	wg.Wait()
@@ -260,19 +357,59 @@ func enrichActivitiesDecoupling(client *icu.Client, activities []icu.Activity, f
 	return nil
 }
 
+// singleActivityContext fetches the paired workout's trim and the VI cutoff
+// (last decouplingVIHistoryDays of rides) for one activity. Both are
+// optional: errors leave them nil.
+func singleActivityContext(client *icu.Client, activity *icu.Activity) (*icu.DecouplingPlanTrim, *float64) {
+	var plan *icu.DecouplingPlanTrim
+	if activity.PairedEventID != nil {
+		var event icu.Event
+		if client.Get("events", []string{strconv.Itoa(*activity.PairedEventID)}, nil, &event) == nil {
+			trims := map[int]*icu.DecouplingPlanTrim{}
+			addEventPlanTrim(trims, &event)
+			plan = trims[event.ID]
+		}
+	}
+	day, err := time.Parse(dateLayout, activityDay(activity))
+	if err != nil {
+		return plan, nil
+	}
+	query := map[string]string{
+		queryOldest: day.AddDate(0, 0, -decouplingVIHistoryDays).Format(dateLayout),
+		queryNewest: day.Format(dateLayout),
+		"fields":    "id,type,icu_variability_index",
+	}
+	var history []icu.Activity
+	if client.Get("activities", nil, query, &history) != nil {
+		return plan, nil
+	}
+
+	return plan, icu.DecouplingVICutoff(decouplingVIValues(history))
+}
+
+func apiDecouplingValue(activity *icu.Activity) *float64 {
+	if activity.Decoupling == 0 {
+		return nil
+	}
+	value := activity.Decoupling
+
+	return &value
+}
+
 func activityDecouplingCommand() *Command {
 	return &Command{
 		Name: "",
-		Usage: "activity <id> decoupling [--decoupling-warmup-min N] [--decoupling-cooldown-min N] " +
-			"[--decoupling-min-power W] [--decoupling-hr-lag S] [--decoupling-iqr-k K]",
-		Description: "Aerobic decoupling (Pa:HR, or pace:HR without power) recomputed from the activity streams " +
-			"on per-minute averages (warm-up 20 / cool-down 12 min trimmed, <50 W minutes and IQR ratio outliers excluded, " +
-			"HR lagged 23 s), next to intervals.icu's decoupling field. Read-only.",
+		Usage: "activity <id> decoupling [--decoupling-source api|streams] [--decoupling-warmup-min N] " +
+			"[--decoupling-cooldown-min N] [--decoupling-hr-lag S] [--decoupling-iqr-k K]",
+		Description: "Aerobic decoupling from the activity streams (Pa:HR; GAP:HR without power) on moving-time minutes, " +
+			"next to intervals.icu's decoupling field. Trim from the paired workout's steps then steady-state detection, " +
+			"HR lag by cross-correlation, coasting and missing-HR minutes and Tukey ratio outliers excluded, VI gate from " +
+			"the athlete's history. The API value stays the consumed one unless --decoupling-source streams. Read-only.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
-			options, _, err := decouplingOptionsFromFlags(flags)
+			options, mode, err := decouplingOptionsFromFlags(flags)
 			if err != nil {
 				return err
 			}
@@ -280,23 +417,42 @@ func activityDecouplingCommand() *Command {
 			if err := client.Get("activity", []string{args[0]}, nil, &activity); err != nil {
 				return wrapCommandError(err)
 			}
-			entry := computeActivityDecoupling(client, args[0], options)
+			activity.ID = args[0]
+			plan, cutoff := singleActivityContext(client, &activity)
 			out := map[string]any{
-				"id":            args[0],
-				"name":          activity.Name,
-				"apiDecoupling": activity.Decoupling,
+				"id":                args[0],
+				"name":              activity.Name,
+				"apiDecoupling":     apiDecouplingValue(&activity),
+				"streamsDecoupling": nil,
 			}
-			if entry.Result != nil {
-				out["decoupling"] = entry.Result.Value
-				out["decouplingSource"] = icu.DecouplingSourceStreams
-				out["streamDetail"] = entry.Result
+			result, err := computeActivityDecoupling(client, &activity, options, plan)
+			if err != nil {
+				activity.MarkAPIDecoupling(err.Error())
+				activity.DecouplingStreamsStatus = icu.DecouplingStatusUnavailable
 			} else {
-				out["decoupling"] = activity.Decoupling
-				out["decouplingSource"] = icu.DecouplingSourceAPI
-				out["decouplingNote"] = entry.Unavailable
+				result.ApplyVIGate(activity.VariabilityIndex, cutoff)
+				activity.AttachStreamDecoupling(&result, mode == decouplingModeStreams)
+				out["streamsDecoupling"] = result.Value
+				out["streamDetail"] = result
+			}
+			out["decoupling"] = sessionValue(&activity)
+			out["decouplingSource"] = activity.DecouplingSource
+			out["streamsStatus"] = activity.DecouplingStreamsStatus
+			if activity.DecouplingNote != "" {
+				out["decouplingNote"] = activity.DecouplingNote
 			}
 
 			return writeJSON(out)
 		},
 	}
+}
+
+// sessionValue is the consumed decoupling, nil when absent.
+func sessionValue(activity *icu.Activity) *float64 {
+	if !activity.HasDecoupling() {
+		return nil
+	}
+	value := activity.Decoupling
+
+	return &value
 }
