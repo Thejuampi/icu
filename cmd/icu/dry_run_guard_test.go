@@ -281,9 +281,37 @@ func readOnlyCommands() map[string]bool {
 }
 
 // dryRunCommands implement --dry-run and must make no write with it.
-func dryRunCommands() map[string]bool {
-	return map[string]bool{
-		"events update": true, "events delete": true, "events revert": true, "sports update": true,
+// writeCommands may write, remotely or to local config. Every registered
+// command must be in exactly one of readOnlyCommands and writeCommands.
+func writeCommands() map[string]bool {
+	keys := []string{
+		"activities manual", "activities upload", "activity delete", "activity estimate-power-accept",
+		"activity update", "athlete plan", "athlete update", "chats send", "config set",
+		"custom create", "custom delete", "custom update",
+		"events create", "events delete", "events revert", "events update",
+		"folders create", "folders delete", "folders update", "ftp update",
+		"gear create", "gear delete", "gear update", "plan accept", "plan preview", "profile set",
+		"rebalance accept", "rebalance approve", "sports delete", "sports update", "weather config",
+		"wellness bulk", "wellness update", "wellness upload",
+		"workouts create", "workouts delete", "workouts update",
+		"zepp login", "zepp logout", "zepp token",
+	}
+	out := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		out[key] = true
+	}
+
+	return out
+}
+
+// dryRunCommands implement --dry-run; the value is the arguments (after the
+// command) of a dry run that must exit 0 without any write.
+func dryRunCommands() map[string][]string {
+	return map[string][]string{
+		"events update": {"1", "--name", "X", "--dry-run"},
+		"events delete": {"1", "--dry-run"},
+		"events revert": {"--id", "1", "--dry-run"},
+		"sports update": {"Ride", "--ftp", "250", "--dry-run"},
 	}
 }
 
@@ -298,87 +326,203 @@ func commandArgs(resource, action string, extra ...string) []string {
 	return append(args, extra...)
 }
 
-//nolint:paralleltest // replaces newCommandClient and sets env.
-func TestEveryCommandRejectsUnsupportedFlagsWithoutWrites(t *testing.T) {
-	t.Setenv(eventBackupDirEnv, t.TempDir())
-	t.Setenv("ICU_CONFIG_DIR", t.TempDir())
-	t.Setenv("INTERVALS_ICU_API_KEY", "k")
-	t.Setenv("INTERVALS_ICU_ATHLETE_ID", "i1")
-	var mu sync.Mutex
-	writes := map[string]int{}
-	current := ""
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		if r.Method != http.MethodGet {
-			writes[current]++
-			w.WriteHeader(http.StatusTeapot)
+// guardMock is a mock intervals.icu that counts requests per phase and, unless
+// writes are allowed, fails every non-GET.
+type guardMock struct {
+	mu          sync.Mutex
+	current     string
+	allowWrites bool
+	requests    map[string]int
+	writes      map[string]int
+}
 
-			return
-		}
+func (m *guardMock) phase(key string, allowWrites bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.current, m.allowWrites = key, allowWrites
+}
+
+func (m *guardMock) counts(key string) (int, int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.requests[key], m.writes[key]
+}
+
+func newGuardMock(t *testing.T) *guardMock {
+	t.Helper()
+	mock := &guardMock{requests: map[string]int{}, writes: map[string]int{}}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		mock.requests[mock.current]++
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":1,"name":"Z2","type":"Ride","start_date_local":"2026-10-28T07:00:00"}`))
+		if r.Method != http.MethodGet {
+			mock.writes[mock.current]++
+			if !mock.allowWrites {
+				w.WriteHeader(http.StatusTeapot)
+
+				return
+			}
+		}
+		_, _ = w.Write([]byte(`{"id":1,"name":"Z2","type":"Ride","types":["Ride"],"ftp":200,` +
+			`"category":"WORKOUT","start_date_local":"2026-10-28T07:00:00"}`))
 	}))
 	t.Cleanup(server.Close)
 	withMockCommandClient(t, icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL)))
 
+	return mock
+}
+
+func guardEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	t.Setenv("ICU_CONFIG_DIR", t.TempDir())
+	t.Setenv("INTERVALS_ICU_API_KEY", "k")
+	t.Setenv("INTERVALS_ICU_ATHLETE_ID", "i1")
+}
+
+// skipLiveRun: commands that reach services other than intervals.icu
+// (Zepp, weather/estimate-power) are classified and flag-checked but never run.
+func skipLiveRun(resource, action string) bool {
+	return resource == "zepp" || strings.HasPrefix(action, "estimate-power")
+}
+
+//nolint:paralleltest // replaces newCommandClient and sets env.
+func TestEveryCommandRejectsUnsupportedFlagsWithoutWrites(t *testing.T) {
+	guardEnv(t)
+	mock := newGuardMock(t)
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
-	accepted := map[string]bool{}
+	readOnly, writers, dryRuns := readOnlyCommands(), writeCommands(), dryRunCommands()
+	seen := map[string]bool{}
 	for _, resource := range registry.Resources() {
 		for _, action := range registry.Actions(resource) {
 			key := resource + " " + action
-			cmd, _ := registry.Lookup(resource, action)
+			seen[key] = true
+			if readOnly[key] == writers[key] {
+				t.Errorf("%s must be in exactly one of readOnlyCommands and writeCommands", key)
+			}
 
+			mock.phase(key+" --not-a-flag", false)
 			var stdout, stderr bytes.Buffer
 			if code := run(commandArgs(resource, action, "--not-a-flag", "1"), &stdout, &stderr); code == 0 ||
 				!strings.Contains(stderr.String(), "unknown flag --not-a-flag") {
 				t.Errorf("%s --not-a-flag: code=%d stderr=%q", key, code, stderr.String())
 			}
+			if requests, _ := mock.counts(key + " --not-a-flag"); requests != 0 {
+				t.Errorf("%s --not-a-flag sent %d request(s)", key, requests)
+			}
 
-			if validateCommandInput(cmd, nil, map[string]string{"dry-run": ""}) != nil {
+			dryArgs, supportsDryRun := dryRuns[key]
+			if !supportsDryRun {
+				mock.phase(key+" --dry-run", false)
+				stdout.Reset()
+				stderr.Reset()
+				if code := run(commandArgs(resource, action, "--dry-run"), &stdout, &stderr); code == 0 ||
+					!strings.Contains(stderr.String(), "unknown flag --dry-run") {
+					t.Errorf("%s --dry-run must be rejected: code=%d stderr=%q", key, code, stderr.String())
+				}
+				if requests, _ := mock.counts(key + " --dry-run"); requests != 0 {
+					t.Errorf("%s --dry-run sent %d request(s)", key, requests)
+				}
+
 				continue
 			}
-			accepted[key] = true
-			if readOnlyCommands()[key] {
-				t.Errorf("%s is listed read-only but accepts --dry-run", key)
+			if !writers[key] {
+				t.Errorf("%s supports --dry-run but is not a write command", key)
 			}
-			mu.Lock()
-			current = key
-			mu.Unlock()
+			if key == "events revert" {
+				seedRevertBackup(t)
+			}
+			mock.phase(key+" --dry-run", false)
 			stdout.Reset()
 			stderr.Reset()
-			_ = run(commandArgs(resource, action, "1", "--name", "X", "--dry-run"), &stdout, &stderr)
+			if code := run(commandArgs(resource, action, dryArgs...), &stdout, &stderr); code != 0 {
+				t.Errorf("%s dry run exit=%d stderr=%q", key, code, stderr.String())
+			}
+			if _, writes := mock.counts(key + " --dry-run"); writes != 0 {
+				t.Errorf("%s --dry-run sent %d write request(s)", key, writes)
+			}
 		}
 	}
-	for key := range readOnlyCommands() {
-		parts := strings.SplitN(key, " ", 2)
-		if _, ok := registry.Lookup(parts[0], parts[1]); !ok {
+	for key := range dryRuns {
+		if !seen[key] {
+			t.Errorf("dryRunCommands lists unknown command %s", key)
+		}
+	}
+	for key := range readOnly {
+		if !seen[key] {
 			t.Errorf("readOnlyCommands lists unknown command %s", key)
 		}
-		// Plain runs against the write-failing mock confirm the
-		// classification. Zepp, config and estimate-power reach other
-		// services or local files, so they are only classified.
-		if parts[0] == "zepp" || parts[0] == "config" || strings.HasPrefix(parts[1], "estimate-power") {
-			continue
-		}
-		mu.Lock()
-		current = key + " (plain)"
-		mu.Unlock()
-		var stdout, stderr bytes.Buffer
-		_ = run(commandArgs(parts[0], parts[1], "1"), &stdout, &stderr)
 	}
-	for key := range accepted {
-		if !dryRunCommands()[key] {
-			t.Errorf("%s accepts --dry-run but is not in dryRunCommands", key)
+	for key := range writers {
+		if !seen[key] {
+			t.Errorf("writeCommands lists unknown command %s", key)
 		}
 	}
-	for key := range dryRunCommands() {
-		if !accepted[key] {
-			t.Errorf("%s is in dryRunCommands but rejects --dry-run", key)
+}
+
+// seedRevertBackup leaves one completed backup of event 1 so events revert
+// --id 1 --dry-run has something to preview.
+func seedRevertBackup(t *testing.T) {
+	t.Helper()
+	client := newCommandClient("k", "i1")
+	if _, err := backupEvent(client, 1, eventBackupReasonDelete); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := listEventBackups(1)
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("backups = %v, %v", paths, err)
+	}
+	if err := markWriteDone(paths[0]); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCommandsRunAgainstMock runs every command without --dry-run against the
+// mock: read-only commands must not write; write commands may.
+//
+//nolint:paralleltest // replaces newCommandClient and sets env.
+func TestCommandsRunAgainstMock(t *testing.T) {
+	guardEnv(t)
+	mock := newGuardMock(t)
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	totalWrites := 0
+	for _, resource := range registry.Resources() {
+		for _, action := range registry.Actions(resource) {
+			key := resource + " " + action
+			if skipLiveRun(resource, action) {
+				continue
+			}
+			write := writeCommands()[key]
+			mock.phase(key, write)
+			var stdout, stderr bytes.Buffer
+			_ = run(commandArgs(resource, action, "1"), &stdout, &stderr)
+			_, writes := mock.counts(key)
+			if !write && writes != 0 {
+				t.Errorf("read-only %s sent %d write request(s)", key, writes)
+			}
+			totalWrites += writes
 		}
 	}
-	for key, n := range writes {
-		t.Errorf("%s --dry-run sent %d write request(s)", key, n)
+	if totalWrites == 0 {
+		t.Fatal("no write command reached the mock; the plain-run pass is not exercising writes")
+	}
+}
+
+//nolint:paralleltest // replaces newCommandClient and sets env.
+func TestAthleteUpdateDryRunRejectedWithoutRequests(t *testing.T) {
+	guardEnv(t)
+	mock := newGuardMock(t)
+	mock.phase("athlete update", false)
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"icu", "athlete", "update", "--weight", "70", "--dry-run"}, &stdout, &stderr)
+	if code == 0 || !strings.Contains(stderr.String(), "unknown flag --dry-run") {
+		t.Fatalf("code=%d stderr=%q", code, stderr.String())
+	}
+	if requests, _ := mock.counts("athlete update"); requests != 0 {
+		t.Fatalf("athlete update --dry-run sent %d request(s)", requests)
 	}
 }

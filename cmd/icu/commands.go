@@ -39,6 +39,11 @@ func (registry *CommandRegistry) Register(resource, action string, cmd *Command)
 // undocumentedUsageFlags lists flags these commands read (and document in
 // docs/cli-reference.md) that their Usage line was missing. Usage is the
 // allow-list for unknown-flag rejection, so they are appended here.
+// decouplingUsageFlags are the decoupling flags the analysis commands pass
+// to enrichActivitiesDecoupling.
+const decouplingUsageFlags = "[--decoupling-source api|streams] [--decoupling-warmup-min N] " +
+	"[--decoupling-cooldown-min N] [--decoupling-hr-lag S] [--decoupling-iqr-k K]"
+
 func undocumentedUsageFlags(key string) string {
 	return map[string]string{
 		"activities interval-search":       "[--minReps N] [--maxReps N] [--limit N]",
@@ -49,12 +54,12 @@ func undocumentedUsageFlags(key string) string {
 		"activity map":                     "[--bounds BOOL] [--weather BOOL]",
 		"activity weather-summary":         "[--descr-config VALUE]",
 		"analysis adaptation":              "[--filters FILTERS] [--limit N] [--activity-fields CSV] [--timezone TZ]",
-		"analysis cycling":                 "[--fields CSV] [--limit N] [--timezone TZ]",
+		"analysis cycling":                 "[--fields CSV] [--limit N] [--timezone TZ] " + decouplingUsageFlags,
 		"analysis wellness":                "[--timezone TZ]",
-		"analysis micro":                   "[--limit N] [--calendar-id ID] [--resolve]",
-		"analysis microcycle":              "[--limit N] [--calendar-id ID] [--resolve]",
+		"analysis micro":                   "[--limit N] [--calendar-id ID] [--resolve] " + decouplingUsageFlags,
+		"analysis microcycle":              "[--limit N] [--calendar-id ID] [--resolve] " + decouplingUsageFlags,
 		"analysis plan": "[--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve] " +
-			"[--activity-fields CSV] [--limit N] [--timezone TZ]",
+			"[--activity-fields CSV] [--limit N] [--timezone TZ] " + decouplingUsageFlags,
 		"curves hr":          "[--curves CURVES]",
 		"curves pace":        "[--curves CURVES]",
 		"curves power":       "[--newest DATE] [--filters FILTERS]",

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Accept flags the code reads but usage omitted: `analysis micro`/`microcycle` `--limit --calendar-id --resolve`, `analysis plan` `--limit --timezone`, `analysis cycling` `--timezone`, `workouts calculate` `--description`, `activity estimate-power-backtest` `--cda --air-density`, and `--limit` on `plan show|preview|accept` and `rebalance preview|accept|approve`. Tests now check every registered command against the code's flag reads (AST scan) and run every command with `--dry-run` and an unknown flag against a write-failing mock.
+- `zepp status` accepts `--zepp-login-token`, `--zepp-app-token` and `--zepp-user-id`; `analysis cycling|micro|microcycle|plan` accept the decoupling flags they pass through. The flag-read scan follows constants, aliases and name-carrying helpers (`queryFromFlags`, `stringFlagAlias`, `icu.Resolve*`, loops over name lists); the guard test requires every command to be classified read-only or write and runs write commands against the mock.
 - Accept `--timezone` on `analysis coaching`, `analysis wellness` and `analysis adaptation` ahead of #25.
 - Commands now reject flags their usage does not document (`unknown flag --x`) before making any request. Previously commands without a flag schema silently ignored unknown flags, so `events update <id> --name x --dry-run` performed a real PUT.
 - `events update` and `events delete` take `--dry-run`: GET only, no backup, no write.
