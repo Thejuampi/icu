@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -80,7 +81,7 @@ func eventsCreateCommand() *Command {
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
 			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert]",
 		Description: "Create calendar event.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			request, err := buildEventCreate(flags)
 			if err != nil {
 				return wrapCommandError(err)
@@ -103,10 +104,10 @@ func eventsCreateCommand() *Command {
 				return err
 			}
 			if request.Estimate != nil {
-				return writeJSON(calculatedEventOutput(&result, request.Estimate))
+				return writeJSON(stdout, calculatedEventOutput(&result, request.Estimate))
 			}
 
-			return writeJSON(result)
+			return writeJSON(stdout, result)
 		},
 	}
 }
@@ -116,7 +117,7 @@ func eventsUpdateCommand() *Command {
 		Name:        "",
 		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--force]",
 		Description: "Update calendar event.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
@@ -157,10 +158,10 @@ func eventsUpdateCommand() *Command {
 				return err
 			}
 			if request.Estimate != nil {
-				return writeJSON(calculatedEventOutput(&result, request.Estimate))
+				return writeJSON(stdout, calculatedEventOutput(&result, request.Estimate))
 			}
 
-			return writeJSON(result)
+			return writeJSON(stdout, result)
 		},
 	}
 }
@@ -344,7 +345,7 @@ func eventsDownloadCommand() *Command {
 		Name:        "",
 		Usage:       "events download <id> --ext zwo|mrc|erg|fit",
 		Description: "Download planned workout file.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
@@ -356,7 +357,7 @@ func eventsDownloadCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeOutput(data)
+			return writeOutput(stdout, data)
 		},
 	}
 }

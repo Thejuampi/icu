@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	icu "github.com/Thejuampi/icu"
@@ -62,23 +63,23 @@ func mustV2EventPreset(name string) icu.V2EventPreset {
 	return preset
 }
 
-func zeppAuthCommand(usage, description string, run func(email, password string) error) *Command {
+func zeppAuthCommand(usage, description string, run func(stdout io.Writer, email, password string) error) *Command {
 	return &Command{
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			email := icu.StringFlag(flags, "email", "")
 			if email == "" {
 				return errors.New("email is required: use --email flag")
 			}
 
-			password, err := promptPasswordFlagOrInteractive(flags["password"])
+			password, err := promptPasswordFlagOrInteractive(stderr, flags["password"])
 			if err != nil {
 				return err
 			}
 
-			return run(email, password)
+			return run(stdout, email, password)
 		},
 	}
 }
@@ -104,8 +105,8 @@ func zeppLogoutCommand() *Command {
 		Name:        "",
 		Usage:       "zepp logout",
 		Description: "Remove the stored Zepp login token from the local config.",
-		Run: func(_ []string, _ map[string]string, _ *icu.Client) error {
-			return runZeppLogout()
+		Run: func(_ []string, _ map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
+			return runZeppLogout(stdout)
 		},
 	}
 }
@@ -115,8 +116,8 @@ func zeppStatusCommand() *Command {
 		Name:        "",
 		Usage:       "zepp status",
 		Description: "Show whether a Zepp login token is configured (no raw value is printed).",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
-			return runZeppStatus(flags)
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
+			return runZeppStatus(stdout, flags)
 		},
 	}
 }
@@ -126,8 +127,8 @@ func zeppProfileCommand() *Command {
 		Name:        "",
 		Usage:       "zepp profile",
 		Description: "Fetch the Zepp user profile for the authenticated account.",
-		Run: func(_ []string, _ map[string]string, _ *icu.Client) error {
-			return runZeppProfile()
+		Run: func(_ []string, _ map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
+			return runZeppProfile(stdout)
 		},
 	}
 }
@@ -137,7 +138,7 @@ func zeppSimpleCommand[T any](name, description string, fetch func(*icu.ZeppClie
 		Name:        "",
 		Usage:       fmt.Sprintf("zepp %s --oldest YYYY-MM-DD --newest YYYY-MM-DD", name),
 		Description: description,
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
@@ -146,7 +147,7 @@ func zeppSimpleCommand[T any](name, description string, fetch func(*icu.ZeppClie
 					return fmt.Errorf("fetch %s: %w", name, err)
 				}
 
-				return writeJSON(records)
+				return writeJSON(stdout, records)
 			})
 		},
 	}
@@ -177,7 +178,7 @@ func zeppEventsCommand() *Command {
 		Name:        "",
 		Usage:       "zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD",
 		Description: "Fetch V2 wellness events by preset.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			presetName := icu.StringFlag(flags, "preset", "")
 			if presetName == "" {
 				return errors.New("preset is required: use --preset flag")
@@ -201,7 +202,7 @@ func zeppEventsCommand() *Command {
 					return fmt.Errorf("decode events: %w", err)
 				}
 
-				return writeJSON(events)
+				return writeJSON(stdout, events)
 			})
 		},
 	}
@@ -216,7 +217,7 @@ func zeppSwitchCommand[A, B any](
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			value := icu.StringFlag(flags, flagName, defaultValue)
 			if value != optionA && value != optionB {
 				return fmt.Errorf("invalid %s %q: must be %s or %s", flagName, value, optionA, optionB)
@@ -239,7 +240,7 @@ func zeppSwitchCommand[A, B any](
 					return fmt.Errorf("fetch %s: %w", flagName, err)
 				}
 
-				return writeJSON(records)
+				return writeJSON(stdout, records)
 			})
 		},
 	}
@@ -266,7 +267,7 @@ func registerV2EventCommand[T any](
 		Name:        "",
 		Usage:       fmt.Sprintf("zepp %s --oldest YYYY-MM-DD --newest YYYY-MM-DD", name),
 		Description: description,
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
@@ -280,7 +281,7 @@ func registerV2EventCommand[T any](
 					return fmt.Errorf("decode %s: %w", name, err)
 				}
 
-				return writeJSON(decoded)
+				return writeJSON(stdout, decoded)
 			})
 		},
 	})
@@ -296,7 +297,7 @@ func registerWatchStatCommand[T any](
 		Name:        "",
 		Usage:       fmt.Sprintf("zepp %s --oldest YYYY-MM-DD --newest YYYY-MM-DD", name),
 		Description: description,
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			oldest, newest := zeppDateRange(flags)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
@@ -305,7 +306,7 @@ func registerWatchStatCommand[T any](
 					return fmt.Errorf("fetch %s: %w", name, err)
 				}
 
-				return writeJSON(records)
+				return writeJSON(stdout, records)
 			})
 		},
 	})
@@ -316,7 +317,7 @@ func zeppSingleDateCommand[T any](name, description string, fetch func(*icu.Zepp
 		Name:        "",
 		Usage:       fmt.Sprintf("zepp %s --date YYYY-MM-DD [--timezone TZ]", name),
 		Description: description,
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			date := icu.StringFlag(flags, "date", "")
 			if date == "" {
 				return errors.New("date is required: use --date flag")
@@ -330,7 +331,7 @@ func zeppSingleDateCommand[T any](name, description string, fetch func(*icu.Zepp
 					return fmt.Errorf("fetch %s: %w", name, err)
 				}
 
-				return writeJSON(windows)
+				return writeJSON(stdout, windows)
 			})
 		},
 	}
@@ -341,7 +342,7 @@ func zeppWorkoutsCommand() *Command {
 		Name:        "",
 		Usage:       "zepp workouts [--sport NAME] [--oldest YYYY-MM-DD --newest YYYY-MM-DD]",
 		Description: "List workouts recorded in Zepp. Defaults: sport=run, last 7 days.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "run")
 			oldest, newest := zeppDateRange(flags)
 
@@ -351,7 +352,7 @@ func zeppWorkoutsCommand() *Command {
 					return fmt.Errorf("fetch workouts: %w", err)
 				}
 
-				return writeJSON(records)
+				return writeJSON(stdout, records)
 			})
 		},
 	}
@@ -362,7 +363,7 @@ func zeppWorkoutCommand() *Command {
 		Name:        "",
 		Usage:       "zepp workout [--sport NAME] <id>",
 		Description: "Fetch a single workout detail (HR, pace, altitude series). Default sport=run.",
-		Run: func(args []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(args []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "run")
 
 			if len(args) == 0 {
@@ -377,7 +378,7 @@ func zeppWorkoutCommand() *Command {
 					return fmt.Errorf("fetch workout detail: %w", err)
 				}
 
-				return writeJSON(detail)
+				return writeJSON(stdout, detail)
 			})
 		},
 	}
@@ -469,13 +470,13 @@ func zeppLogin(email, password string) (*icu.ZeppAuthResult, error) {
 	return auth, nil
 }
 
-func runZeppToken(email, password string) error {
+func runZeppToken(stdout io.Writer, email, password string) error {
 	auth, err := zeppLogin(email, password)
 	if err != nil {
 		return wrapCommandError(fmt.Errorf("zepp token failed: %w", err))
 	}
 
-	return writeJSON(map[string]any{
+	return writeJSON(stdout, map[string]any{
 		"loginToken":  auth.LoginToken,
 		"appToken":    auth.AppToken,
 		"userId":      auth.UserID,
@@ -483,8 +484,8 @@ func runZeppToken(email, password string) error {
 	})
 }
 
-func runZeppLogin(email, password string) error {
-	fmt.Fprintln(osStdout(), "Authenticating with Zepp...")
+func runZeppLogin(stdout io.Writer, email, password string) error {
+	fmt.Fprintln(stdout, "Authenticating with Zepp...")
 
 	auth, err := zeppLogin(email, password)
 	if err != nil {
@@ -505,20 +506,20 @@ func runZeppLogin(email, password string) error {
 		return wrapCommandError(fmt.Errorf("saving config: %w", err))
 	}
 
-	fmt.Fprintf(osStdout(), "Successfully logged in as user %s\n", auth.UserID)
-	fmt.Fprintf(osStdout(), "Tokens saved to %s\n", icu.ConfigPath())
+	fmt.Fprintf(stdout, "Successfully logged in as user %s\n", auth.UserID)
+	fmt.Fprintf(stdout, "Tokens saved to %s\n", icu.ConfigPath())
 
 	return nil
 }
 
-func runZeppLogout() error {
+func runZeppLogout(stdout io.Writer) error {
 	cfg, err := icu.LoadConfig()
 	if err != nil {
 		return wrapCommandError(fmt.Errorf("loading config: %w", err))
 	}
 
 	if cfg.ZeppLoginToken == "" && cfg.ZeppAppToken == "" && cfg.ZeppUserID == "" && cfg.ZeppCountryCode == "" {
-		return writeJSON(map[string]any{"ok": true, "cleared": false})
+		return writeJSON(stdout, map[string]any{"ok": true, "cleared": false})
 	}
 
 	cfg.ZeppLoginToken = ""
@@ -530,10 +531,10 @@ func runZeppLogout() error {
 		return wrapCommandError(fmt.Errorf("saving config: %w", err))
 	}
 
-	return writeJSON(map[string]any{"ok": true, "cleared": true, "savedTo": icu.ConfigPath()})
+	return writeJSON(stdout, map[string]any{"ok": true, "cleared": true, "savedTo": icu.ConfigPath()})
 }
 
-func runZeppStatus(flags map[string]string) error {
+func runZeppStatus(stdout io.Writer, flags map[string]string) error {
 	loginToken := icu.ResolveZeppLoginToken(flags)
 	appToken := icu.ResolveZeppAppToken(flags)
 	userID := icu.ResolveZeppUserID(flags)
@@ -548,7 +549,7 @@ func runZeppStatus(flags map[string]string) error {
 		out["valid"] = false
 		out["error"] = "no Zepp login token configured. Run 'icu zepp login'."
 
-		return writeJSON(out)
+		return writeJSON(stdout, out)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) //nolint:mnd // reasonable timeout for status check
@@ -567,24 +568,24 @@ func runZeppStatus(flags map[string]string) error {
 		out["valid"] = false
 		out["error"] = err.Error()
 
-		return writeJSON(out)
+		return writeJSON(stdout, out)
 	}
 
 	out["valid"] = true
 	out["nickname"] = info.Nickname
 	out["userId"] = info.UserID
 
-	return writeJSON(out)
+	return writeJSON(stdout, out)
 }
 
-func runZeppProfile() error {
+func runZeppProfile(stdout io.Writer) error {
 	return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 		info, err := client.UserInfo(ctx)
 		if err != nil {
 			return fmt.Errorf("fetch user info: %w", err)
 		}
 
-		return writeJSON(info)
+		return writeJSON(stdout, info)
 	})
 }
 
