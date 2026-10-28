@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"os"
@@ -48,7 +49,7 @@ func estimatePowerShowCommand() *Command {
 	}
 }
 
-func runEstimatePowerShowCommand(args []string, flags map[string]string, client *icu.Client) error {
+func runEstimatePowerShowCommand(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errMissing("activity id")
 	}
@@ -70,7 +71,7 @@ func runEstimatePowerShowCommand(args []string, flags map[string]string, client 
 		result.SampleSource = nil
 	}
 
-	return writeJSON(result)
+	return writeJSON(stdout, result)
 }
 
 func estimatePowerAcceptCommand() *Command {
@@ -94,7 +95,7 @@ func estimatePowerBacktestCommand() *Command {
 	}
 }
 
-func runEstimatePowerBacktestCommand(args []string, flags map[string]string, client *icu.Client) error {
+func runEstimatePowerBacktestCommand(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errMissing("activity id")
 	}
@@ -153,10 +154,10 @@ func runEstimatePowerBacktestCommand(args []string, flags map[string]string, cli
 	result.Fill.FilledWatts = nil
 	result.Fill.SampleSource = nil
 
-	return writeJSON(result)
+	return writeJSON(stdout, result)
 }
 
-func runEstimatePowerAcceptCommand(args []string, flags map[string]string, client *icu.Client) error {
+func runEstimatePowerAcceptCommand(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errMissing("activity id")
 	}
@@ -206,7 +207,7 @@ func runEstimatePowerAcceptCommand(args []string, flags map[string]string, clien
 		"warnings":    append([]string{}, result.Warnings...),
 	}
 
-	return writeJSON(out)
+	return writeJSON(stdout, out)
 }
 
 func runEstimatePowerShow(client *icu.Client, activityID string, flags map[string]string) (icu.PowerFillResult, error) {

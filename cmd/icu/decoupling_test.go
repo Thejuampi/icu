@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -256,7 +257,9 @@ func TestDecouplingOptionsFromFlags(t *testing.T) {
 
 func runDecouplingCommand(t *testing.T, client *icu.Client, args []string, flags map[string]string) map[string]any {
 	t.Helper()
-	out, err := captureStdout(t, func() error { return activityDecouplingCommand().Run(args, flags, client) })
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return activityDecouplingCommand().Run(args, flags, client, stdout, io.Discard)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,15 +349,15 @@ func TestActivityDecouplingCommand(t *testing.T) {
 		t.Fatalf("failed output = %v", failed)
 	}
 
-	if err := activityDecouplingCommand().Run(nil, map[string]string{}, client); err == nil {
+	if err := activityDecouplingCommand().Run(nil, map[string]string{}, client, io.Discard, io.Discard); err == nil {
 		t.Fatal("missing id accepted")
 	}
-	if err := activityDecouplingCommand().Run([]string{"i9"}, map[string]string{decouplingIQRKFlag: "x"}, client); err == nil {
+	if err := activityDecouplingCommand().Run([]string{"i9"}, map[string]string{decouplingIQRKFlag: "x"}, client, io.Discard, io.Discard); err == nil {
 		t.Fatal("bad flag accepted")
 	}
 	closed := httptest.NewServer(http.NotFoundHandler())
 	broken := icu.NewClient("k", "0", icu.WithHTTPClient(closed.Client()), icu.WithBaseURL(closed.URL))
-	if err := activityDecouplingCommand().Run([]string{"i9"}, map[string]string{}, broken); err == nil {
+	if err := activityDecouplingCommand().Run([]string{"i9"}, map[string]string{}, broken, io.Discard, io.Discard); err == nil {
 		t.Fatal("activity fetch error swallowed")
 	}
 }

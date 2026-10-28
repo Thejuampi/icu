@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -377,10 +378,10 @@ func activityDecouplingCommand() *Command {
 			"moving-time minutes, always next to intervals.icu's decoupling field (the default consumed value). Uses " +
 			"the coach's criteria on the analyzed range: fixed trim (warm-up max(15 min, HR stabilization), cool-down " +
 			"10 min); VI <= 1.05 valid, 1.05-1.10 low confidence, > 1.10 not valid; >= 60 min; >= 85% of the time in " +
-			"power Z1-Z2; no minute above 105% FTP; coasting < 10%. Any failed criterion: not valid, no number, failed " +
-			"criteria listed. Interpretation: < 5% good, 5-8% moderate, > 8% high; < -5% possible fatigue. HR lag by " +
+			"power Z1-Z2; no minute above 105% FTP; coasting < 10%. Any failed criterion: not valid; the raw stream value is shown " +
+			"(rawValue) but never consumed, and the failed criteria are listed with their values. Interpretation: < 5% good, 5-8% moderate, > 8% high; < -5% possible fatigue. HR lag by " +
 			"cross-correlation, coasting/missing-HR minutes and Tukey ratio outliers excluded. Read-only.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -424,7 +425,7 @@ func activityDecouplingCommand() *Command {
 				out["decouplingNote"] = activity.DecouplingNote
 			}
 
-			return writeJSON(out)
+			return writeJSON(stdout, out)
 		},
 	}
 }

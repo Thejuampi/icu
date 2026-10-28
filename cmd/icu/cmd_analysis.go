@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -44,21 +45,57 @@ const (
 	defaultWorkoutMatchHours = 24
 )
 
+// Timezone source labels (scope.timezoneSource).
+const (
+	timezoneSourceFlag    = "flag"
+	timezoneSourceAthlete = "athlete"
+)
+
+// analysisTimezoneInfo is the timezone every analysis command uses for its
+// default date windows and reports in scope.timezone/timezoneSource.
 type analysisTimezoneInfo struct {
 	timezone string
 	source   string
+	location *time.Location
 }
 
-func analysisTimezone(explicit bool) analysisTimezoneInfo {
-	source := icu.DefaultAnalysisTimezoneSource
-	if explicit {
-		source = timezoneSourceExplicit
+// now is the current time in the analysis timezone, so default windows
+// (today, last N days, next ISO block) follow the athlete's calendar day.
+func (info analysisTimezoneInfo) now() time.Time {
+	return time.Now().In(info.location)
+}
+
+// resolveAnalysisTimezone is the shared timezone resolution of the analysis
+// commands: --timezone if given, else the athlete profile timezone (one GET
+// /athlete), else UTC labeled default_utc.
+func resolveAnalysisTimezone(client *icu.Client, flags map[string]string) analysisTimezoneInfo {
+	flagName := icu.StringFlag(flags, "timezone", "")
+	athleteName := ""
+	if flagName == "" {
+		var athlete icu.Athlete
+		if client.Get("athlete", nil, nil, &athlete) == nil {
+			athleteName = athlete.Timezone
+		}
 	}
 
-	return analysisTimezoneInfo{
-		timezone: icu.DefaultAnalysisTimezone,
-		source:   source,
+	return analysisTimezoneFrom(flagName, athleteName)
+}
+
+// analysisTimezoneFrom applies the precedence flag > athlete > default UTC;
+// an unknown name falls through to the next source.
+func analysisTimezoneFrom(flagName, athleteName string) analysisTimezoneInfo {
+	for _, candidate := range []struct{ name, source string }{
+		{flagName, timezoneSourceFlag}, {athleteName, timezoneSourceAthlete},
+	} {
+		if candidate.name == "" {
+			continue
+		}
+		if location, err := time.LoadLocation(candidate.name); err == nil {
+			return analysisTimezoneInfo{timezone: candidate.name, source: candidate.source, location: location}
+		}
 	}
+
+	return analysisTimezoneInfo{timezone: icu.DefaultAnalysisTimezone, source: icu.DefaultAnalysisTimezoneSource, location: time.UTC}
 }
 
 type analysisRange struct {
@@ -97,18 +134,23 @@ func analysisCoachingCommand() *Command {
 
 			return err
 		},
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRanges, explicit, err := trainingPlanDateRanges(flags, time.Now())
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
+			// Validate the flags before any request; the windows are then
+			// computed on the athlete's calendar day.
+			if _, _, err := trainingPlanDateRanges(flags, time.Now()); err != nil {
+				return err
+			}
+			tzInfo := resolveAnalysisTimezone(client, flags)
+			dateRanges, _, err := trainingPlanDateRanges(flags, tzInfo.now())
 			if err != nil {
 				return err
 			}
 
-			inputs, err := readCoachingContextInputs(client, flags, dateRanges, explicit)
+			inputs, err := readCoachingContextInputs(client, flags, dateRanges, tzInfo)
 			if err != nil {
 				return err
 			}
 
-			tzInfo := analysisTimezone(explicit)
 			context := icu.BuildCoachingContext(inputs, &icu.CoachingContextOptions{
 				SportType:         icu.StringFlag(flags, "sport-type", "Ride"),
 				HistoryStartDate:  dateRanges.History.Oldest,
@@ -120,7 +162,7 @@ func analysisCoachingCommand() *Command {
 				IncludeAdaptation: BoolFlag(flags, "include-adaptation"),
 			})
 
-			return writeJSON(context)
+			return writeJSON(stdout, context)
 		},
 	}
 }
@@ -153,7 +195,7 @@ func readCoachingContextInputs(
 	client *icu.Client,
 	flags map[string]string,
 	dateRanges trainingPlanRanges,
-	explicit bool,
+	tzInfo analysisTimezoneInfo,
 ) (icu.CoachingContextInputs, error) {
 	var inputs icu.CoachingContextInputs
 
@@ -173,7 +215,7 @@ func readCoachingContextInputs(
 		inputs.SportSettings = &sportSettings
 	}
 
-	activities, err := readCoachingActivities(client, flags, dateRanges.History)
+	activities, err := readCoachingActivities(client, flags, dateRanges.History, tzInfo.location)
 	if err != nil {
 		return inputs, err
 	}
@@ -189,7 +231,6 @@ func readCoachingContextInputs(
 	}
 	inputs.Events = events
 
-	tzInfo := analysisTimezone(explicit)
 	cycling := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
 		Thresholds:     profileThresholds(),
 		StartDate:      dateRanges.History.Oldest,
@@ -234,7 +275,9 @@ func readCoachingContextInputs(
 	return inputs, nil
 }
 
-func readCoachingActivities(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Activity, error) {
+func readCoachingActivities(
+	client *icu.Client, flags map[string]string, dateRange analysisRange, location *time.Location,
+) ([]icu.Activity, error) {
 	query := queryFromFlags(flags, "limit")
 	query["oldest"] = dateRange.Oldest
 	query["newest"] = dateRange.Newest
@@ -244,6 +287,7 @@ func readCoachingActivities(client *icu.Client, flags map[string]string, dateRan
 	if err := client.Get("activities", nil, query, &activities); err != nil {
 		return nil, wrapCommandError(err)
 	}
+	icu.LocalizeActivityDates(activities, location)
 
 	if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
 		return nil, err
@@ -329,11 +373,17 @@ func analysisCyclingCommand() *Command {
 		Name:  "",
 		Usage: "analysis cycling [--oldest DATE --newest DATE | --days N] [--min-included-activities N]",
 		Description: "Compute numeric cycling analysis from completed activities. " +
-			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries. " +
+			"Default ranges use the athlete's timezone (profile; --timezone overrides; UTC if unavailable). " +
 			"--min-included-activities has no default (D-4): when set and validity.included falls below it, " +
 			"load/intensity/durability refuse with a named warning instead of reporting on too few sessions.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRange, explicit, err := analysisDateRange(flags, time.Now())
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
+			// Validate the flags before any request; the windows are then
+			// computed on the athlete's calendar day.
+			if _, _, err := analysisDateRange(flags, time.Now()); err != nil {
+				return err
+			}
+			tzInfo := resolveAnalysisTimezone(client, flags)
+			dateRange, _, err := analysisDateRange(flags, tzInfo.now())
 			if err != nil {
 				return err
 			}
@@ -352,11 +402,11 @@ func analysisCyclingCommand() *Command {
 			if err := client.Get("activities", nil, query, &activities); err != nil {
 				return wrapCommandError(err)
 			}
+			icu.LocalizeActivityDates(activities, tzInfo.location)
 			if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
 				return err
 			}
 
-			tzInfo := analysisTimezone(explicit)
 			analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
 				Thresholds:            profileThresholds(),
 				StartDate:             dateRange.Oldest,
@@ -370,7 +420,7 @@ func analysisCyclingCommand() *Command {
 				analysis.Warnings = append(analysis.Warnings, fitnessWarning)
 			}
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -419,9 +469,15 @@ func analysisPlanCommand() *Command {
 		Usage: "analysis plan [--history-oldest DATE --history-newest DATE] " +
 			"[--plan-oldest DATE --plan-newest DATE]",
 		Description: "Analyze a planned training block from recent history and future calendar events. " +
-			"Default ranges use UTC; pass explicit dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRanges, explicit, err := trainingPlanDateRanges(flags, time.Now())
+			"Default ranges use the athlete's timezone (profile; --timezone overrides; UTC if unavailable).",
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
+			// Validate the flags before any request; the windows are then
+			// computed on the athlete's calendar day.
+			if _, _, err := trainingPlanDateRanges(flags, time.Now()); err != nil {
+				return err
+			}
+			tzInfo := resolveAnalysisTimezone(client, flags)
+			dateRanges, _, err := trainingPlanDateRanges(flags, tzInfo.now())
 			if err != nil {
 				return err
 			}
@@ -435,6 +491,7 @@ func analysisPlanCommand() *Command {
 			if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
 				return wrapCommandError(err)
 			}
+			icu.LocalizeActivityDates(activities, tzInfo.location)
 			if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
 				return err
 			}
@@ -454,7 +511,6 @@ func analysisPlanCommand() *Command {
 				return err
 			}
 
-			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
 				Thresholds:     profileThresholds(),
 				StartDate:      dateRanges.History.Oldest,
@@ -489,7 +545,7 @@ func analysisPlanCommand() *Command {
 			analysis.Scope.Timezone = tzInfo.timezone
 			analysis.Scope.TimezoneSource = tzInfo.source
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -499,9 +555,15 @@ func analysisWellnessCommand() *Command {
 		Name:  "",
 		Usage: "analysis wellness [--oldest DATE --newest DATE | --days N]",
 		Description: "Compute wellness and physiology analysis from wellness records. " +
-			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRange, explicit, err := analysisDateRange(flags, time.Now())
+			"Default ranges use the athlete's timezone (profile; --timezone overrides; UTC if unavailable).",
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
+			// Validate the flags before any request; the windows are then
+			// computed on the athlete's calendar day.
+			if _, _, err := analysisDateRange(flags, time.Now()); err != nil {
+				return err
+			}
+			tzInfo := resolveAnalysisTimezone(client, flags)
+			dateRange, _, err := analysisDateRange(flags, tzInfo.now())
 			if err != nil {
 				return err
 			}
@@ -511,7 +573,6 @@ func analysisWellnessCommand() *Command {
 				return err
 			}
 
-			tzInfo := analysisTimezone(explicit)
 			analysis := analyzeWellness(records, warnings, icu.AnalysisOptions{
 				Thresholds:     profileThresholds(),
 				StartDate:      dateRange.Oldest,
@@ -520,7 +581,7 @@ func analysisWellnessCommand() *Command {
 				TimezoneSource: tzInfo.source,
 			})
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -530,7 +591,7 @@ func analysisWorkoutCommand() *Command {
 		Name:        "",
 		Usage:       "analysis workout <activity-id> [--event-id ID] [--calendar-id ID] [--sport-type TYPE] [--match-window-hours N]",
 		Description: "Analyze one completed workout against its planned workout event, intervals, and streams.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -543,7 +604,7 @@ func analysisWorkoutCommand() *Command {
 
 			analysis := icu.AnalyzeWorkoutExecution(inputs, options)
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -667,9 +728,15 @@ func analysisAdaptationCommand() *Command {
 		Name:  "",
 		Usage: "analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride]",
 		Description: "Analyze cycling adaptation from power curves, MMP model, sport anchors, activities, and wellness. " +
-			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
-			dateRange, explicit, err := analysisDateRange(flags, time.Now())
+			"Default ranges use the athlete's timezone (profile; --timezone overrides; UTC if unavailable).",
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
+			// Validate the flags before any request; the windows are then
+			// computed on the athlete's calendar day.
+			if _, _, err := analysisDateRange(flags, time.Now()); err != nil {
+				return err
+			}
+			tzInfo := resolveAnalysisTimezone(client, flags)
+			dateRange, _, err := analysisDateRange(flags, tzInfo.now())
 			if err != nil {
 				return err
 			}
@@ -685,6 +752,7 @@ func analysisAdaptationCommand() *Command {
 			if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
 				return wrapCommandError(err)
 			}
+			icu.LocalizeActivityDates(activities, tzInfo.location)
 
 			curveQuery := map[string]string{
 				"type":   sportType,
@@ -722,7 +790,6 @@ func analysisAdaptationCommand() *Command {
 				return err
 			}
 
-			tzInfo := analysisTimezone(explicit)
 			wellnessAnalysis := analyzeWellness(wellnessRecords, wellnessWarnings, icu.AnalysisOptions{
 				Thresholds:     profileThresholds(),
 				StartDate:      dateRange.Oldest,
@@ -746,7 +813,7 @@ func analysisAdaptationCommand() *Command {
 				},
 			)
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -791,7 +858,7 @@ func trainingPlanHistoryRange(flags map[string]string, now time.Time) (analysisR
 		return analysisRange{}, false, err
 	}
 
-	end := now.UTC()
+	end := now
 	start := end.AddDate(0, 0, -days+1)
 
 	return analysisRange{Oldest: start.Format("2006-01-02"), Newest: end.Format("2006-01-02")}, false, nil
@@ -832,23 +899,12 @@ func trainingPlanFutureRange(flags map[string]string, now time.Time) (analysisRa
 		return analysisRange{}, false, err
 	}
 
-	start := nextISOBlockStart(now.UTC())
+	// The default plan starts the day after today (athlete timezone: now is
+	// already in it), so history and plan are contiguous with no gap.
+	start := now.AddDate(0, 0, 1)
 	end := start.AddDate(0, 0, days-1)
 
 	return analysisRange{Oldest: start.Format("2006-01-02"), Newest: end.Format("2006-01-02")}, false, nil
-}
-
-func nextISOBlockStart(now time.Time) time.Time {
-	var weekday int
-	weekday = int(now.Weekday())
-
-	if weekday == 0 {
-		weekday = calendarWeekDays
-	}
-
-	daysUntilMonday := (nextWeekdayModuloBase - weekday) % calendarWeekDays
-
-	return now.AddDate(0, 0, daysUntilMonday)
 }
 
 func alignToISOWeekStart(date string) string {
@@ -905,7 +961,7 @@ func analysisDateRange(flags map[string]string, now time.Time) (analysisRange, b
 		return analysisRange{}, false, err
 	}
 
-	normalizedNow := now.UTC()
+	normalizedNow := now
 	end := normalizedNow.Format("2006-01-02")
 	start := normalizedNow.AddDate(0, 0, -days+1).Format("2006-01-02")
 
@@ -969,7 +1025,7 @@ func analysisMicrocycleCommand() *Command {
 		Name:        "",
 		Usage:       "analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]",
 		Description: "[experimental] Analyze the selected training microcycle as a read-only, LLM-ready diagnostic contract.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			now := time.Now()
 			location, timezoneSource, err := resolveMicrocycleLocation(client, flags)
 			if err != nil {
@@ -1018,10 +1074,10 @@ func analysisMicrocycleCommand() *Command {
 			})
 
 			if BoolFlag(flags, "json") || icu.ResolveOutputFormat(flags) == icu.FormatJSON {
-				return writeJSON(analysis)
+				return writeJSON(stdout, analysis)
 			}
 
-			return writeMicrocycleHuman(&analysis)
+			return writeMicrocycleHuman(stdout, &analysis)
 		},
 	}
 }
@@ -1215,11 +1271,11 @@ func microcycleLocation(flagName, athleteName string, system *time.Location) (*t
 			return nil, "", fmt.Errorf("%w: invalid --timezone %s", errInvalidValue, flagName)
 		}
 
-		return location, "flag", nil
+		return location, timezoneSourceFlag, nil
 	}
 	if athleteName != "" {
 		if location, err := time.LoadLocation(athleteName); err == nil {
-			return location, "athlete", nil
+			return location, timezoneSourceAthlete, nil
 		}
 	}
 
@@ -1277,7 +1333,7 @@ func addDays(date string, days int) (string, error) {
 	return parsed.AddDate(0, 0, days).Format("2006-01-02"), nil
 }
 
-func writeMicrocycleHuman(analysis *icu.MicrocycleAnalysis) error {
+func writeMicrocycleHuman(stdout io.Writer, analysis *icu.MicrocycleAnalysis) error {
 	var output strings.Builder
 	fmt.Fprintf(&output, "Microcycle: %s to %s\n", analysis.Microcycle.StartDate, analysis.Microcycle.EndDate)
 	fmt.Fprintf(
@@ -1304,5 +1360,5 @@ func writeMicrocycleHuman(analysis *icu.MicrocycleAnalysis) error {
 	}
 	fmt.Fprintln(&output, "Final note: diagnostic only; no plan, config, or external sync changes were made.")
 
-	return writeOutput([]byte(output.String()))
+	return writeOutput(stdout, []byte(output.String()))
 }
