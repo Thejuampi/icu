@@ -31,7 +31,7 @@ func runEventsCommand(t *testing.T, client *icu.Client, sub string, args []strin
 		t.Fatalf("missing command events %s", sub)
 	}
 
-	return cmd.Run(args, values, client, io.Discard)
+	return cmd.Run(args, values, client, io.Discard, io.Discard)
 }
 
 func TestEventsCreateWeightTrainingKeepsTypeWithoutFTPPricing(t *testing.T) {

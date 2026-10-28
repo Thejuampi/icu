@@ -14,7 +14,7 @@ func registerChatsCommands(registry *CommandRegistry) {
 		Name:        "",
 		Usage:       "chats messages <id> [--limit N]",
 		Description: "List messages in a chat.",
-		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("icu.Chat id")
 			}

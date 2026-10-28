@@ -24,7 +24,7 @@ func registerWeatherCommands(registry *CommandRegistry) {
 		Usage: "weather config [update [--id ID] --lat LAT --lon LON --label NAME --location NAME " +
 			"--provider NAME --enabled true]",
 		Description: "Get or update weather config.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if weatherConfigHasUpdate(flags) {
 				return updateWeatherConfig(stdout, flags, client)
 			}

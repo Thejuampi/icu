@@ -3,17 +3,16 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 
 	icu "github.com/Thejuampi/icu"
 )
 
-func applyCalendarOperations(client *icu.Client, operations []icu.CalendarOperation) *icu.CalendarApplySummary {
+func applyCalendarOperations(stderr io.Writer, client *icu.Client, operations []icu.CalendarOperation) *icu.CalendarApplySummary {
 	summary := &icu.CalendarApplySummary{}
 	for index := range operations {
 		operation := &operations[index]
-		result := applyCalendarOperation(client, operation)
+		result := applyCalendarOperation(stderr, client, operation)
 		summary.Results = append(summary.Results, result)
 		countCalendarApplyResult(summary, result)
 	}
@@ -21,7 +20,7 @@ func applyCalendarOperations(client *icu.Client, operations []icu.CalendarOperat
 	return summary
 }
 
-func applyCalendarOperation(client *icu.Client, operation *icu.CalendarOperation) icu.CalendarApplyResult {
+func applyCalendarOperation(stderr io.Writer, client *icu.Client, operation *icu.CalendarOperation) icu.CalendarApplyResult {
 	result := icu.CalendarApplyResult{OperationID: operation.ID, Action: operation.Action, EventID: operation.EventID}
 	if operation.Status != "" && operation.Status != icu.CalendarStatusPending {
 		operation.Status = icu.CalendarStatusSkipped
@@ -65,7 +64,7 @@ func applyCalendarOperation(client *icu.Client, operation *icu.CalendarOperation
 		if err := recordPostWrite(result.BackupPath, &event); err != nil {
 			result.Warning = fmt.Sprintf("event %d updated, but saving its post-write hash in %s failed (%v); "+
 				"its next events update/revert will require --force", operation.EventID, result.BackupPath, err)
-			fmt.Fprintln(os.Stderr, "warning: "+result.Warning)
+			fmt.Fprintln(stderr, "warning: "+result.Warning)
 		}
 	}
 	operation.Status = icu.CalendarStatusApplied

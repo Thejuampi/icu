@@ -63,7 +63,7 @@ func sportsUpdateCommand() *Command {
 	}
 }
 
-func runSportsUpdate(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+func runSportsUpdate(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errMissing("sport type or id")
 	}

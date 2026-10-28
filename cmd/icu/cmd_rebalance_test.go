@@ -24,7 +24,7 @@ func TestRebalanceDryRunWritesProposalFile(t *testing.T) {
 	}
 	file := filepath.Join(t.TempDir(), "rebalance.json")
 
-	err := cmd.Run(nil, rebalanceDryRunFlags(file), client, io.Discard)
+	err := cmd.Run(nil, rebalanceDryRunFlags(file), client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("rebalance dry-run: %v", err)
 	}
@@ -48,11 +48,11 @@ func TestRebalanceAcceptAppliesPendingOperation(t *testing.T) {
 		t.Fatalf("missing rebalance accept command")
 	}
 	file := filepath.Join(t.TempDir(), "rebalance.json")
-	if err := dryRun.Run(nil, rebalanceDryRunFlags(file), client, io.Discard); err != nil {
+	if err := dryRun.Run(nil, rebalanceDryRunFlags(file), client, io.Discard, io.Discard); err != nil {
 		t.Fatalf("rebalance dry-run: %v", err)
 	}
 
-	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("rebalance accept: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestRebalanceAcceptSkipsNonPendingOperation(t *testing.T) {
 		}},
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("rebalance accept: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestRebalanceAcceptFailsOnSourceHashDrift(t *testing.T) {
 		}},
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("rebalance accept: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestRebalanceAcceptAppliesCancelOperation(t *testing.T) {
 		}},
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("rebalance accept: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestRebalanceDryRunPrefersHybridChargeForWellnessContext(t *testing.T) {
 		t.Fatalf("missing rebalance command")
 	}
 	file := filepath.Join(t.TempDir(), "rebalance.json")
-	err := cmd.Run(nil, rebalanceDryRunFlags(file), client, io.Discard)
+	err := cmd.Run(nil, rebalanceDryRunFlags(file), client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("rebalance dry-run: %v", err)
 	}
@@ -314,7 +314,7 @@ func TestRebalanceShowMaxHRFlagReachesSpecificRejection(t *testing.T) {
 	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
 	flags["max-hr"] = "140"
 
-	err := rebalanceDryRunCommand().Run(nil, flags, client, io.Discard)
+	err := rebalanceDryRunCommand().Run(nil, flags, client, io.Discard, io.Discard)
 
 	if err == nil || !strings.Contains(err.Error(), "max-hr is not supported") {
 		t.Fatalf("err = %v, want the specific max-hr rejection", err)
@@ -387,7 +387,7 @@ func TestRebalanceDryRunRejectsMalformedNowDate(t *testing.T) {
 	flags := rebalanceDryRunFlags(filepath.Join(t.TempDir(), "rebalance.json"))
 	flags["now-date"] = "!"
 
-	err := rebalanceDryRunCommand().Run(nil, flags, client, io.Discard)
+	err := rebalanceDryRunCommand().Run(nil, flags, client, io.Discard, io.Discard)
 
 	if !errors.Is(err, errInvalidValue) {
 		t.Fatalf("err = %v, want errInvalidValue for a malformed --now-date", err)
@@ -406,7 +406,7 @@ func TestRebalanceDryRunNeverWritesProposalFileForMalformedNowDate(t *testing.T)
 	flags := rebalanceDryRunFlags(file)
 	flags["now-date"] = "!"
 
-	_ = rebalanceDryRunCommand().Run(nil, flags, client, io.Discard)
+	_ = rebalanceDryRunCommand().Run(nil, flags, client, io.Discard, io.Discard)
 	_, statErr := os.Stat(file)
 
 	if !os.IsNotExist(statErr) {
@@ -449,7 +449,7 @@ func TestRebalanceDryRunRequiresDryRunFlag(t *testing.T) {
 		t.Fatalf("missing rebalance show command")
 	}
 
-	err := cmd.Run(nil, map[string]string{}, client, io.Discard)
+	err := cmd.Run(nil, map[string]string{}, client, io.Discard, io.Discard)
 
 	if err == nil {
 		t.Fatalf("err = nil, want missing oldest")
@@ -522,7 +522,7 @@ func TestApplyRebalanceOperationRejectsUnsupportedAction(t *testing.T) {
 	_, client := rebalanceTestRegistryClient(t)
 	operation := icu.RebalanceOperation{ID: "bad", Action: "move", Status: icu.RebalanceStatusPending}
 
-	result := applyRebalanceOperation(client, &operation)
+	result := applyRebalanceOperation(io.Discard, client, &operation)
 
 	if result.Status != icu.RebalanceStatusFailed {
 		t.Fatalf("status = %q, want failed", result.Status)
@@ -626,7 +626,7 @@ func TestRebalanceApproveRequiresReason(t *testing.T) {
 		SchemaVersion: icu.RebalanceSchemaVersion,
 	})
 
-	err := approve.Run(nil, map[string]string{"file": file}, nil, io.Discard)
+	err := approve.Run(nil, map[string]string{"file": file}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("err = nil, want missing reason")
 	}
@@ -646,7 +646,7 @@ func TestRebalanceApproveBindsHashAndVerifies(t *testing.T) {
 		Envelope:      &icu.RebalanceEnvelopeReport{Envelope: icu.RebalanceEnvelope{Low: fRat(200), Current: fRat(300), High: fRat(400)}, LowSource: "data_robust_fence", HighSource: "data_robust_fence"},
 	})
 
-	err := approve.Run(nil, map[string]string{"file": file, "reason": "ramp-up"}, nil, io.Discard)
+	err := approve.Run(nil, map[string]string{"file": file, "reason": "ramp-up"}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -676,7 +676,7 @@ func TestRebalanceApproveStoresExplicitLimitsWithoutMutatingConstraints(t *testi
 		Options:       []icu.RebalanceOption{{Evaluation: icu.RebalanceEvaluation{TargetLoad: 354}}},
 	})
 
-	err := approve.Run(nil, map[string]string{"file": file, "reason": "override", "target-load": "380", "level": "0.7"}, nil, io.Discard)
+	err := approve.Run(nil, map[string]string{"file": file, "reason": "override", "target-load": "380", "level": "0.7"}, nil, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -699,7 +699,7 @@ func TestRebalanceApproveOutsideEnvelopeRequiresLimits(t *testing.T) {
 		Envelope:      &icu.RebalanceEnvelopeReport{OutsideEnvelope: true, Envelope: icu.RebalanceEnvelope{Low: fRat(200), Current: fRat(300), High: fRat(310)}},
 	})
 
-	err := approve.Run(nil, map[string]string{"file": file, "reason": "override"}, nil, io.Discard)
+	err := approve.Run(nil, map[string]string{"file": file, "reason": "override"}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("err = nil, want explicit limits required for outside-envelope")
 	}
@@ -714,7 +714,7 @@ func TestRebalanceAcceptRejectsV1SchemaFile(t *testing.T) {
 		SchemaVersion: "icu.rebalance.v1",
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("err = nil, want v1 schema rejected")
 	}
@@ -730,7 +730,7 @@ func TestRebalanceAcceptRejectsUnapprovedOutsideEnvelope(t *testing.T) {
 		Envelope:      &icu.RebalanceEnvelopeReport{OutsideEnvelope: true, Envelope: icu.RebalanceEnvelope{Low: fRat(200), Current: fRat(300), High: fRat(310)}},
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("err = nil, want approve required for outside-envelope")
 	}
@@ -754,7 +754,7 @@ func TestRebalanceAcceptRejectsApprovalHashMismatch(t *testing.T) {
 		},
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("err = nil, want approval hash mismatch")
 	}
@@ -794,7 +794,7 @@ func TestRebalanceAcceptRejectsApprovalLimitsMismatch(t *testing.T) {
 		},
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("err = nil, want approval limits mismatch")
 	}

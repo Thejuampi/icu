@@ -20,7 +20,7 @@ func profileShowCommand() *Command {
 		Name:        "",
 		Usage:       "profile show",
 		Description: "Show the local training profile (goals and caps). Local config only; nothing is sent to Intervals.icu.",
-		Run: func(_ []string, _ map[string]string, _ *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, _ map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			profile, err := loadTrainingProfile()
 			if err != nil {
 				return err
@@ -43,7 +43,7 @@ func profileSetCommand() *Command {
 			"[--fitness-load-types TYPE=ctl|atl-only,...|-]",
 		Description: "Update the local training profile. Pass an empty value (e.g. --max-ramp \"\") to keep, " +
 			"or 0 / \"-\" to clear a field. Local config only; nothing is sent to Intervals.icu.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			cfg, err := icu.LoadConfig()
 			if err != nil || cfg == nil {
 				cfg = &icu.Config{}

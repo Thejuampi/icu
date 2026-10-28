@@ -34,7 +34,7 @@ func TestPlanShowWritesProposalFile(t *testing.T) {
 		"intent-file": intentFile,
 		"now-date":    "2026-07-27",
 		"type":        "Ride",
-	}, client, io.Discard)
+	}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("plan show: %v", err)
 	}
@@ -60,11 +60,11 @@ func TestPlanPreviewDoesNotMutate(t *testing.T) {
 	writePlanTestIntent(t, intentFile, samplePlanIntent())
 	if err := show.Run(nil, map[string]string{
 		"file": planFile, "intent-file": intentFile, "now-date": "2026-07-27", "type": "Ride",
-	}, client, io.Discard); err != nil {
+	}, client, io.Discard, io.Discard); err != nil {
 		t.Fatalf("plan show: %v", err)
 	}
 
-	err := preview.Run(nil, map[string]string{"file": planFile, "no-live-check": "true"}, client, io.Discard)
+	err := preview.Run(nil, map[string]string{"file": planFile, "no-live-check": "true"}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("plan preview: %v", err)
 	}
@@ -90,11 +90,11 @@ func TestPlanAcceptAppliesPendingOperation(t *testing.T) {
 	writePlanTestIntent(t, intentFile, samplePlanIntent())
 	if err := show.Run(nil, map[string]string{
 		"file": planFile, "intent-file": intentFile, "now-date": "2026-07-27", "type": "Ride",
-	}, client, io.Discard); err != nil {
+	}, client, io.Discard, io.Discard); err != nil {
 		t.Fatalf("plan show: %v", err)
 	}
 
-	err := accept.Run(nil, map[string]string{"file": planFile}, client, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": planFile}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("plan accept: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestPlanAcceptRejectsBlockingValidation(t *testing.T) {
 		Scope:         icu.PlanScope{StartDate: "2026-07-28", EndDate: "2026-07-28"},
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard, io.Discard)
 
 	if err == nil {
 		t.Fatalf("err = nil, want validation error")
@@ -155,7 +155,7 @@ func TestRebalancePreviewCommandRegistered(t *testing.T) {
 		},
 	})
 
-	err := preview.Run(nil, map[string]string{"file": file, "no-live-check": "true"}, client, io.Discard)
+	err := preview.Run(nil, map[string]string{"file": file, "no-live-check": "true"}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("rebalance preview: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestPlanPreviewLiveCheckAddsWarnings(t *testing.T) {
 		}},
 	})
 
-	err := preview.Run(nil, map[string]string{"file": file}, client, io.Discard)
+	err := preview.Run(nil, map[string]string{"file": file}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("plan preview: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestPlanAcceptRejectsStoredBlockingWithoutNetwork(t *testing.T) {
 		}},
 	})
 	// nil client would panic on network; validation must fail first.
-	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, nil, io.Discard, io.Discard)
 
 	if err == nil || !strings.Contains(err.Error(), "validate plan proposal") {
 		t.Fatalf("err = %v, want validation error before network", err)
@@ -265,7 +265,7 @@ func TestPlanPreviewSurfacesBlockingValidation(t *testing.T) {
 		}},
 	})
 
-	err := preview.Run(nil, map[string]string{"file": file, "no-live-check": "true"}, client, io.Discard)
+	err := preview.Run(nil, map[string]string{"file": file, "no-live-check": "true"}, client, io.Discard, io.Discard)
 
 	if err == nil || !strings.Contains(err.Error(), "strict target miss") {
 		t.Fatalf("err = %v, want blocking preview error", err)
@@ -349,7 +349,7 @@ func TestPlanShowRequiresIntentFile(t *testing.T) {
 	registry, client := rebalanceTestRegistryClient(t)
 	cmd, _ := registry.Lookup("plan", "show")
 
-	err := cmd.Run(nil, map[string]string{"file": filepath.Join(t.TempDir(), "plan.json")}, client, io.Discard)
+	err := cmd.Run(nil, map[string]string{"file": filepath.Join(t.TempDir(), "plan.json")}, client, io.Discard, io.Discard)
 
 	if err == nil {
 		t.Fatalf("err = nil, want missing intent-file")
@@ -456,7 +456,7 @@ func TestPlanAcceptDetectsBaselineDrift(t *testing.T) {
 		}},
 	})
 
-	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard)
+	err := accept.Run(nil, map[string]string{"file": file}, client, io.Discard, io.Discard)
 
 	if err == nil {
 		t.Fatalf("err = nil, want baseline drift")
@@ -486,7 +486,7 @@ func TestRebalancePreviewLiveCheck(t *testing.T) {
 		},
 	})
 
-	err := preview.Run(nil, map[string]string{"file": file}, client, io.Discard)
+	err := preview.Run(nil, map[string]string{"file": file}, client, io.Discard, io.Discard)
 	if err != nil {
 		t.Fatalf("rebalance preview: %v", err)
 	}

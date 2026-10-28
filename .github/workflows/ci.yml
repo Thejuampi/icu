@@ -8,8 +8,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Same key for push and pull_request runs of a branch; never cancel master.
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ (github.head_ref || github.ref_name) != 'master' }}
 
 env:
   GOLANGCI_LINT_VERSION: v2.15.0
@@ -47,24 +48,14 @@ jobs:
           set -o pipefail
           go test -race -count=1 -coverprofile=coverage.out ./... | tee test.out
 
-      - name: Coverage floor (every package)
+      - name: Coverage floor script tests
+        run: bash scripts/coverage-floor_test.sh
+
+      - name: Coverage floor (every package from go list)
         run: |
           set -euo pipefail
-          # Every package that has statements must meet the floor; a package
-          # with no test files fails too.
-          if grep -E '^\?\s+\S+\s+\[no test files\]' test.out; then
-            echo "packages without tests (see above)"; exit 1
-          fi
-          awk -v floor="$COVERAGE_FLOOR" '
-            $1 == "ok" {
-              pct = ""
-              for (i = 1; i <= NF; i++) if ($i == "coverage:") pct = $(i+1)
-              if (pct == "" || pct == "[no") next
-              sub("%", "", pct); n++
-              if (pct + 0 < floor + 0) { printf "FAIL %s coverage %s%% < %s%%\n", $2, pct, floor; bad = 1 }
-              else printf "ok   %s coverage %s%% >= %s%%\n", $2, pct, floor
-            }
-            END { if (n == 0) { print "no coverage lines found"; exit 1 } exit bad }' test.out
+          # shellcheck disable=SC2046
+          bash scripts/coverage-floor.sh test.out "$COVERAGE_FLOOR" $(go list ./...)
           go tool cover -func=coverage.out | awk '/^total:/ { print "total " $NF }'
 
       - name: golangci-lint

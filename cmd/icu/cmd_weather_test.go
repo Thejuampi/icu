@@ -143,7 +143,7 @@ func TestWeatherForecastOutputsDailyHourlyAndIDZero(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerWeatherCommands(registry)
 	cmd, _ := registry.Lookup("weather", "forecast")
-	out, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, map[string]string{}, client, stdout) })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, map[string]string{}, client, stdout, io.Discard) })
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
 	}

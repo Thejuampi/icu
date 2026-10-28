@@ -49,7 +49,7 @@ func estimatePowerShowCommand() *Command {
 	}
 }
 
-func runEstimatePowerShowCommand(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+func runEstimatePowerShowCommand(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errMissing("activity id")
 	}
@@ -95,7 +95,7 @@ func estimatePowerBacktestCommand() *Command {
 	}
 }
 
-func runEstimatePowerBacktestCommand(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+func runEstimatePowerBacktestCommand(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errMissing("activity id")
 	}
@@ -157,7 +157,7 @@ func runEstimatePowerBacktestCommand(args []string, flags map[string]string, cli
 	return writeJSON(stdout, result)
 }
 
-func runEstimatePowerAcceptCommand(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+func runEstimatePowerAcceptCommand(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errMissing("activity id")
 	}

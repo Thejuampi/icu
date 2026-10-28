@@ -98,7 +98,7 @@ func analysisCoachingCommand() *Command {
 
 			return err
 		},
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			dateRanges, explicit, err := trainingPlanDateRanges(flags, time.Now())
 			if err != nil {
 				return err
@@ -329,7 +329,7 @@ func analysisCyclingCommand() *Command {
 			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries. " +
 			"--min-included-activities has no default (D-4): when set and validity.included falls below it, " +
 			"load/intensity/durability refuse with a named warning instead of reporting on too few sessions.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
@@ -414,7 +414,7 @@ func analysisPlanCommand() *Command {
 			"[--plan-oldest DATE --plan-newest DATE]",
 		Description: "Analyze a planned training block from recent history and future calendar events. " +
 			"Default ranges use UTC; pass explicit dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			dateRanges, explicit, err := trainingPlanDateRanges(flags, time.Now())
 			if err != nil {
 				return err
@@ -491,7 +491,7 @@ func analysisWellnessCommand() *Command {
 		Usage: "analysis wellness [--oldest DATE --newest DATE | --days N]",
 		Description: "Compute wellness and physiology analysis from wellness records. " +
 			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
@@ -521,7 +521,7 @@ func analysisWorkoutCommand() *Command {
 		Name:        "",
 		Usage:       "analysis workout <activity-id> [--event-id ID] [--calendar-id ID] [--sport-type TYPE] [--match-window-hours N]",
 		Description: "Analyze one completed workout against its planned workout event, intervals, and streams.",
-		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -659,7 +659,7 @@ func analysisAdaptationCommand() *Command {
 		Usage: "analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride]",
 		Description: "Analyze cycling adaptation from power curves, MMP model, sport anchors, activities, and wellness. " +
 			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
@@ -960,7 +960,7 @@ func analysisMicrocycleCommand() *Command {
 		Name:        "",
 		Usage:       "analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]",
 		Description: "[experimental] Analyze the selected training microcycle as a read-only, LLM-ready diagnostic contract.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			now := time.Now()
 			location, timezoneSource, err := resolveMicrocycleLocation(client, flags)
 			if err != nil {

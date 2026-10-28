@@ -22,17 +22,17 @@ func TestProfileSetAndShowRoundTrip(t *testing.T) {
 		return profileSetCommand().Run(nil, map[string]string{
 			"target-ftp": "280", "indoor-ftp": "250", "max-ramp": "5.5", "usual-days": "Tue, sat",
 			"usual-times": "07:00", "min-z2-minutes": "120", "z2-low": "55", "z2-high": "75",
-		}, nil, stdout)
+		}, nil, stdout, io.Discard)
 	}); err != nil {
 		t.Fatalf("profile set error = %v", err)
 	}
 	if _, err := captureStdout(t, func(stdout io.Writer) error {
-		return profileSetCommand().Run(nil, map[string]string{"target-ftp": "-", "usual-times": "-"}, nil, stdout)
+		return profileSetCommand().Run(nil, map[string]string{"target-ftp": "-", "usual-times": "-"}, nil, stdout, io.Discard)
 	}); err != nil {
 		t.Fatalf("profile clear error = %v", err)
 	}
 
-	out, err := captureStdout(t, func(stdout io.Writer) error { return profileShowCommand().Run(nil, nil, nil, stdout) })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return profileShowCommand().Run(nil, nil, nil, stdout, io.Discard) })
 	if err != nil {
 		t.Fatalf("profile show error = %v", err)
 	}
@@ -46,7 +46,7 @@ func TestProfileSetAndShowRoundTrip(t *testing.T) {
 	}
 
 	for _, bad := range []map[string]string{{"target-ftp": "x"}, {"max-ramp": "y"}, {"usual-days": "funday"}} {
-		if _, err := captureStdout(t, func(stdout io.Writer) error { return profileSetCommand().Run(nil, bad, nil, stdout) }); err == nil {
+		if _, err := captureStdout(t, func(stdout io.Writer) error { return profileSetCommand().Run(nil, bad, nil, stdout, io.Discard) }); err == nil {
 			t.Fatalf("profile set %v accepted", bad)
 		}
 	}
@@ -69,7 +69,7 @@ func TestProfileShowEmpty(t *testing.T) {
 	restore := icu.SetConfigStoreForTesting(icu.NewMemoryConfigStore())
 	t.Cleanup(restore)
 
-	out, err := captureStdout(t, func(stdout io.Writer) error { return profileShowCommand().Run(nil, nil, nil, stdout) })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return profileShowCommand().Run(nil, nil, nil, stdout, io.Discard) })
 	if err != nil || strings.TrimSpace(out) != "{}" {
 		t.Fatalf("profile show = %q, %v", out, err)
 	}
@@ -172,7 +172,7 @@ func TestProfileSetThresholdsJSON(t *testing.T) {
 	t.Cleanup(restore)
 
 	if _, err := captureStdout(t, func(stdout io.Writer) error {
-		return profileSetCommand().Run(nil, map[string]string{"thresholds": `{"watchZ":2,"redZ":3,"sleepWatch":72}`}, nil, stdout)
+		return profileSetCommand().Run(nil, map[string]string{"thresholds": `{"watchZ":2,"redZ":3,"sleepWatch":72}`}, nil, stdout, io.Discard)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -182,13 +182,13 @@ func TestProfileSetThresholdsJSON(t *testing.T) {
 	}
 	for _, bad := range []string{`{"watchZ":3,"redZ":2}`, `{"unknown":1}`, `not json`} {
 		if _, err := captureStdout(t, func(stdout io.Writer) error {
-			return profileSetCommand().Run(nil, map[string]string{"thresholds": bad}, nil, stdout)
+			return profileSetCommand().Run(nil, map[string]string{"thresholds": bad}, nil, stdout, io.Discard)
 		}); err == nil {
 			t.Fatalf("thresholds %s accepted", bad)
 		}
 	}
 	if _, err := captureStdout(t, func(stdout io.Writer) error {
-		return profileSetCommand().Run(nil, map[string]string{"thresholds": "-"}, nil, stdout)
+		return profileSetCommand().Run(nil, map[string]string{"thresholds": "-"}, nil, stdout, io.Discard)
 	}); err != nil || profileThresholds() != nil {
 		t.Fatalf("clear err = %v, thresholds = %+v", err, profileThresholds())
 	}

@@ -102,7 +102,9 @@ func putKeys(body map[string]json.RawMessage) []string {
 
 func runSportsUpdateJSON(t *testing.T, client *icu.Client, flags map[string]string) (sportsUpdateResult, error) {
 	t.Helper()
-	out, err := captureStdout(t, func(stdout io.Writer) error { return runSportsUpdate([]string{"1858902"}, flags, client, stdout) })
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return runSportsUpdate([]string{"1858902"}, flags, client, stdout, io.Discard)
+	})
 	var res sportsUpdateResult
 	if strings.TrimSpace(out) != "" {
 		if uerr := json.Unmarshal([]byte(out), &res); uerr != nil {
@@ -113,8 +115,8 @@ func runSportsUpdateJSON(t *testing.T, client *icu.Client, flags map[string]stri
 	return res, err
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestSportsUpdateHRZonesOnlyWritesByDefault(t *testing.T) {
+	t.Parallel()
 	f, client := newFakeSportServer(t, nil)
 	res, err := runSportsUpdateJSON(t, client, map[string]string{"hr-zones": "120,148,166,177,182,187,198"})
 	if err != nil {
@@ -140,8 +142,8 @@ func TestSportsUpdateHRZonesOnlyWritesByDefault(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestSportsUpdateSendsSnakeCaseWireKeys(t *testing.T) {
+	t.Parallel()
 	f, client := newFakeSportServer(t, nil)
 	_, err := runSportsUpdateJSON(t, client, map[string]string{
 		"ftp": "270", "indoor-ftp": "255", "lthr": "179", "max-hr": "199",
@@ -156,8 +158,8 @@ func TestSportsUpdateSendsSnakeCaseWireKeys(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestSportsUpdateDryRunDoesNotWrite(t *testing.T) {
+	t.Parallel()
 	f, client := newFakeSportServer(t, nil)
 	res, err := runSportsUpdateJSON(t, client, map[string]string{
 		"power-zones": "55,75,90,105,120,150,999", "lthr": "170", "dry-run": "true",
@@ -173,8 +175,8 @@ func TestSportsUpdateDryRunDoesNotWrite(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestSportsUpdateNoChangesSkipsWrite(t *testing.T) {
+	t.Parallel()
 	f, client := newFakeSportServer(t, nil)
 	res, err := runSportsUpdateJSON(t, client, map[string]string{"ftp": "266"})
 	if err != nil || len(f.puts) != 0 || res.Applied {
@@ -182,8 +184,8 @@ func TestSportsUpdateNoChangesSkipsWrite(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestSportsUpdateReadBackMismatchExitsNonZero(t *testing.T) {
+	t.Parallel()
 	f, client := newFakeSportServer(t, nil)
 	f.ignoreWrites = true
 	res, err := runSportsUpdateJSON(t, client, map[string]string{"max-hr": "199", "lthr": "179"})
@@ -217,8 +219,8 @@ func TestReadBackMismatchDetectsEachField(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestSportsUpdateHRZonesBoundedByEffectiveMaxHR(t *testing.T) {
+	t.Parallel()
 	_, client := newFakeSportServer(t, nil)
 	if _, err := runSportsUpdateJSON(t, client, map[string]string{"hr-zones": "121,148,166,177,182,187,205"}); err == nil {
 		t.Fatal("want error: zone above current max_hr 198")
@@ -232,8 +234,8 @@ func TestSportsUpdateHRZonesBoundedByEffectiveMaxHR(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestSportsUpdateZoneCountWhenCurrentZonesEmpty(t *testing.T) {
+	t.Parallel()
 	empty := func(s map[string]any) { delete(s, "hr_zones") }
 	_, client := newFakeSportServer(t, empty)
 	if _, err := runSportsUpdateJSON(t, client, map[string]string{"hr-zones": "121,148,166"}); err == nil {
@@ -249,8 +251,8 @@ func TestSportsUpdateZoneCountWhenCurrentZonesEmpty(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestSportsUpdateValidationRejectsBeforeWrite(t *testing.T) {
+	t.Parallel()
 	cases := []map[string]string{
 		{},
 		{"hr-zones": "121,148,140,177,182,187,198"},
@@ -273,8 +275,8 @@ func TestSportsUpdateValidationRejectsBeforeWrite(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestFTPUpdateSendsSnakeCaseWireKeys(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		flags map[string]string
 		want  string
@@ -283,7 +285,7 @@ func TestFTPUpdateSendsSnakeCaseWireKeys(t *testing.T) {
 		{map[string]string{"value": "255", "indoor": "true"}, "indoor_ftp"},
 	} {
 		f, client := newFakeSportServer(t, nil)
-		if _, err := captureStdout(t, func(stdout io.Writer) error { return ftpUpdateCommand().Run(nil, tc.flags, client, stdout) }); err != nil {
+		if _, err := captureStdout(t, func(stdout io.Writer) error { return ftpUpdateCommand().Run(nil, tc.flags, client, stdout, io.Discard) }); err != nil {
 			t.Fatal(err)
 		}
 		if got := strings.Join(putKeys(f.puts[0]), ","); got != tc.want {

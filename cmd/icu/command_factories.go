@@ -27,7 +27,7 @@ func listAllCommand[T any](resource, usage, description string, parts ...string)
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(_ []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, _ map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			var items T
 			if err := client.Get(resource, parts, nil, &items); err != nil {
 				return wrapCommandError(err)
@@ -43,7 +43,7 @@ func listQueryCommand[T any](resource, usage, description string, queryBuilder f
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			q := map[string]string(nil)
 			if queryBuilder != nil {
 				q = queryBuilder(flags)
@@ -64,7 +64,7 @@ func getByIDCommand[T any](resource, usage, description, idLabel string, queryBu
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing(idLabel)
 			}
@@ -91,7 +91,7 @@ func deleteByIDCommand(resource, usage, description, idLabel string) *Command {
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(args []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing(idLabel)
 			}
@@ -106,7 +106,7 @@ func deleteByIDWithResponseCommand[T any](resource, usage, description, idLabel 
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(args []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing(idLabel)
 			}
@@ -128,7 +128,7 @@ func downloadCommand(resource, usage, description string, parts ...string) *Comm
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(_ []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, _ map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			data, err := client.Download(resource, parts, nil)
 			if err != nil {
 				return wrapCommandError(err)
@@ -144,7 +144,7 @@ func downloadByIDCommand(resource, usage, description, idLabel string, extraPart
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(args []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing(idLabel)
 			}
@@ -171,7 +171,7 @@ func createCommand[Body, Resp any](
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			q := map[string]string(nil)
 			if queryBuilder != nil {
 				q = queryBuilder(flags)
@@ -197,7 +197,7 @@ func updateByIDCommand[Body, Resp any](
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing(idLabel)
 			}

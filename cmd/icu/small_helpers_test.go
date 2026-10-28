@@ -39,15 +39,15 @@ func TestRebalanceApproveRejectsMissingReasonAndLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	command := rebalanceApproveCommand()
-	if err := command.Run(nil, map[string]string{"file": plain}, nil, io.Discard); err == nil ||
+	if err := command.Run(nil, map[string]string{"file": plain}, nil, io.Discard, io.Discard); err == nil ||
 		!strings.Contains(err.Error(), "reason") {
 		t.Fatalf("missing reason: %v", err)
 	}
-	if err := command.Run(nil, map[string]string{"file": outside, "reason": "r"}, nil, io.Discard); err == nil ||
+	if err := command.Run(nil, map[string]string{"file": outside, "reason": "r"}, nil, io.Discard, io.Discard); err == nil ||
 		!strings.Contains(err.Error(), "outside envelope") {
 		t.Fatalf("outside envelope: %v", err)
 	}
-	if err := command.Run(nil, map[string]string{}, nil, io.Discard); err == nil {
+	if err := command.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("missing file accepted")
 	}
 }

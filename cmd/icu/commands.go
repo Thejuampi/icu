@@ -12,7 +12,7 @@ type Command struct {
 	Description string
 	Schema      *CommandSchema
 	Validate    func(flags map[string]string) error
-	Run         func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error
+	Run         func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error
 }
 
 type CommandRegistry struct {

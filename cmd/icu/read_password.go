@@ -8,19 +8,20 @@ import (
 	"golang.org/x/term"
 )
 
-func promptPasswordFlagOrInteractive(stdout io.Writer, flagValue string) (string, error) {
+// promptPasswordFlagOrInteractive prompts on stderr so stdout stays clean JSON.
+func promptPasswordFlagOrInteractive(stderr io.Writer, flagValue string) (string, error) {
 	if flagValue != "" {
 		return flagValue, nil
 	}
 
-	fmt.Fprint(stdout, "Password: ")
+	fmt.Fprint(stderr, "Password: ")
 
 	raw, err := term.ReadPassword(int(os.Stdin.Fd()))
 	if err != nil {
 		return "", fmt.Errorf("reading password: %w", err)
 	}
 
-	fmt.Fprintln(stdout)
+	fmt.Fprintln(stderr)
 
 	return string(raw), nil
 }

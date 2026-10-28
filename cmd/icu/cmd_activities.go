@@ -76,7 +76,7 @@ func activitiesGetCommand() *Command {
 		Name:        "",
 		Usage:       "activities get <id1> [id2 ...]",
 		Description: "Fetch activities by ID.",
-		Run: func(args []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("icu.Activity id(s)")
 			}
@@ -98,7 +98,7 @@ func activitiesUploadCommand() *Command {
 		Name:        "",
 		Usage:       "activities upload <file> [--name NAME] [--description DESC] [--external-id ID]",
 		Description: "Upload an activity file (fit/tcx/gpx/zip/gz).",
-		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("file path")
 			}
@@ -117,7 +117,7 @@ func searchCommand[T any](resource, usage, description, endpoint string) *Comman
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("search query")
 			}
@@ -142,7 +142,7 @@ func activitiesAroundCommand() *Command {
 		Name:        "",
 		Usage:       "activities around <activity-id> [--limit N] [--route-id ID]",
 		Description: "List activities before/after an activity.",
-		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}

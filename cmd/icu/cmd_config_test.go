@@ -80,7 +80,7 @@ func TestConfigShowDoesNotExposeAPIKey(t *testing.T) {
 		t.Fatal("missing config show command")
 	}
 
-	output, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, nil, nil, stdout) })
+	output, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, nil, nil, stdout, io.Discard) })
 	if err != nil {
 		t.Fatalf("config show failed: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestConfigShowShortAPIKeyUsesFingerprint(t *testing.T) {
 		t.Fatal("missing config show command")
 	}
 
-	output, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, nil, nil, stdout) })
+	output, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, nil, nil, stdout, io.Discard) })
 	if err != nil {
 		t.Fatalf("config show failed: %v", err)
 	}
@@ -149,11 +149,13 @@ func TestConfigDiagnoseVerboseFlag(t *testing.T) {
 		t.Fatal("missing config diagnose command")
 	}
 
-	if _, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, nil, nil, stdout) }); err != nil {
+	if _, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, nil, nil, stdout, io.Discard) }); err != nil {
 		t.Fatalf("config diagnose without verbose: %v", err)
 	}
 
-	if _, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, map[string]string{"verbose": "true"}, nil, stdout) }); err != nil {
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return cmd.Run(nil, map[string]string{"verbose": "true"}, nil, stdout, io.Discard)
+	}); err != nil {
 		t.Fatalf("config diagnose with verbose: %v", err)
 	}
 }
@@ -166,5 +168,5 @@ func runConfigCommand(t *testing.T, registry *CommandRegistry, action string, fl
 		t.Fatalf("missing config %s command", action)
 	}
 
-	return cmd.Run(nil, flags, nil, io.Discard)
+	return cmd.Run(nil, flags, nil, io.Discard, io.Discard)
 }

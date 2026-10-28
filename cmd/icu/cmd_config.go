@@ -19,7 +19,7 @@ func configShowCommand() *Command {
 		Name:        "",
 		Usage:       "config show",
 		Description: "Show current configuration.",
-		Run: func(_ []string, _ map[string]string, _ *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, _ map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			out := stdout
 
 			cfg, err := icu.LoadConfig()
@@ -64,7 +64,7 @@ func configSetCommand() *Command {
 		Name:        "",
 		Usage:       "config set --api-key KEY [--athlete-id ID] [--output json|csv|table] [--zepp-login-token TOKEN]",
 		Description: "Set configuration values.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			cfg, _ := icu.LoadConfig()
 			if cfg == nil {
 				var empty icu.Config
@@ -103,7 +103,7 @@ func configPathCommand() *Command {
 		Name:        "",
 		Usage:       "config path",
 		Description: "Show config file path.",
-		Run: func(_ []string, _ map[string]string, _ *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, _ map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			fmt.Fprintln(stdout, icu.ConfigPath())
 
 			return nil
@@ -116,7 +116,7 @@ func configDiagnoseCommand() *Command {
 		Name:        "",
 		Usage:       "config diagnose [--verbose]",
 		Description: "Show non-secret diagnostics for auth and config resolution.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			diag := icu.DiagnoseConfig(flags)
 
 			if !BoolFlag(flags, "verbose") {

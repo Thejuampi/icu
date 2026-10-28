@@ -16,7 +16,7 @@ func ftpShowCommand() *Command {
 		Name:        "",
 		Usage:       "ftp show [--sport Ride]",
 		Description: "Show FTP for a sport type.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "Ride")
 
 			var ss icu.SportSettings
@@ -46,7 +46,7 @@ func ftpUpdateCommand() *Command {
 		Name:        "",
 		Usage:       "ftp update --value WATTS [--sport Ride] [--indoor]",
 		Description: "Update FTP for a sport.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "Ride")
 			val := IntFlag(flags, "value", 0)
 			if val <= 0 {

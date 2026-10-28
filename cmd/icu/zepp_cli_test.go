@@ -83,7 +83,7 @@ func TestRunZeppLoginRequiresEmailAndPassword(t *testing.T) {
 
 	cmd, _ := registry.Lookup("zepp", "login")
 
-	err := cmd.Run(nil, map[string]string{}, nil, io.Discard)
+	err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("expected error when email missing")
 	}
@@ -101,7 +101,7 @@ func TestRunZeppLoginRequiresPassword(t *testing.T) {
 
 	cmd, _ := registry.Lookup("zepp", "login")
 
-	err := cmd.Run(nil, map[string]string{"email": "u@example.com"}, nil, io.Discard)
+	err := cmd.Run(nil, map[string]string{"email": "u@example.com"}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("expected error when password missing")
 	}
@@ -131,7 +131,7 @@ func TestRunZeppLoginPersistsTokensOnSuccess(t *testing.T) {
 	t.Setenv("ZEPP_LOGIN_URL", loginSrv.URL+"/v2/client/login")
 
 	cmd, _ := registry.Lookup("zepp", "login")
-	if err := cmd.Run(nil, map[string]string{"email": "u@example.com", "password": "secret"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"email": "u@example.com", "password": "secret"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("login: %v", err)
 	}
 
@@ -170,7 +170,7 @@ func TestRunZeppLogoutClearsAllZeppFields(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "logout")
-	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("logout: %v", err)
 	}
 
@@ -207,7 +207,7 @@ func TestRunZeppLogoutWithoutTokenIsNoop(t *testing.T) { //nolint:paralleltest /
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "logout")
-	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("logout: %v", err)
 	}
 }
@@ -229,7 +229,7 @@ func TestZeppProfileCommandHitsCorrectEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "profile")
-	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("profile: %v", err)
 	}
 
@@ -256,7 +256,7 @@ func TestZeppSummaryCommandHitsBandDataEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "summary")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("summary: %v", err)
 	}
 
@@ -287,7 +287,7 @@ func TestZeppSleepCommandReturnsDecodedSleep(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "sleep")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("sleep: %v", err)
 	}
 }
@@ -317,7 +317,7 @@ func TestZeppHeartRateCommandDecodesHR(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "heart-rate")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("heart-rate: %v", err)
 	}
 }
@@ -346,7 +346,7 @@ func TestZeppSpO2CommandHitsEventsEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "spo2")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("spo2: %v", err)
 	}
 }
@@ -375,7 +375,7 @@ func TestZeppPAICommandHitsEventsEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "pai")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("pai: %v", err)
 	}
 }
@@ -396,7 +396,7 @@ func TestZeppStatusReportsValidTrue(t *testing.T) { //nolint:paralleltest // use
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "status")
-	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("status: %v", err)
 	}
 }
@@ -408,7 +408,7 @@ func TestZeppStatusReportsNotValidWhenNoTokens(t *testing.T) { //nolint:parallel
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "status")
-	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("status: %v", err)
 	}
 }
@@ -437,7 +437,7 @@ func TestZeppStressCommandHitsEventsEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "stress")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("stress: %v", err)
 	}
 }
@@ -461,7 +461,7 @@ func TestZeppWorkoutsCommandHitsSportEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "workouts")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("workouts: %v", err)
 	}
 
@@ -493,7 +493,7 @@ func TestZeppWorkoutCommandHitsSportDetailEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "workout")
-	if err := cmd.Run([]string{"track1"}, map[string]string{}, nil, io.Discard); err != nil {
+	if err := cmd.Run([]string{"track1"}, map[string]string{}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("workout: %v", err)
 	}
 }
@@ -517,7 +517,7 @@ func TestZeppWorkoutsCommandSupportsSportFlag(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "workouts")
-	if err := cmd.Run(nil, map[string]string{"sport": "walking", "oldest": "2026-06-01", "newest": "2026-06-07"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"sport": "walking", "oldest": "2026-06-01", "newest": "2026-06-07"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("workouts walking: %v", err)
 	}
 }
@@ -529,7 +529,7 @@ func TestZeppWorkoutsCommandRejectsUnknownSport(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "workouts")
-	if err := cmd.Run(nil, map[string]string{"sport": "quidditch"}, nil, io.Discard); err == nil {
+	if err := cmd.Run(nil, map[string]string{"sport": "quidditch"}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatalf("expected error for unknown sport")
 	}
 }
@@ -550,7 +550,7 @@ func TestZeppCommandWithoutTokenReturnsClearError(t *testing.T) {
 
 	cmd, _ := registry.Lookup("zepp", "summary")
 
-	err := cmd.Run(nil, map[string]string{}, nil, io.Discard)
+	err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("expected error for missing token")
 	}
@@ -568,7 +568,7 @@ func TestZeppCommandWithInvalidDateReturnsError(t *testing.T) { //nolint:paralle
 
 	cmd, _ := registry.Lookup("zepp", "summary")
 
-	err := cmd.Run(nil, map[string]string{"oldest": "garbage"}, nil, io.Discard)
+	err := cmd.Run(nil, map[string]string{"oldest": "garbage"}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("expected error for invalid date")
 	}
@@ -637,7 +637,7 @@ func TestZeppEventsCommandRequiresPreset(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "events")
-	err := cmd.Run(nil, map[string]string{}, nil, io.Discard)
+	err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("expected error when preset missing")
 	}
@@ -654,7 +654,7 @@ func TestZeppEventsCommandRejectsUnknownPreset(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "events")
-	err := cmd.Run(nil, map[string]string{"preset": "not-real"}, nil, io.Discard)
+	err := cmd.Run(nil, map[string]string{"preset": "not-real"}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("expected error for unknown preset")
 	}
@@ -681,7 +681,7 @@ func TestZeppEventsCommandHitsV2Endpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "events")
-	if err := cmd.Run(nil, map[string]string{"preset": "body-battery", "oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"preset": "body-battery", "oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("events: %v", err)
 	}
 }
@@ -796,7 +796,7 @@ func TestZeppV2WellnessCommandsHitCorrectEndpoint(t *testing.T) {
 
 			cmd, _ := registry.Lookup("zepp", tc.cmdName)
 
-			if err := cmd.Run(nil, tc.flags, nil, io.Discard); err != nil {
+			if err := cmd.Run(nil, tc.flags, nil, io.Discard, io.Discard); err != nil {
 				t.Fatalf("%s: %v", tc.name, err)
 			}
 		})
@@ -831,7 +831,7 @@ func TestZeppWatchStatCommandsHitCorrectEndpoint(t *testing.T) {
 			registerZeppCommands(registry)
 
 			cmd, _ := registry.Lookup("zepp", tc.cmdName)
-			if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+			if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 				t.Fatalf("%s: %v", tc.name, err)
 			}
 		})
@@ -859,7 +859,7 @@ func TestZeppBloodPressureCommandDefaultsToWatchSource(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "blood-pressure")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("blood-pressure watch: %v", err)
 	}
 }
@@ -881,7 +881,7 @@ func TestZeppBloodPressureCommandUserSource(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "blood-pressure")
-	if err := cmd.Run(nil, map[string]string{"source": "user", "oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"source": "user", "oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("blood-pressure user: %v", err)
 	}
 }
@@ -893,7 +893,7 @@ func TestZeppBloodPressureCommandRejectsInvalidSource(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "blood-pressure")
-	err := cmd.Run(nil, map[string]string{"source": "invalid"}, nil, io.Discard)
+	err := cmd.Run(nil, map[string]string{"source": "invalid"}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("expected error for invalid source")
 	}
@@ -906,7 +906,7 @@ func TestZeppHRVCommandRejectsInvalidMetric(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "hrv")
-	err := cmd.Run(nil, map[string]string{"metric": "invalid"}, nil, io.Discard)
+	err := cmd.Run(nil, map[string]string{"metric": "invalid"}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatalf("expected error for invalid metric")
 	}
@@ -929,7 +929,7 @@ func TestZeppHeartRateCommandAppSource(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "heart-rate")
-	if err := cmd.Run(nil, map[string]string{"source": "app", "oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"source": "app", "oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("heart-rate app: %v", err)
 	}
 }
@@ -941,7 +941,7 @@ func TestZeppHeartRateCommandRejectsInvalidSource(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "heart-rate")
-	if err := cmd.Run(nil, map[string]string{"source": "invalid"}, nil, io.Discard); err == nil {
+	if err := cmd.Run(nil, map[string]string{"source": "invalid"}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatalf("expected error for invalid source")
 	}
 }
@@ -963,7 +963,7 @@ func TestZeppWeightCommandHitsEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "weight")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("weight: %v", err)
 	}
 }
@@ -985,7 +985,7 @@ func TestZeppManualDataCommandHitsEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "manual-data")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("manual-data: %v", err)
 	}
 }
@@ -1007,7 +1007,7 @@ func TestZeppSecondHeartRateCommandHitsEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "second-heart-rate")
-	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("second-heart-rate: %v", err)
 	}
 }
@@ -1029,7 +1029,7 @@ func TestZeppSpO2WindowsCommandHitsEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "spo2-windows")
-	if err := cmd.Run(nil, map[string]string{"date": "2026-06-07"}, nil, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"date": "2026-06-07"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("spo2-windows: %v", err)
 	}
 }
@@ -1041,7 +1041,7 @@ func TestZeppSpO2WindowsCommandRequiresDate(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "spo2-windows")
-	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard); err == nil {
+	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatalf("expected error when date missing")
 	}
 }

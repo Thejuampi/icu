@@ -39,7 +39,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	action, posArgs, flags, dispatch := runDispatch(registry, resource, rest, stdout)
 	if dispatch {
-		return executeCommand(stdout, registry, resource, action, posArgs, flags, stdout, stderr)
+		return executeCommand(registry, resource, action, posArgs, flags, stdout, stderr)
 	}
 
 	return 0
@@ -205,12 +205,12 @@ func commandRequiresAuth(resource, _ string) bool {
 	return true
 }
 
-func executeCommand(stdout io.Writer,
+func executeCommand(
 	registry *CommandRegistry,
 	resource, action string,
 	posArgs []string,
 	flags map[string]string,
-	_, stderr io.Writer,
+	stdout, stderr io.Writer,
 ) int {
 	cmd, ok := registry.Lookup(resource, action)
 	if !ok {
@@ -239,7 +239,7 @@ func executeCommand(stdout io.Writer,
 	athleteID := icu.ResolveAthleteID(flags)
 	client := icu.NewClient(apiKey, athleteID)
 
-	if err := cmd.Run(posArgs, flags, client, stdout); err != nil {
+	if err := cmd.Run(posArgs, flags, client, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 
 		return 1

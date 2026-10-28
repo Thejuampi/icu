@@ -65,7 +65,7 @@ func TestEstimatePowerShowDryRun(t *testing.T) {
 		"calibrate-from-measured": "true",
 		"file":                    outPath,
 		"no-weather":              "true", // activity wind only; no external Open-Meteo
-	}, client, stdout)
+	}, client, stdout, io.Discard)
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, buf.String())
 	}
@@ -198,7 +198,7 @@ func TestEstimatePowerAcceptPutsStreams(t *testing.T) {
 	var buf bytes.Buffer
 	stdout := &buf
 
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": filePath}, client, stdout); err != nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": filePath}, client, stdout, io.Discard); err != nil {
 		t.Fatalf("accept: %v", err)
 	}
 	if !strings.Contains(putBody, `"watts"`) {
@@ -225,7 +225,7 @@ func TestEstimatePowerAcceptRejectsActivityMismatch(t *testing.T) {
 	}
 
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": filePath}, nil, io.Discard); err == nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": filePath}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected mismatch error")
 	}
 }
@@ -249,7 +249,7 @@ func TestEstimatePowerShowRequiresBikeMass(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	cmd, _ := registry.Lookup("activity", "estimate-power")
-	err := cmd.Run([]string{"i1"}, map[string]string{"cda": "0.3"}, client, io.Discard)
+	err := cmd.Run([]string{"i1"}, map[string]string{"cda": "0.3"}, client, io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "bike mass") {
 		t.Fatalf("expected bike mass error, got %v", err)
 	}
@@ -283,7 +283,7 @@ func TestEstimatePowerShowCalibrateFromMeasuredPath(t *testing.T) {
 		"drivetrain-eff":          "0.975",
 		"calibrate-from-measured": "true",
 		"include-streams":         "true",
-	}, client, stdout)
+	}, client, stdout, io.Discard)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestEstimatePowerBacktestRejectsVirtualRide(t *testing.T) {
 		"crr":            "0.004",
 		"drivetrain-eff": "0.97",
 		"cda":            "0.3",
-	}, client, stdout)
+	}, client, stdout, io.Discard)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestEstimatePowerAcceptMissingFile(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	err := cmd.Run([]string{"i1"}, map[string]string{}, nil, io.Discard)
+	err := cmd.Run([]string{"i1"}, map[string]string{}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatal("expected missing file error")
 	}
@@ -365,7 +365,7 @@ func TestEstimatePowerAcceptBlockedEstimate(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard); err == nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected blocked estimate error")
 	}
 }
@@ -375,7 +375,7 @@ func TestEstimatePowerShowMissingID(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	cmd, _ := registry.Lookup("activity", "estimate-power")
-	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard); err == nil {
+	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected missing id")
 	}
 }
@@ -385,7 +385,7 @@ func TestEstimatePowerAcceptMissingID(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run(nil, map[string]string{"file": "x"}, nil, io.Discard); err == nil {
+	if err := cmd.Run(nil, map[string]string{"file": "x"}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected missing id")
 	}
 }
@@ -404,7 +404,7 @@ func TestEstimatePowerAcceptEmptyFilledWatts(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard); err == nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected empty filledWatts error")
 	}
 }
@@ -418,7 +418,7 @@ func TestEstimatePowerAcceptBadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard); err == nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected parse error")
 	}
 }
@@ -442,7 +442,7 @@ func TestEstimatePowerShowRequiresCdA(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	cmd, _ := registry.Lookup("activity", "estimate-power")
-	err := cmd.Run([]string{"i1"}, map[string]string{"bike-mass-kg": "9"}, client, io.Discard)
+	err := cmd.Run([]string{"i1"}, map[string]string{"bike-mass-kg": "9"}, client, io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "CdA") {
 		t.Fatalf("expected CdA error, got %v", err)
 	}
@@ -473,7 +473,7 @@ func TestEstimatePowerShowRiderMassFromAthleteWeight(t *testing.T) {
 		"bike-mass-kg": "9",
 		"cda":          "0.32",
 		"ftp":          "300",
-	}, client, stdout)
+	}, client, stdout, io.Discard)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}

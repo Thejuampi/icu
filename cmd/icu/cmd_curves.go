@@ -11,7 +11,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 		Name:        "",
 		Usage:       "curves power --type Ride [--curves 1y|42d|s0] [--filters FILTERS]",
 		Description: "Get best power curves for the athlete.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			q := queryFromFlags(flags, "type", "curves", "newest", "filters")
 
 			var v any
@@ -27,7 +27,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 		Name:        "",
 		Usage:       "curves hr --type Ride",
 		Description: "Get best HR curves for the athlete.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			q := queryFromFlags(flags, "type", "curves")
 
 			var v any
@@ -43,7 +43,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 		Name:        "",
 		Usage:       "curves pace --type Run",
 		Description: "Get best pace curves for the athlete.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			q := queryFromFlags(flags, "type", "curves")
 
 			var v any
@@ -59,7 +59,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 		Name:        "",
 		Usage:       "curves power-hr --start DATE --end DATE",
 		Description: "Get power vs HR curve.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			q := queryFromFlags(flags, "start", "end")
 
 			var v any
@@ -75,7 +75,7 @@ func registerCurvesCommands(registry *CommandRegistry) {
 		Name:        "",
 		Usage:       "curves mmp --type Ride",
 		Description: "Get power model (MMP) for the athlete.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			q := queryFromFlags(flags, "type")
 
 			var m icu.PowerModel
