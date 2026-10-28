@@ -3,6 +3,7 @@ package icu_test
 import (
 	"testing"
 	"time"
+	_ "time/tzdata" // zone data on any CI image
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -13,7 +14,7 @@ func TestActivityLocalDateNewYorkLateEvening(t *testing.T) {
 	t.Parallel()
 	newYork, err := time.LoadLocation("America/New_York")
 	if err != nil {
-		t.Skip("no tzdata")
+		t.Fatal(err)
 	}
 	late := icu.Activity{StartDate: "2026-10-28T03:30:00Z"}
 	if got := icu.ActivityLocalDate(&late, newYork); got != "2026-10-27" {
@@ -42,5 +43,20 @@ func TestActivityLocalDateNewYorkLateEvening(t *testing.T) {
 	analysis := icu.AnalyzeCyclingActivities([]icu.Activity{{ID: "a", Type: "Ride", StartDate: "2026-10-28T03:30:00Z"}}, icu.AnalysisOptions{})
 	if len(analysis.Sessions) != 1 || analysis.Sessions[0].Date != "2026-10-28" {
 		t.Fatalf("library default stays UTC: %+v", analysis.Sessions)
+	}
+}
+
+// LocalizeActivityDates keeps an existing start_date_local even when it
+// disagrees with start_date in the given timezone (the API value wins).
+func TestLocalizeActivityDatesKeepsExistingLocal(t *testing.T) {
+	t.Parallel()
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	activities := []icu.Activity{{StartDateLocal: "2026-10-28T05:30:00", StartDate: "2026-10-28T03:30:00Z"}}
+	icu.LocalizeActivityDates(activities, newYork)
+	if activities[0].StartDateLocal != "2026-10-28T05:30:00" || icu.ActivityLocalDate(&activities[0], newYork) != "2026-10-28" {
+		t.Fatalf("existing local overwritten: %+v", activities[0])
 	}
 }
