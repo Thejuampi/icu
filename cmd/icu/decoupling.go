@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -410,7 +411,7 @@ func activityDecouplingCommand() *Command {
 			"derived from the last 84 days of steady rides. Rides without a paired steady workout are " +
 			"not measured unless at least 4 steady paired rides in those 84 days give a VI cutoff, so for an athlete " +
 			"who rarely pairs steady workouts it almost never measures anything. Read-only.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -451,7 +452,7 @@ func activityDecouplingCommand() *Command {
 				out["decouplingNote"] = activity.DecouplingNote
 			}
 
-			return writeJSON(out)
+			return writeJSON(stdout, out)
 		},
 	}
 }

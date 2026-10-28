@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,7 +15,6 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
-//nolint:paralleltest // setStdoutForTest uses process-global override
 func TestEstimatePowerShowDryRun(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
@@ -55,8 +55,7 @@ func TestEstimatePowerShowDryRun(t *testing.T) {
 
 	outPath := filepath.Join(t.TempDir(), "est.json")
 	var buf bytes.Buffer
-	setStdoutForTest(&buf)
-	t.Cleanup(func() { setStdoutForTest(nil) })
+	stdout := &buf
 
 	err := cmd.Run([]string{"i1"}, map[string]string{
 		"bike-mass-kg":            "9",
@@ -66,7 +65,7 @@ func TestEstimatePowerShowDryRun(t *testing.T) {
 		"calibrate-from-measured": "true",
 		"file":                    outPath,
 		"no-weather":              "true", // activity wind only; no external Open-Meteo
-	}, client)
+	}, client, stdout, io.Discard)
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, buf.String())
 	}
@@ -157,7 +156,6 @@ func assertEstimatePowerShowOutput(t *testing.T, stdout []byte, outPath string, 
 	}
 }
 
-//nolint:paralleltest // setStdoutForTest uses process-global override
 func TestEstimatePowerAcceptPutsStreams(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
@@ -198,10 +196,9 @@ func TestEstimatePowerAcceptPutsStreams(t *testing.T) {
 		t.Fatal("missing accept command")
 	}
 	var buf bytes.Buffer
-	setStdoutForTest(&buf)
-	t.Cleanup(func() { setStdoutForTest(nil) })
+	stdout := &buf
 
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": filePath}, client); err != nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": filePath}, client, stdout, io.Discard); err != nil {
 		t.Fatalf("accept: %v", err)
 	}
 	if !strings.Contains(putBody, `"watts"`) {
@@ -228,7 +225,7 @@ func TestEstimatePowerAcceptRejectsActivityMismatch(t *testing.T) {
 	}
 
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": filePath}, nil); err == nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": filePath}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected mismatch error")
 	}
 }
@@ -252,13 +249,12 @@ func TestEstimatePowerShowRequiresBikeMass(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	cmd, _ := registry.Lookup("activity", "estimate-power")
-	err := cmd.Run([]string{"i1"}, map[string]string{"cda": "0.3"}, client)
+	err := cmd.Run([]string{"i1"}, map[string]string{"cda": "0.3"}, client, io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "bike mass") {
 		t.Fatalf("expected bike mass error, got %v", err)
 	}
 }
 
-//nolint:paralleltest // setStdoutForTest uses process-global override
 func TestEstimatePowerShowCalibrateFromMeasuredPath(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
@@ -280,15 +276,14 @@ func TestEstimatePowerShowCalibrateFromMeasuredPath(t *testing.T) {
 	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	cmd, _ := registry.Lookup("activity", "estimate-power")
 	var buf bytes.Buffer
-	setStdoutForTest(&buf)
-	t.Cleanup(func() { setStdoutForTest(nil) })
+	stdout := &buf
 	err := cmd.Run([]string{"i1"}, map[string]string{
 		"bike-mass-kg":            "8.5",
 		"crr":                     "0.0045",
 		"drivetrain-eff":          "0.975",
 		"calibrate-from-measured": "true",
 		"include-streams":         "true",
-	}, client)
+	}, client, stdout, io.Discard)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -307,7 +302,6 @@ func TestEstimatePowerShowCalibrateFromMeasuredPath(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // setStdoutForTest uses process-global override
 func TestEstimatePowerBacktestRejectsVirtualRide(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
@@ -327,14 +321,13 @@ func TestEstimatePowerBacktestRejectsVirtualRide(t *testing.T) {
 	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	cmd, _ := registry.Lookup("activity", "estimate-power-backtest")
 	var buf bytes.Buffer
-	setStdoutForTest(&buf)
-	t.Cleanup(func() { setStdoutForTest(nil) })
+	stdout := &buf
 	err := cmd.Run([]string{"i1"}, map[string]string{
 		"bike-mass-kg":   "8",
 		"crr":            "0.004",
 		"drivetrain-eff": "0.97",
 		"cda":            "0.3",
-	}, client)
+	}, client, stdout, io.Discard)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -352,7 +345,7 @@ func TestEstimatePowerAcceptMissingFile(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	err := cmd.Run([]string{"i1"}, map[string]string{}, nil)
+	err := cmd.Run([]string{"i1"}, map[string]string{}, nil, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatal("expected missing file error")
 	}
@@ -372,7 +365,7 @@ func TestEstimatePowerAcceptBlockedEstimate(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil); err == nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected blocked estimate error")
 	}
 }
@@ -382,7 +375,7 @@ func TestEstimatePowerShowMissingID(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	cmd, _ := registry.Lookup("activity", "estimate-power")
-	if err := cmd.Run(nil, map[string]string{}, nil); err == nil {
+	if err := cmd.Run(nil, map[string]string{}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected missing id")
 	}
 }
@@ -392,7 +385,7 @@ func TestEstimatePowerAcceptMissingID(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run(nil, map[string]string{"file": "x"}, nil); err == nil {
+	if err := cmd.Run(nil, map[string]string{"file": "x"}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected missing id")
 	}
 }
@@ -411,7 +404,7 @@ func TestEstimatePowerAcceptEmptyFilledWatts(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil); err == nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected empty filledWatts error")
 	}
 }
@@ -425,7 +418,7 @@ func TestEstimatePowerAcceptBadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd, _ := registry.Lookup("activity", "estimate-power-accept")
-	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil); err == nil {
+	if err := cmd.Run([]string{"i1"}, map[string]string{"file": path}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("expected parse error")
 	}
 }
@@ -449,13 +442,12 @@ func TestEstimatePowerShowRequiresCdA(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	cmd, _ := registry.Lookup("activity", "estimate-power")
-	err := cmd.Run([]string{"i1"}, map[string]string{"bike-mass-kg": "9"}, client)
+	err := cmd.Run([]string{"i1"}, map[string]string{"bike-mass-kg": "9"}, client, io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "CdA") {
 		t.Fatalf("expected CdA error, got %v", err)
 	}
 }
 
-//nolint:paralleltest // setStdoutForTest uses process-global override
 func TestEstimatePowerShowRiderMassFromAthleteWeight(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
@@ -476,13 +468,12 @@ func TestEstimatePowerShowRiderMassFromAthleteWeight(t *testing.T) {
 	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	cmd, _ := registry.Lookup("activity", "estimate-power")
 	var buf bytes.Buffer
-	setStdoutForTest(&buf)
-	t.Cleanup(func() { setStdoutForTest(nil) })
+	stdout := &buf
 	err := cmd.Run([]string{"i1"}, map[string]string{
 		"bike-mass-kg": "9",
 		"cda":          "0.32",
 		"ftp":          "300",
-	}, client)
+	}, client, stdout, io.Discard)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}

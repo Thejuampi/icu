@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -24,7 +25,7 @@ func planShowCommand() *Command {
 			"[--session-environment indoor|outdoor]",
 		Description: "Build an editable multi-session plan proposal from intent JSON without mutating Intervals.icu.",
 		Schema:      planShowSchema(),
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			input, err := readPlanInput(flags, client)
 			if err != nil {
 				return err
@@ -44,7 +45,7 @@ func planPreviewCommand() *Command {
 		Usage:       "plan preview --file PATH [--no-live-check] [--max-ramp CTL/WEEK] [--now-date DATE] [--timezone TZ] [--save-learned]",
 		Description: "Validate a plan proposal and print a non-mutating operation preview.",
 		Schema:      planPreviewSchema(),
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			proposal, err := readPlanProposal(flags)
 			if err != nil {
 				return err
@@ -56,7 +57,7 @@ func planPreviewCommand() *Command {
 				blockingErr = fmt.Errorf("validate plan proposal: %s", validation.Errors[0])
 			}
 
-			return runCalendarOpsPreviewWith(
+			return runCalendarOpsPreviewWith(stdout,
 				flags,
 				proposal.Operations,
 				calendarValidationFromPlan(validation),
@@ -86,7 +87,7 @@ func planAcceptCommand() *Command {
 		Usage:       "plan accept --file PATH",
 		Description: "Apply pending create/update/cancel operations from a plan proposal file.",
 		Schema:      planAcceptSchema(),
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			proposal, err := readPlanProposal(flags)
 			if err != nil {
 				return err
@@ -98,14 +99,14 @@ func planAcceptCommand() *Command {
 			if err := checkPlanBaselineDrift(client, &proposal, flags); err != nil {
 				return err
 			}
-			proposal.Apply = applyCalendarOperations(client, proposal.Operations)
+			proposal.Apply = applyCalendarOperations(stderr, client, proposal.Operations)
 			preview := icu.PreviewCalendarOperations(proposal.Operations)
 			proposal.Preview = &preview
 			if err := writePlanProposal(flags, &proposal); err != nil {
 				return err
 			}
 
-			return writeJSON(proposal.Apply)
+			return writeJSON(stdout, proposal.Apply)
 		},
 	}
 }
