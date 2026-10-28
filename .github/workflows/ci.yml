@@ -38,7 +38,9 @@ jobs:
         run: go vet ./...
 
       - name: go test -race with coverage
-        run: go test -race -count=1 -coverprofile=coverage.out ./... | tee test.out
+        run: |
+          set -o pipefail
+          go test -race -count=1 -coverprofile=coverage.out ./... | tee test.out
 
       - name: Coverage floor
         run: |
