@@ -534,9 +534,9 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu sports get Ride`
 
 - `update`
-  Invocation: `icu sports update <type|id> [--ftp WATTS] [--indoor-ftp WATTS] [--lthr BPM] [--max-hr BPM]`
-  Notes: `--indoor-ftp` is supported by the implementation even though it is omitted from help text.
-  Example: `icu sports update Ride --ftp 285 --lthr 172 --max-hr 191`
+  Invocation: `icu sports update <type|id> [--ftp WATTS] [--indoor-ftp WATTS] [--lthr BPM] [--max-hr BPM] [--hr-zones B1,B2,...] [--power-zones P1,P2,...] [--dry-run] [--yes]`
+  Notes: Any subset of fields; none is required. Reads current settings, sends only fields that differ, and prints a preview (`changes` before/after, `body`). Without `--yes` (or with `--dry-run`) nothing is written. With `--yes` it PUTs (`recalcHrZones=false`), then GETs the settings back (`readBack`; `message` flags any mismatch). `--hr-zones` are zone upper bounds in bpm (1-250); `--power-zones` are zone upper bounds in % of FTP (1-999, 999 = open top zone). Zones must be strictly ascending positive integers with the same count as the current zones.
+  Example: `icu sports update Ride --hr-zones 121,148,166,177,182,187,198 --yes`
 
 - `delete`
   Invocation: `icu sports delete <id>`
