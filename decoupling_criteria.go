@@ -201,10 +201,14 @@ func normalizedPower(values []float64, window int) float64 {
 
 // ApplyCoachCriteria applies the evaluated result.Criteria: any failure
 // makes the result not valid and drops the number (the reason names the
-// failed criteria); otherwise the VI decides valid or low confidence and a
+// failed criteria; RawValue keeps the pipeline's number for display, it is
+// never consumed); otherwise the VI decides valid or low confidence and a
 // measured value gets its interpretation. A result without criteria
 // (unusable streams) or not measured by the stream pipeline is not valid.
 func (result *StreamDecoupling) ApplyCoachCriteria() {
+	if result.Value != nil {
+		result.RawValue = new(*result.Value)
+	}
 	result.FailedCriteria = nil
 	for _, criterion := range result.Criteria {
 		if !criterion.Pass {

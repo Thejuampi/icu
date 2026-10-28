@@ -411,6 +411,9 @@ func activityDecouplingCommand() *Command {
 				history.annotate(&activity, &result)
 				activity.AttachStreamDecoupling(&result, mode == decouplingModeStreams)
 				out["streamsDecoupling"] = activity.DecouplingStreams
+				out["streamsRawDecoupling"] = result.RawValue
+				out["validity"] = result.Validity
+				out["failedCriteria"] = failedCriteriaDetail(&result)
 				out["summary"] = decouplingSummary(&activity, &result)
 				out["streamDetail"] = result
 			}
@@ -429,25 +432,27 @@ func activityDecouplingCommand() *Command {
 // decouplingSummary is the compact, human-checkable view of one result.
 func decouplingSummary(activity *icu.Activity, result *icu.StreamDecoupling) map[string]any {
 	return map[string]any{
-		"status":            result.Status,
-		"reason":            result.Reason,
-		"apiDecoupling":     apiDecouplingValue(activity),
-		"streamsDecoupling": activity.DecouplingStreams,
-		"trim":              result.Trim,
-		"hrLag":             map[string]any{"seconds": result.HRLagSeconds, "method": result.HRLagMethod, "r": result.HRLagCorrelation},
-		"minutesKept":       result.MinutesKept,
-		"minutesInRange":    result.MinutesInRange,
-		"excluded":          result.Excluded,
-		"workoutKind":       result.WorkoutKind,
-		"variabilityIndex":  result.VariabilityIndex,
-		"validity":          result.Validity,
-		"failedCriteria":    result.FailedCriteria,
-		"criteria":          result.Criteria,
-		"hrStabilized":      result.HRStabilized,
-		"interpretation":    result.Interpretation,
-		"possibleFatigue":   result.PossibleFatigue,
-		"powerCv":           result.PowerCV,
-		"stopRule":          result.StopRule,
+		"status":               result.Status,
+		"reason":               result.Reason,
+		"apiDecoupling":        apiDecouplingValue(activity),
+		"streamsDecoupling":    activity.DecouplingStreams,
+		"trim":                 result.Trim,
+		"hrLag":                map[string]any{"seconds": result.HRLagSeconds, "method": result.HRLagMethod, "r": result.HRLagCorrelation},
+		"minutesKept":          result.MinutesKept,
+		"minutesInRange":       result.MinutesInRange,
+		"excluded":             result.Excluded,
+		"workoutKind":          result.WorkoutKind,
+		"variabilityIndex":     result.VariabilityIndex,
+		"streamsRawDecoupling": result.RawValue,
+		"validity":             result.Validity,
+		"failedCriteriaDetail": failedCriteriaDetail(result),
+		"failedCriteria":       result.FailedCriteria,
+		"criteria":             result.Criteria,
+		"hrStabilized":         result.HRStabilized,
+		"interpretation":       result.Interpretation,
+		"possibleFatigue":      result.PossibleFatigue,
+		"powerCv":              result.PowerCV,
+		"stopRule":             result.StopRule,
 	}
 }
 
@@ -459,4 +464,16 @@ func sessionValue(activity *icu.Activity) *float64 {
 	value := activity.Decoupling
 
 	return &value
+}
+
+// failedCriteriaDetail lists the failed criteria with their values.
+func failedCriteriaDetail(result *icu.StreamDecoupling) []icu.DecouplingCriterion {
+	var failed []icu.DecouplingCriterion
+	for _, criterion := range result.Criteria {
+		if !criterion.Pass {
+			failed = append(failed, criterion)
+		}
+	}
+
+	return failed
 }

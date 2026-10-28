@@ -27,7 +27,7 @@ func synthStreamsJSON(minutes int) []icu.ActivityStream {
 
 // decouplingFake serves GET-only activity, streams, events and
 // sport-settings endpoints, counting stream fetches. Activity ids containing "fail" return
-// 500 on streams; "short" returns a 6-minute ride.
+// 500 on streams; "short" returns a 6-minute ride, "medium" a 59-minute one.
 type decouplingFake struct {
 	streamCalls, eventCalls, settingsCalls atomic.Int32
 	server                                 *httptest.Server
@@ -75,6 +75,9 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 				return
 			}
 			minutes := 90
+			if strings.Contains(path, "medium") {
+				minutes = 59
+			}
 			if strings.Contains(path, "short") {
 				minutes = 6
 			}
@@ -307,6 +310,22 @@ func TestActivityDecouplingCommand(t *testing.T) {
 	if short["decoupling"] != 8.26 || short["decouplingSource"] != icu.DecouplingSourceAPI || short["streamsDecoupling"] != nil ||
 		shortSummary["validity"] != icu.DecouplingNotValid || len(failedCriteria) == 0 || failedCriteria[0] != icu.CriterionDuration {
 		t.Fatalf("short output = %v", short)
+	}
+	// A not-valid ride with a pipeline number shows it raw next to the API
+	// value, labeled not valid, never consumed.
+	medium := runDecouplingCommand(t, client, []string{"imedium"}, map[string]string{decouplingSourceFlag: "streams"})
+	mediumSummary, _ := medium["summary"].(map[string]any)
+	if medium["streamsRawDecoupling"] != 0.0 || medium["streamsDecoupling"] != nil || medium["apiDecoupling"] != 8.26 ||
+		medium["validity"] != icu.DecouplingNotValid || medium["decoupling"] != 8.26 ||
+		mediumSummary["streamsRawDecoupling"] != 0.0 || mediumSummary["failedCriteriaDetail"] == nil {
+		t.Fatalf("medium output = %v", medium)
+	}
+	// short has too few minutes for a pipeline number, so rawValue is absent;
+	// the failed criteria come with their values.
+	shortFailed, _ := short["failedCriteria"].([]any)
+	first, _ := shortFailed[0].(map[string]any)
+	if short["validity"] != icu.DecouplingNotValid || first["name"] != icu.CriterionDuration || first["value"] == nil {
+		t.Fatalf("short failed criteria = %v", short["failedCriteria"])
 	}
 
 	// Command-side zone fallback: the athlete's sport-settings zones classify

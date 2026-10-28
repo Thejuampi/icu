@@ -44,6 +44,10 @@ func TestCoachCriterionDurationBoundary(t *testing.T) {
 		len(got.FailedCriteria) != 1 || got.FailedCriteria[0] != icu.CriterionDuration {
 		t.Fatalf("59 min: %+v", got)
 	}
+	// The raw stream number is kept next to the not-valid label.
+	if got.RawValue == nil || *got.RawValue != 0 {
+		t.Fatalf("59 min raw value: %v", got.RawValue)
+	}
 	if got.Reason != "not valid: failed coaching criteria duration" {
 		t.Fatalf("reason %q", got.Reason)
 	}
@@ -149,6 +153,9 @@ func TestCoachApplyCriteriaStates(t *testing.T) {
 		Criteria: []icu.DecouplingCriterion{{Name: icu.CriterionVI, Value: 1.08, Pass: true}},
 	}
 	low.ApplyCoachCriteria()
+	if low.RawValue == nil || *low.RawValue != 6 {
+		t.Fatalf("low raw: %v", low.RawValue)
+	}
 	if low.Validity != icu.DecouplingLowConfidence || low.Value == nil || low.Interpretation != icu.DecouplingInterpretationModerate {
 		t.Fatalf("low confidence: %+v", low)
 	}

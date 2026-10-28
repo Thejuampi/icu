@@ -150,6 +150,9 @@ type StreamDecoupling struct {
 	StopRule string `json:"stopRule,omitempty"`
 	// Coaching criteria (decoupling_criteria.go): validity is valid,
 	// low_confidence or not_valid; failed criteria are listed by name.
+	// RawValue is the stream pipeline's number before the criteria: kept
+	// (shown, never consumed) when the ride is not valid.
+	RawValue        *float64              `json:"rawValue,omitempty"`
 	Validity        string                `json:"validity,omitempty"`
 	Criteria        []DecouplingCriterion `json:"criteria,omitempty"`
 	FailedCriteria  []string              `json:"failedCriteria,omitempty"`
