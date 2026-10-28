@@ -1,6 +1,10 @@
 package main
 
-import icu "github.com/Thejuampi/icu"
+import (
+	"io"
+
+	icu "github.com/Thejuampi/icu"
+)
 
 func registerWellnessCommands(registry *CommandRegistry) {
 	registry.Register(
@@ -63,7 +67,7 @@ func wellnessBulkCommand() *Command {
 		Name:        "",
 		Usage:       "wellness bulk --file FILE.json",
 		Description: "Bulk update wellness records from a JSON array file.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			fpath := icu.StringFlag(flags, "file", "")
 			if fpath == "" {
 				return errMissing("--file")
@@ -89,7 +93,7 @@ func wellnessUploadCommand() *Command {
 		Name:        "",
 		Usage:       "wellness upload <file.csv>",
 		Description: "Upload wellness CSV file.",
-		Run: func(args []string, _ map[string]string, client *icu.Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("csv file path")
 			}

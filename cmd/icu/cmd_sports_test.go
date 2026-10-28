@@ -102,7 +102,7 @@ func putKeys(body map[string]json.RawMessage) []string {
 
 func runSportsUpdateJSON(t *testing.T, client *icu.Client, flags map[string]string) (sportsUpdateResult, error) {
 	t.Helper()
-	out, err := captureStdout(t, func() error { return runSportsUpdate([]string{"1858902"}, flags, client) })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return runSportsUpdate([]string{"1858902"}, flags, client, stdout) })
 	var res sportsUpdateResult
 	if strings.TrimSpace(out) != "" {
 		if uerr := json.Unmarshal([]byte(out), &res); uerr != nil {
@@ -283,7 +283,7 @@ func TestFTPUpdateSendsSnakeCaseWireKeys(t *testing.T) {
 		{map[string]string{"value": "255", "indoor": "true"}, "indoor_ftp"},
 	} {
 		f, client := newFakeSportServer(t, nil)
-		if _, err := captureStdout(t, func() error { return ftpUpdateCommand().Run(nil, tc.flags, client) }); err != nil {
+		if _, err := captureStdout(t, func(stdout io.Writer) error { return ftpUpdateCommand().Run(nil, tc.flags, client, stdout) }); err != nil {
 			t.Fatal(err)
 		}
 		if got := strings.Join(putKeys(f.puts[0]), ","); got != tc.want {

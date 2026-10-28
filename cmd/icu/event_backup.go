@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -226,7 +227,7 @@ func eventsBackupsCommand() *Command {
 		Name:        "",
 		Usage:       "events backups [--id ID]",
 		Description: "List local event backups (newest first). Local only.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout io.Writer) error {
 			paths, err := listEventBackups(IntFlag(flags, "id", 0))
 			if err != nil {
 				return err
@@ -242,7 +243,7 @@ func eventsBackupsCommand() *Command {
 				})
 			}
 
-			return writeJSON(out)
+			return writeJSON(stdout, out)
 		},
 	}
 }
@@ -265,7 +266,7 @@ func eventsRevertCommand() *Command {
 			"event the backup recorded as cancelled or deleted, or --recreate, is created again instead. --id picks " +
 			"the newest backup that is not itself a pre-revert snapshot. Aborts when the event already matches " +
 			"the backup unless --force.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			path, err := resolveRevertBackup(flags)
 			if err != nil {
 				return err
@@ -283,7 +284,7 @@ func eventsRevertCommand() *Command {
 			if BoolFlag(flags, "dry-run") {
 				result.DryRun = true
 
-				return writeJSON(result)
+				return writeJSON(stdout, result)
 			}
 			if err := applyEventRevert(client, &backup, recreate, BoolFlag(flags, "force"), &result); err != nil {
 				return err
@@ -295,7 +296,7 @@ func eventsRevertCommand() *Command {
 				}
 			}
 
-			return writeJSON(result)
+			return writeJSON(stdout, result)
 		},
 	}
 }
@@ -408,7 +409,7 @@ func eventsDeleteCommand() *Command {
 		Usage: "events delete <id>",
 		Description: "Delete calendar event. Backs the event up locally first; restore it with " +
 			"events revert --id ID.",
-		Run: func(args []string, _ map[string]string, client *icu.Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
@@ -424,7 +425,7 @@ func eventsDeleteCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(map[string]any{"deleted": eventID, "backupPath": path})
+			return writeJSON(stdout, map[string]any{"deleted": eventID, "backupPath": path})
 		},
 	}
 }

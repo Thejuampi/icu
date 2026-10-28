@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -62,7 +63,7 @@ func sportsUpdateCommand() *Command {
 	}
 }
 
-func runSportsUpdate(args []string, flags map[string]string, client *icu.Client) error {
+func runSportsUpdate(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 	if len(args) == 0 {
 		return errMissing("sport type or id")
 	}
@@ -85,13 +86,13 @@ func runSportsUpdate(args []string, flags map[string]string, client *icu.Client)
 	if len(body) == 0 {
 		result.Message = "no changes: values already match"
 
-		return writeJSON(result)
+		return writeJSON(stdout, result)
 	}
 	if BoolFlag(flags, "dry-run") {
 		result.DryRun = true
 		result.Message = "dry-run: nothing written"
 
-		return writeJSON(result)
+		return writeJSON(stdout, result)
 	}
 
 	q := map[string]string{"recalcHrZones": "false"}
@@ -107,14 +108,14 @@ func runSportsUpdate(args []string, flags map[string]string, client *icu.Client)
 	result.ReadBack = &after
 	if mismatch := readBackMismatch(body, &after); mismatch != "" {
 		result.Message = "read-back mismatch: " + mismatch
-		if err := writeJSON(result); err != nil {
+		if err := writeJSON(stdout, result); err != nil {
 			return err
 		}
 
 		return fmt.Errorf("sports update: read-back mismatch on %s", mismatch)
 	}
 
-	return writeJSON(result)
+	return writeJSON(stdout, result)
 }
 
 type sportIntFlag struct{ flag, field string }

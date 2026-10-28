@@ -1,6 +1,10 @@
 package main
 
-import icu "github.com/Thejuampi/icu"
+import (
+	"io"
+
+	icu "github.com/Thejuampi/icu"
+)
 
 func registerFTPCommands(registry *CommandRegistry) {
 	registry.Register("ftp", "show", ftpShowCommand())
@@ -12,7 +16,7 @@ func ftpShowCommand() *Command {
 		Name:        "",
 		Usage:       "ftp show [--sport Ride]",
 		Description: "Show FTP for a sport type.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "Ride")
 
 			var ss icu.SportSettings
@@ -27,7 +31,7 @@ func ftpShowCommand() *Command {
 				LTHR      int    `json:"lthr,omitempty"`
 			}
 
-			return writeJSON(FTPInfo{
+			return writeJSON(stdout, FTPInfo{
 				Sport:     sport,
 				FTP:       ss.FTP,
 				IndoorFTP: ss.IndoorFTP,
@@ -42,7 +46,7 @@ func ftpUpdateCommand() *Command {
 		Name:        "",
 		Usage:       "ftp update --value WATTS [--sport Ride] [--indoor]",
 		Description: "Update FTP for a sport.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "Ride")
 			val := IntFlag(flags, "value", 0)
 			if val <= 0 {
@@ -62,7 +66,7 @@ func ftpUpdateCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(result)
+			return writeJSON(stdout, result)
 		},
 	}
 }

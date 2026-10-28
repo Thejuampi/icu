@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"time"
@@ -36,7 +37,7 @@ func rebalanceDryRunCommand() *Command {
 			"[--session-environment indoor|outdoor]",
 		Description: "Write an editable weekly load rebalance proposal without mutating Intervals.icu.",
 		Schema:      rebalanceShowSchema(),
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			flags["dry-run"] = "true"
 			input, err := readRebalanceInput(flags, client)
 			if err != nil {
@@ -55,7 +56,7 @@ func rebalancePreviewCommand() *Command {
 		Usage:       "rebalance preview --file PATH [--no-live-check]",
 		Description: "Validate a rebalance proposal and print a non-mutating operation preview.",
 		Schema:      rebalancePreviewSchema(),
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			proposal, err := readRebalanceProposal(flags)
 			if err != nil {
 				return err
@@ -66,7 +67,7 @@ func rebalancePreviewCommand() *Command {
 				blockingErr = fmt.Errorf("validate rebalance proposal: %s", validation.Errors[0])
 			}
 
-			return runCalendarOpsPreview(
+			return runCalendarOpsPreview(stdout,
 				flags,
 				proposal.Operations,
 				calendarValidationFromRebalance(validation),
@@ -91,7 +92,7 @@ func rebalanceAcceptCommand() *Command {
 		Usage:       "rebalance accept --file PATH",
 		Description: "Apply pending create/update/cancel operations from a rebalance proposal file.",
 		Schema:      rebalanceAcceptSchema(),
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			proposal, err := readRebalanceProposal(flags)
 			if err != nil {
 				return err
@@ -123,7 +124,7 @@ func rebalanceAcceptCommand() *Command {
 				return err
 			}
 
-			return writeJSON(proposal.Apply)
+			return writeJSON(stdout, proposal.Apply)
 		},
 	}
 }
@@ -308,7 +309,7 @@ func rebalanceApproveCommand() *Command {
 		Usage:       "rebalance approve --file PATH --reason TEXT [--target-load N] [--level X] [--mode MODE]",
 		Description: "Recalculate the proposal under explicit limits and approved constraints, then bind approval hashes for accept verification.",
 		Schema:      rebalanceApproveSchema(),
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			proposal, err := readRebalanceProposal(flags)
 			if err != nil {
 				return err
@@ -373,7 +374,7 @@ func rebalanceApproveCommand() *Command {
 			if err := writeRebalanceProposal(flags, &proposal); err != nil {
 				return err
 			}
-			return writeJSON(approve)
+			return writeJSON(stdout, approve)
 		},
 	}
 }

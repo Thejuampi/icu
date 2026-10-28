@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -57,13 +58,13 @@ func workoutsCalculateCommand() *Command {
 		Name:        "",
 		Usage:       "workouts calculate --ftp N --desc DESC",
 		Description: "Calculate planned workout duration, IF, NP, and TSS locally.",
-		Run: func(_ []string, flags map[string]string, _ *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout io.Writer) error {
 			estimate, err := workoutEstimateFromFlags(flags)
 			if err != nil {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(estimate)
+			return writeJSON(stdout, estimate)
 		},
 	}
 }

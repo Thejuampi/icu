@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 
@@ -140,7 +141,7 @@ func liveCheckCalendarOperations(client *icu.Client, operations []icu.CalendarOp
 	return warnings
 }
 
-func runCalendarOpsPreview(
+func runCalendarOpsPreview(stdout io.Writer,
 	flags map[string]string,
 	operations []icu.CalendarOperation,
 	validation *icu.CalendarOpsValidation,
@@ -148,7 +149,7 @@ func runCalendarOpsPreview(
 	blockingErr error,
 	liveCheck func() []string,
 ) error {
-	return runCalendarOpsPreviewWith(flags, operations, validation, blocking, blockingErr,
+	return runCalendarOpsPreviewWith(stdout, flags, operations, validation, blocking, blockingErr,
 		func(*icu.CalendarOpsPreview) []string {
 			if liveCheck == nil {
 				return nil
@@ -160,7 +161,7 @@ func runCalendarOpsPreview(
 
 // runCalendarOpsPreviewWith is runCalendarOpsPreview with a live check that
 // can also attach data (such as a load projection) to the preview.
-func runCalendarOpsPreviewWith(
+func runCalendarOpsPreviewWith(stdout io.Writer,
 	flags map[string]string,
 	operations []icu.CalendarOperation,
 	validation *icu.CalendarOpsValidation,
@@ -176,7 +177,7 @@ func runCalendarOpsPreviewWith(
 	if !blocking && !BoolFlag(flags, "no-live-check") && liveCheck != nil {
 		preview.Warnings = append(preview.Warnings, liveCheck(&preview)...)
 	}
-	if err := writeJSON(preview); err != nil {
+	if err := writeJSON(stdout, preview); err != nil {
 		return err
 	}
 	if blocking {

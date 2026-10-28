@@ -1,6 +1,10 @@
 package main
 
-import icu "github.com/Thejuampi/icu"
+import (
+	"io"
+
+	icu "github.com/Thejuampi/icu"
+)
 
 func registerAthleteCommands(registry *CommandRegistry) {
 	registry.Register("athlete", "show", listAllCommand[icu.Athlete]("athlete", "athlete show", "Get athlete profile with sport settings."))
@@ -24,7 +28,7 @@ func athleteUpdateCommand() *Command {
 		Name:        "",
 		Usage:       "athlete update --weight 81 --icu-weight 81 --height 1.81",
 		Description: "Update athlete profile fields.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			var u icu.AthleteUpdate
 			setIf := func(key string, set func()) {
 				if _, ok := flags[key]; ok {
@@ -43,7 +47,7 @@ func athleteUpdateCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(a)
+			return writeJSON(stdout, a)
 		},
 	}
 }
@@ -53,7 +57,7 @@ func athletePlanCommand() *Command {
 		Name:        "",
 		Usage:       "athlete plan [update --plan-id ID --start-date DATE]",
 		Description: "Get or update training plan.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			if _, ok := flags["plan-id"]; ok {
 				var u icu.AthleteTrainingPlanUpdate
 				u.ID = icu.ResolveAthleteID(flags)
@@ -65,7 +69,7 @@ func athletePlanCommand() *Command {
 					return wrapCommandError(err)
 				}
 
-				return writeJSON(p)
+				return writeJSON(stdout, p)
 			}
 
 			var p icu.AthleteTrainingPlan
@@ -73,7 +77,7 @@ func athletePlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(p)
+			return writeJSON(stdout, p)
 		},
 	}
 }
@@ -83,7 +87,7 @@ func athleteSettingsCommand() *Command {
 		Name:        "",
 		Usage:       "athlete settings --device desktop|phone|tablet",
 		Description: "Get athlete settings for device class.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			device := icu.StringFlag(flags, "device", "desktop")
 
 			var s any
@@ -91,7 +95,7 @@ func athleteSettingsCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(s)
+			return writeJSON(stdout, s)
 		},
 	}
 }

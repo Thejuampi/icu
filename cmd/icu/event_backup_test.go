@@ -83,21 +83,21 @@ func TestApplyCalendarOperationsBacksUpAndRevertRestores(t *testing.T) {
 		t.Fatalf("backup must precede the update: %+v", *requests)
 	}
 
-	listed, err := captureStdout(t, func() error { return eventsBackupsCommand().Run(nil, map[string]string{}, nil) })
+	listed, err := captureStdout(t, func(stdout io.Writer) error { return eventsBackupsCommand().Run(nil, map[string]string{}, nil, stdout) })
 	if err != nil || strings.Count(listed, `"path"`) != 2 {
 		t.Fatalf("backups = %s, %v", listed, err)
 	}
 
-	dry, err := captureStdout(t, func() error {
-		return eventsRevertCommand().Run(nil, map[string]string{"id": "7", "dry-run": "true"}, client)
+	dry, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "7", "dry-run": "true"}, client, stdout)
 	})
 	if err != nil || !strings.Contains(dry, `"dryRun": true`) {
 		t.Fatalf("dry run = %s, %v", dry, err)
 	}
 
 	*requests = nil
-	out, err := captureStdout(t, func() error {
-		return eventsRevertCommand().Run(nil, map[string]string{"id": "7"}, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "7"}, client, stdout)
 	})
 	if err != nil {
 		t.Fatalf("revert error = %v", err)
@@ -115,14 +115,14 @@ func TestApplyCalendarOperationsBacksUpAndRevertRestores(t *testing.T) {
 
 	// The event now matches the original backup: a second revert by id skips
 	// the pre-revert snapshot, finds nothing to do and aborts without --force.
-	if err := eventsRevertCommand().Run(nil, map[string]string{"id": "7"}, client); err == nil ||
+	if err := eventsRevertCommand().Run(nil, map[string]string{"id": "7"}, client, io.Discard); err == nil ||
 		!strings.Contains(err.Error(), "already matches backup") {
 		t.Fatalf("second revert error = %v", err)
 	}
 
 	*requests = nil
-	out, err = captureStdout(t, func() error {
-		return eventsRevertCommand().Run(nil, map[string]string{"backup": summary.Results[1].BackupPath}, client)
+	out, err = captureStdout(t, func(stdout io.Writer) error {
+		return eventsRevertCommand().Run(nil, map[string]string{"backup": summary.Results[1].BackupPath}, client, stdout)
 	})
 	if err != nil || !strings.Contains(out, `"action": "create"`) || !strings.Contains(out, `"restoredEventId": 99`) {
 		t.Fatalf("recreate = %s, %v", out, err)
@@ -144,7 +144,7 @@ func TestEventsRevertErrors(t *testing.T) {
 		"no backup": {"id": "5"},
 		"bad file":  {"backup": dir + "/nope.json"},
 	} {
-		if err := eventsRevertCommand().Run(nil, flagSet, client); err == nil {
+		if err := eventsRevertCommand().Run(nil, flagSet, client, io.Discard); err == nil {
 			t.Fatalf("%s: revert succeeded", name)
 		}
 	}
@@ -152,7 +152,7 @@ func TestEventsRevertErrors(t *testing.T) {
 	if err := os.WriteFile(empty, []byte(`{"eventId":0}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := eventsRevertCommand().Run(nil, map[string]string{"backup": empty}, client); err == nil {
+	if err := eventsRevertCommand().Run(nil, map[string]string{"backup": empty}, client, io.Discard); err == nil {
 		t.Fatal("empty backup accepted")
 	}
 	if len(*requests) != 0 {
@@ -177,10 +177,10 @@ func TestEventsUpdateFailsWhenBackupFails(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 
-	if err := eventsUpdateCommand().Run([]string{"7"}, map[string]string{"name": "x"}, client); err == nil {
+	if err := eventsUpdateCommand().Run([]string{"7"}, map[string]string{"name": "x"}, client, io.Discard); err == nil {
 		t.Fatal("update ran without a backup")
 	}
-	if err := eventsUpdateCommand().Run([]string{"abc"}, map[string]string{"name": "x"}, client); err == nil {
+	if err := eventsUpdateCommand().Run([]string{"abc"}, map[string]string{"name": "x"}, client, io.Discard); err == nil {
 		t.Fatal("non-numeric id accepted")
 	}
 	result := applyCalendarOperation(client, &icu.CalendarOperation{
@@ -196,21 +196,21 @@ func TestEventsDeleteBacksUpAndRevertRecreates(t *testing.T) {
 	t.Setenv(eventBackupDirEnv, t.TempDir())
 	client, requests := newBackupTestServer(t)
 
-	out, err := captureStdout(t, func() error { return eventsDeleteCommand().Run([]string{"8"}, nil, client) })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return eventsDeleteCommand().Run([]string{"8"}, nil, client, stdout) })
 	if err != nil || !strings.Contains(out, `"backupPath"`) {
 		t.Fatalf("delete = %s, %v", out, err)
 	}
 	if (*requests)[0].method != http.MethodGet || (*requests)[1].method != http.MethodDelete {
 		t.Fatalf("backup must precede the delete: %+v", *requests)
 	}
-	out, err = captureStdout(t, func() error {
-		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	out, err = captureStdout(t, func(stdout io.Writer) error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client, stdout)
 	})
 	if err != nil || !strings.Contains(out, `"action": "create"`) {
 		t.Fatalf("revert deleted = %s, %v", out, err)
 	}
 	for _, args := range [][]string{nil, {"x"}} {
-		if err := eventsDeleteCommand().Run(args, nil, client); err == nil {
+		if err := eventsDeleteCommand().Run(args, nil, client, io.Discard); err == nil {
 			t.Fatalf("delete %v: expected error", args)
 		}
 	}
@@ -236,11 +236,11 @@ func TestEventsCreateUpsertBacksUpMatchingEvent(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 
-	if err := eventsCreateCommand().Run(nil, map[string]string{"upsert": "true", "name": "x"}, client); err == nil {
+	if err := eventsCreateCommand().Run(nil, map[string]string{"upsert": "true", "name": "x"}, client, io.Discard); err == nil {
 		t.Fatal("--upsert without --uid accepted")
 	}
 	flags := map[string]string{"upsert": "true", "uid": "u-1", "name": "New", "start-date": "2026-10-27T07:00:00"}
-	if _, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) }); err != nil {
+	if _, err := captureStdout(t, func(stdout io.Writer) error { return eventsCreateCommand().Run(nil, flags, client, stdout) }); err != nil {
 		t.Fatal(err)
 	}
 	paths, err := listEventBackups(5)
@@ -346,16 +346,16 @@ func TestEventsRevertRecreateIsIdempotent(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 
-	if _, err := captureStdout(t, func() error { return eventsDeleteCommand().Run([]string{"8"}, nil, client) }); err != nil {
+	if _, err := captureStdout(t, func(stdout io.Writer) error { return eventsDeleteCommand().Run([]string{"8"}, nil, client, stdout) }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := captureStdout(t, func() error {
-		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client, stdout)
 	}); err != nil || posts != 1 {
 		t.Fatalf("first revert: posts=%d err=%v", posts, err)
 	}
 	// The backup now records restoredEventId: a second revert aborts.
-	err := eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	err := eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "already restored as event 99") || posts != 1 {
 		t.Fatalf("second revert: posts=%d err=%v", posts, err)
 	}
@@ -370,8 +370,8 @@ func TestEventsRevertRecreateIsIdempotent(t *testing.T) {
 	// type) is not a copy: the recreate goes ahead.
 	calendar = `[{"id":50,"name":"Z2","category":"WORKOUT","start_date_local":"2026-10-27T17:00:00"},` +
 		`{"id":51,"name":"Z2","category":"WORKOUT","type":"Run","start_date_local":"2026-10-27T07:00:00"}]`
-	if _, err := captureStdout(t, func() error {
-		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client, stdout)
 	}); err != nil || posts != 2 {
 		t.Fatalf("sibling revert: posts=%d err=%v", posts, err)
 	}
@@ -381,12 +381,12 @@ func TestEventsRevertRecreateIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	calendar = `[{"id":99,"name":"Z2","category":"WORKOUT","start_date_local":"2026-10-27T07:00:00"}]`
-	err = eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client)
+	err = eventsRevertCommand().Run(nil, map[string]string{"id": "8"}, client, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "already matches backup") || posts != 2 {
 		t.Fatalf("lookup revert: posts=%d err=%v", posts, err)
 	}
-	if _, err := captureStdout(t, func() error {
-		return eventsRevertCommand().Run(nil, map[string]string{"id": "8", "force": "true"}, client)
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsRevertCommand().Run(nil, map[string]string{"id": "8", "force": "true"}, client, stdout)
 	}); err != nil || posts != 3 {
 		t.Fatalf("forced revert: posts=%d err=%v", posts, err)
 	}
@@ -461,7 +461,7 @@ func TestEventsCreateUpsertBacksUpMatchYearsAway(t *testing.T) {
 	// fails if the search window is shrunk.
 	client, _ := upsertCalendarServer(t, "2017-11-01T07:00:00", 5)
 	flags := map[string]string{"upsert": "true", "uid": "u-1", "name": "New", "start-date": "2026-10-27T07:00:00"}
-	if _, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) }); err != nil {
+	if _, err := captureStdout(t, func(stdout io.Writer) error { return eventsCreateCommand().Run(nil, flags, client, stdout) }); err != nil {
 		t.Fatal(err)
 	}
 	if paths, _ := listEventBackups(5); len(paths) != 1 {
@@ -474,14 +474,14 @@ func TestEventsCreateUpsertFailsWhenOverwrittenEventWasNotBackedUp(t *testing.T)
 	flags := map[string]string{"upsert": "true", "uid": "u-1", "name": "New", "start-date": "2026-10-27T07:00:00"}
 	// The match lies outside any window; the POST updates existing event 5.
 	client, posts := upsertCalendarServer(t, "1990-01-01T07:00:00", 5)
-	_, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) })
+	_, err := captureStdout(t, func(stdout io.Writer) error { return eventsCreateCommand().Run(nil, flags, client, stdout) })
 	if err == nil || !strings.Contains(err.Error(), `ALREADY OVERWROTE existing event 5 (now dated 2026-10-27, named "New"`) ||
 		!strings.Contains(err.Error(), "NO BACKUP") || *posts != 1 {
 		t.Fatalf("err = %v posts=%d", err, *posts)
 	}
 	// A new id (above every id seen) is a plain create.
 	client, _ = upsertCalendarServer(t, "1990-01-01T07:00:00", 41)
-	if _, err := captureStdout(t, func() error { return eventsCreateCommand().Run(nil, flags, client) }); err != nil {
+	if _, err := captureStdout(t, func(stdout io.Writer) error { return eventsCreateCommand().Run(nil, flags, client, stdout) }); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -525,7 +525,7 @@ func TestEventsUpdateDetectsThirdPartyEdits(t *testing.T) {
 	t.Setenv(eventBackupDirEnv, t.TempDir())
 	client, stored, puts := editableEventServer(t)
 	update := func(flags map[string]string) error {
-		_, err := captureStdout(t, func() error { return eventsUpdateCommand().Run([]string{"3"}, flags, client) })
+		_, err := captureStdout(t, func(stdout io.Writer) error { return eventsUpdateCommand().Run([]string{"3"}, flags, client, stdout) })
 
 		return err
 	}
@@ -556,13 +556,13 @@ func TestEventsUpdateDetectsThirdPartyEdits(t *testing.T) {
 func TestEventsRevertDetectsThirdPartyEditsAndLegacyBackups(t *testing.T) {
 	t.Setenv(eventBackupDirEnv, t.TempDir())
 	client, stored, puts := editableEventServer(t)
-	if _, err := captureStdout(t, func() error {
-		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{"name": "Changed"}, client)
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{"name": "Changed"}, client, stdout)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	revert := func(flags map[string]string) error {
-		_, err := captureStdout(t, func() error { return eventsRevertCommand().Run(nil, flags, client) })
+		_, err := captureStdout(t, func(stdout io.Writer) error { return eventsRevertCommand().Run(nil, flags, client, stdout) })
 
 		return err
 	}

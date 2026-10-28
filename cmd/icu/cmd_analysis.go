@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -97,7 +98,7 @@ func analysisCoachingCommand() *Command {
 
 			return err
 		},
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			dateRanges, explicit, err := trainingPlanDateRanges(flags, time.Now())
 			if err != nil {
 				return err
@@ -120,7 +121,7 @@ func analysisCoachingCommand() *Command {
 				IncludeAdaptation: BoolFlag(flags, "include-adaptation"),
 			})
 
-			return writeJSON(context)
+			return writeJSON(stdout, context)
 		},
 	}
 }
@@ -328,7 +329,7 @@ func analysisCyclingCommand() *Command {
 			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries. " +
 			"--min-included-activities has no default (D-4): when set and validity.included falls below it, " +
 			"load/intensity/durability refuse with a named warning instead of reporting on too few sessions.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
@@ -363,7 +364,7 @@ func analysisCyclingCommand() *Command {
 				analysis.Warnings = append(analysis.Warnings, fitnessWarning)
 			}
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -413,7 +414,7 @@ func analysisPlanCommand() *Command {
 			"[--plan-oldest DATE --plan-newest DATE]",
 		Description: "Analyze a planned training block from recent history and future calendar events. " +
 			"Default ranges use UTC; pass explicit dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			dateRanges, explicit, err := trainingPlanDateRanges(flags, time.Now())
 			if err != nil {
 				return err
@@ -479,7 +480,7 @@ func analysisPlanCommand() *Command {
 			analysis.Scope.Timezone = tzInfo.timezone
 			analysis.Scope.TimezoneSource = tzInfo.source
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -490,7 +491,7 @@ func analysisWellnessCommand() *Command {
 		Usage: "analysis wellness [--oldest DATE --newest DATE | --days N]",
 		Description: "Compute wellness and physiology analysis from wellness records. " +
 			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
@@ -510,7 +511,7 @@ func analysisWellnessCommand() *Command {
 				TimezoneSource: tzInfo.source,
 			})
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -520,7 +521,7 @@ func analysisWorkoutCommand() *Command {
 		Name:        "",
 		Usage:       "analysis workout <activity-id> [--event-id ID] [--calendar-id ID] [--sport-type TYPE] [--match-window-hours N]",
 		Description: "Analyze one completed workout against its planned workout event, intervals, and streams.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -533,7 +534,7 @@ func analysisWorkoutCommand() *Command {
 
 			analysis := icu.AnalyzeWorkoutExecution(inputs, options)
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -658,7 +659,7 @@ func analysisAdaptationCommand() *Command {
 		Usage: "analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride]",
 		Description: "Analyze cycling adaptation from power curves, MMP model, sport anchors, activities, and wellness. " +
 			"Default ranges use UTC; pass explicit --oldest/--newest dates for athlete-local daily boundaries.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			dateRange, explicit, err := analysisDateRange(flags, time.Now())
 			if err != nil {
 				return err
@@ -736,7 +737,7 @@ func analysisAdaptationCommand() *Command {
 				},
 			)
 
-			return writeJSON(analysis)
+			return writeJSON(stdout, analysis)
 		},
 	}
 }
@@ -959,7 +960,7 @@ func analysisMicrocycleCommand() *Command {
 		Name:        "",
 		Usage:       "analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]",
 		Description: "[experimental] Analyze the selected training microcycle as a read-only, LLM-ready diagnostic contract.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			now := time.Now()
 			location, timezoneSource, err := resolveMicrocycleLocation(client, flags)
 			if err != nil {
@@ -1008,10 +1009,10 @@ func analysisMicrocycleCommand() *Command {
 			})
 
 			if BoolFlag(flags, "json") || icu.ResolveOutputFormat(flags) == icu.FormatJSON {
-				return writeJSON(analysis)
+				return writeJSON(stdout, analysis)
 			}
 
-			return writeMicrocycleHuman(&analysis)
+			return writeMicrocycleHuman(stdout, &analysis)
 		},
 	}
 }
@@ -1263,7 +1264,7 @@ func addDays(date string, days int) (string, error) {
 	return parsed.AddDate(0, 0, days).Format("2006-01-02"), nil
 }
 
-func writeMicrocycleHuman(analysis *icu.MicrocycleAnalysis) error {
+func writeMicrocycleHuman(stdout io.Writer, analysis *icu.MicrocycleAnalysis) error {
 	var output strings.Builder
 	fmt.Fprintf(&output, "Microcycle: %s to %s\n", analysis.Microcycle.StartDate, analysis.Microcycle.EndDate)
 	fmt.Fprintf(
@@ -1290,5 +1291,5 @@ func writeMicrocycleHuman(analysis *icu.MicrocycleAnalysis) error {
 	}
 	fmt.Fprintln(&output, "Final note: diagnostic only; no plan, config, or external sync changes were made.")
 
-	return writeOutput([]byte(output.String()))
+	return writeOutput(stdout, []byte(output.String()))
 }

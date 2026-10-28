@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,7 +31,7 @@ func runEventsCommand(t *testing.T, client *icu.Client, sub string, args []strin
 		t.Fatalf("missing command events %s", sub)
 	}
 
-	return cmd.Run(args, values, client)
+	return cmd.Run(args, values, client, io.Discard)
 }
 
 func TestEventsCreateWeightTrainingKeepsTypeWithoutFTPPricing(t *testing.T) {
@@ -62,8 +63,14 @@ func TestEventsCreateCalculateLoadRejectsNonCyclingType(t *testing.T) {
 	}
 }
 
+// Runs against its own t.TempDir() config dir instead of the shared TestMain
+// dir: `events update` takes an event backup before the type check rejects the
+// request, and that file must not leak into the dir other tests read.
+// t.Setenv rules out t.Parallel.
+//
+//nolint:paralleltest // t.Setenv
 func TestEventsUpdateCalculateLoadRejectsNonCyclingTypeFlag(t *testing.T) {
-	t.Parallel()
+	t.Setenv("ICU_CONFIG_DIR", t.TempDir())
 	client, state := eventsTestClient(t)
 
 	err := runEventsCommand(t, client, "update", []string{"1"}, flags("type", "Run", "desc", "- 30m 70%",

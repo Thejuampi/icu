@@ -7,35 +7,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 
 	icu "github.com/Thejuampi/icu"
 )
 
 const strTrue = "true"
-
-var (
-	stdoutOverride   io.Writer  //nolint:gochecknoglobals // test output redirection
-	stdoutOverrideMu sync.Mutex //nolint:gochecknoglobals // protects stdoutOverride
-)
-
-func osStdout() io.Writer {
-	stdoutOverrideMu.Lock()
-	ov := stdoutOverride
-	stdoutOverrideMu.Unlock()
-
-	if ov != nil {
-		return ov
-	}
-
-	return os.Stdout
-}
-
-func setStdoutForTest(w io.Writer) {
-	stdoutOverrideMu.Lock()
-	stdoutOverride = w
-	stdoutOverrideMu.Unlock()
-}
 
 func osGetenv(key string) string { return os.Getenv(key) }
 
@@ -47,12 +23,12 @@ func wrapCommandError(err error) error {
 	return fmt.Errorf("command failed: %w", err)
 }
 
-func writeJSON(v any) error {
-	return wrapCommandError(icu.WriteJSON(osStdout(), v))
+func writeJSON(stdout io.Writer, v any) error {
+	return wrapCommandError(icu.WriteJSON(stdout, v))
 }
 
-func writeOutput(data []byte) error {
-	if _, err := osStdout().Write(data); err != nil {
+func writeOutput(stdout io.Writer, data []byte) error {
+	if _, err := stdout.Write(data); err != nil {
 		return fmt.Errorf("writing output: %w", err)
 	}
 

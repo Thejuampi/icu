@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"strings"
 
 	icu "github.com/Thejuampi/icu"
@@ -75,7 +76,7 @@ func activitiesGetCommand() *Command {
 		Name:        "",
 		Usage:       "activities get <id1> [id2 ...]",
 		Description: "Fetch activities by ID.",
-		Run: func(args []string, _ map[string]string, client *icu.Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client, stdout io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("icu.Activity id(s)")
 			}
@@ -87,7 +88,7 @@ func activitiesGetCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(acts)
+			return writeJSON(stdout, acts)
 		},
 	}
 }
@@ -97,7 +98,7 @@ func activitiesUploadCommand() *Command {
 		Name:        "",
 		Usage:       "activities upload <file> [--name NAME] [--description DESC] [--external-id ID]",
 		Description: "Upload an activity file (fit/tcx/gpx/zip/gz).",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("file path")
 			}
@@ -116,7 +117,7 @@ func searchCommand[T any](resource, usage, description, endpoint string) *Comman
 		Name:        "",
 		Usage:       usage,
 		Description: description,
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("search query")
 			}
@@ -131,7 +132,7 @@ func searchCommand[T any](resource, usage, description, endpoint string) *Comman
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(results)
+			return writeJSON(stdout, results)
 		},
 	}
 }
@@ -141,7 +142,7 @@ func activitiesAroundCommand() *Command {
 		Name:        "",
 		Usage:       "activities around <activity-id> [--limit N] [--route-id ID]",
 		Description: "List activities before/after an activity.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
@@ -160,7 +161,7 @@ func activitiesAroundCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(acts)
+			return writeJSON(stdout, acts)
 		},
 	}
 }

@@ -2,26 +2,18 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"testing"
 )
 
-func captureStdout(t *testing.T, fn func() error) (string, error) {
+// captureStdout runs fn with an injected buffer as the command's stdout and
+// returns what it wrote. No process-global state is touched, so callers may
+// run in parallel.
+func captureStdout(t *testing.T, fn func(stdout io.Writer) error) (string, error) {
 	t.Helper()
 
 	var buf bytes.Buffer
-
-	stdoutOverrideMu.Lock()
-	prev := stdoutOverride
-	stdoutOverride = &buf
-	stdoutOverrideMu.Unlock()
-
-	defer func() {
-		stdoutOverrideMu.Lock()
-		stdoutOverride = prev
-		stdoutOverrideMu.Unlock()
-	}()
-
-	err := fn()
+	err := fn(&buf)
 
 	return buf.String(), err
 }

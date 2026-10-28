@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 
@@ -23,12 +24,12 @@ func registerWeatherCommands(registry *CommandRegistry) {
 		Usage: "weather config [update [--id ID] --lat LAT --lon LON --label NAME --location NAME " +
 			"--provider NAME --enabled true]",
 		Description: "Get or update weather config.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			if weatherConfigHasUpdate(flags) {
-				return updateWeatherConfig(flags, client)
+				return updateWeatherConfig(stdout, flags, client)
 			}
 
-			return showWeatherConfig(client)
+			return showWeatherConfig(stdout, client)
 		},
 	})
 
@@ -50,7 +51,7 @@ func weatherConfigHasUpdate(flags map[string]string) bool {
 
 // updateWeatherConfig reads the full forecast list, edits one entry, and
 // PUTs the whole list back so other configured locations are preserved.
-func updateWeatherConfig(flags map[string]string, client *icu.Client) error {
+func updateWeatherConfig(stdout io.Writer, flags map[string]string, client *icu.Client) error {
 	var cfg icu.WeatherConfig
 	if err := client.Get("weather-config", nil, nil, &cfg); err != nil {
 		return wrapCommandError(err)
@@ -69,7 +70,7 @@ func updateWeatherConfig(flags map[string]string, client *icu.Client) error {
 		return fmt.Errorf("%w: update returned no forecasts; check the config in Intervals.icu", errWeatherConfig)
 	}
 
-	return writeJSON(result)
+	return writeJSON(stdout, result)
 }
 
 // mergeWeatherConfig selects the entry to edit (by --id, or the only entry
@@ -180,11 +181,11 @@ func hasFlagValue(flags map[string]string, name string) bool {
 	return ok && v != ""
 }
 
-func showWeatherConfig(client *icu.Client) error {
+func showWeatherConfig(stdout io.Writer, client *icu.Client) error {
 	var cfg icu.WeatherConfig
 	if err := client.Get("weather-config", nil, nil, &cfg); err != nil {
 		return wrapCommandError(err)
 	}
 
-	return writeJSON(cfg)
+	return writeJSON(stdout, cfg)
 }

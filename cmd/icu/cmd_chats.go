@@ -1,6 +1,10 @@
 package main
 
-import icu "github.com/Thejuampi/icu"
+import (
+	"io"
+
+	icu "github.com/Thejuampi/icu"
+)
 
 func registerChatsCommands(registry *CommandRegistry) {
 	registry.Register("chats", "list", listAllCommand[[]icu.Chat]("chats", "chats list", "List chats."))
@@ -10,7 +14,7 @@ func registerChatsCommands(registry *CommandRegistry) {
 		Name:        "",
 		Usage:       "chats messages <id> [--limit N]",
 		Description: "List messages in a chat.",
-		Run: func(args []string, flags map[string]string, client *icu.Client) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("icu.Chat id")
 			}
@@ -22,7 +26,7 @@ func registerChatsCommands(registry *CommandRegistry) {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(msgs)
+			return writeJSON(stdout, msgs)
 		},
 	})
 

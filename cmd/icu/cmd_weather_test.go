@@ -57,8 +57,8 @@ func TestWeatherConfigUpdatePreservesOtherEntriesAndFields(t *testing.T) {
 	state := &weatherTestServer{getBody: twoForecastConfig, putBody: twoForecastConfig}
 	client := newWeatherTestClient(t, state)
 
-	_, err := captureStdout(t, func() error {
-		return updateWeatherConfig(map[string]string{"id": "1", "enabled": "false"}, client)
+	_, err := captureStdout(t, func(stdout io.Writer) error {
+		return updateWeatherConfig(stdout, map[string]string{"id": "1", "enabled": "false"}, client)
 	})
 	if err != nil {
 		t.Fatalf("update error: %v", err)
@@ -77,8 +77,8 @@ func TestWeatherConfigUpdateSingleEntryKeepsIDZero(t *testing.T) {
 	state := &weatherTestServer{getBody: single, putBody: single}
 	client := newWeatherTestClient(t, state)
 
-	if _, err := captureStdout(t, func() error {
-		return updateWeatherConfig(map[string]string{"label": "Casa"}, client)
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return updateWeatherConfig(stdout, map[string]string{"label": "Casa"}, client)
 	}); err != nil {
 		t.Fatalf("update error: %v", err)
 	}
@@ -124,8 +124,8 @@ func TestWeatherConfigUpdateRejectsEmptyResponse(t *testing.T) {
 	state := &weatherTestServer{getBody: twoForecastConfig, putBody: `{"forecasts":[]}`}
 	client := newWeatherTestClient(t, state)
 
-	_, err := captureStdout(t, func() error {
-		return updateWeatherConfig(map[string]string{"id": "0", "label": "Home"}, client)
+	_, err := captureStdout(t, func(stdout io.Writer) error {
+		return updateWeatherConfig(stdout, map[string]string{"id": "0", "label": "Home"}, client)
 	})
 	if err == nil || !strings.Contains(err.Error(), "no forecasts") {
 		t.Fatalf("error = %v, want empty-response error", err)
@@ -143,7 +143,7 @@ func TestWeatherForecastOutputsDailyHourlyAndIDZero(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerWeatherCommands(registry)
 	cmd, _ := registry.Lookup("weather", "forecast")
-	out, err := captureStdout(t, func() error { return cmd.Run(nil, map[string]string{}, client) })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, map[string]string{}, client, stdout) })
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
