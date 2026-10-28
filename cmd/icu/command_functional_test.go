@@ -426,7 +426,7 @@ func errorCommandCases() []commandCase {
 		commandFlow("error tags workouts", "tags", "workouts", nil, nil, "", "", ""),
 		commandFlow("error activity delete", "activity", "delete", []string{"i1"}, nil, "", "", ""),
 		commandFlow("error ftp update", "ftp", "update", nil, flags("ftp", "290"), "", "", ""),
-		commandFlow("error sports update", "sports", "update", []string{"Ride"}, flags("ftp", "290", "yes", "true"), "", "", ""),
+		commandFlow("error sports update", "sports", "update", []string{"Ride"}, flags("ftp", "290"), "", "", ""),
 		commandFlow("error sports delete", "sports", "delete", []string{"Ride"}, nil, "", "", ""),
 		commandFlow("error curves pace", "curves", "pace", nil, nil, "", "", ""),
 		commandFlow("error curves power-hr", "curves", "power-hr", nil, nil, "", "", ""),
@@ -647,8 +647,8 @@ func sportCommandCases() []commandCase {
 		commandFlow("sports get", "sports", "get", []string{"Ride"}, nil,
 			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "Ride"),
 		commandFlow("sports update", "sports", "update", []string{"Ride"},
-			flags("ftp", "291", "lthr", "179", "max-hr", "199", "indoor-ftp", "281", "yes", "true"),
-			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "Ride"), // read-back follows the PUT
+			flags("ftp", "291", "lthr", "179", "max-hr", "199", "indoor-ftp", "281", "dry-run", "true"),
+			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "Ride"), // static fixture cannot echo writes; PUT paths covered in cmd_sports_test.go
 		commandFlow("sports delete", "sports", "delete", []string{"1"}, nil,
 			http.MethodDelete, "/api/v1/athlete/0/sport-settings/1", ""),
 		commandFlow("ftp show", "ftp", "show", nil, flags("sport", "Ride"),

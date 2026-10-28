@@ -534,9 +534,9 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu sports get Ride`
 
 - `update`
-  Invocation: `icu sports update <type|id> [--ftp WATTS] [--indoor-ftp WATTS] [--lthr BPM] [--max-hr BPM] [--hr-zones B1,B2,...] [--power-zones P1,P2,...] [--dry-run] [--yes]`
-  Notes: Any subset of fields; none is required. Reads current settings, sends only fields that differ, and prints a preview (`changes` before/after, `body`). Without `--yes` (or with `--dry-run`) nothing is written. With `--yes` it PUTs (`recalcHrZones=false`), then GETs the settings back (`readBack`; `message` flags any mismatch). `--hr-zones` are zone upper bounds in bpm (1-250); `--power-zones` are zone upper bounds in % of FTP (1-999, 999 = open top zone). Zones must be strictly ascending positive integers with the same count as the current zones.
-  Example: `icu sports update Ride --hr-zones 121,148,166,177,182,187,198 --yes`
+  Invocation: `icu sports update <type|id> [--ftp WATTS] [--indoor-ftp WATTS] [--lthr BPM] [--max-hr BPM] [--hr-zones B1,B2,...] [--power-zones P1,P2,...] [--dry-run]`
+  Notes: Any subset of fields; none is required. Reads current settings and sends only fields that differ, using the API's snake_case wire names (`ftp`, `indoor_ftp`, `lthr`, `max_hr`, `hr_zones`, `power_zones`, query `recalcHrZones=false`). Writes by default; output shows the before/after `changes`, the exact `body`, and a GET `readBack`. A read-back mismatch is reported in `message` and exits non-zero. `--dry-run` only previews. `--hr-zones` are zone upper bounds in bpm, each at most the effective max HR (the `--max-hr` given in the same command, else the current one); `--power-zones` are zone upper bounds in % of FTP (999 = open top zone). Zones must be strictly ascending positive integers, with the same count as the current zones (or the configured zone names when no zones are set).
+  Example: `icu sports update Ride --hr-zones 121,148,166,177,182,187,198 --dry-run`
 
 - `delete`
   Invocation: `icu sports delete <id>`
