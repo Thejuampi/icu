@@ -210,7 +210,7 @@ func executeCommand(
 	resource, action string,
 	posArgs []string,
 	flags map[string]string,
-	_, stderr io.Writer,
+	stdout, stderr io.Writer,
 ) int {
 	cmd, ok := registry.Lookup(resource, action)
 	if !ok {
@@ -239,7 +239,7 @@ func executeCommand(
 	athleteID := icu.ResolveAthleteID(flags)
 	client := icu.NewClient(apiKey, athleteID)
 
-	if err := cmd.Run(posArgs, flags, client); err != nil {
+	if err := cmd.Run(posArgs, flags, client, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 
 		return 1

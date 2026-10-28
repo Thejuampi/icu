@@ -91,7 +91,7 @@ func TestRegisteredCommandsReturnErrorsOnClientFailure(t *testing.T) {
 			t.Fatalf("%s: missing command %s %s", tc.Name, tc.Resource, tc.Action)
 		}
 
-		if err := cmd.Run(tc.Args, tc.Flags, errClient); err == nil {
+		if err := cmd.Run(tc.Args, tc.Flags, errClient, io.Discard, io.Discard); err == nil {
 			t.Fatalf("%s: expected error, got nil", tc.Name)
 		}
 	}
@@ -197,7 +197,7 @@ func TestActivityShowPassesIntervalsFlag(t *testing.T) {
 		t.Fatalf("missing command activity show")
 	}
 
-	if err := cmd.Run([]string{"i123"}, flags("intervals", "true"), client); err != nil {
+	if err := cmd.Run([]string{"i123"}, flags("intervals", "true"), client, io.Discard, io.Discard); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
 
@@ -226,7 +226,7 @@ func TestActivityUpdateSendsTrainingLoad(t *testing.T) {
 		t.Fatalf("missing command activity update")
 	}
 
-	err := cmd.Run([]string{"i123"}, flags("training-load", "139"), client)
+	err := cmd.Run([]string{"i123"}, flags("training-load", "139"), client, io.Discard, io.Discard)
 
 	if err != nil || len(serverState.Requests) != 1 || !strings.Contains(serverState.Requests[0].Body, `"icu_training_load":139`) {
 		t.Fatalf("activity update body = %+v err=%v, want training load", serverState.Requests, err)
@@ -258,7 +258,7 @@ func TestEventsCalculateLoadSendsCalculatedFields(t *testing.T) {
 		t.Fatalf("missing command events create")
 	}
 
-	err := cmd.Run(nil, flags("name", "Workout", "start-date", "2026-06-01", "desc", "- 60m 70%", "calculate-load", "true", "ftp", "300"), client)
+	err := cmd.Run(nil, flags("name", "Workout", "start-date", "2026-06-01", "desc", "- 60m 70%", "calculate-load", "true", "ftp", "300"), client, io.Discard, io.Discard)
 
 	if err != nil || len(serverState.Requests) != 1 || !strings.Contains(serverState.Requests[0].Body, `"icu_training_load":49`) || !strings.Contains(serverState.Requests[0].Body, `"moving_time":3600`) {
 		t.Fatalf("events create body = %+v err=%v, want calculated load and moving time", serverState.Requests, err)
@@ -280,7 +280,7 @@ func TestEventsUpdateCalculateLoadSendsCalculatedFields(t *testing.T) {
 		t.Fatalf("missing command events update")
 	}
 
-	err := cmd.Run([]string{"1"}, flags("desc", "- 60m 70%", "calculate-load", "true", "ftp", "300"), client)
+	err := cmd.Run([]string{"1"}, flags("desc", "- 60m 70%", "calculate-load", "true", "ftp", "300"), client, io.Discard, io.Discard)
 
 	// Request 0 is the pre-update backup GET; request 1 is the PUT.
 	if err != nil || len(serverState.Requests) != 2 || serverState.Requests[0].Method != http.MethodGet ||
@@ -312,7 +312,7 @@ func TestEventsCalculateLoadMissingFTPReturnsError(t *testing.T) {
 		t.Fatalf("missing command events create")
 	}
 
-	err := cmd.Run(nil, flags("name", "Workout", "start-date", "2026-06-01", "desc", "- 60m 70%", "calculate-load", "true"), client)
+	err := cmd.Run(nil, flags("name", "Workout", "start-date", "2026-06-01", "desc", "- 60m 70%", "calculate-load", "true"), client, io.Discard, io.Discard)
 
 	if err == nil {
 		t.Fatal("events create missing ftp error = nil, want error")
@@ -330,7 +330,7 @@ func TestWorkoutsCalculateMissingDescReturnsError(t *testing.T) {
 		t.Fatalf("missing command workouts calculate")
 	}
 
-	err := cmd.Run(nil, flags("ftp", "300"), client)
+	err := cmd.Run(nil, flags("ftp", "300"), client, io.Discard, io.Discard)
 
 	if !errors.Is(err, errMissingRequired) {
 		t.Fatalf("workouts calculate missing desc error = %v, want errMissingRequired", err)
@@ -351,7 +351,7 @@ func TestRegisteredCommandsValidateRequiredArgs(t *testing.T) {
 			t.Fatalf("%s: missing command %s %s", tc.Name, tc.Resource, tc.Action)
 		}
 
-		err := cmd.Run(tc.Args, tc.Flags, client)
+		err := cmd.Run(tc.Args, tc.Flags, client, io.Discard, io.Discard)
 		if !errors.Is(err, errMissingRequired) {
 			t.Fatalf("%s: error = %v, want missing required", tc.Name, err)
 		}
@@ -826,7 +826,7 @@ func runCommandCase(
 
 	serverState.Requests = nil
 
-	if err := cmd.Run(tc.Args, tc.Flags, client); err != nil {
+	if err := cmd.Run(tc.Args, tc.Flags, client, io.Discard, io.Discard); err != nil {
 		t.Fatalf("%s: Run error: %v", tc.Name, err)
 	}
 
@@ -1198,7 +1198,7 @@ func TestEventsDescFlagAlias(t *testing.T) {
 			t.Fatalf("%s: missing command events %s", tc.name, tc.action)
 		}
 
-		if err := cmd.Run(tc.args, tc.flags, client); err != nil {
+		if err := cmd.Run(tc.args, tc.flags, client, io.Discard, io.Discard); err != nil {
 			t.Fatalf("%s: Run error: %v", tc.name, err)
 		}
 

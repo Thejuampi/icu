@@ -1,19 +1,17 @@
 package main
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 )
 
-//nolint:paralleltest // swaps the package-level stdout override; running in parallel races with other tests' output.
-func TestSetStdoutForTestSwitchesOutput(t *testing.T) {
-	var buf testBuf
+func TestWriteJSONWritesToInjectedWriter(t *testing.T) {
+	t.Parallel()
 
-	setStdoutForTest(&buf)
-
-	defer setStdoutForTest(nil)
-
-	if stdoutOverride == nil {
-		t.Fatal("stdoutOverride should be set")
+	var buf bytes.Buffer
+	if err := writeJSON(&buf, map[string]int{"a": 1}); err != nil || !strings.Contains(buf.String(), `"a": 1`) {
+		t.Fatalf("out=%q err=%v", buf.String(), err)
 	}
 }
 
@@ -52,23 +50,12 @@ func TestFloatFlagValMissingKeyReturnsDefault(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // sets a package-level stdout override that would race with other writers.
 func TestWriteOutputReturnsErrorOnWriteFailure(t *testing.T) {
-	var eb errBuf
+	t.Parallel()
 
-	setStdoutForTest(&eb)
-
-	defer setStdoutForTest(nil)
-
-	if err := writeOutput([]byte("data")); err == nil {
+	if err := writeOutput(&errBuf{}, []byte("data")); err == nil {
 		t.Fatal("expected write error")
 	}
-}
-
-type testBuf struct{}
-
-func (b *testBuf) Write(p []byte) (int, error) {
-	return len(p), nil
 }
 
 type errBuf struct{}
