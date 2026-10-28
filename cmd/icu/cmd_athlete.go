@@ -9,7 +9,7 @@ import (
 )
 
 func registerAthleteCommands(registry *CommandRegistry) {
-	registry.Register("athlete", "show", listAllCommand[icu.Athlete]("athlete", "athlete show", "Get athlete profile with sport settings."))
+	registry.Register("athlete", "show", athleteShowCommand())
 	registry.Register("athlete", "update", athleteUpdateCommand())
 	registry.Register("athlete", "profile", listAllCommand[icu.AthleteProfile]("profile", "athlete profile", "Get athlete profile info."))
 	registry.Register(
@@ -86,6 +86,9 @@ func athleteUpdateFields(u *icu.AthleteUpdate, a *icu.Athlete) (map[string]any, 
 
 func runAthleteUpdate(_ []string, flags map[string]string, client *icu.Client) error {
 	u := buildAthleteUpdate(flags)
+	if want, _ := athleteUpdateFields(&u, &icu.Athlete{}); len(want) == 0 {
+		return fmt.Errorf("%w: athlete update needs at least one of --weight, --icu-weight, --height, --name, --bio", errInvalidValue)
+	}
 
 	var current icu.Athlete
 	if err := client.Get("athlete", nil, nil, &current); err != nil {
@@ -174,6 +177,27 @@ func athleteSettingsCommand() *Command {
 			}
 
 			return writeJSON(s)
+		},
+	}
+}
+
+func athleteShowCommand() *Command {
+	return &Command{
+		Name:  "",
+		Usage: "athlete show [--include-private]",
+		Description: "Get athlete profile with sport settings. Date of birth and Strava id are " +
+			"omitted unless --include-private is set.",
+		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+			var athlete icu.Athlete
+			if err := client.Get("athlete", nil, nil, &athlete); err != nil {
+				return wrapCommandError(err)
+			}
+			if !BoolFlag(flags, "include-private") {
+				athlete.DateOfBirth = ""
+				athlete.StravaID = 0
+			}
+
+			return writeJSON(athlete)
 		},
 	}
 }

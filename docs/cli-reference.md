@@ -286,7 +286,8 @@ Local training profile stored in the config file under `profile`. Nothing here i
 ## athlete
 
 - `show`
-  Invocation: `icu athlete show`
+  Invocation: `icu athlete show [--include-private]`
+  Date of birth and Strava id are omitted unless `--include-private` is set.
   Example: `icu athlete show`
 
 - `update`

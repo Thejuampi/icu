@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -249,5 +251,94 @@ func TestAthleteUpdateGetError(t *testing.T) {
 	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 	if err := runAthleteUpdate(nil, map[string]string{"weight": "1"}, client); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestWellnessOutputKeysStayStable(t *testing.T) {
+	t.Parallel()
+	var w icu.Wellness
+	if err := json.Unmarshal([]byte(`{"id":"2026-10-27","restingHR":48,"hrvSDNN":70,"avgSleepingHR":50,"baevskySI":9}`), &w); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `"restingHr":48`
+	for _, key := range []string{want, `"hrvSdnn":70`, `"avgSleepingHr":50`, `"baevskySi":9`} {
+		if !strings.Contains(string(raw), key) {
+			t.Fatalf("output %s missing %s", raw, key)
+		}
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestWellnessBulkSendsWriteKeysAndDropsComputed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "w.json")
+	file := `[{"id":"2026-10-26","restingHr":49,"ctl":40,"atl":50},{"id":"2026-10-27","hrvSdnn":70}]`
+	if err := os.WriteFile(path, []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/athlete/i1/wellness-bulk" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	cmd, _ := registry.Lookup("wellness", "bulk")
+	if _, err := captureStdout(t, func() error { return cmd.Run(nil, map[string]string{"file": path}, client) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0]["restingHR"] != 49.0 || got[1]["hrvSDNN"] != 70.0 {
+		t.Fatalf("body = %v", got)
+	}
+	for _, rec := range got {
+		for _, k := range []string{"ctl", "atl", "restingHr", "hrvSdnn"} {
+			if _, ok := rec[k]; ok {
+				t.Fatalf("body record %v has %s", rec, k)
+			}
+		}
+	}
+}
+
+func TestWellnessBulkDroppedWarning(t *testing.T) {
+	t.Parallel()
+	if w := wellnessBulkDroppedWarning([]icu.Wellness{{ID: "a"}}); w != "" {
+		t.Fatalf("unexpected warning %q", w)
+	}
+	w := wellnessBulkDroppedWarning([]icu.Wellness{{ID: "a", CTL: 1}, {ID: "b"}, {ID: "c", ATL: 2}})
+	if !strings.Contains(w, "ctl/atl") || !strings.Contains(w, "2 record(s) (a,c)") {
+		t.Fatalf("warning = %q", w)
+	}
+}
+
+func TestAthleteUpdateWithoutFlagsErrorsWithoutRequest(t *testing.T) {
+	t.Parallel()
+	rec, client := newWriteRecorder(t, athleteSnakeJSON)
+	if err := runAthleteUpdate(nil, map[string]string{}, client); err == nil || !strings.Contains(err.Error(), "at least one") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(rec.writes) != 0 {
+		t.Fatalf("writes = %+v", rec.writes)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAthleteShowHidesPrivateFieldsByDefault(t *testing.T) {
+	_, client := newWriteRecorder(t, `{"id":"i1","name":"A","icu_date_of_birth":"1990-01-02","strava_id":12345}`)
+	cmd := athleteShowCommand()
+	out, err := captureStdout(t, func() error { return cmd.Run(nil, map[string]string{}, client) })
+	if err != nil || strings.Contains(out, "1990-01-02") || strings.Contains(out, "12345") {
+		t.Fatalf("out=%s err=%v", out, err)
+	}
+	out, err = captureStdout(t, func() error { return cmd.Run(nil, map[string]string{"include-private": "true"}, client) })
+	if err != nil || !strings.Contains(out, "1990-01-02") || !strings.Contains(out, "12345") {
+		t.Fatalf("include-private out=%s err=%v", out, err)
 	}
 }

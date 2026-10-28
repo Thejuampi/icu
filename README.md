@@ -218,6 +218,8 @@ Current top-level resources:
 
 When a power meter dies mid-ride, use outdoor physics fill rather than inventing TSS from RPE:
 
+> **Rider mass:** without `--rider-mass-kg`, `estimate-power` now uses the athlete's `icu_weight` (falling back to `weight`, then wellness weight). Earlier versions never decoded `icu_weight` from the API, so they fell through to `weight`. If those two differ, estimated watts change; pass `--rider-mass-kg` to pin the old value.
+
 ```bash
 # Dry-run (classifies measured / true_zero / missing; real weather aero outdoors)
 icu activity i123 estimate-power --rider-mass-kg 81 --bike-mass-kg 7.8 --calibrate-from-measured --file fill.json

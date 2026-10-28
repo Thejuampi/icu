@@ -289,6 +289,11 @@ type ActivitySearchResult struct {
 	Description    string   `json:"description,omitempty"`
 }
 
+// Wellness is the CLI's read/output shape. Its JSON keys (restingHr, hrvSdnn,
+// avgSleepingHr, baevskySi) are part of the CLI output contract and stay as-is;
+// decoding the API's restingHR/hrvSDNN/... works because encoding/json matches
+// keys case-insensitively. Writes go through WellnessWrite, which uses the
+// API's exact names.
 type Wellness struct {
 	ID string `json:"id"`
 	// CTLLoad/ATLLoad are the day's load as intervals.icu feeds it into
@@ -297,15 +302,15 @@ type Wellness struct {
 	CTLLoad        float64            `json:"ctlLoad,omitempty"`
 	ATLLoad        float64            `json:"atlLoad,omitempty"`
 	Weight         float64            `json:"weight,omitempty"`
-	RestingHR      int                `json:"restingHR,omitempty"`
+	RestingHR      int                `json:"restingHr,omitempty"`
 	HRV            float64            `json:"hrv,omitempty"`
-	HRVSDNN        float64            `json:"hrvSDNN,omitempty"`
+	HRVSDNN        float64            `json:"hrvSdnn,omitempty"`
 	SleepSecs      int                `json:"sleepSecs,omitempty"`
 	SleepScore     float64            `json:"sleepScore,omitempty"`
 	SleepQuality   int                `json:"sleepQuality,omitempty"`
-	AvgSleepHR     float64            `json:"avgSleepingHR,omitempty"`
+	AvgSleepHR     float64            `json:"avgSleepingHr,omitempty"`
 	Readiness      float64            `json:"readiness,omitempty"`
-	BaevskySI      float64            `json:"baevskySI,omitempty"`
+	BaevskySI      float64            `json:"baevskySi,omitempty"`
 	SpO2           float64            `json:"spO2,omitempty"`
 	Systolic       int                `json:"systolic,omitempty"`
 	Diastolic      int                `json:"diastolic,omitempty"`

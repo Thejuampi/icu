@@ -1,6 +1,12 @@
 package main
 
-import icu "github.com/Thejuampi/icu"
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	icu "github.com/Thejuampi/icu"
+)
 
 func registerWellnessCommands(registry *CommandRegistry) {
 	registry.Register(
@@ -79,6 +85,10 @@ func wellnessBulkCommand() *Command {
 				return err
 			}
 
+			if warning := wellnessBulkDroppedWarning(records); warning != "" {
+				fmt.Fprintln(os.Stderr, warning)
+			}
+
 			body := make([]icu.WellnessWrite, len(records))
 			for i := range records {
 				body[i] = icu.NewWellnessWrite(&records[i])
@@ -104,4 +114,22 @@ func wellnessUploadCommand() *Command {
 			return wrapCommandError(client.UploadFile("wellness", "", args[0], nil, &resp))
 		},
 	}
+}
+
+// wellnessBulkDroppedWarning reports computed fields present in a bulk file
+// that WellnessWrite does not send (Intervals.icu computes them itself).
+func wellnessBulkDroppedWarning(records []icu.Wellness) string {
+	var ids []string
+	for i := range records {
+		r := &records[i]
+		if r.CTL != 0 || r.ATL != 0 || r.CTLLoad != 0 || r.ATLLoad != 0 || r.RampRate != 0 {
+			ids = append(ids, r.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("warning: wellness bulk: ignoring computed fields ctl/atl/ctlLoad/atlLoad/rampRate for %d record(s) (%s); Intervals.icu computes them",
+		len(ids), strings.Join(ids, ","))
 }
