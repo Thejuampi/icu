@@ -223,3 +223,102 @@ func (msg *Message) UnmarshalJSON(data []byte) error {
 			copyRawIfSet(&m.AthleteID, raw, "athlete_id")
 		}, nil)
 }
+
+// WellnessWrite is the wellness update / bulk request body (spec schema
+// Wellness). Wellness keys are camelCase on the wire, with acronyms upper-cased
+// (restingHR, hrvSDNN, avgSleepingHR, baevskySI). Computed fields (ctl, atl,
+// rampRate, ctlLoad, atlLoad, sportInfo) are not written.
+type WellnessWrite struct {
+	ID           string  `json:"id,omitempty"`
+	Weight       float64 `json:"weight,omitempty"`
+	RestingHR    int     `json:"restingHR,omitempty"`
+	HRV          float64 `json:"hrv,omitempty"`
+	HRVSDNN      float64 `json:"hrvSDNN,omitempty"`
+	SleepSecs    int     `json:"sleepSecs,omitempty"`
+	SleepScore   float64 `json:"sleepScore,omitempty"`
+	SleepQuality int     `json:"sleepQuality,omitempty"`
+	AvgSleepHR   float64 `json:"avgSleepingHR,omitempty"`
+	Readiness    float64 `json:"readiness,omitempty"`
+	BaevskySI    float64 `json:"baevskySI,omitempty"`
+	SpO2         float64 `json:"spO2,omitempty"`
+	Systolic     int     `json:"systolic,omitempty"`
+	Diastolic    int     `json:"diastolic,omitempty"`
+	Kcal         int     `json:"kcalConsumed,omitempty"`
+	Soreness     int     `json:"soreness,omitempty"`
+	Fatigue      int     `json:"fatigue,omitempty"`
+	Stress       int     `json:"stress,omitempty"`
+	Mood         int     `json:"mood,omitempty"`
+	Motivation   int     `json:"motivation,omitempty"`
+	Injury       int     `json:"injury,omitempty"`
+	Hydration    int     `json:"hydration,omitempty"`
+	HydrationVol float64 `json:"hydrationVolume,omitempty"`
+	BloodGlucose float64 `json:"bloodGlucose,omitempty"`
+	Lactate      float64 `json:"lactate,omitempty"`
+	BodyFat      float64 `json:"bodyFat,omitempty"`
+	Abdomen      float64 `json:"abdomen,omitempty"`
+	VO2Max       float64 `json:"vo2max,omitempty"`
+	Steps        int     `json:"steps,omitempty"`
+	Respiration  float64 `json:"respiration,omitempty"`
+	Comments     string  `json:"comments,omitempty"`
+	Locked       bool    `json:"locked,omitempty"`
+}
+
+// NewWellnessWrite copies the writable fields of a Wellness record.
+func NewWellnessWrite(w *Wellness) WellnessWrite {
+	return WellnessWrite{
+		ID: w.ID, Weight: w.Weight, RestingHR: w.RestingHR, HRV: w.HRV, HRVSDNN: w.HRVSDNN,
+		SleepSecs: w.SleepSecs, SleepScore: w.SleepScore, SleepQuality: w.SleepQuality, AvgSleepHR: w.AvgSleepHR,
+		Readiness: w.Readiness, BaevskySI: w.BaevskySI, SpO2: w.SpO2, Systolic: w.Systolic, Diastolic: w.Diastolic,
+		Kcal: w.Kcal, Soreness: w.Soreness, Fatigue: w.Fatigue, Stress: w.Stress, Mood: w.Mood,
+		Motivation: w.Motivation, Injury: w.Injury, Hydration: w.Hydration, HydrationVol: w.HydrationVol,
+		BloodGlucose: w.BloodGlucose, Lactate: w.Lactate, BodyFat: w.BodyFat, Abdomen: w.Abdomen,
+		VO2Max: w.VO2Max, Steps: w.Steps, Respiration: w.Respiration, Comments: w.Comments, Locked: w.Locked,
+	}
+}
+
+// ActivityManualWrite is the POST /activities/manual body (spec schema
+// Activity, snake_case).
+type ActivityManualWrite struct {
+	Type           string
+	Name           string
+	Description    string
+	StartDateLocal string
+	MovingTime     int
+	Distance       float64
+	TrainingLoad   int
+}
+
+//nolint:tagliatelle // wire format matches external API snake_case contract
+type activityManualWire struct {
+	Type           string  `json:"type,omitempty"`
+	Name           string  `json:"name,omitempty"`
+	Description    string  `json:"description,omitempty"`
+	StartDateLocal string  `json:"start_date_local,omitempty"`
+	MovingTime     int     `json:"moving_time,omitempty"`
+	Distance       float64 `json:"distance,omitempty"`
+	TrainingLoad   int     `json:"icu_training_load,omitempty"`
+}
+
+func (activity ActivityManualWrite) MarshalJSON() ([]byte, error) {
+	return marshalWire("ActivityManualWrite", activityManualWire(activity))
+}
+
+type athleteAlias Athlete
+
+// UnmarshalJSON decodes the API's snake_case athlete fields as well as
+// camelCase. icu_api_key is deliberately not decoded so it never reaches output.
+func (athlete *Athlete) UnmarshalJSON(data []byte) error {
+	var alias athleteAlias
+
+	return unmarshalWithSnakeFields(data, athlete, &alias,
+		func(a athleteAlias) Athlete { return Athlete(a) },
+		func(a *Athlete, raw map[string]json.RawMessage) {
+			copyRawIfSet(&a.HeightUnits, raw, "height_units")
+			copyRawIfSet(&a.RestingHR, raw, "icu_resting_hr")
+			copyRawIfSet(&a.ICUWeight, raw, "icu_weight")
+			copyRawIfSet(&a.FormAsPercent, raw, "icu_form_as_percent")
+			copyRawIfSet(&a.StravaID, raw, "strava_id")
+			copyRawIfSet(&a.StravaAuthd, raw, "strava_authorized")
+			copyRawIfSet(&a.DateOfBirth, raw, "icu_date_of_birth")
+		}, nil)
+}

@@ -120,3 +120,38 @@ func TestResponseDecodersRejectInvalidJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestWellnessWireKeysLiteral(t *testing.T) {
+	t.Parallel()
+	w := icu.Wellness{ID: "2026-10-27", RestingHR: 48, HRVSDNN: 70, AvgSleepHR: 50, BaevskySI: 9, CTL: 40}
+	raw, err := json.Marshal(icu.NewWellnessWrite(&w))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"id":"2026-10-27","restingHR":48,"hrvSDNN":70,"avgSleepingHR":50,"baevskySI":9}`
+	if string(raw) != want {
+		t.Fatalf("got %s want %s", raw, want)
+	}
+	var back icu.Wellness
+	if err := json.Unmarshal([]byte(`{"restingHR":48,"hrvSDNN":70,"avgSleepingHR":50,"baevskySI":9}`), &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.RestingHR != 48 || back.HRVSDNN != 70 || back.AvgSleepHR != 50 || back.BaevskySI != 9 {
+		t.Fatalf("read = %+v", back)
+	}
+}
+
+func TestActivityManualWireKeysLiteral(t *testing.T) {
+	t.Parallel()
+	raw, err := json.Marshal(icu.ActivityManualWrite{
+		Type: "Ride", Name: "R", Description: "d", StartDateLocal: "2026-10-27T08:00:00",
+		MovingTime: 60, Distance: 1, TrainingLoad: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"type":"Ride","name":"R","description":"d","start_date_local":"2026-10-27T08:00:00","moving_time":60,"distance":1,"icu_training_load":2}`
+	if string(raw) != want {
+		t.Fatalf("got %s", raw)
+	}
+}

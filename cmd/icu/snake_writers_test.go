@@ -85,10 +85,17 @@ func TestWriterCommandsSendSnakeCaseKeys(t *testing.T) {
 		{"gear", "update", []string{"g1"}, map[string]string{"name": "Bike"}, "name"},
 		{"custom", "create", nil, map[string]string{"name": "C", "type": "FITNESS_CHART"}, "name,type"},
 		{"custom", "update", []string{"1"}, map[string]string{"name": "C"}, "name"},
+		{"wellness", "update", []string{"2026-10-27"}, map[string]string{"resting-hr": "48", "hrv": "60"}, "hrv,restingHR"},
+		{
+			"activities", "manual", nil,
+			map[string]string{"type": "Ride", "name": "R", "moving-time": "3600", "distance": "30000", "training-load": "60", "start-date": "2026-10-27T08:00:00"},
+			"distance,icu_training_load,moving_time,name,start_date_local,type",
+		},
 		{"chats", "send", nil, map[string]string{"content": "hi", "to": "i2"}, "content,to_athlete_id"},
 	}
 	for _, tc := range cases {
 		rec, client := newWriteRecorder(t, `{}`)
+		rec.applyPut = true
 		cmd, ok := registry.Lookup(tc.resource, tc.action)
 		if !ok {
 			t.Fatalf("missing %s %s", tc.resource, tc.action)
@@ -162,6 +169,85 @@ func TestFTPUpdateReadBackMismatchExitsNonZero(t *testing.T) {
 func TestFTPUpdateRejectsMissingValue(t *testing.T) {
 	t.Parallel()
 	if err := runFTPUpdate(nil, map[string]string{}, nil); err == nil {
+		t.Fatal("want error")
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestFTPUpdateSkipsWriteWhenUnchanged(t *testing.T) {
+	rec, client := newWriteRecorder(t, ftpSettingsJSON)
+	out, err := captureStdout(t, func() error { return runFTPUpdate(nil, map[string]string{"value": "266"}, client) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.writes) != 0 || !strings.Contains(out, "no changes") {
+		t.Fatalf("writes=%+v out=%s", rec.writes, out)
+	}
+}
+
+const athleteSnakeJSON = `{"id":"i1","name":"A","weight":80,"icu_weight":79.5,"height":1.8,"icu_resting_hr":48,"height_units":"CM"}`
+
+func TestAthleteDecodesSnakeFields(t *testing.T) {
+	t.Parallel()
+	var a icu.Athlete
+	if err := json.Unmarshal([]byte(athleteSnakeJSON), &a); err != nil {
+		t.Fatal(err)
+	}
+	if a.ICUWeight != 79.5 || a.RestingHR != 48 || a.HeightUnits != "CM" {
+		t.Fatalf("athlete = %+v", a)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAthleteUpdateDryRunDoesNotWrite(t *testing.T) {
+	rec, client := newWriteRecorder(t, athleteSnakeJSON)
+	out, err := captureStdout(t, func() error {
+		return runAthleteUpdate(nil, map[string]string{"icu-weight": "78", "dry-run": "true"}, client)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res athleteUpdateResult
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.writes) != 0 || !res.DryRun || res.Applied || res.Before["icu_weight"] != 79.5 {
+		t.Fatalf("writes=%+v res=%+v", rec.writes, res)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAthleteUpdateReadsBack(t *testing.T) {
+	rec, client := newWriteRecorder(t, athleteSnakeJSON)
+	rec.applyPut = true
+	flags := map[string]string{"weight": "81", "icu-weight": "78", "height": "1.82", "name": "B", "bio": "x"}
+	out, err := captureStdout(t, func() error { return runAthleteUpdate(nil, flags, client) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.writes) != 1 || rec.writes[0].keys != "bio,height,icu_weight,name,weight" {
+		t.Fatalf("writes=%+v", rec.writes)
+	}
+	if !strings.Contains(out, `"applied": true`) && !strings.Contains(out, `"applied":true`) {
+		t.Fatalf("out=%s", out)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAthleteUpdateReadBackMismatchExitsNonZero(t *testing.T) {
+	_, client := newWriteRecorder(t, athleteSnakeJSON) // applyPut=false: server ignores the write
+	_, err := captureStdout(t, func() error { return runAthleteUpdate(nil, map[string]string{"icu-weight": "70"}, client) })
+	if err == nil || !strings.Contains(err.Error(), "icu_weight") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAthleteUpdateGetError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) }))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	if err := runAthleteUpdate(nil, map[string]string{"weight": "1"}, client); err == nil {
 		t.Fatal("want error")
 	}
 }

@@ -88,6 +88,11 @@ func runFTPUpdate(_ []string, flags map[string]string, client *icu.Client) error
 		return wrapCommandError(err)
 	}
 	result := ftpUpdateResult{Sport: sport, Field: field, Before: pick(&current), After: val, Body: map[string]int{field: val}}
+	if result.Before == val {
+		result.Message = "no changes: value already matches"
+
+		return writeJSON(result)
+	}
 	if BoolFlag(flags, "dry-run") {
 		result.DryRun = true
 		result.Message = "dry-run: nothing written"

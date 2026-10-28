@@ -297,15 +297,15 @@ type Wellness struct {
 	CTLLoad        float64            `json:"ctlLoad,omitempty"`
 	ATLLoad        float64            `json:"atlLoad,omitempty"`
 	Weight         float64            `json:"weight,omitempty"`
-	RestingHR      int                `json:"restingHr,omitempty"`
+	RestingHR      int                `json:"restingHR,omitempty"`
 	HRV            float64            `json:"hrv,omitempty"`
-	HRVSDNN        float64            `json:"hrvSdnn,omitempty"`
+	HRVSDNN        float64            `json:"hrvSDNN,omitempty"`
 	SleepSecs      int                `json:"sleepSecs,omitempty"`
 	SleepScore     float64            `json:"sleepScore,omitempty"`
 	SleepQuality   int                `json:"sleepQuality,omitempty"`
-	AvgSleepHR     float64            `json:"avgSleepingHr,omitempty"`
+	AvgSleepHR     float64            `json:"avgSleepingHR,omitempty"`
 	Readiness      float64            `json:"readiness,omitempty"`
-	BaevskySI      float64            `json:"baevskySi,omitempty"`
+	BaevskySI      float64            `json:"baevskySI,omitempty"`
 	SpO2           float64            `json:"spO2,omitempty"`
 	Systolic       int                `json:"systolic,omitempty"`
 	Diastolic      int                `json:"diastolic,omitempty"`

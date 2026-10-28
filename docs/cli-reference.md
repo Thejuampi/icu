@@ -290,7 +290,8 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu athlete show`
 
 - `update`
-  Invocation: `icu athlete update [--weight KG] [--icu-weight KG] [--height METERS] [--name NAME] [--bio TEXT]`
+  Invocation: `icu athlete update [--weight KG] [--icu-weight KG] [--height METERS] [--name NAME] [--bio TEXT] [--dry-run]`
+  Reads current values first; `--dry-run` previews the snake_case body without writing. After a write it reads the athlete back and exits non-zero on a mismatch.
   Notes: fields are optional partial updates.
   Example: `icu athlete update --weight 81.2 --height 1.81`
 
@@ -484,6 +485,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
 
 - `update`
   Invocation: `icu ftp update --value WATTS [--sport Ride] [--indoor] [--dry-run]`
+  If the value already matches, nothing is written ("no changes").
   Defaults: `Ride`
   Notes: Sends `ftp` (or `indoor_ftp` with `--indoor`). Output shows `before`/`after`, the exact `body`, and a GET `readBack`; a read-back mismatch exits non-zero. `--dry-run` reads current settings and previews without writing.
   Example: `icu ftp update --value 285 --sport Ride`

@@ -50,13 +50,13 @@ func registerActivitiesCommands(registry *CommandRegistry) {
 	registry.Register("activities", "around", activitiesAroundCommand())
 	registry.Register(
 		"activities", "manual",
-		createCommand[icu.Activity, icu.Activity](
+		createCommand[icu.ActivityManualWrite, icu.Activity](
 			"activities",
 			"activities manual --type Ride --name NAME --moving-time SECS [--distance M] [--training-load N]",
 			"Create a manual activity.",
 			nil,
-			func(flags map[string]string) icu.Activity {
-				return icu.Activity{
+			func(flags map[string]string) icu.ActivityManualWrite {
+				return icu.ActivityManualWrite{
 					Type:           icu.StringFlag(flags, "type", "Ride"),
 					Name:           icu.StringFlag(flags, "name", ""),
 					MovingTime:     IntFlag(flags, "moving-time", 0),

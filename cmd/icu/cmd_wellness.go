@@ -16,14 +16,14 @@ func registerWellnessCommands(registry *CommandRegistry) {
 
 	registry.Register(
 		"wellness", "update",
-		updateByIDCommand[icu.Wellness, icu.Wellness](
+		updateByIDCommand[icu.WellnessWrite, icu.Wellness](
 			"wellness",
 			"wellness update <date> --weight 81 --resting-hr 50 --hrv 72.5 [--sleep-secs 28800] [--locked]",
 			"Update wellness record for a date.",
 			"date (YYYY-MM-DD)",
 			nil,
-			func(flags map[string]string) icu.Wellness {
-				var w icu.Wellness
+			func(flags map[string]string) icu.WellnessWrite {
+				var w icu.WellnessWrite
 				if _, ok := flags["weight"]; ok {
 					w.Weight = floatFlagVal(flags, "weight", 0)
 				}
@@ -79,7 +79,12 @@ func wellnessBulkCommand() *Command {
 				return err
 			}
 
-			return wrapCommandError(client.Put("wellness-bulk", nil, nil, records, nil))
+			body := make([]icu.WellnessWrite, len(records))
+			for i := range records {
+				body[i] = icu.NewWellnessWrite(&records[i])
+			}
+
+			return wrapCommandError(client.Put("wellness-bulk", nil, nil, body, nil))
 		},
 	}
 }
