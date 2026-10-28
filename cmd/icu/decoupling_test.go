@@ -25,12 +25,12 @@ func synthStreamsJSON(minutes int) []icu.ActivityStream {
 	}
 }
 
-// decouplingFake serves GET-only activity, streams, events and activities
-// endpoints, counting stream fetches. Activity ids containing "fail" return
+// decouplingFake serves GET-only activity, streams, events and
+// sport-settings endpoints, counting stream fetches. Activity ids containing "fail" return
 // 500 on streams; "short" returns a 6-minute ride.
 type decouplingFake struct {
-	streamCalls, eventCalls, historyCalls atomic.Int32
-	server                                *httptest.Server
+	streamCalls, eventCalls, settingsCalls atomic.Int32
+	server                                 *httptest.Server
 }
 
 func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
@@ -80,6 +80,7 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 			}
 			_ = json.NewEncoder(writer).Encode(synthStreamsJSON(minutes))
 		case strings.HasSuffix(path, "/sport-settings/Ride"):
+			fake.settingsCalls.Add(1)
 			_ = json.NewEncoder(writer).Encode(map[string]any{"ftp": 250, "powerZones": []int{55, 75, 90, 105, 120, 150, 999}})
 		case strings.Contains(path, "/events/"):
 			fake.eventCalls.Add(1)
@@ -87,21 +88,6 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 		case strings.HasSuffix(path, "/events"):
 			fake.eventCalls.Add(1)
 			_ = json.NewEncoder(writer).Encode([]map[string]any{{"id": 77, "workoutDoc": workoutDoc}, {"id": 78}, {"id": 79, "workoutDoc": wavesDoc}, {"id": 80, "workoutDoc": sameZoneDoc}})
-		case strings.HasSuffix(path, "/activities"):
-			fake.historyCalls.Add(1)
-			_ = json.NewEncoder(writer).Encode([]map[string]any{
-				{"id": "h1", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.00},
-				{"id": "h2", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.02},
-				{"id": "h3", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.04},
-				{"id": "h4", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.06},
-				{"id": "h5", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.08},
-				// Interval-paired and unpaired rides must not enter the
-				// steady-only VI cutoff (it would rise well above 1.12).
-				{"id": "h6", "type": "Ride", "pairedEventId": 79, "icuVariabilityIndex": 1.6},
-				{"id": "h7", "type": "Ride", "pairedEventId": 79, "icuVariabilityIndex": 1.7},
-				{"id": "h8", "type": "Ride", "icuVariabilityIndex": 1.8},
-				{"id": "h9", "type": "Ride", "icuVariabilityIndex": 1.9},
-			})
 		case strings.Contains(path, "/activity/"):
 			id := path[strings.LastIndex(path, "/")+1:]
 			paired := 77
@@ -291,25 +277,36 @@ func TestActivityDecouplingCommand(t *testing.T) {
 	}
 	detail, ok := got["streamDetail"].(map[string]any)
 	trim, _ := detail["trim"].(map[string]any)
-	if !ok || detail["viCutoff"] != 1.12 || trim["method"] != "workout_steps+steady_state" {
+	if !ok || detail["validity"] != icu.DecouplingValid || trim["method"] != icu.DecouplingTrimCoachFixed {
 		t.Fatalf("streamDetail = %v", got["streamDetail"])
 	}
-	if fake.historyCalls.Load() != 1 || fake.eventCalls.Load() != 1 {
-		t.Fatalf("history %d events %d", fake.historyCalls.Load(), fake.eventCalls.Load())
+	if fake.settingsCalls.Load() != 1 || fake.eventCalls.Load() != 1 {
+		t.Fatalf("settings %d events %d", fake.settingsCalls.Load(), fake.eventCalls.Load())
 	}
 
 	summary, _ := got["summary"].(map[string]any)
 	if got["experimental"] != true || summary["status"] != icu.DecouplingStatusMeasured || summary["stopRule"] == nil ||
-		summary["viCutoff"] != 1.12 || summary["workoutKind"] != icu.DecouplingWorkoutSteady {
+		summary["validity"] != icu.DecouplingValid || summary["interpretation"] != icu.DecouplingInterpretationGood ||
+		summary["workoutKind"] != icu.DecouplingWorkoutSteady || summary["failedCriteria"] != nil {
 		t.Fatalf("summary = %v", got["summary"])
 	}
 
-	// Gated path: an interval workout is not measurable, so even with
-	// --decoupling-source streams the API value is kept and no stream value shows.
-	gated := runDecouplingCommand(t, client, []string{"iwaves"}, map[string]string{decouplingSourceFlag: "streams"})
-	if gated["decoupling"] != 8.26 || gated["decouplingSource"] != icu.DecouplingSourceAPI ||
-		gated["streamsDecoupling"] != nil || gated["streamsStatus"] != icu.DecouplingStatusNotMeasurable {
-		t.Fatalf("gated output = %v", gated)
+	// The workout kind is informational: a steady ride paired with an
+	// interval workout is measured when it meets the coaching criteria.
+	waves := runDecouplingCommand(t, client, []string{"iwaves"}, map[string]string{decouplingSourceFlag: "streams"})
+	wavesSummary, _ := waves["summary"].(map[string]any)
+	if waves["decouplingSource"] != icu.DecouplingSourceStreams || wavesSummary["workoutKind"] != icu.DecouplingWorkoutIntervals {
+		t.Fatalf("waves output = %v", waves)
+	}
+
+	// Failed criteria: not valid, no stream number, the API value kept and
+	// the failed criterion named.
+	short := runDecouplingCommand(t, client, []string{"ishort"}, map[string]string{decouplingSourceFlag: "streams"})
+	shortSummary, _ := short["summary"].(map[string]any)
+	failedCriteria, _ := shortSummary["failedCriteria"].([]any)
+	if short["decoupling"] != 8.26 || short["decouplingSource"] != icu.DecouplingSourceAPI || short["streamsDecoupling"] != nil ||
+		shortSummary["validity"] != icu.DecouplingNotValid || len(failedCriteria) == 0 || failedCriteria[0] != icu.CriterionDuration {
+		t.Fatalf("short output = %v", short)
 	}
 
 	// Command-side zone fallback: the athlete's sport-settings zones classify
