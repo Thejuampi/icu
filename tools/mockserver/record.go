@@ -126,12 +126,12 @@ func mergeArrays(existing, incoming []byte) []byte {
 	merged := make([]map[string]any, 0, len(oldItems)+len(newItems))
 
 	for _, item := range append(newItems, oldItems...) {
-		id := fmt.Sprint(item["id"])
-		if item["id"] != nil && seen[id] {
+		key, ok := mergeKey(item)
+		if ok && seen[key] {
 			continue
 		}
 
-		seen[id] = true
+		seen[key] = true
 		merged = append(merged, item)
 	}
 
@@ -141,6 +141,20 @@ func mergeArrays(existing, incoming []byte) []byte {
 	}
 
 	return out
+}
+
+// mergeKey identifies a list element: by "id" (activities, events, wellness)
+// or, for stream entries that have no id, by stream "type".
+func mergeKey(item map[string]any) (string, bool) {
+	if item["id"] != nil {
+		return "id:" + fmt.Sprint(item["id"]), true
+	}
+
+	if streamType, ok := item["type"].(string); ok {
+		return "type:" + streamType, true
+	}
+
+	return "", false
 }
 
 func prettyJSON(body []byte) []byte {

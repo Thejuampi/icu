@@ -162,6 +162,46 @@ func TestRecorderSaveStaysInsideFixtureDir(t *testing.T) {
 	}
 }
 
+func TestMergeArraysDedupesStreamsByType(t *testing.T) {
+	t.Parallel()
+
+	got := string(mergeArrays(
+		[]byte(`[{"type":"time","data":[0]},{"type":"watts","data":[1]}]`),
+		[]byte(`[{"type":"time","data":[9]},{"type":"heartrate","data":[2]},{"x":1},{"x":1}]`)))
+
+	if strings.Count(got, `"time"`) != 1 || !strings.Contains(got, `[9]`) || !strings.Contains(got, `"watts"`) ||
+		!strings.Contains(got, `"heartrate"`) || strings.Count(got, `"x"`) != 2 {
+		t.Fatalf("merged = %s", got)
+	}
+}
+
+func TestCommittedStreamFixturesHaveUniqueTypes(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range []string{"i195273358", "i202545713", "i198806466"} {
+		body, err := os.ReadFile(filepath.Join("..", "..", "testdata", "fixtures", "api", "v1", "activity", id, "streams.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var streams []struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(body, &streams); err != nil {
+			t.Fatal(err)
+		}
+
+		seen := map[string]bool{}
+		for _, s := range streams {
+			if seen[s.Type] {
+				t.Errorf("%s: duplicate stream type %q", id, s.Type)
+			}
+
+			seen[s.Type] = true
+		}
+	}
+}
+
 func TestAnonymizeHelpers(t *testing.T) {
 	t.Parallel()
 
