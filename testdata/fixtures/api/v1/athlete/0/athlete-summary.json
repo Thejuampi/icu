@@ -112,7 +112,7 @@
     "timeInZonesTot": 6086,
     "total_elevation_gain": 328,
     "training_load": 75,
-    "weight": 70
+    "weight": 72.8
   },
   {
     "athlete_id": "i0",
@@ -177,6 +177,6 @@
     "timeInZonesTot": 19855,
     "total_elevation_gain": 930,
     "training_load": 278,
-    "weight": 81
+    "weight": 84.2
   }
 ]

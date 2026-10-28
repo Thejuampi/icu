@@ -70,7 +70,7 @@
   },
   "ActivityOverlayView.items": [
     {
-      "activityId": "i150456668",
+      "activityId": "i900000122",
       "athleteId": "i0",
       "distanceShift": 0,
       "selected": true,
@@ -235,7 +235,7 @@
     ]
   },
   "PlanningToolbox.options": {
-    "height": 649,
+    "height": 1.75,
     "left": 432,
     "showWorkoutCharts": true,
     "top": 282,

@@ -5,14 +5,14 @@
   "bikes": [
     {
       "distance": 22214500,
-      "id": "b13109085",
-      "name": "Gear b13109085",
+      "id": "b90001",
+      "name": "Gear b90001",
       "primary": false
     },
     {
       "distance": 5880803,
-      "id": "b9476185",
-      "name": "Gear b9476185",
+      "id": "b90002",
+      "name": "Gear b90002",
       "primary": false
     }
   ],
@@ -62,7 +62,7 @@
   "google_wellness_keys": null,
   "has_password": null,
   "has_push_subscriptions": true,
-  "height": 1.81,
+  "height": 1.75,
   "height_units": "CM",
   "huawei_download_wellness": false,
   "huawei_sync_activities": false,
@@ -120,7 +120,7 @@
   "icu_tags": [],
   "icu_track_menstrual_cycle": false,
   "icu_type_settings": [],
-  "icu_weight": 70,
+  "icu_weight": 72.8,
   "icu_weight_sync": "NONE",
   "icu_wellness_keys": [
     "weight",
@@ -202,8 +202,8 @@
   "shoes": [
     {
       "distance": 308368,
-      "id": "g8843987",
-      "name": "Gear g8843987",
+      "id": "g90003",
+      "name": "Gear g90003",
       "primary": false
     }
   ],
@@ -859,7 +859,7 @@
   "suunto_upload_workouts": null,
   "suunto_user_id": null,
   "time_format": "hh_mm_a",
-  "timezone": "America/New_York",
+  "timezone": "America/Toronto",
   "training_availability": null,
   "training_plan_id": 827693,
   "training_plan_start_date": "2026-06-01",

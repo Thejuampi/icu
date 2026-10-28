@@ -165,7 +165,7 @@
   ],
   "filter_label": null,
   "filters": null,
-  "id": "i195273358",
+  "id": "i900000001",
   "label": null,
   "mapPlot": null,
   "moving_time": 0,
@@ -976,6 +976,6 @@
     1.7037038,
     1.6666666
   ],
-  "weight": 81,
+  "weight": 84.2,
   "wkg_activity_id": null
 }

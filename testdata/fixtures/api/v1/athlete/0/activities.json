@@ -1,239 +1,239 @@
 [
   {
     "icu_variability_index": 1.4,
-    "id": "i198806466",
+    "id": "i900000003",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.3157895,
-    "id": "i196641252",
+    "id": "i900000183",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.2635659,
-    "id": "i195939665",
-    "paired_event_id": 140627414,
+    "id": "i900000182",
+    "paired_event_id": 800000140,
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.1940298,
-    "id": "i195273358",
-    "paired_event_id": 140627411,
+    "id": "i900000001",
+    "paired_event_id": 800000002,
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.2631578,
-    "id": "i194481032",
-    "paired_event_id": 140627408,
+    "id": "i900000181",
+    "paired_event_id": 800000139,
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.1678321,
-    "id": "i194047752",
+    "id": "i900000180",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.2874252,
-    "id": "i192446353",
+    "id": "i900000179",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.1695906,
-    "id": "i192062660",
+    "id": "i900000178",
     "type": "VirtualRide"
   },
   {
     "icu_variability_index": 1.1363636,
-    "id": "i191024419",
-    "paired_event_id": 136011323,
+    "id": "i900000177",
+    "paired_event_id": 800000128,
     "type": "VirtualRide"
   },
   {
     "icu_variability_index": 1.0965909,
-    "id": "i190405709",
-    "paired_event_id": 136011322,
+    "id": "i900000176",
+    "paired_event_id": 800000127,
     "type": "VirtualRide"
   },
   {
     "icu_variability_index": 1.3710692,
-    "id": "i190084680",
+    "id": "i900000175",
     "type": "VirtualRide"
   },
   {
     "icu_variability_index": 1.1195652,
-    "id": "i189380245",
-    "paired_event_id": 136011320,
+    "id": "i900000174",
+    "paired_event_id": 800000125,
     "type": "VirtualRide"
   },
   {
     "icu_variability_index": 1.1504854,
-    "id": "i188687156",
+    "id": "i900000173",
     "type": "VirtualRide"
   },
   {
     "icu_variability_index": 1.0680628,
-    "id": "i188685046",
+    "id": "i900000172",
     "type": "VirtualRide"
   },
   {
     "icu_variability_index": 1.0689656,
-    "id": "i187139570",
+    "id": "i900000171",
     "type": "VirtualRide"
   },
   {
     "icu_variability_index": 1.2785715,
-    "id": "i186420059",
+    "id": "i900000170",
     "type": "VirtualRide"
   },
   {
-    "id": "i185755875",
+    "id": "i900000169",
     "type": "WeightTraining"
   },
   {
     "icu_variability_index": 1.518797,
-    "id": "i185074281",
+    "id": "i900000168",
     "type": "VirtualRide"
   },
   {
-    "id": "i184394627",
+    "id": "i900000167",
     "type": "WeightTraining"
   },
   {
-    "id": "i184394626",
+    "id": "i900000166",
     "type": "VirtualRun"
   },
   {
-    "id": "i184056660",
+    "id": "i900000165",
     "type": "WeightTraining"
   },
   {
-    "id": "i184056659",
+    "id": "i900000164",
     "type": "VirtualRun"
   },
   {
-    "id": "i181514044",
+    "id": "i900000163",
     "type": "WeightTraining"
   },
   {
-    "id": "i181514043",
+    "id": "i900000162",
     "type": "VirtualRun"
   },
   {
-    "id": "i177370341",
+    "id": "i900000160",
     "type": "Workout"
   },
   {
-    "id": "i177370343",
+    "id": "i900000161",
     "type": "VirtualRun"
   },
   {
     "icu_variability_index": 1.3522012,
-    "id": "i176950109",
+    "id": "i900000159",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.2370371,
-    "id": "i176583352",
+    "id": "i900000158",
     "type": "Ride"
   },
   {
-    "id": "i175598139",
+    "id": "i900000154",
     "type": "VirtualRun"
   },
   {
-    "id": "i175599169",
+    "id": "i900000157",
     "type": "Walk"
   },
   {
-    "id": "i175599168",
-    "paired_event_id": 128068435,
+    "id": "i900000156",
+    "paired_event_id": 800000108,
     "type": "Walk"
   },
   {
-    "id": "i175599167",
+    "id": "i900000155",
     "type": "Walk"
   },
   {
     "icu_variability_index": 1.2352941,
-    "id": "i173884602",
-    "paired_event_id": 125663242,
+    "id": "i900000153",
+    "paired_event_id": 800000093,
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.2333333,
-    "id": "i173237133",
+    "id": "i900000152",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.4198895,
-    "id": "i172550074",
+    "id": "i900000151",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.3014706,
-    "id": "i172206933",
+    "id": "i900000150",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.3664596,
-    "id": "i171876627",
+    "id": "i900000149",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.5223881,
-    "id": "i169541904",
-    "paired_event_id": 116767445,
+    "id": "i900000148",
+    "paired_event_id": 800000078,
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.2040817,
-    "id": "i202545713",
-    "paired_event_id": 148627465,
+    "id": "i900000002",
+    "paired_event_id": 800000001,
     "type": "Ride"
   },
   {
-    "id": "i202108973",
-    "paired_event_id": 148638764,
+    "id": "i900000189",
+    "paired_event_id": 800000147,
     "type": "WeightTraining"
   },
   {
     "icu_variability_index": 1.1946309,
-    "id": "i201662249",
+    "id": "i900000188",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.2251656,
-    "id": "i200910489",
+    "id": "i900000187",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.4121622,
-    "id": "i200562205",
+    "id": "i900000186",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.6,
-    "id": "i199758082",
+    "id": "i900000185",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.2720588,
-    "id": "i199267423",
+    "id": "i900000184",
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.278481,
-    "id": "i169223796",
-    "paired_event_id": 116767444,
+    "id": "i900000147",
+    "paired_event_id": 800000077,
     "type": "Ride"
   },
   {
     "icu_variability_index": 1.3372093,
-    "id": "i168619603",
+    "id": "i900000146",
     "type": "Ride"
   },
   {
-    "id": "i166470041",
+    "id": "i900000145",
     "type": "VirtualRun"
   },
   {
@@ -287,8 +287,8 @@
     "gap_zone_times": null,
     "gear": {
       "distance": null,
-      "id": "b13109085",
-      "name": "Gear b13109085",
+      "id": "b90001",
+      "name": "Gear b90001",
       "primary": null
     },
     "group": "cb78d187",
@@ -375,7 +375,7 @@
     "icu_variability_index": 1.2040817,
     "icu_w_prime": null,
     "icu_warmup_time": 1200,
-    "icu_weight": 70,
+    "icu_weight": 72.8,
     "icu_weighted_avg_watts": 177,
     "icu_zone_times": [
       {
@@ -411,7 +411,7 @@
         "secs": 645
       }
     ],
-    "id": "i202545713",
+    "id": "i900000002",
     "ignore_pace": false,
     "ignore_parts": null,
     "ignore_velocity": false,
@@ -443,7 +443,7 @@
     "pace_load_type": null,
     "pace_zone_times": null,
     "pace_zones": null,
-    "paired_event_id": 148627465,
+    "paired_event_id": 800000001,
     "perceived_exertion": null,
     "polarization_index": 0.46,
     "pool_length": null,

@@ -392,7 +392,7 @@
       "prevailing_wind_deg": null,
       "segment_effort_ids": null,
       "ss_cp": 0.08293586,
-      "ss_p_max": 0.000008382461,
+      "ss_p_max": 8.382461e-06,
       "ss_w_prime": 0.0009374549,
       "start_index": 0,
       "start_time": 0,
@@ -1270,5 +1270,5 @@
       "zone_min_watts": 0
     }
   ],
-  "id": "i198806466"
+  "id": "i900000003"
 }

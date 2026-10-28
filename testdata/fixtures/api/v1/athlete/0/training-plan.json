@@ -1,6 +1,6 @@
 {
   "athlete_id": "i0",
-  "timezone": "America/New_York",
+  "timezone": "America/Toronto",
   "training_plan": {
     "activity_types": [
       "Ride"
@@ -27,7 +27,7 @@
       "profile_medium": "redacted",
       "sex": "M",
       "state": "redacted",
-      "timezone": "America/New_York",
+      "timezone": "America/Toronto",
       "website": "redacted"
     },
     "read_only_workouts": false,

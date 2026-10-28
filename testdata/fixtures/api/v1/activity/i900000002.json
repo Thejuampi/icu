@@ -49,8 +49,8 @@
   "gap_zone_times": null,
   "gear": {
     "distance": null,
-    "id": "b13109085",
-    "name": "Gear b13109085",
+    "id": "b90001",
+    "name": "Gear b90001",
     "primary": null
   },
   "group": "cb78d187",
@@ -137,7 +137,7 @@
   "icu_variability_index": 1.2040817,
   "icu_w_prime": null,
   "icu_warmup_time": 1200,
-  "icu_weight": 70,
+  "icu_weight": 72.8,
   "icu_weighted_avg_watts": 177,
   "icu_zone_times": [
     {
@@ -173,7 +173,7 @@
       "secs": 645
     }
   ],
-  "id": "i202545713",
+  "id": "i900000002",
   "ignore_pace": false,
   "ignore_parts": null,
   "ignore_velocity": false,
@@ -205,7 +205,7 @@
   "pace_load_type": null,
   "pace_zone_times": null,
   "pace_zones": null,
-  "paired_event_id": 148627465,
+  "paired_event_id": 800000001,
   "perceived_exertion": null,
   "polarization_index": 0.46,
   "pool_length": null,
