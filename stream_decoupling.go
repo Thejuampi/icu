@@ -720,7 +720,10 @@ const (
 	DecouplingWorkoutSteady    = "steady"
 	DecouplingWorkoutIntervals = "intervals"
 	DecouplingWorkoutLadder    = "ladder"
-	powerZoneUnits             = "power_zone"
+	// DecouplingWorkoutUnverified: the main set uses targets this method does
+	// not classify (pace targets, or watt targets without an FTP).
+	DecouplingWorkoutUnverified = "unverified"
+	powerZoneUnits              = "power_zone"
 )
 
 type decouplingZoneTime struct {
@@ -735,14 +738,16 @@ type decouplingZoneTime struct {
 //   - ladder: main-set steps (repeated or flat) with more than one cadence target;
 //   - steady otherwise.
 func PlannedDecouplingWorkout(raw any) (*DecouplingPlanTrim, string, bool) {
-	return PlannedDecouplingWorkoutZones(raw, nil)
+	return PlannedDecouplingWorkoutZones(raw, nil, 0)
 }
 
 // PlannedDecouplingWorkoutZones is PlannedDecouplingWorkout with the
 // athlete's power zones (upper bounds in % FTP, from sport settings) used
-// when the doc has no zoneTimes. Without either, distinct raw targets count
-// as distinct zones.
-func PlannedDecouplingWorkoutZones(raw any, athleteZones []int) (*DecouplingPlanTrim, string, bool) {
+// when the doc has no zoneTimes, and the athlete's FTP used to convert watt
+// targets to % FTP when the doc carries none. Without zones, distinct raw
+// targets count as distinct zones. Pace-target main sets, and watt targets
+// with no FTP, are "unverified".
+func PlannedDecouplingWorkoutZones(raw any, athleteZones []int, athleteFTP int) (*DecouplingPlanTrim, string, bool) {
 	doc, err := DecodeWorkoutDoc(raw)
 	if err != nil {
 		return nil, "", false
@@ -753,6 +758,7 @@ func PlannedDecouplingWorkoutZones(raw any, athleteZones []int) (*DecouplingPlan
 	}
 	var zones struct {
 		ZoneTimes []decouplingZoneTime `json:"zoneTimes"`
+		FTP       int                  `json:"ftp"`
 	}
 	if data, err := json.Marshal(raw); err == nil {
 		_ = json.Unmarshal(data, &zones)
@@ -764,10 +770,15 @@ func PlannedDecouplingWorkoutZones(raw any, athleteZones []int) (*DecouplingPlan
 		}
 	}
 
-	return trim, plannedWorkoutKind(ExpandWorkoutSteps(doc), trim, zones.ZoneTimes), true
+	ftp := zones.FTP
+	if ftp <= 0 {
+		ftp = athleteFTP
+	}
+
+	return trim, plannedWorkoutKind(ExpandWorkoutSteps(doc), trim, zones.ZoneTimes, ftp), true
 }
 
-func plannedWorkoutKind(steps []PlannedWorkoutStep, trim *DecouplingPlanTrim, zones []decouplingZoneTime) string {
+func plannedWorkoutKind(steps []PlannedWorkoutStep, trim *DecouplingPlanTrim, zones []decouplingZoneTime, ftp int) string {
 	total := 0
 	for index := range steps {
 		total += steps[index].DurationSeconds
@@ -779,7 +790,16 @@ func plannedWorkoutKind(steps []PlannedWorkoutStep, trim *DecouplingPlanTrim, zo
 		if step.StartOffset < trim.WarmupSeconds || step.EndOffset > total-trim.CooldownSeconds {
 			continue
 		}
+		if step.Power == nil && step.Pace != nil {
+			return DecouplingWorkoutUnverified
+		}
 		if target := targetReference(step.Power); target > 0 {
+			if !isPercentOrZoneUnits(step.Power.Units) {
+				if ftp <= 0 {
+					return DecouplingWorkoutUnverified
+				}
+				target = target * percentScale / float64(ftp)
+			}
 			seenZones[decouplingStepZone(step.Power, target, zones)] = true
 		}
 		if step.Cadence != nil {
@@ -794,6 +814,12 @@ func plannedWorkoutKind(steps []PlannedWorkoutStep, trim *DecouplingPlanTrim, zo
 	}
 
 	return DecouplingWorkoutSteady
+}
+
+// isPercentOrZoneUnits: %ftp (also the default when units are empty) or a
+// power zone number; anything else (e.g. "w") is absolute watts.
+func isPercentOrZoneUnits(units string) bool {
+	return units == "" || strings.EqualFold(units, "%ftp") || units == powerZoneUnits
 }
 
 func decouplingStepZone(power *WorkoutTarget, target float64, zones []decouplingZoneTime) float64 {
@@ -815,6 +841,9 @@ func (result *StreamDecoupling) ApplyWorkoutGate(kind string) {
 	if kind != "" && kind != DecouplingWorkoutSteady && result.Status == DecouplingStatusMeasured {
 		result.Status = DecouplingStatusNotMeasurable
 		result.Reason = "structured workout (" + kind + ")"
+		if kind == DecouplingWorkoutUnverified {
+			result.Reason = "planned workout targets not classified (pace targets, or watt targets without FTP)"
+		}
 		result.Value = nil
 	}
 }

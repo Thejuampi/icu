@@ -506,7 +506,7 @@ func microcycleFatigueDurability(cycling *CyclingAnalysis, wellness *WellnessAna
 		State:               state,
 		LongRides:           countLongRides(cycling.Sessions),
 		HighDecouplingRides: cycling.Durability.HighDecouplingActivities,
-		AverageDecoupling:   cycling.Durability.AverageDecoupling,
+		AverageDecoupling:   cycling.Durability.APIAverageDecoupling(),
 		DecouplingSources:   cycling.Durability.DecouplingSources,
 		LatestForm:          cycling.Load.LatestForm,
 		Evidence:            evidence,

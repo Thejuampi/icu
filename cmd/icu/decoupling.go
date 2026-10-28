@@ -288,7 +288,7 @@ func loadDecouplingHistory(client *icu.Client, oldest, newest string) *decouplin
 	var events []icu.Event
 	if client.Get("events", nil, map[string]string{queryOldest: eventsOldest, queryNewest: newest}, &events) == nil {
 		for index := range events {
-			if trim, kind, ok := icu.PlannedDecouplingWorkoutZones(events[index].WorkoutDoc, settings.PowerZones); ok {
+			if trim, kind, ok := icu.PlannedDecouplingWorkoutZones(events[index].WorkoutDoc, settings.PowerZones, settings.FTP); ok {
 				history.plans[events[index].ID], history.kinds[events[index].ID] = trim, kind
 			}
 		}

@@ -1133,7 +1133,7 @@ func (accumulator *cyclingAnalysisAccumulator) repeatabilitySignal() CyclingRepe
 func (accumulator *cyclingAnalysisAccumulator) durabilitySignal() CyclingDurabilitySignal {
 	return CyclingDurabilitySignal{
 		State:                 durabilityState(accumulator.maxDecoupling),
-		MeanDecoupling:        accumulator.analysis.Durability.AverageDecoupling,
+		MeanDecoupling:        accumulator.analysis.Durability.APIAverageDecoupling(),
 		MaxDecoupling:         round2(accumulator.maxDecoupling),
 		HighDriftSessions:     accumulator.analysis.Durability.HighDecouplingActivities,
 		LongEnduranceSessions: accumulator.longEndurance,
@@ -1539,4 +1539,16 @@ func sessionDecoupling(activity *Activity) *float64 {
 	value := activity.Decoupling
 
 	return &value
+}
+
+// APIAverageDecoupling is the intervals.icu-API average decoupling: the
+// separate API average in streams mode, otherwise AverageDecoupling (which is
+// the API average when not enriched). Downstream signals use it so a mixed
+// API/streams average never drives state.
+func (durability CyclingDurability) APIAverageDecoupling() float64 {
+	if durability.AverageDecouplingAPI != nil {
+		return *durability.AverageDecouplingAPI
+	}
+
+	return durability.AverageDecoupling
 }

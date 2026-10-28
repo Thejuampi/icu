@@ -614,6 +614,14 @@ func TestAnalyzeCyclingAverageDecouplingBySource(t *testing.T) {
 		durability.AverageDecouplingStreams == nil || *durability.AverageDecouplingStreams != 1 {
 		t.Fatalf("durability = %+v", durability)
 	}
+	// Downstream signals use the API average, not the mixed consumed one.
+	analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{})
+	if analysis.Performance.Durability.MeanDecoupling != 4 || analysis.Durability.APIAverageDecoupling() != 4 {
+		t.Fatalf("mean decoupling = %v, want the API average 4", analysis.Performance.Durability.MeanDecoupling)
+	}
+	if plain := (icu.CyclingDurability{AverageDecoupling: 2.5}); plain.APIAverageDecoupling() != 2.5 {
+		t.Fatal("api mode falls back to averageDecoupling")
+	}
 	if apiOnly := icu.AnalyzeCyclingActivities(activities[2:], icu.AnalysisOptions{}).Durability; apiOnly.AverageDecouplingStreams != nil || apiOnly.AverageDecouplingAPI != nil {
 		t.Fatalf("api only: %+v", apiOnly)
 	}
