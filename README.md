@@ -88,7 +88,7 @@ API base URL resolution order:
 `--base-url` may appear before the resource (`icu --base-url URL athlete show`) or among the command flags. It only redirects intervals.icu calls and HTTP redirects to a different scheme or host are refused. Two outside services ignore it:
 
 - **Open-Meteo** (weather for `activity estimate-power`): pass `--no-weather` when testing against the mock.
-- **Zepp** (`zepp ...`): uses its own `ZEPP_*` settings and is not served by the mock.
+- **Zepp** (`zepp ...`): not served by the mock. `zepp login`/`zepp token` take `--zepp-base-url URL` (wins over `ZEPP_TOKENS_URL`/`ZEPP_LOGIN_URL`); other `zepp` commands use the `ZEPP_*` settings. The global `--base-url` is never passed to Zepp.
 
 `icu config show` prints the config file path and shows only a 12-character SHA256 fingerprint for the stored API key (never partial or raw characters).
 `icu config diagnose` prints source resolution details and a non-reversible fingerprint, not the raw secret.

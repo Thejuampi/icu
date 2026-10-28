@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	icu "github.com/Thejuampi/icu"
@@ -13,6 +14,12 @@ import (
 const (
 	zeppDefaultDateRangeDays = 7
 	zeppLoginTimeout         = 5 * time.Minute
+
+	// zeppBaseURLFlag points zepp login/token at another Zepp auth host
+	// (e.g. a local mock). It is distinct from the global --base-url.
+	zeppBaseURLFlag   = "zepp-base-url"
+	zeppTokensPath    = "/v2/registrations/tokens"
+	zeppLoginPathPart = "/v2/client/login"
 )
 
 func registerZeppCommands(registry *CommandRegistry) {
@@ -63,7 +70,7 @@ func mustV2EventPreset(name string) icu.V2EventPreset {
 	return preset
 }
 
-func zeppAuthCommand(usage, description string, run func(stdout io.Writer, email, password string) error) *Command {
+func zeppAuthCommand(usage, description string, run func(stdout io.Writer, email, password, zeppBaseURL string) error) *Command {
 	return &Command{
 		Name:        "",
 		Usage:       usage,
@@ -79,14 +86,16 @@ func zeppAuthCommand(usage, description string, run func(stdout io.Writer, email
 				return err
 			}
 
-			return run(stdout, email, password)
+			// --zepp-base-url is Zepp-only; the global --base-url (intervals.icu)
+			// is stripped in executeCommand and never reaches Zepp.
+			return run(stdout, email, password, icu.StringFlag(flags, zeppBaseURLFlag, ""))
 		},
 	}
 }
 
 func zeppTokenCommand() *Command {
 	return zeppAuthCommand(
-		"zepp token --email EMAIL [--password PASSWORD]",
+		"zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL]",
 		"[debug] Get Zepp API tokens. WARNING: outputs tokens in plaintext. Use 'zepp login' for normal auth. Use this only when you need to inspect or manually manage tokens.", //nolint:lll // security warning
 		runZeppToken,
 	)
@@ -94,7 +103,7 @@ func zeppTokenCommand() *Command {
 
 func zeppLoginCommand() *Command {
 	return zeppAuthCommand(
-		"zepp login --email EMAIL [--password PASSWORD]",
+		"zepp login --email EMAIL [--password PASSWORD] [--zepp-base-url URL]",
 		"Authenticate with Zepp using email and password to obtain login tokens.",
 		runZeppLogin,
 	)
@@ -449,9 +458,13 @@ func zeppClientOptionsForRun() []icu.ZeppClientOption {
 	return options
 }
 
-func zeppLogin(email, password string) (*icu.ZeppAuthResult, error) {
+func zeppLogin(email, password, zeppBaseURL string) (*icu.ZeppAuthResult, error) {
 	tokensURL := osGetenv("ZEPP_TOKENS_URL")
 	loginURL := osGetenv("ZEPP_LOGIN_URL")
+
+	if base := strings.TrimRight(zeppBaseURL, "/"); base != "" {
+		tokensURL, loginURL = base+zeppTokensPath, base+zeppLoginPathPart
+	}
 
 	if tokensURL != "" && loginURL != "" {
 		auth, err := icu.ZeppLoginWithURLs(tokensURL, loginURL, email, password)
@@ -470,8 +483,8 @@ func zeppLogin(email, password string) (*icu.ZeppAuthResult, error) {
 	return auth, nil
 }
 
-func runZeppToken(stdout io.Writer, email, password string) error {
-	auth, err := zeppLogin(email, password)
+func runZeppToken(stdout io.Writer, email, password, zeppBaseURL string) error {
+	auth, err := zeppLogin(email, password, zeppBaseURL)
 	if err != nil {
 		return wrapCommandError(fmt.Errorf("zepp token failed: %w", err))
 	}
@@ -484,10 +497,10 @@ func runZeppToken(stdout io.Writer, email, password string) error {
 	})
 }
 
-func runZeppLogin(stdout io.Writer, email, password string) error {
+func runZeppLogin(stdout io.Writer, email, password, zeppBaseURL string) error {
 	fmt.Fprintln(stdout, "Authenticating with Zepp...")
 
-	auth, err := zeppLogin(email, password)
+	auth, err := zeppLogin(email, password, zeppBaseURL)
 	if err != nil {
 		return wrapCommandError(fmt.Errorf("zepp login failed: %w", err))
 	}

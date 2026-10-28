@@ -343,6 +343,7 @@ func printGlobalHelp(registry *CommandRegistry, w io.Writer) {
 	fmt.Fprintln(w, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
 	fmt.Fprintln(w, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
 	fmt.Fprintln(w, "  --base-url URL    API base URL (or ICU_BASE_URL env; default https://intervals.icu)")
+	fmt.Fprintln(w, "                    intervals.icu only; zepp login/token use --zepp-base-url URL")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Resources:")
 
