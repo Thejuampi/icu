@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -65,8 +66,8 @@ func newWriteRecorder(t *testing.T, getBody string) (*writeRecorder, *icu.Client
 	return rec, icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestWriterCommandsSendSnakeCaseKeys(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	cases := []struct {
@@ -102,7 +103,7 @@ func TestWriterCommandsSendSnakeCaseKeys(t *testing.T) {
 		if !ok {
 			t.Fatalf("missing %s %s", tc.resource, tc.action)
 		}
-		if _, err := captureStdout(t, func() error { return cmd.Run(tc.args, tc.flags, client) }); err != nil {
+		if _, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(tc.args, tc.flags, client, stdout, io.Discard) }); err != nil {
 			t.Fatalf("%s %s: %v", tc.resource, tc.action, err)
 		}
 		if len(rec.writes) != 1 || rec.writes[0].keys != tc.wantKeys {
@@ -113,8 +114,8 @@ func TestWriterCommandsSendSnakeCaseKeys(t *testing.T) {
 
 const ftpSettingsJSON = `{"id":1,"types":["Ride"],"ftp":266,"indoor_ftp":250}`
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestFTPUpdateWiresSnakeKeysAndReadsBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		flags map[string]string
 		want  string
@@ -124,7 +125,7 @@ func TestFTPUpdateWiresSnakeKeysAndReadsBack(t *testing.T) {
 	} {
 		rec, client := newWriteRecorder(t, ftpSettingsJSON)
 		rec.applyPut = true
-		out, err := captureStdout(t, func() error { return runFTPUpdate(nil, tc.flags, client) })
+		out, err := captureStdout(t, func(stdout io.Writer) error { return runFTPUpdate(nil, tc.flags, client, stdout, io.Discard) })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,11 +142,11 @@ func TestFTPUpdateWiresSnakeKeysAndReadsBack(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestFTPUpdateDryRunDoesNotWrite(t *testing.T) {
+	t.Parallel()
 	rec, client := newWriteRecorder(t, ftpSettingsJSON)
-	out, err := captureStdout(t, func() error {
-		return runFTPUpdate(nil, map[string]string{"value": "255", "indoor": "true", "dry-run": "true"}, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return runFTPUpdate(nil, map[string]string{"value": "255", "indoor": "true", "dry-run": "true"}, client, stdout, io.Discard)
 	})
 	if err != nil || len(rec.writes) != 0 {
 		t.Fatalf("err=%v writes=%d", err, len(rec.writes))
@@ -159,10 +160,12 @@ func TestFTPUpdateDryRunDoesNotWrite(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestFTPUpdateReadBackMismatchExitsNonZero(t *testing.T) {
+	t.Parallel()
 	rec, client := newWriteRecorder(t, ftpSettingsJSON) // applyPut=false: server ignores the write
-	_, err := captureStdout(t, func() error { return runFTPUpdate(nil, map[string]string{"value": "270"}, client) })
+	_, err := captureStdout(t, func(stdout io.Writer) error {
+		return runFTPUpdate(nil, map[string]string{"value": "270"}, client, stdout, io.Discard)
+	})
 	if err == nil || !strings.Contains(err.Error(), "read-back mismatch on ftp") || len(rec.writes) != 1 {
 		t.Fatalf("err=%v writes=%d", err, len(rec.writes))
 	}
@@ -170,15 +173,17 @@ func TestFTPUpdateReadBackMismatchExitsNonZero(t *testing.T) {
 
 func TestFTPUpdateRejectsMissingValue(t *testing.T) {
 	t.Parallel()
-	if err := runFTPUpdate(nil, map[string]string{}, nil); err == nil {
+	if err := runFTPUpdate(nil, map[string]string{}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("want error")
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestFTPUpdateSkipsWriteWhenUnchanged(t *testing.T) {
+	t.Parallel()
 	rec, client := newWriteRecorder(t, ftpSettingsJSON)
-	out, err := captureStdout(t, func() error { return runFTPUpdate(nil, map[string]string{"value": "266"}, client) })
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return runFTPUpdate(nil, map[string]string{"value": "266"}, client, stdout, io.Discard)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,11 +205,11 @@ func TestAthleteDecodesSnakeFields(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAthleteUpdateDryRunDoesNotWrite(t *testing.T) {
+	t.Parallel()
 	rec, client := newWriteRecorder(t, athleteSnakeJSON)
-	out, err := captureStdout(t, func() error {
-		return runAthleteUpdate(nil, map[string]string{"icu-weight": "78", "dry-run": "true"}, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return runAthleteUpdate(nil, map[string]string{"icu-weight": "78", "dry-run": "true"}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -218,12 +223,12 @@ func TestAthleteUpdateDryRunDoesNotWrite(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAthleteUpdateReadsBack(t *testing.T) {
+	t.Parallel()
 	rec, client := newWriteRecorder(t, athleteSnakeJSON)
 	rec.applyPut = true
 	flags := map[string]string{"weight": "81", "icu-weight": "78", "height": "1.82", "name": "B", "bio": "x"}
-	out, err := captureStdout(t, func() error { return runAthleteUpdate(nil, flags, client) })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return runAthleteUpdate(nil, flags, client, stdout, io.Discard) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,21 +240,23 @@ func TestAthleteUpdateReadsBack(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAthleteUpdateReadBackMismatchExitsNonZero(t *testing.T) {
+	t.Parallel()
 	_, client := newWriteRecorder(t, athleteSnakeJSON) // applyPut=false: server ignores the write
-	_, err := captureStdout(t, func() error { return runAthleteUpdate(nil, map[string]string{"icu-weight": "70"}, client) })
+	_, err := captureStdout(t, func(stdout io.Writer) error {
+		return runAthleteUpdate(nil, map[string]string{"icu-weight": "70"}, client, stdout, io.Discard)
+	})
 	if err == nil || !strings.Contains(err.Error(), "icu_weight") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAthleteUpdateGetError(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) }))
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	if err := runAthleteUpdate(nil, map[string]string{"weight": "1"}, client); err == nil {
+	if err := runAthleteUpdate(nil, map[string]string{"weight": "1"}, client, io.Discard, io.Discard); err == nil {
 		t.Fatal("want error")
 	}
 }
@@ -272,8 +279,8 @@ func TestWellnessOutputKeysStayStable(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestWellnessBulkSendsWriteKeysAndDropsComputed(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "w.json")
 	file := `[{"id":"2026-10-26","restingHr":49,"ctl":40,"atl":50},{"id":"2026-10-27","hrvSdnn":70}]`
 	if err := os.WriteFile(path, []byte(file), 0o600); err != nil {
@@ -292,8 +299,15 @@ func TestWellnessBulkSendsWriteKeysAndDropsComputed(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	cmd, _ := registry.Lookup("wellness", "bulk")
-	if _, err := captureStdout(t, func() error { return cmd.Run(nil, map[string]string{"file": path}, client) }); err != nil {
+	var stderr bytes.Buffer
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return cmd.Run(nil, map[string]string{"file": path}, client, stdout, &stderr)
+	}); err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "warning: wellness bulk: ignoring computed fields") ||
+		!strings.Contains(stderr.String(), "(2026-10-26)") {
+		t.Fatalf("stderr = %q", stderr.String())
 	}
 	if len(got) != 2 || got[0]["restingHR"] != 49.0 || got[1]["hrvSDNN"] != 70.0 {
 		t.Fatalf("body = %v", got)
@@ -321,7 +335,7 @@ func TestWellnessBulkDroppedWarning(t *testing.T) {
 func TestAthleteUpdateWithoutFlagsErrorsWithoutRequest(t *testing.T) {
 	t.Parallel()
 	rec, client := newWriteRecorder(t, athleteSnakeJSON)
-	if err := runAthleteUpdate(nil, map[string]string{}, client); err == nil || !strings.Contains(err.Error(), "at least one") {
+	if err := runAthleteUpdate(nil, map[string]string{}, client, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "at least one") {
 		t.Fatalf("err = %v", err)
 	}
 	if len(rec.writes) != 0 {
@@ -329,16 +343,58 @@ func TestAthleteUpdateWithoutFlagsErrorsWithoutRequest(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // captureStdout uses a package-level stdout override.
 func TestAthleteShowHidesPrivateFieldsByDefault(t *testing.T) {
+	t.Parallel()
 	_, client := newWriteRecorder(t, `{"id":"i1","name":"A","icu_date_of_birth":"1990-01-02","strava_id":12345}`)
 	cmd := athleteShowCommand()
-	out, err := captureStdout(t, func() error { return cmd.Run(nil, map[string]string{}, client) })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return cmd.Run(nil, map[string]string{}, client, stdout, io.Discard) })
 	if err != nil || strings.Contains(out, "1990-01-02") || strings.Contains(out, "12345") {
 		t.Fatalf("out=%s err=%v", out, err)
 	}
-	out, err = captureStdout(t, func() error { return cmd.Run(nil, map[string]string{"include-private": "true"}, client) })
+	out, err = captureStdout(t, func(stdout io.Writer) error {
+		return cmd.Run(nil, map[string]string{"include-private": "true"}, client, stdout, io.Discard)
+	})
 	if err != nil || !strings.Contains(out, "1990-01-02") || !strings.Contains(out, "12345") {
 		t.Fatalf("include-private out=%s err=%v", out, err)
 	}
+}
+
+func TestAnalysisCoachingRedactsPrivateAthleteFields(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/activities"), strings.Contains(r.URL.Path, "/wellness"),
+			strings.Contains(r.URL.Path, "/events"):
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(r.URL.Path, "/sport-settings"):
+			_, _ = w.Write([]byte(`{"id":1,"types":["Ride"],"ftp":250}`))
+		default:
+			_, _ = w.Write([]byte(`{"id":"i1","name":"A","icu_date_of_birth":"1990-01-02","strava_id":12345}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	flags := map[string]string{
+		"history-oldest": "2026-06-01", "history-newest": "2026-06-02",
+		"plan-oldest": "2026-06-01", "plan-newest": "2026-06-07",
+	}
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return analysisCoachingCommand().Run(nil, flags, client, stdout, io.Discard)
+	})
+	if err != nil || !strings.Contains(out, `"name": "A"`) || strings.Contains(out, "1990-01-02") || strings.Contains(out, "12345") {
+		t.Fatalf("default out leaks or misses athlete: err=%v out=%s", err, out)
+	}
+	flags["include-private"] = "true"
+	out, err = captureStdout(t, func(stdout io.Writer) error {
+		return analysisCoachingCommand().Run(nil, flags, client, stdout, io.Discard)
+	})
+	if err != nil || !strings.Contains(out, "1990-01-02") || !strings.Contains(out, "12345") {
+		t.Fatalf("include-private out: err=%v out=%s", err, out)
+	}
+}
+
+func TestRedactAthletePrivateNil(t *testing.T) {
+	t.Parallel()
+	redactAthletePrivate(nil, nil)
 }

@@ -7,6 +7,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # Same key for push and pull_request runs of a branch; never cancel master.
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ (github.head_ref || github.ref_name) != 'master' }}
+
 env:
   GOLANGCI_LINT_VERSION: v2.15.0
   GOFUMPT_VERSION: v0.12.0
@@ -16,10 +21,11 @@ env:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
 
@@ -42,23 +48,18 @@ jobs:
           set -o pipefail
           go test -race -count=1 -coverprofile=coverage.out ./... | tee test.out
 
-      - name: Coverage floor
+      - name: Coverage floor script tests
+        run: bash scripts/coverage-floor_test.sh
+
+      - name: Coverage floor (every package from go list)
         run: |
           set -euo pipefail
-          check() {
-            awk -v name="$1" -v pct="$2" -v floor="$COVERAGE_FLOOR" 'BEGIN {
-              sub("%", "", pct);
-              if (pct + 0 < floor + 0) { printf "%s coverage %s%% < %s%%\n", name, pct, floor; exit 1 }
-              printf "%s coverage %s%% >= %s%%\n", name, pct, floor }'
-          }
-          cmd_pct="$(awk '$2 == "github.com/Thejuampi/icu/cmd/icu" { for (i = 1; i <= NF; i++) if ($i == "coverage:") print $(i+1) }' test.out)"
-          [ -n "$cmd_pct" ] || { echo "cmd/icu coverage not found"; exit 1; }
-          check "cmd/icu" "$cmd_pct"
-          total="$(go tool cover -func=coverage.out | awk '/^total:/ { print $NF }')"
-          check "total" "$total"
+          # shellcheck disable=SC2046
+          bash scripts/coverage-floor.sh test.out "$COVERAGE_FLOOR" $(go list ./...)
+          go tool cover -func=coverage.out | awk '/^total:/ { print "total " $NF }'
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: ./...

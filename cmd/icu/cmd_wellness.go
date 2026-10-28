@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	icu "github.com/Thejuampi/icu"
@@ -69,7 +69,7 @@ func wellnessBulkCommand() *Command {
 		Name:        "",
 		Usage:       "wellness bulk --file FILE.json",
 		Description: "Bulk update wellness records from a JSON array file.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			fpath := icu.StringFlag(flags, "file", "")
 			if fpath == "" {
 				return errMissing("--file")
@@ -86,7 +86,7 @@ func wellnessBulkCommand() *Command {
 			}
 
 			if warning := wellnessBulkDroppedWarning(records); warning != "" {
-				fmt.Fprintln(os.Stderr, warning)
+				fmt.Fprintln(stderr, warning)
 			}
 
 			body := make([]icu.WellnessWrite, len(records))
@@ -104,7 +104,7 @@ func wellnessUploadCommand() *Command {
 		Name:        "",
 		Usage:       "wellness upload <file.csv>",
 		Description: "Upload wellness CSV file.",
-		Run: func(args []string, _ map[string]string, client *icu.Client) error {
+		Run: func(args []string, _ map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("csv file path")
 			}

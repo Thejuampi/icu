@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -155,7 +156,7 @@ func TestAnalysisCommandsRejectInvalidDayFlagsBeforeHTTP(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if err := test.command.Run(nil, test.flags, nil); err == nil {
+			if err := test.command.Run(nil, test.flags, nil, io.Discard, io.Discard); err == nil {
 				t.Fatal("Run error = nil, want invalid day error before client use")
 			}
 		})
@@ -176,12 +177,12 @@ func TestAnalysisCyclingCommandWiresMinIncludedActivitiesFlag(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return analysisCyclingCommand().Run(nil, map[string]string{
 			"oldest":                  "2026-06-01",
 			"newest":                  "2026-06-07",
 			"min-included-activities": "5",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -224,12 +225,12 @@ func analysisCyclingCommandWithFieldsOverride(t *testing.T) (string, icu.Cycling
 	t.Cleanup(server.Close)
 
 	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return analysisCyclingCommand().Run(nil, map[string]string{
 			"oldest": "2026-06-01",
 			"newest": "2026-06-07",
 			"fields": "id,name",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -400,14 +401,14 @@ func TestAnalysisPlanCommandUsesValidatedAlignedRanges(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	output, err := captureStdout(t, func() error {
+	output, err := captureStdout(t, func(stdout io.Writer) error {
 		return analysisPlanCommand().Run(nil, map[string]string{
 			"history-oldest": "2026-04-06",
 			"history-newest": "2026-06-28",
 			"plan-oldest":    "2026-07-01",
 			"plan-newest":    "2026-07-24",
 			"resolve":        "false",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error = %v", err)
@@ -440,7 +441,7 @@ func TestAnalysisPlanCommandReportsUpstreamFailures(t *testing.T) {
 				"history-newest": "2026-06-28",
 				"plan-oldest":    "2026-06-29",
 				"plan-newest":    "2026-07-26",
-			}, client)
+			}, client, io.Discard, io.Discard)
 			if err == nil {
 				t.Fatal("Run error = nil, want upstream failure")
 			}
@@ -483,11 +484,11 @@ func TestAnalysisWellnessCommandPrefersZeppHybridCharge(t *testing.T) {
 	t.Cleanup(intervalsServer.Close)
 
 	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(intervalsServer.Client()), icu.WithBaseURL(intervalsServer.URL))
-	output, err := captureStdout(t, func() error {
+	output, err := captureStdout(t, func(stdout io.Writer) error {
 		return analysisWellnessCommand().Run(nil, map[string]string{
 			"oldest": "2026-06-01",
 			"newest": "2026-06-02",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error = %v", err)
@@ -527,13 +528,13 @@ func TestAnalysisCoachingCommandPropagatesPreferredWellnessScore(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return analysisCoachingCommand().Run(nil, map[string]string{
 			"history-oldest": "2026-06-01",
 			"history-newest": "2026-06-02",
 			"plan-oldest":    "2026-06-01",
 			"plan-newest":    "2026-06-07",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -571,13 +572,13 @@ func TestAnalysisPlanCommandPrefersHybridChargeForWellnessRules(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	client := icu.NewClient("test-key", "i123", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return analysisPlanCommand().Run(nil, map[string]string{
 			"history-oldest": "2026-05-30",
 			"history-newest": "2026-05-31",
 			"plan-oldest":    "2026-06-01",
 			"plan-newest":    "2026-06-01",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -654,7 +655,7 @@ func TestAnalysisAdaptationCommandReportsUpstreamFailures(t *testing.T) {
 			err := analysisAdaptationCommand().Run(nil, map[string]string{
 				"oldest": "2026-04-06",
 				"newest": "2026-06-28",
-			}, client)
+			}, client, io.Discard, io.Discard)
 			if err == nil {
 				t.Fatal("Run error = nil, want upstream failure")
 			}
@@ -710,7 +711,7 @@ func TestAnalysisCoachingCommandReportsUpstreamFailure(t *testing.T) {
 		"history-newest": "2026-06-28",
 		"plan-oldest":    "2026-06-29",
 		"plan-newest":    "2026-07-26",
-	}, client)
+	}, client, io.Discard, io.Discard)
 	if err == nil {
 		t.Fatal("Run error = nil, want upstream failure")
 	}
@@ -750,7 +751,7 @@ func TestAnalysisCoachingCommandCombinesContext(t *testing.T) {
 		icu.WithBaseURL(server.URL),
 	)
 	cmd := analysisCoachingCommand()
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return cmd.Run(nil, map[string]string{
 			"history-oldest": "2026-04-06",
 			"history-newest": "2026-06-28",
@@ -758,7 +759,7 @@ func TestAnalysisCoachingCommandCombinesContext(t *testing.T) {
 			"plan-newest":    "2026-07-26",
 			"sport-type":     "Ride",
 			"resolve":        "true",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -810,7 +811,7 @@ func TestAnalysisCoachingCommandIncludesAdaptationWhenRequested(t *testing.T) {
 		icu.WithBaseURL(server.URL),
 	)
 	cmd := analysisCoachingCommand()
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return cmd.Run(nil, map[string]string{
 			"history-oldest":     "2026-04-06",
 			"history-newest":     "2026-06-28",
@@ -818,7 +819,7 @@ func TestAnalysisCoachingCommandIncludesAdaptationWhenRequested(t *testing.T) {
 			"plan-newest":        "2026-07-26",
 			"include-adaptation": "true",
 			"adaptation-curves":  "42d,365d",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1100,8 +1101,8 @@ func TestAnalysisWorkoutCommandWritesJSON(t *testing.T) {
 		icu.WithBaseURL(server.URL),
 	)
 	cmd := analysisWorkoutCommand()
-	out, err := captureStdout(t, func() error {
-		return cmd.Run([]string{"a1"}, map[string]string{"json": "true"}, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return cmd.Run([]string{"a1"}, map[string]string{"json": "true"}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1152,8 +1153,8 @@ func TestAnalysisWorkoutCommandRecalculatesWBalWithGlobalModel(t *testing.T) {
 		icu.WithBaseURL(server.URL),
 	)
 	cmd := analysisWorkoutCommand()
-	out, err := captureStdout(t, func() error {
-		return cmd.Run([]string{"a2"}, map[string]string{"json": "true"}, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return cmd.Run([]string{"a2"}, map[string]string{"json": "true"}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1222,8 +1223,8 @@ func runMicrocycleCommandJSONTest(
 
 	client := newMicrocycleCommandTestClient(server.URL, server.Client())
 	cmd := analysisMicrocycleCommand()
-	out, err := captureStdout(t, func() error {
-		return cmd.Run(nil, flags, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return cmd.Run(nil, flags, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1308,7 +1309,7 @@ func TestAnalysisMicrocycleCommandSkipsPlanAndWellness(t *testing.T) {
 		icu.WithBaseURL(server.URL),
 	)
 	cmd := analysisMicrocycleCommand()
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return cmd.Run(nil, map[string]string{
 			"from":        "2026-06-01",
 			"to":          "2026-06-07",
@@ -1316,7 +1317,7 @@ func TestAnalysisMicrocycleCommandSkipsPlanAndWellness(t *testing.T) {
 			"timezone":    "UTC",
 			"no-plan":     "true",
 			"no-wellness": "true",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1353,7 +1354,7 @@ func TestAnalysisMicrocycleCommandWritesHumanOutput(t *testing.T) {
 		icu.WithBaseURL(server.URL),
 	)
 	cmd := analysisMicrocycleCommand()
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return cmd.Run(nil, map[string]string{
 			"from":        "2026-06-01",
 			"to":          "2026-06-07",
@@ -1361,7 +1362,7 @@ func TestAnalysisMicrocycleCommandWritesHumanOutput(t *testing.T) {
 			"timezone":    "UTC",
 			"no-plan":     "true",
 			"no-wellness": "true",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1399,7 +1400,7 @@ func TestAnalysisMicrocycleCommandForwardsCalendarID(t *testing.T) {
 		icu.WithBaseURL(server.URL),
 	)
 	cmd := analysisMicrocycleCommand()
-	_, err := captureStdout(t, func() error {
+	_, err := captureStdout(t, func(stdout io.Writer) error {
 		return cmd.Run(nil, map[string]string{
 			"from":        "2026-06-01",
 			"to":          "2026-06-07",
@@ -1407,7 +1408,7 @@ func TestAnalysisMicrocycleCommandForwardsCalendarID(t *testing.T) {
 			"timezone":    "UTC",
 			"calendar-id": "42",
 			"no-wellness": "true",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1445,13 +1446,13 @@ func TestAnalysisMicrocycleCommandAllowsMissingSportSettings(t *testing.T) {
 		icu.WithBaseURL(server.URL),
 	)
 	cmd := analysisMicrocycleCommand()
-	out, err := captureStdout(t, func() error {
+	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return cmd.Run(nil, map[string]string{
 			"from":     "2026-06-01",
 			"to":       "2026-06-07",
 			"json":     "true",
 			"timezone": "UTC",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1642,8 +1643,8 @@ func TestWriteMicrocycleHuman(t *testing.T) {
 		Intensity: icu.MicrocycleIntensity{Z4PlusSessions: 1},
 	}
 
-	out, err := captureStdout(t, func() error {
-		return writeMicrocycleHuman(&analysis)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return writeMicrocycleHuman(stdout, &analysis)
 	})
 	if err != nil {
 		t.Fatalf("writeMicrocycleHuman error: %v", err)
@@ -1718,8 +1719,8 @@ func TestAnalysisMicrocycleCommandUsesAthleteTimezoneAndClampsWellness(t *testin
 	t.Cleanup(server.Close)
 
 	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	out, err := captureStdout(t, func() error {
-		return analysisMicrocycleCommand().Run(nil, map[string]string{"from": "2020-01-01", "to": "2999-12-31", "json": "true"}, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return analysisMicrocycleCommand().Run(nil, map[string]string{"from": "2020-01-01", "to": "2999-12-31", "json": "true"}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1765,8 +1766,8 @@ func TestAnalysisAdaptationCommandDefaultsToNonOverlappingCurves(t *testing.T) {
 		{"oldest": "2026-04-06", "newest": "2026-06-28"},
 		{"oldest": "2026-04-06", "newest": "2026-06-28", "curves": "42d,365d"},
 	} {
-		if _, err := captureStdout(t, func() error {
-			return analysisAdaptationCommand().Run(nil, flagSet, client)
+		if _, err := captureStdout(t, func(stdout io.Writer) error {
+			return analysisAdaptationCommand().Run(nil, flagSet, client, stdout, io.Discard)
 		}); err != nil {
 			t.Fatalf("Run error = %v", err)
 		}
@@ -1801,8 +1802,8 @@ func TestAnalysisCyclingCommandUsesWellnessForCurrentLoad(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	out, err := captureStdout(t, func() error {
-		return analysisCyclingCommand().Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return analysisCyclingCommand().Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
@@ -1835,8 +1836,8 @@ func TestAnalysisCyclingCommandWarnsWhenWellnessUnavailable(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	client := icu.NewClient("test-key", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	out, err := captureStdout(t, func() error {
-		return analysisCyclingCommand().Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, client)
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return analysisCyclingCommand().Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-07"}, client, stdout, io.Discard)
 	})
 	if err != nil {
 		t.Fatalf("Run error: %v", err)

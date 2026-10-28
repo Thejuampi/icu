@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -84,7 +85,7 @@ func athleteUpdateFields(u *icu.AthleteUpdate, a *icu.Athlete) (map[string]any, 
 	return want, have
 }
 
-func runAthleteUpdate(_ []string, flags map[string]string, client *icu.Client) error {
+func runAthleteUpdate(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	u := buildAthleteUpdate(flags)
 	if want, _ := athleteUpdateFields(&u, &icu.Athlete{}); len(want) == 0 {
 		return fmt.Errorf("%w: athlete update needs at least one of --weight, --icu-weight, --height, --name, --bio", errInvalidValue)
@@ -100,7 +101,7 @@ func runAthleteUpdate(_ []string, flags map[string]string, client *icu.Client) e
 		result.DryRun = true
 		result.Message = "dry-run: nothing written"
 
-		return writeJSON(result)
+		return writeJSON(stdout, result)
 	}
 
 	if err := client.Put("athlete", nil, nil, u, nil); err != nil {
@@ -123,14 +124,14 @@ func runAthleteUpdate(_ []string, flags map[string]string, client *icu.Client) e
 	if len(bad) > 0 {
 		sort.Strings(bad)
 		result.Message = "read-back mismatch: " + strings.Join(bad, ",")
-		if err := writeJSON(result); err != nil {
+		if err := writeJSON(stdout, result); err != nil {
 			return err
 		}
 
 		return fmt.Errorf("athlete update: read-back mismatch on %s", strings.Join(bad, ","))
 	}
 
-	return writeJSON(result)
+	return writeJSON(stdout, result)
 }
 
 func athletePlanCommand() *Command {
@@ -138,7 +139,7 @@ func athletePlanCommand() *Command {
 		Name:        "",
 		Usage:       "athlete plan [update --plan-id ID --start-date DATE]",
 		Description: "Get or update training plan.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if _, ok := flags["plan-id"]; ok {
 				var u icu.AthleteTrainingPlanUpdate
 				u.ID = icu.ResolveAthleteID(flags)
@@ -150,7 +151,7 @@ func athletePlanCommand() *Command {
 					return wrapCommandError(err)
 				}
 
-				return writeJSON(p)
+				return writeJSON(stdout, p)
 			}
 
 			var p icu.AthleteTrainingPlan
@@ -158,7 +159,7 @@ func athletePlanCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(p)
+			return writeJSON(stdout, p)
 		},
 	}
 }
@@ -168,7 +169,7 @@ func athleteSettingsCommand() *Command {
 		Name:        "",
 		Usage:       "athlete settings --device desktop|phone|tablet",
 		Description: "Get athlete settings for device class.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			device := icu.StringFlag(flags, "device", "desktop")
 
 			var s any
@@ -176,7 +177,7 @@ func athleteSettingsCommand() *Command {
 				return wrapCommandError(err)
 			}
 
-			return writeJSON(s)
+			return writeJSON(stdout, s)
 		},
 	}
 }
@@ -187,17 +188,24 @@ func athleteShowCommand() *Command {
 		Usage: "athlete show [--include-private]",
 		Description: "Get athlete profile with sport settings. Date of birth and Strava id are " +
 			"omitted unless --include-private is set.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			var athlete icu.Athlete
 			if err := client.Get("athlete", nil, nil, &athlete); err != nil {
 				return wrapCommandError(err)
 			}
-			if !BoolFlag(flags, "include-private") {
-				athlete.DateOfBirth = ""
-				athlete.StravaID = 0
-			}
+			redactAthletePrivate(&athlete, flags)
 
-			return writeJSON(athlete)
+			return writeJSON(stdout, athlete)
 		},
 	}
+}
+
+// redactAthletePrivate clears date of birth and Strava id unless
+// --include-private is set. Used by every command that prints the athlete.
+func redactAthletePrivate(athlete *icu.Athlete, flags map[string]string) {
+	if athlete == nil || BoolFlag(flags, "include-private") {
+		return
+	}
+	athlete.DateOfBirth = ""
+	athlete.StravaID = 0
 }

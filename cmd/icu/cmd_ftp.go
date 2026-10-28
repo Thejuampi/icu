@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -16,7 +17,7 @@ func ftpShowCommand() *Command {
 		Name:        "",
 		Usage:       "ftp show [--sport Ride]",
 		Description: "Show FTP for a sport type.",
-		Run: func(_ []string, flags map[string]string, client *icu.Client) error {
+		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "Ride")
 
 			var ss icu.SportSettings
@@ -31,7 +32,7 @@ func ftpShowCommand() *Command {
 				LTHR      int    `json:"lthr,omitempty"`
 			}
 
-			return writeJSON(FTPInfo{
+			return writeJSON(stdout, FTPInfo{
 				Sport:     sport,
 				FTP:       ss.FTP,
 				IndoorFTP: ss.IndoorFTP,
@@ -63,7 +64,7 @@ func ftpUpdateCommand() *Command {
 	}
 }
 
-func runFTPUpdate(_ []string, flags map[string]string, client *icu.Client) error {
+func runFTPUpdate(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 	sport := icu.StringFlag(flags, "sport", "Ride")
 	val := IntFlag(flags, "value", 0)
 	if val <= 0 {
@@ -91,13 +92,13 @@ func runFTPUpdate(_ []string, flags map[string]string, client *icu.Client) error
 	if result.Before == val {
 		result.Message = "no changes: value already matches"
 
-		return writeJSON(result)
+		return writeJSON(stdout, result)
 	}
 	if BoolFlag(flags, "dry-run") {
 		result.DryRun = true
 		result.Message = "dry-run: nothing written"
 
-		return writeJSON(result)
+		return writeJSON(stdout, result)
 	}
 
 	if err := client.Put("sport-settings", []string{sport}, map[string]string{"recalcHrZones": "false"}, result.Body, nil); err != nil {
@@ -112,12 +113,12 @@ func runFTPUpdate(_ []string, flags map[string]string, client *icu.Client) error
 	result.ReadBack = &after
 	if got := pick(&after); got != val {
 		result.Message = fmt.Sprintf("read-back mismatch: %s = %d, want %d", field, got, val)
-		if err := writeJSON(result); err != nil {
+		if err := writeJSON(stdout, result); err != nil {
 			return err
 		}
 
 		return fmt.Errorf("ftp update: read-back mismatch on %s", field)
 	}
 
-	return writeJSON(result)
+	return writeJSON(stdout, result)
 }
