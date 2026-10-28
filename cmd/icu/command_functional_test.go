@@ -653,8 +653,8 @@ func sportCommandCases() []commandCase {
 			http.MethodDelete, "/api/v1/athlete/0/sport-settings/1", ""),
 		commandFlow("ftp show", "ftp", "show", nil, flags("sport", "Ride"),
 			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "ftp"),
-		commandFlow("ftp update", "ftp", "update", nil, flags("sport", "Ride", "value", "285", "indoor", "true"),
-			http.MethodPut, "/api/v1/athlete/0/sport-settings/Ride", "Ride"),
+		commandFlow("ftp update", "ftp", "update", nil, flags("sport", "Ride", "value", "280", "indoor", "true"),
+			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "Ride"), // read-back GET follows the PUT
 	}
 }
 
