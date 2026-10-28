@@ -370,3 +370,24 @@ func TestCoachNPWindowChangesVI(t *testing.T) {
 		t.Fatalf("60 s: VI %v", slow.VariabilityIndex)
 	}
 }
+
+// End to end: 2 min blocks at 98.67 W / 150 W give VI ~1.05003,
+// which rounds to 1.05 (the displayed criterion value) but is above 1.05,
+// so the result is low confidence, not valid.
+func TestCoachVIJustAboveOKIsLowConfidenceEndToEnd(t *testing.T) {
+	t.Parallel()
+	got := evaluate(t, 60, func(sec int) float64 {
+		if (sec/120)%2 == 0 {
+			return 98.67
+		}
+
+		return 150
+	})
+	if got.VariabilityIndex <= icu.CoachVIOK || got.VariabilityIndex >= 1.05005 {
+		t.Fatalf("fixture VI = %.8f, want in (1.05, 1.05005)", got.VariabilityIndex)
+	}
+	if criterion(t, &got, icu.CriterionVI).Value != 1.05 || len(got.FailedCriteriaNames) != 0 ||
+		got.Validity != icu.DecouplingLowConfidence || got.Value == nil {
+		t.Fatalf("VI %.8f: validity %s failed %v value %v", got.VariabilityIndex, got.Validity, got.FailedCriteriaNames, got.Value)
+	}
+}
