@@ -32,3 +32,4 @@ coverage_pkg
 coverage_pkg/
 power-fill-*.png
 /icu
+/icu-mock

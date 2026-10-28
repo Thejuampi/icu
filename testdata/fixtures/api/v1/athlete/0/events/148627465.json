@@ -1,0 +1,240 @@
+{
+  "athlete_cannot_edit": false,
+  "athlete_id": "i0",
+  "atl_days": null,
+  "attachments": null,
+  "calendar_id": 1,
+  "can_train_sports": null,
+  "carbs_per_hour": null,
+  "carbs_used": null,
+  "category": "WORKOUT",
+  "color": null,
+  "created_by_id": "i0",
+  "ctl_days": null,
+  "description": "- 10m ramp 50-65% 85rpm\n\n3x\n- 5m 65% 90rpm\n- 5m 65% 100rpm\n- 5m 67% 70rpm\n\n- 25m 62%\n- 10m 55%",
+  "distance": 0,
+  "distance_target": null,
+  "end_date_local": "2026-10-27T19:30:00",
+  "entered": false,
+  "external_id": null,
+  "for_week": false,
+  "hide_from_athlete": false,
+  "icu_atl": 42.841488,
+  "icu_ctl": 29.586573,
+  "icu_ftp": null,
+  "icu_intensity": 62.716293,
+  "icu_training_load": 59,
+  "id": 148627465,
+  "indoor": null,
+  "joules": null,
+  "joules_above_ftp": null,
+  "load_target": null,
+  "max_training_time": null,
+  "moving_time": 5400,
+  "name": "Z2 Cadence Ladder 90m",
+  "not_on_fitness_chart": false,
+  "oauth_client_id": null,
+  "p_max": null,
+  "plan_applied": null,
+  "plan_athlete_id": "i0",
+  "plan_folder_id": null,
+  "plan_name": null,
+  "plan_workout_id": null,
+  "push_errors": null,
+  "shared_event_id": null,
+  "show_as_note": false,
+  "show_on_ctl_line": false,
+  "ss_cp": 84.4311,
+  "ss_p_max": 0,
+  "ss_w_prime": 0,
+  "start_date_local": "2026-10-27T18:00:00",
+  "strain_score": 84.4311,
+  "structure_read_only": false,
+  "sub_type": null,
+  "tags": null,
+  "target": "POWER",
+  "time_target": null,
+  "training_availability": "NORMAL",
+  "type": "Ride",
+  "uid": "bbb5e5d6-096e-47fd-b1cf-264577dfae25",
+  "updated": "2026-10-28T01:34:07.840+00:00",
+  "w_prime": null,
+  "workout_doc": {
+    "average_watts": 166,
+    "distance": 0,
+    "duration": 5400,
+    "locales": [],
+    "normalized_power": 167,
+    "options": {},
+    "polarization_index": 0,
+    "steps": [
+      {
+        "cadence": {
+          "units": "rpm",
+          "value": 85
+        },
+        "duration": 600,
+        "power": {
+          "end": 65,
+          "start": 50,
+          "units": "%ftp"
+        },
+        "ramp": true
+      },
+      {
+        "distance": 0,
+        "duration": 2700,
+        "reps": 3,
+        "steps": [
+          {
+            "cadence": {
+              "units": "rpm",
+              "value": 90
+            },
+            "duration": 300,
+            "power": {
+              "units": "%ftp",
+              "value": 65
+            }
+          },
+          {
+            "cadence": {
+              "units": "rpm",
+              "value": 100
+            },
+            "duration": 300,
+            "power": {
+              "units": "%ftp",
+              "value": 65
+            }
+          },
+          {
+            "cadence": {
+              "units": "rpm",
+              "value": 70
+            },
+            "duration": 300,
+            "power": {
+              "units": "%ftp",
+              "value": 67
+            }
+          }
+        ],
+        "text": "3x"
+      },
+      {
+        "duration": 1500,
+        "power": {
+          "units": "%ftp",
+          "value": 62
+        }
+      },
+      {
+        "duration": 600,
+        "power": {
+          "units": "%ftp",
+          "value": 55
+        }
+      }
+    ],
+    "strain_score": {
+      "ss_cp": 84.43109829619812,
+      "ss_p_max": 0,
+      "ss_w_prime": 0,
+      "strain_score": 84.43109829619812
+    },
+    "variability_index": 1.0060240963855422,
+    "zoneTimes": [
+      {
+        "color": "#009e80",
+        "id": "Z1",
+        "max": 55,
+        "maxWatts": 146,
+        "minWatts": 1,
+        "name": "Z1",
+        "percentRange": "0% - 55%",
+        "secs": 800,
+        "zone": 1
+      },
+      {
+        "color": "#009e00",
+        "id": "Z2",
+        "max": 75,
+        "maxWatts": 199,
+        "minWatts": 147,
+        "name": "Z2",
+        "percentRange": "56% - 75%",
+        "secs": 4600,
+        "zone": 2
+      },
+      {
+        "color": "#ffcb0e",
+        "id": "Z3",
+        "max": 90,
+        "maxWatts": 239,
+        "minWatts": 200,
+        "name": "Z3",
+        "percentRange": "76% - 90%",
+        "secs": 0,
+        "zone": 3
+      },
+      {
+        "color": "#ff7f0e",
+        "id": "Z4",
+        "max": 105,
+        "maxWatts": 279,
+        "minWatts": 240,
+        "name": "Z4",
+        "percentRange": "91% - 105%",
+        "secs": 0,
+        "zone": 4
+      },
+      {
+        "color": "#dd0447",
+        "id": "Z5",
+        "max": 120,
+        "maxWatts": 319,
+        "minWatts": 280,
+        "name": "Z5",
+        "percentRange": "106% - 120%",
+        "secs": 0,
+        "zone": 5
+      },
+      {
+        "color": "#6633cc",
+        "id": "Z6",
+        "max": 150,
+        "maxWatts": 399,
+        "minWatts": 320,
+        "name": "Z6",
+        "percentRange": "121% - 150%",
+        "secs": 0,
+        "zone": 6
+      },
+      {
+        "color": "#504861",
+        "id": "Z7",
+        "max": 999,
+        "maxWatts": 9999,
+        "minWatts": 400,
+        "name": "Z7",
+        "percentRange": "151% +",
+        "secs": 0,
+        "zone": 7
+      },
+      {
+        "color": "#ffa00e",
+        "gap": true,
+        "id": "SS",
+        "max": 97,
+        "maxWatts": 258,
+        "min": 84,
+        "minWatts": 223,
+        "name": "Sweet Spot",
+        "percentRange": "84% - 97%",
+        "secs": 0,
+        "zone": 8
+      }
+    ]
+  }
+}

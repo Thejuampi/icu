@@ -79,6 +79,12 @@ Athlete ID resolution order:
 3. `~/.icu/config.json`
 4. default `"0"` for the authenticated athlete
 
+API base URL resolution order:
+
+1. `--base-url URL`
+2. `ICU_BASE_URL`
+3. default `https://intervals.icu` (the real API; a warning is printed on stderr whenever this is used)
+
 `icu config show` prints the config file path and shows only a 12-character SHA256 fingerprint for the stored API key (never partial or raw characters).
 `icu config diagnose` prints source resolution details and a non-reversible fingerprint, not the raw secret.
 
@@ -288,6 +294,27 @@ go tool cover -func coverage.out
 ```
 
 `AGENTS.md` requires documentation updates for every public feature change.
+
+### Testing against the mock
+
+Release candidates and manual tests run only against a local mock of the intervals.icu API, never against a real account. The mock serves anonymized fixtures from `testdata/fixtures` (athlete, profile, sport settings, wellness, events, activities, curves, and streams for `i195273358`, `i202545713`, `i198806466`). It accepts writes (PUT/POST/DELETE/PATCH) in memory only and logs them.
+
+```bash
+scripts/rc-mock.sh            # builds and starts the mock on 127.0.0.1, prints PORT, BASE_URL, PID, LOG
+scripts/rc-mock.sh 8765       # fixed port
+# or in the foreground:
+go run ./tools/mockserver -port 8765        # make mock  -> ./icu-mock binary
+
+export INTERVALS_ICU_API_KEY=mock INTERVALS_ICU_ATHLETE_ID=0
+icu athlete show --base-url http://127.0.0.1:8765
+icu activity i202545713 decoupling --base-url http://127.0.0.1:8765
+icu analysis coaching --base-url http://127.0.0.1:8765
+icu events get 148627465 --base-url http://127.0.0.1:8765
+curl -s http://127.0.0.1:8765/_mock/writes          # {"count":N,"writes":[...]}: what the CLI tried to write
+curl -s -X POST http://127.0.0.1:8765/_mock/reset   # clear the write log and in-memory changes
+```
+
+Any athlete id maps onto the `0` fixtures; list endpoints honour `oldest`/`newest`. A missing fixture returns 404 and is logged. `-record -upstream https://intervals.icu` is the one-time, GET-only fixture capture mode (non-GET requests are refused locally); `-anonymize DIR` re-applies the anonymizer (DOB, Strava/device ids, email, city/state/country, names, gear nicknames, tokens/API keys, GPS) to captured fixtures.
 
 ## License
 

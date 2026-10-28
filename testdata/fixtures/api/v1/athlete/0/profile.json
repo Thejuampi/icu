@@ -1,0 +1,20 @@
+{
+  "athlete": {
+    "bio": "redacted",
+    "city": "redacted",
+    "countries": [],
+    "country": "redacted",
+    "email": "athlete@example.invalid",
+    "icu_coach": false,
+    "id": "i0",
+    "languages": [],
+    "name": "Mock Athlete",
+    "profile_medium": "redacted",
+    "sex": "M",
+    "state": "redacted",
+    "timezone": "America/New_York",
+    "website": "redacted"
+  },
+  "customItems": [],
+  "sharedFolders": []
+}

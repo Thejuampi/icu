@@ -220,6 +220,11 @@ func executeCommand(
 		return 1
 	}
 
+	// --base-url is a global flag: resolve and strip it before per-command
+	// schema validation so commands with a strict schema accept it.
+	baseURL := icu.ResolveBaseURL(flags)
+	delete(flags, "base-url")
+
 	if err := validateCommandInput(cmd, posArgs, flags); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 
@@ -237,7 +242,11 @@ func executeCommand(
 	}
 
 	athleteID := icu.ResolveAthleteID(flags)
-	client := icu.NewClient(apiKey, athleteID)
+	if commandRequiresAuth(resource, action) {
+		warnRealAPI(stderr, baseURL)
+	}
+
+	client := icu.NewClient(apiKey, athleteID, icu.WithBaseURL(baseURL))
 
 	if err := cmd.Run(posArgs, flags, client, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
@@ -331,6 +340,7 @@ func printGlobalHelp(registry *CommandRegistry, w io.Writer) {
 	fmt.Fprintln(w, "Global flags:")
 	fmt.Fprintln(w, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
 	fmt.Fprintln(w, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
+	fmt.Fprintln(w, "  --base-url URL    API base URL (or ICU_BASE_URL env; default https://intervals.icu)")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Resources:")
 
@@ -398,5 +408,13 @@ func printCommandHelp(w io.Writer, command *Command) {
 			description += " (default: " + flag.Default + ")"
 		}
 		fmt.Fprintf(w, "  %-34s %s\n", label, description)
+	}
+}
+
+// warnRealAPI prints a stderr warning when baseURL targets the production
+// intervals.icu API, so RC and test runs notice they are not on the mock.
+func warnRealAPI(stderr io.Writer, baseURL string) {
+	if icu.IsRealAPIBaseURL(baseURL) {
+		fmt.Fprintf(stderr, "Warning: using the real intervals.icu API (%s). Set --base-url or %s to target a mock.\n", baseURL, icu.BaseURLEnv)
 	}
 }

@@ -18,6 +18,7 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 
 - `--api-key KEY`: overrides all other API key sources
 - `--athlete-id ID`: overrides all other athlete ID sources
+- `--base-url URL`: API base URL; overrides the `ICU_BASE_URL` env var; default `https://intervals.icu`. Accepted by every command (it is stripped before per-command flag validation). Commands that call the API print `Warning: using the real intervals.icu API ...` on stderr whenever the URL points at intervals.icu or a subdomain. Use it with the local mock (`scripts/rc-mock.sh`, see README "Testing against the mock").
 - `--output json|csv|table`: persisted and resolved, but not broadly wired into current command renderers
 
 ## Help Quirks
