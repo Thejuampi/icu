@@ -16,6 +16,7 @@ import (
 const (
 	upstreamTimeout = 60 * time.Second
 	fixtureDirPerm  = 0o750
+	maxRedirects    = 10
 )
 
 // recorder is the one-time fixture capture proxy. It forwards GET requests
@@ -32,7 +33,7 @@ func newRecorder(upstream, dir string, log io.Writer) *recorder {
 	return &recorder{
 		upstream: strings.TrimRight(upstream, "/"),
 		dir:      dir,
-		client:   &http.Client{Timeout: upstreamTimeout},
+		client:   &http.Client{Timeout: upstreamTimeout, CheckRedirect: sameOriginRedirect},
 		log:      log,
 	}
 }
@@ -336,6 +337,17 @@ func anonymizeDir(dir string) error {
 	})
 	if walkErr != nil {
 		return fmt.Errorf("anonymize %s: %w", dir, walkErr)
+	}
+
+	return nil
+}
+
+// sameOriginRedirect refuses any redirect that changes scheme or host, so a
+// capture can never be bounced to an unexpected server.
+func sameOriginRedirect(req *http.Request, via []*http.Request) error {
+	origin := via[0].URL
+	if !strings.EqualFold(req.URL.Scheme, origin.Scheme) || !strings.EqualFold(req.URL.Host, origin.Host) || len(via) >= maxRedirects {
+		return fmt.Errorf("refusing redirect %s://%s -> %s://%s", origin.Scheme, origin.Host, req.URL.Scheme, req.URL.Host)
 	}
 
 	return nil

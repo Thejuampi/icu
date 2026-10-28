@@ -13,6 +13,10 @@ workdir="$(mktemp -d "${TMPDIR:-/tmp}/icu-mock.XXXXXX")"
 bin="$workdir/icu-mock"
 log="$workdir/icu-mock.log"
 
+# Remove the temp dir on any failure; on success the "Stop" line removes it.
+cleanup() { [ -n "${pid:-}" ] && kill "$pid" 2>/dev/null; rm -rf "$workdir"; }
+trap cleanup ERR INT TERM
+
 (cd "$repo" && go build -o "$bin" ./tools/mockserver)
 
 cd "$repo"
@@ -26,14 +30,16 @@ for _ in $(seq 1 100); do
   if ! kill -0 "$pid" 2>/dev/null; then
     echo "icu-mock failed to start:" >&2
     cat "$log" >&2
+    cleanup
     exit 1
   fi
   sleep 0.1
 done
 
 if [ -z "$url" ]; then
-  echo "icu-mock did not report its address; see $log" >&2
-  kill "$pid" 2>/dev/null || true
+  echo "icu-mock did not report its address:" >&2
+  cat "$log" >&2
+  cleanup
   exit 1
 fi
 
@@ -45,4 +51,5 @@ echo
 echo "# Point the CLI at the mock (flag wins over env):"
 echo "export ICU_BASE_URL=$url INTERVALS_ICU_API_KEY=mock INTERVALS_ICU_ATHLETE_ID=0"
 echo "# Inspect / reset writes:  curl -s $url/_mock/writes   |   curl -s -X POST $url/_mock/reset"
-echo "# Stop:  kill $pid"
+trap - ERR INT TERM
+echo "# Stop (also removes $workdir):  kill $pid; rm -rf $workdir"

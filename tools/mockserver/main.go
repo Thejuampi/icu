@@ -57,12 +57,16 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	fs.IntVar(&opts.port, "port", 0, "listen port (0 picks a free port)")
 	fs.StringVar(&opts.fixtures, "fixtures", defaultFixtures, "fixture directory")
 	fs.BoolVar(&opts.record, "record", false, "fixture capture mode: forward GETs to -upstream and save anonymized responses")
-	fs.StringVar(&opts.upstream, "upstream", "https://intervals.icu", "upstream API for -record")
+	fs.StringVar(&opts.upstream, "upstream", "", "upstream API for -record (required with -record; no default)")
 
 	fs.StringVar(&opts.anonDir, "anonymize", "", "re-anonymize every fixture in this directory and exit")
 
 	if err := fs.Parse(args); err != nil {
 		return opts, fmt.Errorf("parse flags: %w", err)
+	}
+
+	if opts.record && opts.upstream == "" {
+		return opts, errors.New("-record requires an explicit -upstream URL")
 	}
 
 	if opts.port < 0 || opts.port > 65535 {
@@ -75,6 +79,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	opts, err := parseOptions(args, stderr)
 	if err != nil {
+		fmt.Fprintf(stderr, "icu-mock: %v\n", err)
+
 		return 2
 	}
 

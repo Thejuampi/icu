@@ -1,6 +1,9 @@
 package icu
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -33,7 +36,29 @@ func IsRealAPIBaseURL(baseURL string) bool {
 		return false
 	}
 
-	host := strings.ToLower(parsed.Hostname())
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
 
 	return host == "intervals.icu" || strings.HasSuffix(host, ".intervals.icu")
+}
+
+// ErrCrossOriginRedirect is returned when a redirect would leave the
+// configured base URL's scheme and host (e.g. from a mock to the real API).
+var ErrCrossOriginRedirect = errors.New("refusing redirect to a different scheme or host")
+
+const maxRedirects = 10
+
+// SameOriginRedirects is an http.Client CheckRedirect policy that follows a
+// redirect only when it keeps the original request's scheme and host, so a
+// redirect can never move a request off the --base-url target.
+func SameOriginRedirects(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+
+	origin := via[0].URL
+	if !strings.EqualFold(req.URL.Scheme, origin.Scheme) || !strings.EqualFold(req.URL.Host, origin.Host) {
+		return fmt.Errorf("%w: %s://%s -> %s://%s", ErrCrossOriginRedirect, origin.Scheme, origin.Host, req.URL.Scheme, req.URL.Host)
+	}
+
+	return nil
 }

@@ -87,3 +87,26 @@ func TestGlobalHelpMentionsBaseURL(t *testing.T) {
 		t.Fatalf("help missing --base-url: %q", stdout.String())
 	}
 }
+
+func TestRunBaseURLBeforeResource(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"i0","name":"Leading Flag"}`))
+	}))
+	defer server.Close()
+
+	for _, args := range [][]string{
+		{"icu", "--base-url", server.URL, "athlete", "show", "--api-key", "k"},
+		{"icu", "--base-url=" + server.URL, "athlete", "show", "--api-key", "k"},
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := run(args, &stdout, &stderr); code != 0 || !strings.Contains(stdout.String(), "Leading Flag") {
+			t.Fatalf("%v: code=%d stdout=%q stderr=%q", args, code, stdout.String(), stderr.String())
+		}
+	}
+
+	if got := hoistLeadingBaseURL([]string{"icu", "--base-url"}); len(got) != 2 {
+		t.Fatalf("lone flag = %v", got)
+	}
+}

@@ -178,7 +178,7 @@ func TestMergeArraysDedupesStreamsByType(t *testing.T) {
 func TestCommittedStreamFixturesHaveUniqueTypes(t *testing.T) {
 	t.Parallel()
 
-	for _, id := range []string{"i195273358", "i202545713", "i198806466"} {
+	for _, id := range []string{"i900000001", "i900000002", "i900000003"} {
 		body, err := os.ReadFile(filepath.Join("..", "..", "testdata", "fixtures", "api", "v1", "activity", id, "streams.json"))
 		if err != nil {
 			t.Fatal(err)
@@ -221,8 +221,8 @@ func TestAnonymizeHelpers(t *testing.T) {
 		t.Errorf("non-GPS stream dropped: %s", got)
 	}
 
-	activity := string(anonymizeJSON([]byte(`{"id":"i202545713","name":"Morning Ride","strava_id":"55"}`)))
-	if !strings.Contains(activity, "i202545713") || !strings.Contains(activity, "Morning Ride") || strings.Contains(activity, "55") {
+	activity := string(anonymizeJSON([]byte(`{"id":"i900000002","name":"Morning Ride","strava_id":"55"}`)))
+	if !strings.Contains(activity, "i900000002") || !strings.Contains(activity, "Morning Ride") || strings.Contains(activity, "55") {
 		t.Errorf("activity with strava_id must keep id/name and drop strava_id: %s", activity)
 	}
 
@@ -291,5 +291,57 @@ func TestRunRecordModeStarts(t *testing.T) {
 
 	if code := <-done; code != 0 {
 		t.Fatalf("run = %d", code)
+	}
+}
+
+func TestRecorderRefusesCrossHostRedirect(t *testing.T) {
+	t.Parallel()
+
+	var otherHits atomic.Int32
+
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		otherHits.Add(1)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer other.Close()
+
+	target := strings.Replace(other.URL, "127.0.0.1", "localhost", 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/same" {
+			http.Redirect(w, r, "/final", http.StatusFound)
+
+			return
+		}
+
+		if r.URL.Path == "/final" {
+			_, _ = w.Write([]byte(`{"ok":true}`))
+
+			return
+		}
+
+		http.Redirect(w, r, target+"/x", http.StatusFound)
+	}))
+	defer upstream.Close()
+
+	dir := t.TempDir()
+	ts := httptest.NewServer(newRecorder(upstream.URL, dir, io.Discard))
+	defer ts.Close()
+
+	if code, body := do(t, http.MethodGet, ts.URL+"/same", ""); code != 200 || !strings.Contains(body, "ok") {
+		t.Fatalf("same-host redirect = %d %s", code, body)
+	}
+
+	if code, _ := do(t, http.MethodGet, ts.URL+"/away", ""); code != http.StatusBadGateway || otherHits.Load() != 0 {
+		t.Fatalf("cross-host redirect = %d, other hits %d", code, otherHits.Load())
+	}
+}
+
+func TestRecordRequiresExplicitUpstream(t *testing.T) {
+	t.Parallel()
+
+	var stderr strings.Builder
+	if code := run(context.Background(), []string{"-record", "-fixtures", t.TempDir()}, io.Discard, &stderr); code != 2 ||
+		!strings.Contains(stderr.String(), "-record requires an explicit -upstream") {
+		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 }

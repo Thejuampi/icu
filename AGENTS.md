@@ -152,7 +152,7 @@ A human may still write tests first, or review tests before implementation. That
 
 ### Release Candidates Use the Mock Only
 
-RCs and any manual or agent testing are run only against the local mock (`scripts/rc-mock.sh` or `go run ./tools/mockserver`) with `--base-url http://127.0.0.1:<port>` / `ICU_BASE_URL`. Never test against a real intervals.icu account, not even read-only GETs, and never put commands that target the real API in RC instructions. Write commands are verified through the mock's `GET /_mock/writes` log. Refreshing fixtures is a separate, explicit, GET-only task using `-record`, and the captured data must go through the anonymizer before it is committed.
+RCs and any manual or agent testing are run only against the local mock (`scripts/rc-mock.sh` or `go run ./tools/mockserver`) with `--base-url http://127.0.0.1:<port>` / `ICU_BASE_URL`. Never test against a real intervals.icu account, not even read-only GETs, and never put commands that target the real API in RC instructions. Use `--no-weather` for `activity estimate-power` (Open-Meteo ignores `--base-url`) and do not run `zepp` commands in RCs. Write commands are verified through the mock's `GET /_mock/writes` log. Refreshing fixtures is a separate, explicit, GET-only task using `-record`, and the captured data must go through the anonymizer before it is committed.
 
 ### Mutation Testing
 

@@ -3,9 +3,14 @@ package main
 import (
 	"os"
 	"testing"
+
+	"github.com/Thejuampi/icu/internal/testnet"
 )
 
 func TestMain(m *testing.M) {
+	// No test may reach a non-loopback host (real API, Open-Meteo, Zepp).
+	testnet.Install()
+
 	dir, err := os.MkdirTemp("", "icu-cli-test-config-")
 	if err != nil {
 		panic(err)

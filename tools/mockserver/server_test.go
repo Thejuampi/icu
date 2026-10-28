@@ -34,10 +34,10 @@ func newTestServer(t *testing.T) *httptest.Server {
 
 	dir := t.TempDir()
 	writeFixture(t, dir, "api/v1/athlete/0.json", `{"id":"i0","name":"Mock Athlete","timezone":"America/New_York"}`)
-	writeFixture(t, dir, "api/v1/athlete/0/events/148627465.json", `{"id":148627465,"name":"Endurance"}`)
+	writeFixture(t, dir, "api/v1/athlete/0/events/800000001.json", `{"id":800000001,"name":"Endurance"}`)
 	writeFixture(t, dir, "api/v1/athlete/0/wellness.json",
 		`[{"id":"2026-10-01","ctl":50},{"id":"2026-10-10","ctl":51},{"id":"2026-10-20","ctl":52},{"note":"undated"}]`)
-	writeFixture(t, dir, "api/v1/activity/i195273358/streams.json", `[{"type":"watts","data":[100,200]}]`)
+	writeFixture(t, dir, "api/v1/activity/i900000001/streams.json", `[{"type":"watts","data":[100,200]}]`)
 	writeFixture(t, dir, "README.txt", "ignored")
 
 	srv, err := newServer(dir, io.Discard)
@@ -88,9 +88,9 @@ func TestServerServesFixtures(t *testing.T) {
 		{"/api/v1/athlete/0", 200, "America/New_York"},
 		{"/api/v1/athlete/i445566", 200, "Mock Athlete"},
 		{"/api/v1/athlete/0/", 200, "Mock Athlete"},
-		{"/api/v1/athlete/0/events/148627465", 200, "Endurance"},
-		{"/api/v1/activity/i195273358/streams", 200, "watts"},
-		{"/api/v1/activity/i195273358/streams.json", 200, "watts"},
+		{"/api/v1/athlete/0/events/800000001", 200, "Endurance"},
+		{"/api/v1/activity/i900000001/streams", 200, "watts"},
+		{"/api/v1/activity/i900000001/streams.json", 200, "watts"},
 		{"/api/v1/activity/i000/streams", 404, "no fixture"},
 		{"/_mock/health", 200, "ok"},
 	}
@@ -129,10 +129,10 @@ func TestServerRecordsWritesInMemoryAndResets(t *testing.T) {
 	t.Parallel()
 
 	ts := newTestServer(t)
-	eventURL := ts.URL + "/api/v1/athlete/0/events/148627465"
+	eventURL := ts.URL + "/api/v1/athlete/0/events/800000001"
 
 	code, body := do(t, http.MethodPut, eventURL, `{"name":"x"}`)
-	if code != 200 || !strings.Contains(body, `"name":"x"`) || !strings.Contains(body, "148627465") {
+	if code != 200 || !strings.Contains(body, `"name":"x"`) || !strings.Contains(body, "800000001") {
 		t.Fatalf("PUT = %d %s", code, body)
 	}
 
@@ -170,7 +170,7 @@ func TestServerRecordsWritesInMemoryAndResets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.Count != 6 || got.Writes[0].Method != http.MethodPut || got.Writes[0].Path != "/api/v1/athlete/0/events/148627465" ||
+	if got.Count != 6 || got.Writes[0].Method != http.MethodPut || got.Writes[0].Path != "/api/v1/athlete/0/events/800000001" ||
 		string(got.Writes[0].Body) != `{"name":"x"}` || got.Writes[1].Query != "upsert=true" || string(got.Writes[2].Body) != `"plain text"` ||
 		got.Writes[0].Time != "2026-10-27T12:00:00Z" {
 		t.Fatalf("writes = %+v", got)
@@ -233,9 +233,9 @@ func TestCommittedFixturesCoverCLIEndpoints(t *testing.T) {
 		"/api/v1/athlete/0/wellness",
 		"/api/v1/athlete/0/events",
 		"/api/v1/athlete/0/activities",
-		"/api/v1/activity/i195273358/streams",
-		"/api/v1/activity/i202545713/streams",
-		"/api/v1/activity/i198806466/streams",
+		"/api/v1/activity/i900000001/streams",
+		"/api/v1/activity/i900000002/streams",
+		"/api/v1/activity/i900000003/streams",
 	} {
 		if _, ok := srv.lookup(key); !ok {
 			t.Errorf("missing fixture %s", key)

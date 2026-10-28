@@ -22,6 +22,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 
+	args = hoistLeadingBaseURL(args)
+
 	if len(args) >= minArgs && isHelpArg(args[1]) {
 		printHelp(registry, stdout, "")
 
@@ -417,4 +419,23 @@ func warnRealAPI(stderr io.Writer, baseURL string) {
 	if icu.IsRealAPIBaseURL(baseURL) {
 		fmt.Fprintf(stderr, "Warning: using the real intervals.icu API (%s). Set --base-url or %s to target a mock.\n", baseURL, icu.BaseURLEnv)
 	}
+}
+
+// hoistLeadingBaseURL lets the global --base-url flag appear before the
+// resource ("icu --base-url URL athlete show") by moving it to the end.
+func hoistLeadingBaseURL(args []string) []string {
+	if len(args) < 2 {
+		return args
+	}
+
+	first := args[1]
+
+	switch {
+	case strings.HasPrefix(first, "--base-url="):
+		return append(append([]string{args[0]}, args[2:]...), first)
+	case first == "--base-url" && len(args) >= 3:
+		return append(append([]string{args[0]}, args[3:]...), first, args[2])
+	}
+
+	return args
 }
