@@ -84,6 +84,12 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 				{"id": "h3", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.04},
 				{"id": "h4", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.06},
 				{"id": "h5", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.08},
+				// Interval-paired and unpaired rides must not enter the
+				// steady-only VI cutoff (it would rise well above 1.12).
+				{"id": "h6", "type": "Ride", "pairedEventId": 79, "icuVariabilityIndex": 1.6},
+				{"id": "h7", "type": "Ride", "pairedEventId": 79, "icuVariabilityIndex": 1.7},
+				{"id": "h8", "type": "Ride", "icuVariabilityIndex": 1.8},
+				{"id": "h9", "type": "Ride", "icuVariabilityIndex": 1.9},
 			})
 		case strings.Contains(path, "/activity/"):
 			id := path[strings.LastIndex(path, "/")+1:]

@@ -281,10 +281,14 @@ func loadDecouplingHistory(client *icu.Client, oldest, newest string) *decouplin
 	}
 	historyOldest := end.AddDate(0, 0, -decouplingVIHistoryDays).Format(dateLayout)
 	eventsOldest := minString(oldest, historyOldest)
+	var settings icu.SportSettings
+	if client.Get("sport-settings", []string{"Ride"}, nil, &settings) != nil {
+		settings = icu.SportSettings{}
+	}
 	var events []icu.Event
 	if client.Get("events", nil, map[string]string{queryOldest: eventsOldest, queryNewest: newest}, &events) == nil {
 		for index := range events {
-			if trim, kind, ok := icu.PlannedDecouplingWorkout(events[index].WorkoutDoc); ok {
+			if trim, kind, ok := icu.PlannedDecouplingWorkoutZones(events[index].WorkoutDoc, settings.PowerZones); ok {
 				history.plans[events[index].ID], history.kinds[events[index].ID] = trim, kind
 			}
 		}
@@ -403,7 +407,9 @@ func activityDecouplingCommand() *Command {
 			"moving-time minutes, next to intervals.icu's decoupling field (the default consumed value). Trim from the " +
 			"paired workout's steps then steady-state detection, HR lag by cross-correlation, coasting/missing-HR minutes " +
 			"and Tukey ratio outliers excluded. Not measurable for interval/ladder workouts or a VI above the cutoff " +
-			"derived from the last 84 days of steady rides. Read-only.",
+			"derived from the last 84 days of steady rides. Rides without a paired steady workout are " +
+			"not measured unless at least 4 steady paired rides in those 84 days give a VI cutoff, so for an athlete " +
+			"who rarely pairs steady workouts it almost never measures anything. Read-only.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")

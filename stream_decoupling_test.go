@@ -157,34 +157,41 @@ func TestStreamDecouplingExcludesCoastingMinutes(t *testing.T) {
 }
 
 // outlierRide: minute powers cycle 148/150/152/154 W at constant HR, one
-// minute at 162 W (between the k=1.5 and k=3 fences), and 20 coasting
-// minutes (20 s at 150 W) that would widen the fences if they were counted.
+// minute at 162 W (between the k=1.5 and k=3 fences), and 30 low-power
+// minutes pedalled at 60 W (not coasting) whose HR covers only 20 s, so the
+// missing_hr filter drops them. Their 60/140 ratio would widen the fences
+// enough to keep the 162 W minute if fences were computed before filtering.
 func outlierRide() icu.NullableStreamData {
 	cycle := []float64{148, 150, 152, 154}
+	lowMinute := func(sec int) bool { return sec/60 >= 20 && sec/60 < 50 }
 	power := func(sec int) float64 {
 		minute := sec / 60
 		switch {
 		case minute == 60:
 			return 162
-		case minute >= 20 && minute < 40:
-			if sec%60 < 20 {
-				return 150
-			}
-
-			return 0
+		case lowMinute(sec):
+			return 60
 		default:
 			return cycle[minute%len(cycle)]
 		}
 	}
+	hr := func(sec int) float64 {
+		if lowMinute(sec) && sec%60 >= 20 {
+			return -1
+		}
 
-	return synthRide(90, power, constant(140))
+		return 140
+	}
+
+	return synthRide(90, power, hr)
 }
 
 func TestStreamDecouplingIQRFencesAfterPowerFilter(t *testing.T) {
 	t.Parallel()
 	got := mustDecouple(t, outlierRide(), fixed(icu.DefaultDecouplingIQRK))
-	if got.Excluded[icu.DecouplingExcludedRatioOutlier] != 1 || got.Excluded[icu.DecouplingExcludedCoasting] != 20 {
-		t.Fatalf("excluded = %v, want 1 ratio_outlier and 20 coasting", got.Excluded)
+	if got.Excluded[icu.DecouplingExcludedRatioOutlier] != 1 || got.Excluded[icu.DecouplingExcludedMissingHR] != 30 ||
+		got.Excluded[icu.DecouplingExcludedCoasting] != 0 {
+		t.Fatalf("excluded = %v, want 1 ratio_outlier, 30 missing_hr, no coasting", got.Excluded)
 	}
 	if got.RatioFenceHigh == nil || *got.RatioFenceHigh >= 162.0/140 {
 		t.Fatalf("high fence = %v, want below 162/140", got.RatioFenceHigh)
@@ -436,8 +443,61 @@ func TestStreamDecouplingHRLagSearchIsBounded(t *testing.T) {
 	options := fixed(0)
 	options.HRLagSeconds = nil
 	got := mustDecouple(t, synthRide(90, power, hr), options)
-	if got.HRLagSeconds > 120 {
-		t.Fatalf("lag = %d, want within the 120 s bound", got.HRLagSeconds)
+	if got.HRLagSeconds != 120 {
+		t.Fatalf("lag = %d, want clamped to the 120 s bound", got.HRLagSeconds)
+	}
+}
+
+func TestStreamDecouplingHRLagNinetySeconds(t *testing.T) {
+	t.Parallel()
+	// A realistic ~90 s HR response, inside the search range: found, not clamped.
+	power := func(sec int) float64 {
+		if (sec/600)%2 == 0 {
+			return 150
+		}
+
+		return 250
+	}
+	hr := func(sec int) float64 { return 100 + 0.2*power(sec-90) }
+	options := fixed(0)
+	options.HRLagSeconds = nil
+	got := mustDecouple(t, synthRide(90, power, hr), options)
+	if got.HRLagSeconds < 85 || got.HRLagSeconds > 95 || got.HRLagMethod != "cross_correlation" {
+		t.Fatalf("lag = %d (%s), want ~90 s by cross-correlation", got.HRLagSeconds, got.HRLagMethod)
+	}
+}
+
+func TestPlannedDecouplingWorkoutAthleteZonesAndFlatLadder(t *testing.T) {
+	t.Parallel()
+	step := func(seconds int, watts, cadence float64) map[string]any {
+		out := map[string]any{"duration": seconds, "power": map[string]any{"value": watts, "units": "%ftp"}}
+		if cadence > 0 {
+			out["cadence"] = map[string]any{"value": cadence}
+		}
+
+		return out
+	}
+	ramp := map[string]any{"duration": 600, "ramp": true, "power": map[string]any{"start": 50, "end": 65, "units": "%ftp"}}
+	// 62/68/72 % FTP: three raw targets, one athlete zone (Z2 56-75 %).
+	sameZone := map[string]any{"steps": []any{ramp, step(1200, 62, 0), step(1200, 68, 0), step(1200, 72, 0), step(600, 50, 0)}}
+	zones := []int{55, 75, 90, 105, 120, 150, 999}
+	if _, kind, _ := icu.PlannedDecouplingWorkoutZones(sameZone, zones); kind != icu.DecouplingWorkoutSteady {
+		t.Fatalf("athlete zones: %q, want steady", kind)
+	}
+	if _, kind, _ := icu.PlannedDecouplingWorkoutZones(sameZone, nil); kind != icu.DecouplingWorkoutIntervals {
+		t.Fatalf("raw targets: %q, want intervals", kind)
+	}
+	// 62 vs 80 % FTP spans Z2/Z3 with athlete zones.
+	twoZones := map[string]any{"steps": []any{ramp, step(1800, 62, 0), step(1800, 80, 0), step(600, 50, 0)}}
+	if _, kind, _ := icu.PlannedDecouplingWorkoutZones(twoZones, zones); kind != icu.DecouplingWorkoutIntervals {
+		t.Fatalf("two athlete zones: %q, want intervals", kind)
+	}
+	// Cadence ladder written as flat steps (no repeat block).
+	flat := map[string]any{"steps": []any{
+		ramp, step(600, 65, 90), step(600, 65, 100), step(600, 65, 70), step(600, 65, 90), step(600, 50, 0),
+	}}
+	if _, kind, _ := icu.PlannedDecouplingWorkoutZones(flat, zones); kind != icu.DecouplingWorkoutLadder {
+		t.Fatalf("flat ladder: %q, want ladder", kind)
 	}
 }
 

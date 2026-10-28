@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -730,11 +731,18 @@ type decouplingZoneTime struct {
 // PlannedDecouplingWorkout decodes a workout doc (as returned by the events
 // API) into its warm-up/cool-down trim and its kind:
 //   - intervals: the main set (between the trimmed edges) targets more than
-//     one power zone, zones taken from the doc's own zoneTimes (the athlete's
-//     zones); without zoneTimes, more than one distinct target;
-//   - ladder: a repeated block whose steps change the cadence target;
+//     one power zone, zones taken from the doc's own zoneTimes;
+//   - ladder: main-set steps (repeated or flat) with more than one cadence target;
 //   - steady otherwise.
 func PlannedDecouplingWorkout(raw any) (*DecouplingPlanTrim, string, bool) {
+	return PlannedDecouplingWorkoutZones(raw, nil)
+}
+
+// PlannedDecouplingWorkoutZones is PlannedDecouplingWorkout with the
+// athlete's power zones (upper bounds in % FTP, from sport settings) used
+// when the doc has no zoneTimes. Without either, distinct raw targets count
+// as distinct zones.
+func PlannedDecouplingWorkoutZones(raw any, athleteZones []int) (*DecouplingPlanTrim, string, bool) {
 	doc, err := DecodeWorkoutDoc(raw)
 	if err != nil {
 		return nil, "", false
@@ -750,6 +758,12 @@ func PlannedDecouplingWorkout(raw any) (*DecouplingPlanTrim, string, bool) {
 		_ = json.Unmarshal(data, &zones)
 	}
 
+	if len(zones.ZoneTimes) == 0 {
+		for index, upper := range athleteZones {
+			zones.ZoneTimes = append(zones.ZoneTimes, decouplingZoneTime{ID: "Z" + strconv.Itoa(index+1), Max: float64(upper)})
+		}
+	}
+
 	return trim, plannedWorkoutKind(ExpandWorkoutSteps(doc), trim, zones.ZoneTimes), true
 }
 
@@ -759,7 +773,7 @@ func plannedWorkoutKind(steps []PlannedWorkoutStep, trim *DecouplingPlanTrim, zo
 		total += steps[index].DurationSeconds
 	}
 	seenZones := map[float64]bool{}
-	cadence := map[int]map[float64]bool{}
+	cadence := map[float64]bool{}
 	for index := range steps {
 		step := &steps[index]
 		if step.StartOffset < trim.WarmupSeconds || step.EndOffset > total-trim.CooldownSeconds {
@@ -768,20 +782,15 @@ func plannedWorkoutKind(steps []PlannedWorkoutStep, trim *DecouplingPlanTrim, zo
 		if target := targetReference(step.Power); target > 0 {
 			seenZones[decouplingStepZone(step.Power, target, zones)] = true
 		}
-		if step.ParentIndex > 0 && step.Cadence != nil {
-			if cadence[step.ParentIndex] == nil {
-				cadence[step.ParentIndex] = map[float64]bool{}
-			}
-			cadence[step.ParentIndex][targetReference(step.Cadence)] = true
+		if step.Cadence != nil {
+			cadence[targetReference(step.Cadence)] = true
 		}
 	}
 	if len(seenZones) > 1 {
 		return DecouplingWorkoutIntervals
 	}
-	for _, values := range cadence {
-		if len(values) > 1 {
-			return DecouplingWorkoutLadder
-		}
+	if len(cadence) > 1 {
+		return DecouplingWorkoutLadder
 	}
 
 	return DecouplingWorkoutSteady

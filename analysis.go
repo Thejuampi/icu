@@ -262,8 +262,14 @@ type CyclingIntensity struct {
 }
 
 type CyclingDurability struct {
-	AverageDecoupling        float64 `json:"averageDecoupling"`
-	HighDecouplingActivities int     `json:"highDecouplingActivities"`
+	AverageDecoupling float64 `json:"averageDecoupling"`
+	// AverageDecouplingAPI / AverageDecouplingStreams average each source
+	// separately (B15): the API value of every ride that has one, and the
+	// stream value of every measured ride. Emitted only when streams
+	// enrichment ran (--decoupling-source streams); nil otherwise.
+	AverageDecouplingAPI     *float64 `json:"averageDecouplingApi,omitempty"`
+	AverageDecouplingStreams *float64 `json:"averageDecouplingStreams,omitempty"`
+	HighDecouplingActivities int      `json:"highDecouplingActivities"`
 	// DecouplingSources counts contributing activities by decoupling source
 	// (B15): "api" or "streams" (omitted when not enriched).
 	DecouplingSources       map[string]int `json:"decouplingSources,omitempty"`
@@ -404,6 +410,9 @@ type cyclingAnalysisAccumulator struct {
 	powerMovingTimeSecs            int
 	intensity                      numericAccumulator
 	decoupling                     numericAccumulator
+	decouplingAPI                  numericAccumulator
+	decouplingStreams              numericAccumulator
+	decouplingEnriched             bool
 	efficiency                     numericAccumulator
 	variability                    numericAccumulator
 	wbalDepletion                  numericAccumulator
@@ -674,6 +683,17 @@ func (accumulator *cyclingAnalysisAccumulator) addDurability(activity *Activity)
 		accumulator.decoupling.add(activity.Decoupling)
 		accumulator.updateMaxDecoupling(activity.Decoupling)
 		accumulator.addHighDecoupling(activity.Decoupling)
+	}
+	if activity.DecouplingStreamsStatus != "" {
+		accumulator.decouplingEnriched = true
+	}
+	if activity.DecouplingAPI != nil {
+		accumulator.decouplingAPI.add(*activity.DecouplingAPI)
+	} else if activity.HasDecoupling() && activity.DecouplingSource != DecouplingSourceStreams {
+		accumulator.decouplingAPI.add(activity.Decoupling)
+	}
+	if activity.DecouplingStreams != nil {
+		accumulator.decouplingStreams.add(*activity.DecouplingStreams)
 	}
 
 	if activity.EfficiencyFactor != 0 {
@@ -1049,6 +1069,14 @@ func (accumulator *cyclingAnalysisAccumulator) finishIntensity() {
 
 func (accumulator *cyclingAnalysisAccumulator) finishDurability() {
 	accumulator.analysis.Durability.AverageDecoupling = round2(accumulator.decoupling.average())
+	// Only with stream enrichment: in API mode averageDecoupling already is
+	// the API average, and the default output shape is unchanged.
+	if accumulator.decouplingEnriched && accumulator.decouplingAPI.count > 0 {
+		accumulator.analysis.Durability.AverageDecouplingAPI = new(round2(accumulator.decouplingAPI.average()))
+	}
+	if accumulator.decouplingStreams.count > 0 {
+		accumulator.analysis.Durability.AverageDecouplingStreams = new(round2(accumulator.decouplingStreams.average()))
+	}
 	accumulator.analysis.Durability.AverageEfficiencyFactor = round2(accumulator.efficiency.average())
 	accumulator.analysis.Durability.AverageVariabilityIndex = round2(accumulator.variability.average())
 }
