@@ -272,14 +272,14 @@ func TestAnalysisCyclingCommandReportsFieldsGuaranteedDespiteOverride(t *testing
 	}
 }
 
-func TestTrainingPlanDateRangesDefaultToTwelveWeekHistoryAndNextISOBlock(t *testing.T) {
+func TestTrainingPlanDateRangesDefaultToTwelveWeekHistoryAndNextDay(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.May, 30, 12, 0, 0, 0, time.UTC)
 	got, explicit, err := trainingPlanDateRanges(map[string]string{}, now)
 	want := trainingPlanRanges{
 		History: analysisRange{Oldest: "2026-03-08", Newest: "2026-05-30"},
-		Plan:    analysisRange{Oldest: "2026-06-01", Newest: "2026-06-28"},
+		Plan:    analysisRange{Oldest: "2026-05-31", Newest: "2026-06-27"},
 	}
 
 	if err != nil || got != want || explicit {
@@ -342,7 +342,7 @@ func TestTrainingPlanDateRangesHandleSundayBoundaries(t *testing.T) {
 
 	defaults, defaultExplicit, err := trainingPlanDateRanges(map[string]string{}, now)
 	if err != nil || defaultExplicit || defaults.Plan.Oldest != planMonday {
-		t.Fatalf("default trainingPlanDateRanges = %+v explicit %v error %v, want next Monday", defaults, defaultExplicit, err)
+		t.Fatalf("default trainingPlanDateRanges = %+v explicit %v error %v, want the next day (a Monday here)", defaults, defaultExplicit, err)
 	}
 }
 

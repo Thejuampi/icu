@@ -1301,15 +1301,50 @@ func acuteChronicWorkRatio(acuteLoad, chronicLoad int) float64 {
 }
 
 func activityDate(activity *Activity) string {
+	return ActivityLocalDate(activity, nil)
+}
+
+// ActivityLocalDate is the activity's calendar day: start_date_local when
+// present, else start_date (UTC) converted to location (UTC when nil), so an
+// activity at 23:30 in America/New_York stays on its local day.
+func ActivityLocalDate(activity *Activity, location *time.Location) string {
 	if len(activity.StartDateLocal) >= len(analysisDateLayout) {
 		return activity.StartDateLocal[:len(analysisDateLayout)]
 	}
-
+	if local, ok := activityLocalStart(activity, location); ok {
+		return local.Format(analysisDateLayout)
+	}
 	if len(activity.StartDate) >= len(analysisDateLayout) {
 		return activity.StartDate[:len(analysisDateLayout)]
 	}
 
 	return ""
+}
+
+func activityLocalStart(activity *Activity, location *time.Location) (time.Time, bool) {
+	if location == nil {
+		location = time.UTC
+	}
+	start, err := time.Parse(time.RFC3339, activity.StartDate)
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	return start.In(location), true
+}
+
+// LocalizeActivityDates fills a missing start_date_local from start_date in
+// location (the analysis timezone), so every date-keyed analysis uses the
+// athlete's local day instead of the UTC one.
+func LocalizeActivityDates(activities []Activity, location *time.Location) {
+	for index := range activities {
+		if activities[index].StartDateLocal != "" {
+			continue
+		}
+		if local, ok := activityLocalStart(&activities[index], location); ok {
+			activities[index].StartDateLocal = local.Format("2006-01-02T15:04:05")
+		}
+	}
 }
 
 func cyclingSessionFromActivity(activity *Activity) CyclingSession {

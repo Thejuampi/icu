@@ -215,7 +215,7 @@ func readCoachingContextInputs(
 		inputs.SportSettings = &sportSettings
 	}
 
-	activities, err := readCoachingActivities(client, flags, dateRanges.History)
+	activities, err := readCoachingActivities(client, flags, dateRanges.History, tzInfo.location)
 	if err != nil {
 		return inputs, err
 	}
@@ -275,7 +275,9 @@ func readCoachingContextInputs(
 	return inputs, nil
 }
 
-func readCoachingActivities(client *icu.Client, flags map[string]string, dateRange analysisRange) ([]icu.Activity, error) {
+func readCoachingActivities(
+	client *icu.Client, flags map[string]string, dateRange analysisRange, location *time.Location,
+) ([]icu.Activity, error) {
 	query := queryFromFlags(flags, "limit")
 	query["oldest"] = dateRange.Oldest
 	query["newest"] = dateRange.Newest
@@ -285,6 +287,7 @@ func readCoachingActivities(client *icu.Client, flags map[string]string, dateRan
 	if err := client.Get("activities", nil, query, &activities); err != nil {
 		return nil, wrapCommandError(err)
 	}
+	icu.LocalizeActivityDates(activities, location)
 
 	if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
 		return nil, err
@@ -399,6 +402,7 @@ func analysisCyclingCommand() *Command {
 			if err := client.Get("activities", nil, query, &activities); err != nil {
 				return wrapCommandError(err)
 			}
+			icu.LocalizeActivityDates(activities, tzInfo.location)
 			if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
 				return err
 			}
@@ -487,6 +491,7 @@ func analysisPlanCommand() *Command {
 			if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
 				return wrapCommandError(err)
 			}
+			icu.LocalizeActivityDates(activities, tzInfo.location)
 			if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
 				return err
 			}
@@ -747,6 +752,7 @@ func analysisAdaptationCommand() *Command {
 			if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
 				return wrapCommandError(err)
 			}
+			icu.LocalizeActivityDates(activities, tzInfo.location)
 
 			curveQuery := map[string]string{
 				"type":   sportType,
@@ -893,23 +899,12 @@ func trainingPlanFutureRange(flags map[string]string, now time.Time) (analysisRa
 		return analysisRange{}, false, err
 	}
 
-	start := nextISOBlockStart(now)
+	// The default plan starts the day after today (athlete timezone: now is
+	// already in it), so history and plan are contiguous with no gap.
+	start := now.AddDate(0, 0, 1)
 	end := start.AddDate(0, 0, days-1)
 
 	return analysisRange{Oldest: start.Format("2006-01-02"), Newest: end.Format("2006-01-02")}, false, nil
-}
-
-func nextISOBlockStart(now time.Time) time.Time {
-	var weekday int
-	weekday = int(now.Weekday())
-
-	if weekday == 0 {
-		weekday = calendarWeekDays
-	}
-
-	daysUntilMonday := (nextWeekdayModuloBase - weekday) % calendarWeekDays
-
-	return now.AddDate(0, 0, daysUntilMonday)
 }
 
 func alignToISOWeekStart(date string) string {
