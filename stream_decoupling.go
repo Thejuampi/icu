@@ -25,7 +25,7 @@ const (
 
 	// DecouplingAlgorithmVersion is bumped whenever the stream algorithm
 	// changes so cached results are recomputed.
-	DecouplingAlgorithmVersion = 4
+	DecouplingAlgorithmVersion = 5
 )
 
 // Stream decoupling status values.
@@ -152,13 +152,13 @@ type StreamDecoupling struct {
 	// low_confidence or not_valid; failed criteria are listed by name.
 	// RawValue is the stream pipeline's number before the criteria: kept
 	// (shown, never consumed) when the ride is not valid.
-	RawValue        *float64              `json:"rawValue,omitempty"`
-	Validity        string                `json:"validity,omitempty"`
-	Criteria        []DecouplingCriterion `json:"criteria,omitempty"`
-	FailedCriteria  []string              `json:"failedCriteria,omitempty"`
-	HRStabilized    bool                  `json:"hrStabilized"`
-	Interpretation  string                `json:"interpretation,omitempty"`
-	PossibleFatigue bool                  `json:"possibleFatigue,omitempty"`
+	RawValue            *float64              `json:"rawValue,omitempty"`
+	Validity            string                `json:"validity,omitempty"`
+	Criteria            []DecouplingCriterion `json:"criteria,omitempty"`
+	FailedCriteriaNames []string              `json:"failedCriteriaNames,omitempty"`
+	HRStabilized        bool                  `json:"hrStabilized"`
+	Interpretation      string                `json:"interpretation,omitempty"`
+	PossibleFatigue     bool                  `json:"possibleFatigue,omitempty"`
 }
 
 // DecouplingStreamTypes is the stream request used by the decoupling fetch
@@ -381,25 +381,23 @@ func (ride *decouplingRide) samplesPerMinute() int {
 // trim returns [start, end) positions into ride.moving.
 func (ride *decouplingRide) trim(options DecouplingOptions, result *StreamDecoupling) (int, int) {
 	toSamples := func(seconds int) int { return int(math.Round(float64(seconds) / ride.step)) }
-	if options.WarmupSeconds != nil || options.CooldownSeconds != nil {
-		result.Trim.Method = DecouplingTrimManual
-		if options.WarmupSeconds != nil {
-			result.Trim.WarmupSeconds = *options.WarmupSeconds
-		}
-		if options.CooldownSeconds != nil {
-			result.Trim.CooldownSeconds = *options.CooldownSeconds
-		}
-
-		return toSamples(result.Trim.WarmupSeconds), len(ride.moving) - toSamples(result.Trim.CooldownSeconds)
-	}
-
 	warmup, stabilized := ride.coachWarmupSamples()
 	result.HRStabilized = stabilized
 	result.Trim.Method = DecouplingTrimCoachFixed
 	result.Trim.WarmupSeconds = int(math.Round(float64(warmup) * ride.step))
 	result.Trim.CooldownSeconds = CoachCooldownSeconds
+	// Manual overrides may only lengthen the coach's trim, never shorten it.
+	if options.WarmupSeconds != nil && *options.WarmupSeconds > result.Trim.WarmupSeconds {
+		result.Trim.Method = DecouplingTrimManual
+		result.Trim.WarmupSeconds = *options.WarmupSeconds
+		warmup = toSamples(result.Trim.WarmupSeconds)
+	}
+	if options.CooldownSeconds != nil && *options.CooldownSeconds > result.Trim.CooldownSeconds {
+		result.Trim.Method = DecouplingTrimManual
+		result.Trim.CooldownSeconds = *options.CooldownSeconds
+	}
 
-	return warmup, len(ride.moving) - toSamples(CoachCooldownSeconds)
+	return warmup, len(ride.moving) - toSamples(result.Trim.CooldownSeconds)
 }
 
 // hrLag sets result.HRLagSeconds from the override or cross-correlation.
@@ -655,7 +653,7 @@ const (
 	DecouplingWorkoutIntervals = "intervals"
 	DecouplingWorkoutLadder    = "ladder"
 	// DecouplingWorkoutUnverified: the main set uses targets this method does
-	// not classify (pace targets, or watt targets without an FTP).
+	// not classify (pace or HR-only targets, or watt targets without an FTP).
 	DecouplingWorkoutUnverified = "unverified"
 	powerZoneUnits              = "power_zone"
 )
@@ -724,7 +722,8 @@ func plannedWorkoutKind(steps []PlannedWorkoutStep, trim *DecouplingPlanTrim, zo
 		if step.StartOffset < trim.WarmupSeconds || step.EndOffset > total-trim.CooldownSeconds {
 			continue
 		}
-		if step.Power == nil && step.Pace != nil {
+		// Pace- or HR-only steps: the method cannot classify them.
+		if step.Power == nil && (step.Pace != nil || step.HR != nil) {
 			return DecouplingWorkoutUnverified
 		}
 		if target := targetReference(step.Power); target > 0 {

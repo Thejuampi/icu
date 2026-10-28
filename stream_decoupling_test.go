@@ -82,10 +82,16 @@ func TestStreamDecouplingDetectsHRDrift(t *testing.T) {
 func TestStreamDecouplingManualTrim(t *testing.T) {
 	t.Parallel()
 	options := fixed(0)
-	options.WarmupSeconds, options.CooldownSeconds = new(600), new(300)
+	options.WarmupSeconds, options.CooldownSeconds = new(1500), new(900)
 	got := mustDecouple(t, synthRide(90, constant(150), constant(135)), options)
-	if got.Trim.Method != icu.DecouplingTrimManual || got.MinutesInRange != 75 {
-		t.Fatalf("trim %+v in range %d, want manual 75", got.Trim, got.MinutesInRange)
+	if got.Trim.Method != icu.DecouplingTrimManual || got.MinutesInRange != 50 {
+		t.Fatalf("trim %+v in range %d, want manual 50", got.Trim, got.MinutesInRange)
+	}
+	// Shorter overrides are clamped up to the coach's 15/10 min trim.
+	options.WarmupSeconds, options.CooldownSeconds = new(600), new(300)
+	short := mustDecouple(t, synthRide(90, constant(150), constant(135)), options)
+	if short.Trim.Method != icu.DecouplingTrimCoachFixed || short.MinutesInRange != 65 {
+		t.Fatalf("short override %+v in range %d, want coach_fixed 65", short.Trim, short.MinutesInRange)
 	}
 }
 
@@ -104,8 +110,8 @@ func TestStreamDecouplingExcludesCoastingMinutes(t *testing.T) {
 		return 150
 	}
 	got := mustDecouple(t, synthRide(90, power, constant(135)), fixed(0))
-	if got.Excluded[icu.DecouplingExcludedCoasting] != 5 || got.MinutesKept != 85 || *got.Value != 0 {
-		t.Fatalf("excluded %v kept %d value %v, want coasting 5, 85 kept, 0", got.Excluded, got.MinutesKept, *got.Value)
+	if got.Excluded[icu.DecouplingExcludedCoasting] != 5 || got.MinutesKept != 60 || *got.Value != 0 {
+		t.Fatalf("excluded %v kept %d value %v, want coasting 5, 60 kept, 0", got.Excluded, got.MinutesKept, *got.Value)
 	}
 	// Pedalling 40 of 60 s is not coasting.
 	half := func(sec int) float64 {
@@ -202,8 +208,8 @@ func TestStreamDecouplingMissingHRRule(t *testing.T) {
 		return 135
 	}
 	got := mustDecouple(t, synthRide(90, constant(150), hr), fixed(0))
-	if got.Excluded[icu.DecouplingExcludedMissingHR] != 1 || len(got.ExcludedMinutes) != 1 || got.ExcludedMinutes[0].Minute != 30 {
-		t.Fatalf("excluded = %v %v, want missing_hr at minute 30 only", got.Excluded, got.ExcludedMinutes)
+	if got.Excluded[icu.DecouplingExcludedMissingHR] != 1 || len(got.ExcludedMinutes) != 1 || got.ExcludedMinutes[0].Minute != 15 {
+		t.Fatalf("excluded = %v %v, want missing_hr at minute 15 (30 - 15 min warm-up) only", got.Excluded, got.ExcludedMinutes)
 	}
 }
 
@@ -508,5 +514,13 @@ func TestPlannedDecouplingWorkoutWattAndPaceTargets(t *testing.T) {
 	run := map[string]any{"steps": []any{pace(600, 75), pace(3000, 85), pace(600, 70)}}
 	if _, kind, _ := icu.PlannedDecouplingWorkoutZones(run, zones, 250); kind != icu.DecouplingWorkoutUnverified {
 		t.Fatalf("pace run: %q, want unverified", kind)
+	}
+	// A run step with only HR targets is not measured as steady either.
+	hrStep := func(seconds int, value float64) map[string]any {
+		return map[string]any{"duration": seconds, "hr": map[string]any{"value": value, "units": "%lthr"}}
+	}
+	hrRun := map[string]any{"steps": []any{hrStep(600, 70), hrStep(3000, 80), hrStep(600, 70)}}
+	if _, kind, _ := icu.PlannedDecouplingWorkoutZones(hrRun, zones, 250); kind != icu.DecouplingWorkoutUnverified {
+		t.Fatalf("HR-only run: %q, want unverified", kind)
 	}
 }

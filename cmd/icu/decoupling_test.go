@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,11 +15,16 @@ import (
 	icu "github.com/Thejuampi/icu"
 )
 
-func synthStreamsJSON(minutes int) []icu.ActivityStream {
+// synthStreamsJSON: a steady 150 W / 135 bpm ride; from driftFromMinute
+// (when > 0) HR is 140 bpm, so the stream decoupling is nonzero.
+func synthStreamsJSON(minutes, driftFromMinute int) []icu.ActivityStream {
 	n := minutes * 60
 	timeData, watts, hr := make([]float64, n), make([]float64, n), make([]float64, n)
 	for sec := range n {
 		timeData[sec], watts[sec], hr[sec] = float64(sec), 150, 135
+		if driftFromMinute > 0 && sec >= driftFromMinute*60 {
+			hr[sec] = 140
+		}
 	}
 
 	return []icu.ActivityStream{
@@ -75,14 +81,14 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 
 				return
 			}
-			minutes := 90
+			minutes, drift := 90, 0
 			if strings.Contains(path, "medium") {
-				minutes = 59
+				minutes, drift = 59, 32
 			}
 			if strings.Contains(path, "short") {
 				minutes = 6
 			}
-			_ = json.NewEncoder(writer).Encode(synthStreamsJSON(minutes))
+			_ = json.NewEncoder(writer).Encode(synthStreamsJSON(minutes, drift))
 		case strings.HasSuffix(path, "/sport-settings/Ride"):
 			fake.settingsCalls.Add(1)
 			_ = json.NewEncoder(writer).Encode(map[string]any{"ftp": 250, "powerZones": []int{55, 75, 90, 105, 120, 150, 999}})
@@ -309,25 +315,51 @@ func TestActivityDecouplingCommand(t *testing.T) {
 	// the failed criterion named.
 	short := runDecouplingCommand(t, client, []string{"ishort"}, map[string]string{decouplingSourceFlag: "streams"})
 	shortSummary, _ := short["summary"].(map[string]any)
-	failedCriteria, _ := shortSummary["failedCriteria"].([]any)
+	failedNames, _ := shortSummary["failedCriteriaNames"].([]any)
 	if short["decoupling"] != 8.26 || short["decouplingSource"] != icu.DecouplingSourceAPI || short["streamsDecoupling"] != nil ||
-		shortSummary["validity"] != icu.DecouplingNotValid || len(failedCriteria) == 0 || failedCriteria[0] != icu.CriterionDuration {
+		shortSummary["validity"] != icu.DecouplingNotValid || len(failedNames) != 1 || failedNames[0] != icu.CriterionDuration {
 		t.Fatalf("short output = %v", short)
 	}
 	// A not-valid ride with a pipeline number shows it raw next to the API
 	// value, labeled not valid, never consumed.
 	medium := runDecouplingCommand(t, client, []string{"imedium"}, map[string]string{decouplingSourceFlag: "streams"})
 	mediumSummary, _ := medium["summary"].(map[string]any)
-	if medium["streamsRawDecoupling"] != 0.0 || medium["streamsDecoupling"] != nil || medium["apiDecoupling"] != 8.26 ||
+	raw, _ := medium["streamsRawDecoupling"].(float64)
+	if raw == 0 || medium["streamsDecoupling"] != nil || medium["apiDecoupling"] != 8.26 ||
 		medium["validity"] != icu.DecouplingNotValid || medium["decoupling"] != 8.26 ||
-		mediumSummary["streamsRawDecoupling"] != 0.0 || mediumSummary["failedCriteriaDetail"] == nil {
+		mediumSummary["streamsRawDecoupling"] != raw {
 		t.Fatalf("medium output = %v", medium)
+	}
+	// Exactly one failed criterion, duration, with its value and threshold:
+	// 59 min minus the 15/10 min coach trim leaves 34 min against >= 60 min.
+	// Top-level and summary failedCriteria are the same detail list.
+	wantFailed := []any{map[string]any{"name": icu.CriterionDuration, "value": 34.0, "threshold": ">= 60 min", "pass": false}}
+	if !reflect.DeepEqual(medium["failedCriteria"], wantFailed) || !reflect.DeepEqual(mediumSummary["failedCriteria"], wantFailed) ||
+		!reflect.DeepEqual(mediumSummary["failedCriteriaNames"], []any{icu.CriterionDuration}) {
+		t.Fatalf("medium failed criteria = %v / %v / %v", medium["failedCriteria"], mediumSummary["failedCriteria"], mediumSummary["failedCriteriaNames"])
+	}
+	criteria, _ := mediumSummary["criteria"].([]any)
+	thresholds := map[string]string{}
+	for _, item := range criteria {
+		entry, _ := item.(map[string]any)
+		name, _ := entry["name"].(string)
+		thresholds[name], _ = entry["threshold"].(string)
+	}
+	if !reflect.DeepEqual(thresholds, map[string]string{
+		icu.CriterionDuration: ">= 60 min", icu.CriterionVI: "<= 1.10 (<= 1.05 ok)", icu.CriterionCoasting: "< 0.10",
+		icu.CriterionZ1Z2: ">= 0.85", icu.CriterionMaxMinute: "<= 105 % FTP",
+	}) {
+		t.Fatalf("thresholds = %v", thresholds)
 	}
 	// short has too few minutes for a pipeline number, so rawValue is absent;
 	// the failed criteria come with their values.
 	shortFailed, _ := short["failedCriteria"].([]any)
+	if len(shortFailed) != 1 {
+		t.Fatalf("short failed criteria = %v, want only duration", shortFailed)
+	}
 	first, _ := shortFailed[0].(map[string]any)
-	if short["validity"] != icu.DecouplingNotValid || first["name"] != icu.CriterionDuration || first["value"] == nil {
+	if short["validity"] != icu.DecouplingNotValid || first["name"] != icu.CriterionDuration || first["value"] != 0.0 ||
+		first["threshold"] != ">= 60 min" || first["pass"] != false {
 		t.Fatalf("short failed criteria = %v", short["failedCriteria"])
 	}
 

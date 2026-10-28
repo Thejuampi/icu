@@ -24,9 +24,13 @@ const (
 	CoachMaxMinutePctFTP = 105.0
 	// CoachMaxCoastingShare: coasting (watts = 0) under 10% of the time.
 	CoachMaxCoastingShare = 0.10
-	// CoachWarmupMinSeconds / CoachCooldownSeconds: the fixed trim. Warm-up
-	// is max(15 min, HR stabilization); cool-down is always 10 min.
+	// CoachWarmupMinSeconds / CoachWarmupMaxSeconds / CoachCooldownSeconds:
+	// the fixed trim. Warm-up is max(15 min, HR stabilization); when HR does
+	// not stabilize by 20 min the warm-up is cut at 20 min and the result is
+	// at most low confidence. Cool-down is always 10 min. Manual overrides
+	// can only lengthen these, never shorten them.
 	CoachWarmupMinSeconds = 15 * 60
+	CoachWarmupMaxSeconds = 20 * 60
 	CoachCooldownSeconds  = 10 * 60
 	// HR stabilization: the first moving minute m >= CoachHRStableWindow at
 	// which the mean HR of the window [m, m+5) is within CoachHRStableBPM of
@@ -72,7 +76,8 @@ type DecouplingCriterion struct {
 }
 
 // coachWarmupSamples returns the fixed warm-up in moving samples:
-// max(15 min, HR stabilization) and whether HR stabilized.
+// max(15 min, HR stabilization) and whether HR stabilized. Stabilization
+// is only searched up to 20 min; without it the warm-up is 20 min.
 func (ride *decouplingRide) coachWarmupSamples() (int, bool) {
 	perMinute := ride.samplesPerMinute()
 	minimum := int(math.Round(CoachWarmupMinSeconds / ride.step))
@@ -103,7 +108,8 @@ func (ride *decouplingRide) coachWarmupSamples() (int, bool) {
 		return sum / CoachHRStableWindow, true
 	}
 	minutes := len(ride.moving) / perMinute
-	for minute := CoachHRStableWindow; minute+CoachHRStableWindow <= minutes; minute++ {
+	maxMinute := CoachWarmupMaxSeconds / secondsPerMinute
+	for minute := CoachHRStableWindow; minute <= maxMinute && minute+CoachHRStableWindow <= minutes; minute++ {
 		before, okBefore := windowHR(minute - CoachHRStableWindow)
 		after, okAfter := windowHR(minute)
 		if okBefore && okAfter && math.Abs(after-before) <= CoachHRStableBPM {
@@ -111,7 +117,7 @@ func (ride *decouplingRide) coachWarmupSamples() (int, bool) {
 		}
 	}
 
-	return minimum, false
+	return int(math.Round(CoachWarmupMaxSeconds / ride.step)), false
 }
 
 // evaluateCoachCriteria checks the coaching criteria on moving samples
@@ -138,10 +144,11 @@ func (ride *decouplingRide) evaluateCoachCriteria(start, end int, context Decoup
 	n := float64(len(values))
 	vi := 0.0
 	if mean := sum / n; mean > 0 {
-		vi = round4(normalizedPower(values, maxInt(1, int(math.Round(npWindowSeconds/ride.step)))) / mean)
+		// Unrounded: the validity bands compare the exact VI.
+		vi = normalizedPower(values, maxInt(1, int(math.Round(npWindowSeconds/ride.step)))) / mean
 	}
 	criteria = append(criteria,
-		DecouplingCriterion{Name: CriterionVI, Value: vi, Threshold: "<= 1.10 (<= 1.05 ok)", Pass: CoachVIValidity(vi) != DecouplingNotValid},
+		DecouplingCriterion{Name: CriterionVI, Value: round4(vi), Threshold: "<= 1.10 (<= 1.05 ok)", Pass: CoachVIValidity(vi) != DecouplingNotValid},
 		DecouplingCriterion{
 			Name: CriterionCoasting, Value: round4(coasting / n), Threshold: "< 0.10",
 			Pass: coasting/n < CoachMaxCoastingShare,
@@ -209,21 +216,21 @@ func (result *StreamDecoupling) ApplyCoachCriteria() {
 	if result.Value != nil {
 		result.RawValue = new(*result.Value)
 	}
-	result.FailedCriteria = nil
+	result.FailedCriteriaNames = nil
 	for _, criterion := range result.Criteria {
 		if !criterion.Pass {
-			result.FailedCriteria = append(result.FailedCriteria, criterion.Name)
+			result.FailedCriteriaNames = append(result.FailedCriteriaNames, criterion.Name)
 		}
 	}
 	switch {
-	case len(result.FailedCriteria) > 0:
+	case len(result.FailedCriteriaNames) > 0:
 		result.Validity = DecouplingNotValid
 		if result.Status == DecouplingStatusMeasured {
 			result.Status = DecouplingStatusNotMeasurable
 		}
 		result.Value = nil
 		result.Reason = "not valid: failed coaching criteria"
-		for index, name := range result.FailedCriteria {
+		for index, name := range result.FailedCriteriaNames {
 			sep := ", "
 			if index == 0 {
 				sep = " "
@@ -235,6 +242,10 @@ func (result *StreamDecoupling) ApplyCoachCriteria() {
 		result.Value = nil
 	default:
 		result.Validity = CoachVIValidity(result.VariabilityIndex)
+		if result.Validity == DecouplingValid && !result.HRStabilized {
+			// HR never stabilized: warm-up cut at 20 min, low confidence.
+			result.Validity = DecouplingLowConfidence
+		}
 		if result.Value != nil {
 			result.Interpretation, result.PossibleFatigue = DecouplingInterpretation(*result.Value)
 		}

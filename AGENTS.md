@@ -125,6 +125,8 @@ Decision rules must:
 - Treat missing or sparse data as lower confidence, not as permission to invent constants
 - Include edge-case handling for sparse history, stale data, outliers, abrupt baseline shifts, travel/illness, unusually high or low recent load, and already-completed sessions
 - Include tests that prove the rule responds correctly to representative historical scenarios and outliers
+
+Exception: the B15 stream-decoupling coaching criteria in `decoupling_criteria.go` (`Coach*` constants: VI 1.05/1.10, >= 60 min analyzed, >= 85 % Z1-Z2, no minute > 105 % FTP, coasting < 10 %, warm-up max(15 min, HR stabilization over 5 min within 3 bpm) capped at 20 min with low confidence, 10 min cool-down, interpretation bands 5/8/-5 %) are explicit constraints specified by the client's coach. They are fixed on purpose: do not derive, fit, or tune them to athlete data. Manual trim overrides may only lengthen the coach's trim.
 - Include backtesting or replay-style tests against realistic sequences before the rule is trusted for planning decisions
 
 If a rule cannot be made dynamic with available data, expose it as an explicit user-configurable constraint and document that it is user-provided, not a model default. Do not silently bake it into the code.

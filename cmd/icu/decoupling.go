@@ -48,10 +48,10 @@ func decouplingSchemaFlags() []CommandFlag {
 		{Name: decouplingSourceFlag, ValueName: "api|streams", Description: "[EXPERIMENTAL streams] Consumed decoupling: api (intervals.icu's " +
 			"field, default, no stream fetch) or streams (recompute from activity streams, report both, consume the stream " +
 			"value when measured).", Default: decouplingModeAPI},
-		{Name: decouplingWarmupFlag, ValueName: "N", Description: "Override the warm-up trim (whole moving minutes); " +
-			"default the coach's fixed trim: max(15 min, HR stabilization)."},
-		{Name: decouplingCooldownFlag, ValueName: "N", Description: "Override the cool-down trim (whole moving minutes); " +
-			"default the coach's fixed 10 min."},
+		{Name: decouplingWarmupFlag, ValueName: "N", Description: "Lengthen the warm-up trim (whole moving minutes); " +
+			"never shorter than the coach's trim: max(15 min, HR stabilization), cut at 20 min (low confidence) when HR does not stabilize."},
+		{Name: decouplingCooldownFlag, ValueName: "N", Description: "Lengthen the cool-down trim (whole moving minutes); " +
+			"never shorter than the coach's fixed 10 min."},
 		{Name: decouplingHRLagFlag, ValueName: "S", Description: "Override the HR lag (whole seconds); default " +
 			"measured by power/HR cross-correlation (0-120 s), 0 when uncorrelated."},
 		{Name: decouplingIQRKFlag, ValueName: "K", Description: "Tukey IQR multiplier for per-minute power/HR ratio " +
@@ -376,10 +376,10 @@ func activityDecouplingCommand() *Command {
 			"[--decoupling-cooldown-min N] [--decoupling-hr-lag S] [--decoupling-iqr-k K]",
 		Description: "[EXPERIMENTAL] Aerobic decoupling from the activity streams (Pa:HR; GAP:HR without power) on " +
 			"moving-time minutes, always next to intervals.icu's decoupling field (the default consumed value). Uses " +
-			"the coach's criteria on the analyzed range: fixed trim (warm-up max(15 min, HR stabilization), cool-down " +
-			"10 min); VI <= 1.05 valid, 1.05-1.10 low confidence, > 1.10 not valid; >= 60 min; >= 85% of the time in " +
+			"the coach's criteria on the analyzed range: fixed trim (warm-up max(15 min, HR stabilization), cut at 20 min " +
+			"with low confidence when HR does not stabilize; cool-down 10 min; overrides can only lengthen it); VI <= 1.05 valid, 1.05-1.10 low confidence, > 1.10 not valid; >= 60 min; >= 85% of the time in " +
 			"power Z1-Z2; no minute above 105% FTP; coasting < 10%. Any failed criterion: not valid; the raw stream value is shown " +
-			"(rawValue) but never consumed, and the failed criteria are listed with their values. Interpretation: < 5% good, 5-8% moderate, > 8% high; < -5% possible fatigue. HR lag by " +
+			"(rawValue) but never consumed, and the failed criteria are listed with their values (failedCriteria). Interpretation: < 5% good, 5-8% moderate, > 8% high; < -5% possible fatigue. HR lag by " +
 			"cross-correlation, coasting/missing-HR minutes and Tukey ratio outliers excluded. Read-only.",
 		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
@@ -446,8 +446,8 @@ func decouplingSummary(activity *icu.Activity, result *icu.StreamDecoupling) map
 		"variabilityIndex":     result.VariabilityIndex,
 		"streamsRawDecoupling": result.RawValue,
 		"validity":             result.Validity,
-		"failedCriteriaDetail": failedCriteriaDetail(result),
-		"failedCriteria":       result.FailedCriteria,
+		"failedCriteria":       failedCriteriaDetail(result),
+		"failedCriteriaNames":  result.FailedCriteriaNames,
 		"criteria":             result.Criteria,
 		"hrStabilized":         result.HRStabilized,
 		"interpretation":       result.Interpretation,
