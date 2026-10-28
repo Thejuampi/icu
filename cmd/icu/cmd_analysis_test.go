@@ -1654,34 +1654,34 @@ func TestWriteMicrocycleHuman(t *testing.T) {
 	}
 }
 
-func TestMicrocycleLocationPrecedence(t *testing.T) {
+// resolveMicrocycleLocation shares the analysis resolver: flag, athlete,
+// then UTC (default_utc), never the system zone; an invalid flag errors.
+func TestResolveMicrocycleLocationPrecedence(t *testing.T) {
 	t.Parallel()
-
-	system := time.FixedZone("SYS", 0)
-	cases := []struct {
-		name, flag, athlete, wantZone, wantSource string
+	for name, test := range map[string]struct {
+		athlete, flag, wantZone, wantSource string
 	}{
-		{"flag wins over athlete", "UTC", "America/New_York", "UTC", "flag"},
-		{"athlete when no flag", "", "America/New_York", "America/New_York", "athlete"},
-		{"system when athlete empty", "", "", "SYS", "system"},
-		{"system when athlete invalid", "", "Not/AZone", "SYS", "system"},
+		"flag wins over athlete":   {"America/New_York", "Europe/Madrid", "Europe/Madrid", "flag"},
+		"athlete when no flag":     {"America/New_York", "", "America/New_York", "athlete"},
+		"utc when athlete empty":   {"", "", "UTC", icu.DefaultAnalysisTimezoneSource},
+		"utc when athlete invalid": {"Not/AZone", "", "UTC", icu.DefaultAnalysisTimezoneSource},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(response).Encode(map[string]any{"id": "0", "timezone": test.athlete})
+		}))
+		client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+		flags := map[string]string{}
+		if test.flag != "" {
+			flags["timezone"] = test.flag
+		}
+		location, source, err := resolveMicrocycleLocation(client, flags)
+		server.Close()
+		if err != nil || location.String() != test.wantZone || source != test.wantSource {
+			t.Fatalf("%s: %v %s %v, want %s %s", name, location, source, err, test.wantZone, test.wantSource)
+		}
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			location, source, err := microcycleLocation(tc.flag, tc.athlete, system)
-			if err != nil || location.String() != tc.wantZone || source != tc.wantSource {
-				t.Fatalf("got %v %s %v, want %s %s", location, source, err, tc.wantZone, tc.wantSource)
-			}
-		})
-	}
-}
-
-func TestMicrocycleLocationRejectsInvalidFlag(t *testing.T) {
-	t.Parallel()
-
-	if _, _, err := microcycleLocation("Invalid/Zone", "", time.UTC); err == nil {
-		t.Fatal("error = nil, want invalid --timezone error")
+	if _, _, err := resolveMicrocycleLocation(nil, map[string]string{"timezone": "Invalid/Zone"}); err == nil {
+		t.Fatal("invalid --timezone accepted")
 	}
 }
 

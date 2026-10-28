@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -142,5 +143,53 @@ func TestAnalysisAdaptationLocalizesActivityDates(t *testing.T) {
 	phase, _ := got["phaseSummary"].(map[string]any)
 	if phase["recentLoad"] != 50.0 {
 		t.Fatalf("phaseSummary = %v, want recentLoad 50 (ride on local 10-27)", phase)
+	}
+}
+
+// wellness "today" follows the injected clock in the athlete's timezone:
+// 03:30Z on Oct 28 is 23:30 on Oct 27 in New York, so the default window
+// ends 10-27.
+func TestAnalysisWellnessTodayUsesInjectedClock(t *testing.T) {
+	t.Parallel()
+	var newest atomic.Value
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch path := request.URL.Path; {
+		case strings.HasSuffix(path, "/athlete/i1"):
+			_ = json.NewEncoder(writer).Encode(map[string]any{"id": "i1", "timezone": "America/New_York"})
+		case strings.HasSuffix(path, "/wellness"):
+			newest.Store(request.URL.Query().Get("newest"))
+			_, _ = writer.Write([]byte(`[]`))
+		default:
+			_, _ = writer.Write([]byte(`[]`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	clock := func() time.Time { return time.Date(2026, 10, 28, 3, 30, 0, 0, time.UTC) }
+	var out strings.Builder
+	if err := analysisWellnessCommandWithClock(clock).Run(nil, map[string]string{}, client, &out, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if newest.Load() != "2026-10-27" {
+		t.Fatalf("wellness newest = %v, want 2026-10-27", newest.Load())
+	}
+	if !strings.Contains(out.String(), `"endDate": "2026-10-27"`) {
+		t.Fatalf("output = %s", out.String())
+	}
+}
+
+// coaching reuses the profile read by the timezone resolver: one /athlete.
+func TestAnalysisCoachingFetchesAthleteOnce(t *testing.T) {
+	t.Parallel()
+	fake := newTZFake(t, "2026-10-28T03:30:00Z")
+	runTZ(t, analysisCoachingCommand(), fake, map[string]string{})
+	if fake.athleteRequests.Load() != 1 {
+		t.Fatalf("/athlete requests = %d, want 1", fake.athleteRequests.Load())
+	}
+	// With --timezone the resolver skips /athlete, so coaching reads it once.
+	flagged := newTZFake(t, "2026-10-28T03:30:00Z")
+	runTZ(t, analysisCoachingCommand(), flagged, map[string]string{"timezone": "Europe/Madrid"})
+	if flagged.athleteRequests.Load() != 1 {
+		t.Fatalf("/athlete requests with --timezone = %d, want 1", flagged.athleteRequests.Load())
 	}
 }

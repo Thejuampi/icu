@@ -384,8 +384,9 @@ date. `--from` and `--to` select an explicit custom range and must be supplied
 together. Conflicting date selectors and inverted ranges are rejected.
 
 Timezone precedence is `--timezone`, then the athlete profile `timezone`
-(`timezoneSource: "athlete"`), then the system timezone. Only the system
-fallback emits the "missing athlete timezone" data-quality warning.
+(`timezoneSource: "athlete"`), then UTC (`timezoneSource: "default_utc"`),
+the same resolver as the other analysis commands. Only the UTC fallback emits
+the "missing athlete timezone" data-quality warning (`timezone: "utc_fallback"`).
 
 Wellness is read only up to today (in the resolved timezone), never up to the
 end of the selected week: Intervals.icu returns projected CTL/ATL rows for
