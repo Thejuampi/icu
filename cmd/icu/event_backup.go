@@ -64,6 +64,21 @@ func recordPostWrite(path string, written *icu.Event) error {
 	return rewriteEventBackup(path, &backup)
 }
 
+// markWriteDone clears WritePending on a backup whose write (a delete or
+// cancel, which leaves no event to hash) succeeded.
+func markWriteDone(path string) error {
+	if path == "" {
+		return nil
+	}
+	backup, err := readEventBackup(path)
+	if err != nil {
+		return err
+	}
+	backup.WritePending = false
+
+	return rewriteEventBackup(path, &backup)
+}
+
 // lastWrite is what the newest backup of an event says about this CLI's
 // last write to it.
 type lastWrite struct {
@@ -88,6 +103,12 @@ func findLastWrite(eventID int) (lastWrite, error) {
 		if backup.Reason == eventBackupReasonDelete || backup.Reason == eventBackupReasonDrop {
 			return lastWrite{}, nil
 		}
+		// After a crash between the PUT and recordPostWrite the write may
+		// have landed while its backup stays pending. The fallback is then an
+		// older backup whose hash no longer matches the live event, so the
+		// next update/revert stops as a third-party edit and needs --force
+		// (after checking the event). That is deliberate: without the
+		// post-write hash the CLI cannot prove the change was its own.
 		if backup.WritePending {
 			continue
 		}
@@ -333,6 +354,12 @@ func resolveRevertBackup(flags map[string]string) (string, error) {
 		if err != nil || backup.Reason == eventBackupReasonRevert {
 			continue
 		}
+		// A pending backup's write never happened (or its outcome is
+		// unknown), so it is not a state this CLI moved away from. Pass
+		// --backup PATH to restore one explicitly.
+		if backup.WritePending {
+			continue
+		}
 
 		return path, nil
 	}
@@ -436,6 +463,9 @@ func eventsDeleteCommand() *Command {
 			}
 			if err := client.Delete("events", []string{args[0]}, nil, nil); err != nil {
 				return wrapCommandError(err)
+			}
+			if err := markWriteDone(path); err != nil {
+				return err
 			}
 
 			return writeJSON(stdout, map[string]any{"deleted": eventID, "backupPath": path})

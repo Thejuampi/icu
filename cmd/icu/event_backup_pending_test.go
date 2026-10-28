@@ -2,6 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -39,10 +42,10 @@ func TestFindLastWriteSkipsPendingBackups(t *testing.T) {
 func TestEventsUpdateValidatesBeforeBackup(t *testing.T) {
 	t.Setenv(eventBackupDirEnv, t.TempDir())
 	client, _, puts := editableEventServer(t)
-	_, err := captureStdout(t, func() error {
+	_, err := captureStdout(t, func(stdout io.Writer) error {
 		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{
 			"type": "Run", "desc": "- 30m 70%", "calculate-load": "true", "ftp": "300",
-		}, client)
+		}, client, stdout, io.Discard)
 	})
 	if err == nil || !strings.Contains(err.Error(), "not FTP-priced") || *puts != 0 {
 		t.Fatalf("err = %v puts = %d", err, *puts)
@@ -56,8 +59,8 @@ func TestEventsUpdateValidatesBeforeBackup(t *testing.T) {
 func TestEventsUpdateClearsWritePendingAfterWrite(t *testing.T) {
 	t.Setenv(eventBackupDirEnv, t.TempDir())
 	client, _, puts := editableEventServer(t)
-	if _, err := captureStdout(t, func() error {
-		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{"name": "N"}, client)
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{"name": "N"}, client, stdout, io.Discard)
 	}); err != nil || *puts != 1 {
 		t.Fatalf("err = %v puts = %d", err, *puts)
 	}
@@ -75,8 +78,8 @@ func TestEventsUpdateClearsWritePendingAfterWrite(t *testing.T) {
 func TestEventsUpdateFailedPutLeavesPendingBackupIgnored(t *testing.T) {
 	t.Setenv(eventBackupDirEnv, t.TempDir())
 	client, _, puts := editableEventServer(t)
-	if _, err := captureStdout(t, func() error {
-		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{"name": "N"}, client)
+	if _, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{"name": "N"}, client, stdout, io.Discard)
 	}); err != nil || *puts != 1 {
 		t.Fatalf("first: %v", err)
 	}
@@ -88,5 +91,61 @@ func TestEventsUpdateFailedPutLeavesPendingBackupIgnored(t *testing.T) {
 	}
 	if last, _ := findLastWrite(3); last != first {
 		t.Fatalf("last = %+v, want %+v", last, first)
+	}
+}
+
+//nolint:paralleltest // sets ICU_BACKUP_DIR.
+func TestEventsUpdateServerErrorLeavesPendingBackup(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	puts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			puts++
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":3,"name":"old","type":"Ride","category":"WORKOUT"}`))
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+
+	_, err := captureStdout(t, func(stdout io.Writer) error {
+		return eventsUpdateCommand().Run([]string{"3"}, map[string]string{"name": "N"}, client, stdout, io.Discard)
+	})
+	if err == nil || puts != 1 {
+		t.Fatalf("err = %v puts = %d, want PUT failure", err, puts)
+	}
+	paths, _ := listEventBackups(3)
+	if len(paths) != 1 {
+		t.Fatalf("backups = %v", paths)
+	}
+	backup, err := readEventBackup(paths[0])
+	if err != nil || !backup.WritePending || backup.PostWriteHash != "" {
+		t.Fatalf("backup = %+v err = %v, want pending without hash", backup, err)
+	}
+	if last, _ := findLastWrite(3); last != (lastWrite{}) {
+		t.Fatalf("failed write counted as last write: %+v", last)
+	}
+	if _, err := resolveRevertBackup(map[string]string{"id": "3"}); err == nil {
+		t.Fatal("revert picked a pending backup")
+	}
+}
+
+//nolint:paralleltest // sets ICU_BACKUP_DIR.
+func TestResolveRevertBackupSkipsPending(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	older, err := writeEventBackup(&eventBackup{EventID: 9, Reason: "events update", Event: json.RawMessage(`{}`), PostWriteHash: "h"}, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeEventBackup(&eventBackup{EventID: 9, Reason: "events update", Event: json.RawMessage(`{}`), WritePending: true},
+		base.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := resolveRevertBackup(map[string]string{"id": "9"}); err != nil || got != older {
+		t.Fatalf("got %q err %v, want %q", got, err, older)
 	}
 }
