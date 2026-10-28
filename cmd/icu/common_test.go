@@ -4,9 +4,8 @@ import (
 	"testing"
 )
 
+//nolint:paralleltest // swaps the package-level stdout override; running in parallel races with other tests' output.
 func TestSetStdoutForTestSwitchesOutput(t *testing.T) {
-	t.Parallel()
-
 	var buf testBuf
 
 	setStdoutForTest(&buf)
