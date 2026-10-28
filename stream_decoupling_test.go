@@ -295,13 +295,24 @@ func TestDecouplingVIGate(t *testing.T) {
 		t.Fatalf("cutoff = %v, want 1.12", cutoff)
 	}
 	result := mustDecouple(t, synthRide(90, constant(150), constant(135)), fixed(0))
-	result.ApplyVIGate(1.10, cutoff)
-	if result.Status != icu.DecouplingStatusMeasured {
+	result.ApplyVIGate(1.10, cutoff, false)
+	if result.Status != icu.DecouplingStatusMeasured || result.Value == nil {
 		t.Fatalf("VI below cutoff: %s", result.Status)
 	}
-	result.ApplyVIGate(1.20, cutoff)
-	if result.Status != icu.DecouplingStatusNotMeasurable || result.Reason == "" {
+	result.ApplyVIGate(1.20, cutoff, true)
+	if result.Status != icu.DecouplingStatusNotMeasurable || result.Reason == "" || result.Value != nil {
 		t.Fatalf("VI above cutoff: %+v", result)
+	}
+	// No cutoff: measurable only when a paired steady workout vouches for it.
+	planned := mustDecouple(t, synthRide(90, constant(150), constant(135)), fixed(0))
+	planned.ApplyVIGate(1.6, nil, true)
+	if planned.Status != icu.DecouplingStatusMeasured {
+		t.Fatalf("planned steady without cutoff: %+v", planned)
+	}
+	unverified := mustDecouple(t, synthRide(90, constant(150), constant(135)), fixed(0))
+	unverified.ApplyVIGate(1.0, nil, false)
+	if unverified.Status != icu.DecouplingStatusNotMeasurable || unverified.Value != nil {
+		t.Fatalf("unverified: %+v", unverified)
 	}
 }
 
@@ -350,6 +361,13 @@ func TestActivityDecouplingSourceLabels(t *testing.T) {
 	if !consumed.HasDecoupling() || consumed.Decoupling != 0 || consumed.DecouplingSource != icu.DecouplingSourceStreams ||
 		consumed.DecouplingAPI == nil || *consumed.DecouplingAPI != 8.26 || consumed.DecouplingStreams == nil {
 		t.Fatalf("consumed: %+v", consumed)
+	}
+	// A not-measured result never shows or consumes a stream value.
+	gated := icu.Activity{Decoupling: 8.26}
+	unmeasured := icu.StreamDecoupling{Status: icu.DecouplingStatusNotMeasurable, Value: &zero}
+	gated.AttachStreamDecoupling(&unmeasured, true)
+	if gated.Decoupling != 8.26 || gated.DecouplingSource != icu.DecouplingSourceAPI || gated.DecouplingStreams != nil {
+		t.Fatalf("gated: %+v", gated)
 	}
 	reported := icu.Activity{Decoupling: 8.26}
 	reported.AttachStreamDecoupling(&streamResult, false)
@@ -402,4 +420,75 @@ func TestStreamDecouplingReferenceRideI202545713(t *testing.T) {
 	}
 	t.Logf("i202545713: %.2f%% trim %+v lag %d (%s) kept %d/%d excluded %v",
 		*got.Value, got.Trim, got.HRLagSeconds, got.HRLagMethod, got.MinutesKept, got.MinutesInRange, got.Excluded)
+}
+
+func TestStreamDecouplingHRLagSearchIsBounded(t *testing.T) {
+	t.Parallel()
+	// HR follows power 150 s later, beyond the 120 s search bound.
+	power := func(sec int) float64 {
+		if (sec/600)%2 == 0 {
+			return 150
+		}
+
+		return 250
+	}
+	hr := func(sec int) float64 { return 100 + 0.2*power(sec-150) }
+	options := fixed(0)
+	options.HRLagSeconds = nil
+	got := mustDecouple(t, synthRide(90, power, hr), options)
+	if got.HRLagSeconds > 120 {
+		t.Fatalf("lag = %d, want within the 120 s bound", got.HRLagSeconds)
+	}
+}
+
+func workoutRaw(steps ...map[string]any) map[string]any {
+	list := make([]any, 0, len(steps))
+	for _, step := range steps {
+		list = append(list, step)
+	}
+
+	return map[string]any{
+		"steps":     list,
+		"zoneTimes": []any{map[string]any{"id": "Z1", "max": 55}, map[string]any{"id": "Z2", "max": 75}, map[string]any{"id": "SS", "max": 97}},
+	}
+}
+
+func TestPlannedDecouplingWorkoutKinds(t *testing.T) {
+	t.Parallel()
+	ramp := map[string]any{"duration": 600, "ramp": true, "power": map[string]any{"start": 50, "end": 65, "units": "%ftp"}}
+	cool := map[string]any{"duration": 600, "power": map[string]any{"value": 50, "units": "%ftp"}}
+	steady := workoutRaw(ramp, map[string]any{"duration": 3600, "power": map[string]any{"value": 65, "units": "%ftp"}},
+		map[string]any{"duration": 1200, "power": map[string]any{"value": 72, "units": "%ftp"}}, cool)
+	waves := workoutRaw(ramp, map[string]any{"reps": 6, "steps": []any{
+		map[string]any{"duration": 150, "power": map[string]any{"value": 72, "units": "%ftp"}},
+		map[string]any{"duration": 35, "power": map[string]any{"value": 54, "units": "%ftp"}},
+	}}, cool)
+	ladder := workoutRaw(ramp, map[string]any{"reps": 3, "steps": []any{
+		map[string]any{"duration": 300, "power": map[string]any{"value": 65, "units": "%ftp"}, "cadence": map[string]any{"value": 90}},
+		map[string]any{"duration": 300, "power": map[string]any{"value": 65, "units": "%ftp"}, "cadence": map[string]any{"value": 100}},
+	}}, cool)
+	zones := map[string]any{"steps": []any{
+		map[string]any{"duration": 600, "power": map[string]any{"value": 1, "units": "power_zone"}},
+		map[string]any{"duration": 4500, "power": map[string]any{"value": 2, "units": "power_zone"}},
+		map[string]any{"duration": 300, "power": map[string]any{"value": 1, "units": "power_zone"}},
+	}}
+	for name, tc := range map[string]struct {
+		raw  any
+		want string
+	}{
+		"steady": {steady, icu.DecouplingWorkoutSteady}, "waves": {waves, icu.DecouplingWorkoutIntervals},
+		"ladder": {ladder, icu.DecouplingWorkoutLadder}, "power_zone": {zones, icu.DecouplingWorkoutSteady},
+	} {
+		if _, kind, ok := icu.PlannedDecouplingWorkout(tc.raw); !ok || kind != tc.want {
+			t.Fatalf("%s: kind %q ok %v, want %q", name, kind, ok, tc.want)
+		}
+	}
+	if _, _, ok := icu.PlannedDecouplingWorkout(nil); ok {
+		t.Fatal("nil doc")
+	}
+	result := mustDecouple(t, synthRide(90, constant(150), constant(135)), fixed(0))
+	result.ApplyWorkoutGate(icu.DecouplingWorkoutLadder)
+	if result.Status != icu.DecouplingStatusNotMeasurable || result.Value != nil || result.WorkoutKind != icu.DecouplingWorkoutLadder {
+		t.Fatalf("ladder gate: %+v", result)
+	}
 }

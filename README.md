@@ -252,21 +252,25 @@ Details: [docs/cli-reference.md](docs/cli-reference.md), [docs/library.md](docs/
 
 `analysis cycling`, `analysis coaching`, and `analysis microcycle` exclude STRAVA-stub records (5 raw keys, `_note` present, `source == "STRAVA"`) from every activity count and load aggregate, and `analysis cycling` reports a `validity` block naming which activities were excluded and why (`icu_ignore_power`/`icu_ignore_hr`/`icu_ignore_time`, D-2). That ignore-flag filtering is correct and tested, but has been measured `false` on every real activity checked against a live account so far — see [docs/analysis.md](docs/analysis.md) for the inertness statement before crediting it with a reported number change.
 
-### Aerobic decoupling (B15)
+### Aerobic decoupling (B15, experimental)
+
+The stream method is **experimental and opt-in**: `activity decoupling` help is prefixed `[EXPERIMENTAL]` and its JSON carries `"experimental": true`; sessions with a stream result carry `decouplingExperimental: true`.
 
 intervals.icu's `decoupling` field remains the default value consumed by `analysis cycling|coaching|plan|microcycle` (`--decoupling-source api`, no extra requests). A stream-based method is available next to it and is not yet the default because it has not been validated on enough rides. With `--decoupling-source streams` the analysis commands recompute decoupling from each ride's streams (`GET /activity/{id}/streams`, read-only), report both values, and consume the stream value when it is measured.
 
 - **Method** (Friel Pa:HR; GAP:HR from `ga_velocity`, or pace:HR, without power; speeds in m/s), on moving-time minutes. Nothing is fitted to a reference ride:
-  1. Moving samples: speed above a stop speed derived so the moving sample time matches the activity's `moving_time` (a rank in the ride's own speed distribution, so it does not depend on units).
+  1. Moving samples: speed above a stop speed derived so the moving sample time matches the activity's `moving_time` (a rank in the ride's own speed distribution, so it does not depend on units). When that rank is 0 the rule is plain `speed>0`; `stopRule` reports which (`moving_time_rank` or `speed>0`).
   2. Trim: `--decoupling-warmup-min` / `--decoupling-cooldown-min` (integers) if given. Otherwise the paired workout's leading/trailing steps that are ramps, labeled warm-up/cool-down, or below the workout's duration-weighted median target. Then steady-state edges are dropped: leading/trailing minutes whose output is below the ride's lower quartile.
   3. HR lag: `--decoupling-hr-lag` (integer seconds), or the 0–120 s lag that maximizes the power/HR cross-correlation (0 when uncorrelated).
-  4. 60-moving-second buckets from the trim start. `missing_hr` when lagged HR covers under half the minute. `coasting` (power basis) when the rider pedalled (watts > 0) under half of it.
+  4. 60-moving-second buckets from the trim start. `missing_hr` when lagged HR covers under half the minute. `coasting` (power basis) when watts = 0 for more than half of the minute's moving samples (the coasting share is a strict majority rule; a minute with ≤ 50 % coasting is kept).
   5. Tukey fences `Q1 − k·IQR … Q3 + k·IQR` on the per-minute ratio of the remaining minutes (`--decoupling-iqr-k`, default 1.5, 0 disables): `ratio_outlier`.
   6. Kept minutes are split at the range midpoint: `decoupling = (1 − (P2/HR2)/(P1/HR1)) × 100`. Each half needs at least 4 kept minutes.
-  7. VI gate: a ride whose variability index exceeds `Q3 + 1.5·IQR` of the athlete's ride VIs (the analysis window, or the last 84 days for `activity decoupling`) is `not_measurable`.
+  7. Workout gate: when the paired workout's main set (inside the trim) spans more than one power zone (from the doc's `zoneTimes`, or `power_zone` units) it is `intervals`; when a repeat block varies cadence targets it is `ladder`. Both are `not_measurable`.
+  8. Steadiness gate: the VI cutoff is `Q3 + 1.5·IQR` of the VIs of rides paired with *steady* workouts in the last 84 days (also in analysis), needing at least 4 such rides. A ride above it is `not_measurable`. With no cutoff, a ride is measurable only if its paired workout is steady; otherwise `not_measurable` (steadiness unverified). The in-window CV of per-minute output (`powerCv`) is reported but not gated, since no data-derived cutoff exists for it yet.
+  A result that is not `measured` never exposes a stream value (`decouplingStreams`/`streamsDecoupling` are null) and is never consumed.
 - **Labels**: each session has `decoupling` (the consumed value; a real 0 is kept), `decouplingSource` (`api` or `streams`), `decouplingApi`, `decouplingStreams` and `decouplingStreamsStatus` (`measured`, `not_measurable` or `unavailable`, with the reason in `decouplingNote`). `durability.decouplingSources`, `history.decouplingSources` and microcycle `fatigueDurability.decouplingSources` count the sources.
 - **API volume**: streams mode adds one streams GET per cycling/running activity with HR (4 in parallel) and one events GET for the paired workouts. Results are cached under `~/.icu/cache/decoupling/` (or `$ICU_CONFIG_DIR/cache/decoupling/`), keyed by algorithm version, options, plan trim, moving time and the activity's `analyzed` timestamp, so an edit or reprocess invalidates the entry. Results that are not measured expire after 24 h. Fetch errors are never cached.
-- `icu activity <id> decoupling` shows both values and the full breakdown for one activity: trim and its source, HR lag, stop speed, kept/excluded minutes by reason, fences, half means and the VI cutoff.
+- `icu activity <id> decoupling` shows both values and the full breakdown for one activity: trim and its source, HR lag, stop speed, kept/excluded minutes by reason, fences, half means and the VI cutoff, plus a `summary` (status, reason, API vs streams value, trim, lag and r, minutes kept/in range, exclusions by reason, workout kind, VI vs cutoff, powerCv, stopRule).
 
 See [docs/analysis.md](docs/analysis.md) for defaults, inputs, output sections, and current limitations.
 

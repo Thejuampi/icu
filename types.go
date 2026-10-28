@@ -127,8 +127,10 @@ type Activity struct {
 	// one; a real 0.0 is kept (pointer).
 	DecouplingStreams       *float64 `json:"decouplingStreams,omitempty"`
 	DecouplingStreamsStatus string   `json:"decouplingStreamsStatus,omitempty"`
-	DecouplingBasis         string   `json:"decouplingBasis,omitempty"`
-	DecouplingNote          string   `json:"decouplingNote,omitempty"`
+	// DecouplingExperimental flags the stream method as experimental.
+	DecouplingExperimental bool   `json:"decouplingExperimental,omitempty"`
+	DecouplingBasis        string `json:"decouplingBasis,omitempty"`
+	DecouplingNote         string `json:"decouplingNote,omitempty"`
 	// Analyzed is intervals.icu's last-analysis timestamp; it changes when
 	// the activity is edited/reprocessed and keys the decoupling cache.
 	Analyzed          string  `json:"analyzed,omitempty"`

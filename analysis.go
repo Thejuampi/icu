@@ -328,6 +328,7 @@ type CyclingSession struct {
 	DecouplingAPI           *float64   `json:"decouplingApi,omitempty"`
 	DecouplingStreams       *float64   `json:"decouplingStreams,omitempty"`
 	DecouplingStreamsStatus string     `json:"decouplingStreamsStatus,omitempty"`
+	DecouplingExperimental  bool       `json:"decouplingExperimental,omitempty"`
 	EfficiencyFactor        float64    `json:"efficiencyFactor,omitempty"`
 	VariabilityIndex        float64    `json:"variabilityIndex,omitempty"`
 	JoulesAboveFTP          int        `json:"joulesAboveFtp,omitempty"`
@@ -1307,6 +1308,7 @@ func cyclingSessionFromActivity(activity *Activity) CyclingSession {
 		DecouplingAPI:           activity.DecouplingAPI,
 		DecouplingStreams:       activity.DecouplingStreams,
 		DecouplingStreamsStatus: activity.DecouplingStreamsStatus,
+		DecouplingExperimental:  activity.DecouplingExperimental,
 		EfficiencyFactor:        activity.EfficiencyFactor,
 		VariabilityIndex:        activity.VariabilityIndex,
 		JoulesAboveFTP:          activity.JoulesAboveFTP,

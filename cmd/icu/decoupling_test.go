@@ -41,6 +41,17 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 		map[string]any{"duration": 3600, "power": map[string]any{"value": 65}},
 		map[string]any{"duration": 600, "power": map[string]any{"value": 50}},
 	}}
+	wavesDoc := map[string]any{
+		"steps": []any{
+			map[string]any{"duration": 600, "ramp": true, "power": map[string]any{"start": 50, "end": 65}},
+			map[string]any{"reps": 12, "steps": []any{
+				map[string]any{"duration": 150, "power": map[string]any{"value": 72}},
+				map[string]any{"duration": 35, "power": map[string]any{"value": 54}},
+			}},
+			map[string]any{"duration": 600, "power": map[string]any{"value": 50}},
+		},
+		"zoneTimes": []any{map[string]any{"id": "Z1", "max": 55}, map[string]any{"id": "Z2", "max": 75}},
+	}
 	fake.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet {
 			t.Errorf("non-GET request %s %s", request.Method, request.URL.Path)
@@ -64,21 +75,25 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 			_ = json.NewEncoder(writer).Encode(map[string]any{"id": 77, "workoutDoc": workoutDoc})
 		case strings.HasSuffix(path, "/events"):
 			fake.eventCalls.Add(1)
-			_ = json.NewEncoder(writer).Encode([]map[string]any{{"id": 77, "workoutDoc": workoutDoc}, {"id": 78}})
+			_ = json.NewEncoder(writer).Encode([]map[string]any{{"id": 77, "workoutDoc": workoutDoc}, {"id": 78}, {"id": 79, "workoutDoc": wavesDoc}})
 		case strings.HasSuffix(path, "/activities"):
 			fake.historyCalls.Add(1)
 			_ = json.NewEncoder(writer).Encode([]map[string]any{
-				{"id": "h1", "type": "Ride", "icuVariabilityIndex": 1.00},
-				{"id": "h2", "type": "Ride", "icuVariabilityIndex": 1.02},
-				{"id": "h3", "type": "Ride", "icuVariabilityIndex": 1.04},
-				{"id": "h4", "type": "Ride", "icuVariabilityIndex": 1.06},
-				{"id": "h5", "type": "Ride", "icuVariabilityIndex": 1.08},
+				{"id": "h1", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.00},
+				{"id": "h2", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.02},
+				{"id": "h3", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.04},
+				{"id": "h4", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.06},
+				{"id": "h5", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.08},
 			})
 		case strings.Contains(path, "/activity/"):
 			id := path[strings.LastIndex(path, "/")+1:]
+			paired := 77
+			if strings.Contains(id, "waves") {
+				paired = 79
+			}
 			_ = json.NewEncoder(writer).Encode(map[string]any{
 				"id": id, "name": "Z2", "type": "Ride", "decoupling": 8.26, "movingTime": 5400,
-				"startDateLocal": "2026-10-27T08:00:00", "pairedEventId": 77, "icuVariabilityIndex": 1.05,
+				"startDateLocal": "2026-10-27T08:00:00", "pairedEventId": paired, "icuVariabilityIndex": 1.05,
 				"analyzed": "2026-10-27T10:00:00Z",
 			})
 		default:
@@ -261,6 +276,20 @@ func TestActivityDecouplingCommand(t *testing.T) {
 	}
 	if fake.historyCalls.Load() != 1 || fake.eventCalls.Load() != 1 {
 		t.Fatalf("history %d events %d", fake.historyCalls.Load(), fake.eventCalls.Load())
+	}
+
+	summary, _ := got["summary"].(map[string]any)
+	if got["experimental"] != true || summary["status"] != icu.DecouplingStatusMeasured || summary["stopRule"] == nil ||
+		summary["viCutoff"] != 1.12 || summary["workoutKind"] != icu.DecouplingWorkoutSteady {
+		t.Fatalf("summary = %v", got["summary"])
+	}
+
+	// Gated path: an interval workout is not measurable, so even with
+	// --decoupling-source streams the API value is kept and no stream value shows.
+	gated := runDecouplingCommand(t, client, []string{"iwaves"}, map[string]string{decouplingSourceFlag: "streams"})
+	if gated["decoupling"] != 8.26 || gated["decouplingSource"] != icu.DecouplingSourceAPI ||
+		gated["streamsDecoupling"] != nil || gated["streamsStatus"] != icu.DecouplingStatusNotMeasurable {
+		t.Fatalf("gated output = %v", gated)
 	}
 
 	streams := runDecouplingCommand(t, client, []string{"i9"}, map[string]string{decouplingSourceFlag: "streams"})

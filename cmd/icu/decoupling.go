@@ -47,7 +47,7 @@ const (
 
 func decouplingSchemaFlags() []CommandFlag {
 	return []CommandFlag{
-		{Name: decouplingSourceFlag, ValueName: "api|streams", Description: "Consumed decoupling: api (intervals.icu's " +
+		{Name: decouplingSourceFlag, ValueName: "api|streams", Description: "[EXPERIMENTAL streams] Consumed decoupling: api (intervals.icu's " +
 			"field, default, no stream fetch) or streams (recompute from activity streams, report both, consume the stream " +
 			"value when measured).", Default: decouplingModeAPI},
 		{Name: decouplingWarmupFlag, ValueName: "N", Description: "Override the warm-up trim (whole moving minutes); " +
@@ -247,47 +247,73 @@ func activityDay(activity *icu.Activity) string {
 	return activity.StartDateLocal[:len(dateLayout)]
 }
 
-// decouplingPlanTrims reads the paired workouts' warm-up/cool-down with a
-// single events GET over the candidates' date span. Errors fall back to
-// steady-state trimming (empty map).
-func decouplingPlanTrims(client *icu.Client, activities []icu.Activity, candidates []int) map[int]*icu.DecouplingPlanTrim {
-	trims := map[int]*icu.DecouplingPlanTrim{}
-	oldest, newest := "", ""
-	for _, index := range candidates {
-		activity := &activities[index]
-		day := activityDay(activity)
-		if activity.PairedEventID == nil || day == "" {
-			continue
-		}
-		if oldest == "" || day < oldest {
-			oldest = day
-		}
-		if day > newest {
-			newest = day
-		}
-	}
-	if oldest == "" {
-		return trims
-	}
-	var events []icu.Event
-	if err := client.Get("events", nil, map[string]string{queryOldest: oldest, queryNewest: newest}, &events); err != nil {
-		return trims
-	}
-	for index := range events {
-		addEventPlanTrim(trims, &events[index])
-	}
-
-	return trims
+// decouplingHistory is the paired-workout and VI context of a window.
+type decouplingHistory struct {
+	plans  map[int]*icu.DecouplingPlanTrim
+	kinds  map[int]string
+	cutoff *float64
 }
 
-func addEventPlanTrim(trims map[int]*icu.DecouplingPlanTrim, event *icu.Event) {
-	doc, err := icu.DecodeWorkoutDoc(event.WorkoutDoc)
+func (history *decouplingHistory) gate(activity *icu.Activity, result *icu.StreamDecoupling) *icu.DecouplingPlanTrim {
+	var plan *icu.DecouplingPlanTrim
+	kind := ""
+	if activity.PairedEventID != nil {
+		plan, kind = history.plans[*activity.PairedEventID], history.kinds[*activity.PairedEventID]
+	}
+	if result != nil {
+		result.ApplyWorkoutGate(kind)
+		result.ApplyVIGate(activity.VariabilityIndex, history.cutoff, kind == icu.DecouplingWorkoutSteady)
+	}
+
+	return plan
+}
+
+// loadDecouplingHistory makes two GETs: the events from oldest (or
+// decouplingVIHistoryDays before newest, if earlier) to newest, for the
+// paired workouts' trims and kinds; and the rides of the last
+// decouplingVIHistoryDays, whose steady-workout VIs give the VI cutoff.
+// Errors leave the context empty (steady-state trim, no gate).
+func loadDecouplingHistory(client *icu.Client, oldest, newest string) *decouplingHistory {
+	history := &decouplingHistory{plans: map[int]*icu.DecouplingPlanTrim{}, kinds: map[int]string{}}
+	end, err := time.Parse(dateLayout, newest)
 	if err != nil {
-		return
+		return history
 	}
-	if trim, ok := icu.PlannedDecouplingTrim(doc); ok {
-		trims[event.ID] = trim
+	historyOldest := end.AddDate(0, 0, -decouplingVIHistoryDays).Format(dateLayout)
+	eventsOldest := minString(oldest, historyOldest)
+	var events []icu.Event
+	if client.Get("events", nil, map[string]string{queryOldest: eventsOldest, queryNewest: newest}, &events) == nil {
+		for index := range events {
+			if trim, kind, ok := icu.PlannedDecouplingWorkout(events[index].WorkoutDoc); ok {
+				history.plans[events[index].ID], history.kinds[events[index].ID] = trim, kind
+			}
+		}
 	}
+	query := map[string]string{
+		queryOldest: historyOldest, queryNewest: newest,
+		"fields": "id,type,icu_variability_index,paired_event_id",
+	}
+	var rides []icu.Activity
+	if client.Get("activities", nil, query, &rides) != nil {
+		return history
+	}
+	var steady []icu.Activity
+	for index := range rides {
+		if id := rides[index].PairedEventID; id != nil && history.kinds[*id] == icu.DecouplingWorkoutSteady {
+			steady = append(steady, rides[index])
+		}
+	}
+	history.cutoff = icu.DecouplingVICutoff(decouplingVIValues(steady))
+
+	return history
+}
+
+func minString(left, right string) string {
+	if left != "" && left < right {
+		return left
+	}
+
+	return right
 }
 
 // decouplingVIValues are the cycling VIs the cutoff is derived from.
@@ -321,8 +347,13 @@ func enrichActivitiesDecoupling(client *icu.Client, activities []icu.Activity, f
 	if len(candidates) == 0 {
 		return nil
 	}
-	trims := decouplingPlanTrims(client, activities, candidates)
-	cutoff := icu.DecouplingVICutoff(decouplingVIValues(activities))
+	oldest, newest := "", ""
+	for _, index := range candidates {
+		if day := activityDay(&activities[index]); day != "" {
+			oldest, newest = minString(oldest, day), max(newest, day)
+		}
+	}
+	history := loadDecouplingHistory(client, oldest, newest)
 
 	jobs := make(chan int)
 	var wg sync.WaitGroup
@@ -332,18 +363,15 @@ func enrichActivitiesDecoupling(client *icu.Client, activities []icu.Activity, f
 			defer wg.Done()
 			for index := range jobs {
 				activity := &activities[index]
-				var plan *icu.DecouplingPlanTrim
-				if activity.PairedEventID != nil {
-					plan = trims[*activity.PairedEventID]
-				}
-				result, err := computeActivityDecoupling(client, activity, options, plan)
+				result, err := computeActivityDecoupling(client, activity, options, history.gate(activity, nil))
 				if err != nil {
 					activity.MarkAPIDecoupling(err.Error())
 					activity.DecouplingStreamsStatus = icu.DecouplingStatusUnavailable
+					activity.DecouplingExperimental = true
 
 					continue
 				}
-				result.ApplyVIGate(activity.VariabilityIndex, cutoff)
+				history.gate(activity, &result)
 				activity.AttachStreamDecoupling(&result, true)
 			}
 		}()
@@ -355,36 +383,6 @@ func enrichActivitiesDecoupling(client *icu.Client, activities []icu.Activity, f
 	wg.Wait()
 
 	return nil
-}
-
-// singleActivityContext fetches the paired workout's trim and the VI cutoff
-// (last decouplingVIHistoryDays of rides) for one activity. Both are
-// optional: errors leave them nil.
-func singleActivityContext(client *icu.Client, activity *icu.Activity) (*icu.DecouplingPlanTrim, *float64) {
-	var plan *icu.DecouplingPlanTrim
-	if activity.PairedEventID != nil {
-		var event icu.Event
-		if client.Get("events", []string{strconv.Itoa(*activity.PairedEventID)}, nil, &event) == nil {
-			trims := map[int]*icu.DecouplingPlanTrim{}
-			addEventPlanTrim(trims, &event)
-			plan = trims[event.ID]
-		}
-	}
-	day, err := time.Parse(dateLayout, activityDay(activity))
-	if err != nil {
-		return plan, nil
-	}
-	query := map[string]string{
-		queryOldest: day.AddDate(0, 0, -decouplingVIHistoryDays).Format(dateLayout),
-		queryNewest: day.Format(dateLayout),
-		"fields":    "id,type,icu_variability_index",
-	}
-	var history []icu.Activity
-	if client.Get("activities", nil, query, &history) != nil {
-		return plan, nil
-	}
-
-	return plan, icu.DecouplingVICutoff(decouplingVIValues(history))
 }
 
 func apiDecouplingValue(activity *icu.Activity) *float64 {
@@ -401,10 +399,11 @@ func activityDecouplingCommand() *Command {
 		Name: "",
 		Usage: "activity <id> decoupling [--decoupling-source api|streams] [--decoupling-warmup-min N] " +
 			"[--decoupling-cooldown-min N] [--decoupling-hr-lag S] [--decoupling-iqr-k K]",
-		Description: "Aerobic decoupling from the activity streams (Pa:HR; GAP:HR without power) on moving-time minutes, " +
-			"next to intervals.icu's decoupling field. Trim from the paired workout's steps then steady-state detection, " +
-			"HR lag by cross-correlation, coasting and missing-HR minutes and Tukey ratio outliers excluded, VI gate from " +
-			"the athlete's history. The API value stays the consumed one unless --decoupling-source streams. Read-only.",
+		Description: "[EXPERIMENTAL] Aerobic decoupling from the activity streams (Pa:HR; GAP:HR without power) on " +
+			"moving-time minutes, next to intervals.icu's decoupling field (the default consumed value). Trim from the " +
+			"paired workout's steps then steady-state detection, HR lag by cross-correlation, coasting/missing-HR minutes " +
+			"and Tukey ratio outliers excluded. Not measurable for interval/ladder workouts or a VI above the cutoff " +
+			"derived from the last 84 days of steady rides. Read-only.",
 		Run: func(args []string, flags map[string]string, client *icu.Client) error {
 			if len(args) == 0 {
 				return errMissing("activity id")
@@ -418,21 +417,25 @@ func activityDecouplingCommand() *Command {
 				return wrapCommandError(err)
 			}
 			activity.ID = args[0]
-			plan, cutoff := singleActivityContext(client, &activity)
+			day := activityDay(&activity)
+			history := loadDecouplingHistory(client, day, day)
 			out := map[string]any{
 				"id":                args[0],
 				"name":              activity.Name,
+				"experimental":      true,
 				"apiDecoupling":     apiDecouplingValue(&activity),
 				"streamsDecoupling": nil,
 			}
-			result, err := computeActivityDecoupling(client, &activity, options, plan)
+			result, err := computeActivityDecoupling(client, &activity, options, history.gate(&activity, nil))
 			if err != nil {
 				activity.MarkAPIDecoupling(err.Error())
 				activity.DecouplingStreamsStatus = icu.DecouplingStatusUnavailable
+				activity.DecouplingExperimental = true
 			} else {
-				result.ApplyVIGate(activity.VariabilityIndex, cutoff)
+				history.gate(&activity, &result)
 				activity.AttachStreamDecoupling(&result, mode == decouplingModeStreams)
-				out["streamsDecoupling"] = result.Value
+				out["streamsDecoupling"] = activity.DecouplingStreams
+				out["summary"] = decouplingSummary(&activity, &result)
 				out["streamDetail"] = result
 			}
 			out["decoupling"] = sessionValue(&activity)
@@ -444,6 +447,26 @@ func activityDecouplingCommand() *Command {
 
 			return writeJSON(out)
 		},
+	}
+}
+
+// decouplingSummary is the compact, human-checkable view of one result.
+func decouplingSummary(activity *icu.Activity, result *icu.StreamDecoupling) map[string]any {
+	return map[string]any{
+		"status":            result.Status,
+		"reason":            result.Reason,
+		"apiDecoupling":     apiDecouplingValue(activity),
+		"streamsDecoupling": activity.DecouplingStreams,
+		"trim":              result.Trim,
+		"hrLag":             map[string]any{"seconds": result.HRLagSeconds, "method": result.HRLagMethod, "r": result.HRLagCorrelation},
+		"minutesKept":       result.MinutesKept,
+		"minutesInRange":    result.MinutesInRange,
+		"excluded":          result.Excluded,
+		"workoutKind":       result.WorkoutKind,
+		"variabilityIndex":  result.VariabilityIndex,
+		"viCutoff":          result.VICutoff,
+		"powerCv":           result.PowerCV,
+		"stopRule":          result.StopRule,
 	}
 }
 
