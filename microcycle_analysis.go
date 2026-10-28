@@ -158,12 +158,14 @@ type MicrocycleWellness struct {
 }
 
 type MicrocycleFatigueDurability struct {
-	State               string   `json:"state"`
-	LongRides           int      `json:"longRides"`
-	HighDecouplingRides int      `json:"highDecouplingRides"`
-	AverageDecoupling   float64  `json:"averageDecoupling,omitempty"`
-	LatestForm          float64  `json:"latestForm,omitempty"`
-	Evidence            []string `json:"evidence,omitempty"`
+	State               string  `json:"state"`
+	LongRides           int     `json:"longRides"`
+	HighDecouplingRides int     `json:"highDecouplingRides"`
+	AverageDecoupling   float64 `json:"averageDecoupling,omitempty"`
+	// DecouplingSources labels where the decoupling values came from (B15).
+	DecouplingSources map[string]int `json:"decouplingSources,omitempty"`
+	LatestForm        float64        `json:"latestForm,omitempty"`
+	Evidence          []string       `json:"evidence,omitempty"`
 }
 
 type MicrocycleAdaptationSignal struct {
@@ -505,6 +507,7 @@ func microcycleFatigueDurability(cycling *CyclingAnalysis, wellness *WellnessAna
 		LongRides:           countLongRides(cycling.Sessions),
 		HighDecouplingRides: cycling.Durability.HighDecouplingActivities,
 		AverageDecoupling:   cycling.Durability.AverageDecoupling,
+		DecouplingSources:   cycling.Durability.DecouplingSources,
 		LatestForm:          cycling.Load.LatestForm,
 		Evidence:            evidence,
 	}
