@@ -419,7 +419,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu events create --name "Endurance" --start-date 2026-06-03 --desc "- 60m 70%" --calculate-load --ftp 300`
 
 - `update`
-  Invocation: `icu events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N] [--force]`
+  Invocation: `icu events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N] [--force] [--dry-run]`
   Notes: `--calculate-load` is explicit only; descriptions are not parsed unless the flag is present. When enabled, calculated `moving_time` and `icu_training_load` override manual values for the request body. FTP pricing applies only to cycling types: `--type`, else the stored event type read by the backup GET. `--desc-file` and the literal-escape check behave as on `create`.
   Example: `icu events update 123 --name "Threshold 4x8" --training-load 92`
   Example: `icu events update 123 --desc "- 60m 70%" --calculate-load --ftp 300`

@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -79,7 +81,7 @@ func eventsCreateCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert] [--color COLOR] [--indoor] [--external-id ID]",
+			" [--moving-time SECS] [--training-load N] [--desc DESC | --description DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert] [--color COLOR] [--indoor] [--external-id ID]",
 		Description: "Create calendar event.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			request, err := buildEventCreate(flags)
@@ -114,8 +116,9 @@ func eventsCreateCommand() *Command {
 
 func eventsUpdateCommand() *Command {
 	return &Command{
-		Name:        "",
-		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--force] [--dry-run]",
+		Name: "",
+		Usage: "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --description DESC | --desc-file PATH] " +
+			"[--training-load N] [--moving-time SECS] [--calculate-load --ftp N] [--force] [--dry-run]",
 		Description: "Update calendar event.",
 		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
@@ -166,7 +169,7 @@ func eventsUpdateCommand() *Command {
 
 				return writeJSON(stdout, map[string]any{
 					"id": eventID, "dryRun": true, "applied": false, "body": request.Body,
-					"message": "dry-run: nothing written",
+					"changes": eventUpdateChanges(raw, request.Body), "message": "dry-run: nothing written",
 				})
 			}
 			path, _, err := backupEventChecked(client, eventID, "events update", validate)
@@ -464,4 +467,34 @@ func eventDay(startDateLocal string) string {
 	}
 
 	return startDateLocal[:len("2006-01-02")]
+}
+
+type eventFieldChange struct {
+	Field  string `json:"field"`
+	Before any    `json:"before"`
+	After  any    `json:"after"`
+}
+
+// eventUpdateChanges diffs the update body against the live event, by wire
+// field name, for --dry-run output.
+func eventUpdateChanges(current json.RawMessage, body any) []eventFieldChange {
+	var before, after map[string]any
+	_ = json.Unmarshal(current, &before)
+	data, err := json.Marshal(body)
+	if err != nil || json.Unmarshal(data, &after) != nil {
+		return nil
+	}
+	keys := make([]string, 0, len(after))
+	for key := range after {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	changes := []eventFieldChange{}
+	for _, key := range keys {
+		if !reflect.DeepEqual(before[key], after[key]) {
+			changes = append(changes, eventFieldChange{Field: key, Before: before[key], After: after[key]})
+		}
+	}
+
+	return changes
 }

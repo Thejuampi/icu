@@ -5,21 +5,28 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // globalFlags are accepted by every command (auth, output and session
 // selection are resolved outside the command's own Run).
-var globalFlags = map[string]bool{
-	"api-key": true, "athlete-id": true, "output": true, "session-environment": true,
+func isGlobalFlag(name string) bool {
+	switch name {
+	case "api-key", "athlete-id", "output", "session-environment":
+		return true
+	}
+
+	return false
 }
 
-var usageFlagPattern = regexp.MustCompile(`(?:^|[\s\[(|])--?([A-Za-z0-9][A-Za-z0-9-]*)`)
+var usageFlagPattern = regexp.MustCompile(`(?:^|[\s\[(|])--?([A-Za-z0-9][A-Za-z0-9_-]*)`)
 
 // usageFlags lists the flag names a command's Usage line documents.
 func usageFlags(usage string) map[string]bool {
 	names := map[string]bool{}
 	for _, match := range usageFlagPattern.FindAllStringSubmatch(usage, -1) {
-		names[match[1]] = true
+		// parseFlags maps --a_b to a-b; match that here.
+		names[strings.ReplaceAll(match[1], "_", "-")] = true
 	}
 
 	return names
@@ -37,7 +44,7 @@ func validateUsageFlags(command *Command, flags map[string]string) error {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if !allowed[name] && !globalFlags[name] {
+		if !allowed[name] && !isGlobalFlag(name) {
 			return fmt.Errorf("unknown flag --%s", name)
 		}
 	}
@@ -88,7 +95,7 @@ func validateCommandInput(command *Command, args []string, flags map[string]stri
 
 	for _, name := range names {
 		flag, ok := allowed[name]
-		if !ok && globalFlags[name] {
+		if !ok && isGlobalFlag(name) {
 			continue
 		}
 		if !ok {

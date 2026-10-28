@@ -121,8 +121,12 @@ func TestEventsUpdateDryRunEndToEndNeverWrites(t *testing.T) {
 	client, writes := readOnlyServer(t)
 	withMockCommandClient(t, client)
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"icu", "events", "update", "3", "--name", "x", "--dry-run"}, &stdout, &stderr); code != 0 || *writes != 0 {
+	if code := run([]string{"icu", "events", "update", "1", "--name", "X", "--dry-run"}, &stdout, &stderr); code != 0 || *writes != 0 {
 		t.Fatalf("code=%d writes=%d stderr=%q", code, *writes, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, `"field": "name"`) || !strings.Contains(out, `"before": "Z2"`) || !strings.Contains(out, `"after": "X"`) {
+		t.Fatalf("dry-run diff missing: %s", out)
 	}
 }
 
@@ -160,3 +164,73 @@ func TestResolveRevertBackupOnlyPendingPointsToBackupFlag(t *testing.T) {
 }
 
 func timeNowForTest() time.Time { return time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC) }
+
+//nolint:paralleltest // replaces newCommandClient and sets env.
+func TestWriteCommandsRejectUnsupportedFlagsWithoutRequests(t *testing.T) {
+	t.Setenv(eventBackupDirEnv, t.TempDir())
+	t.Setenv("INTERVALS_ICU_API_KEY", "k")
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(server.Close)
+	withMockCommandClient(t, icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL)))
+
+	// Commands that implement --dry-run are only checked with a bogus flag.
+	supportsDryRun := map[string]bool{
+		"events update": true, "events delete": true, "events revert": true, "sports update": true,
+		"rebalance accept": true, "plan accept": true,
+	}
+	writes := [][]string{
+		{"events", "create", "--name", "x"},
+		{"events", "update", "1", "--name", "X"},
+		{"events", "delete", "1"},
+		{"events", "revert", "--id", "1"},
+		{"workouts", "create", "--name", "x"},
+		{"workouts", "update", "1"},
+		{"workouts", "delete", "1"},
+		{"folders", "create", "--name", "x"},
+		{"folders", "update", "1"},
+		{"folders", "delete", "1"},
+		{"gear", "create", "--name", "x"},
+		{"gear", "update", "1"},
+		{"gear", "delete", "1"},
+		{"custom", "create", "--name", "x"},
+		{"custom", "update", "1"},
+		{"custom", "delete", "1"},
+		{"wellness", "update", "2026-10-26", "--weight", "70"},
+		{"wellness", "bulk", "--file", "/nonexistent.json"},
+		{"wellness", "upload", "/nonexistent.csv"},
+		{"activities", "upload", "/nonexistent.fit"},
+		{"activities", "manual", "--name", "x"},
+		{"activity", "1", "update", "--name", "x"},
+		{"activity", "1", "estimate-power-accept", "--file", "/nonexistent.json"},
+		{"chats", "send", "--content", "x"},
+		{"sports", "update", "Ride", "--ftp", "250"},
+		{"sports", "delete", "1"},
+		{"athlete", "settings", "--device", "phone"},
+		{"rebalance", "accept", "--file", "/nonexistent.json"},
+		{"plan", "accept", "--file", "/nonexistent.json"},
+	}
+	for _, args := range writes {
+		key := args[0] + " " + args[1]
+		if args[0] == "activity" {
+			key = args[0] + " " + args[2]
+		}
+		extras := [][]string{{"--not-a-flag", "1"}}
+		if !supportsDryRun[key] {
+			extras = append(extras, []string{"--dry-run"})
+		}
+		for _, extra := range extras {
+			var stdout, stderr bytes.Buffer
+			full := append(append([]string{"icu"}, args...), extra...)
+			if code := run(full, &stdout, &stderr); code == 0 || !strings.Contains(stderr.String(), "unknown flag") {
+				t.Errorf("%v: code=%d stderr=%q", full, code, stderr.String())
+			}
+		}
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d, want 0", requests)
+	}
+}

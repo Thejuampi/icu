@@ -207,6 +207,8 @@ func commandRequiresAuth(resource, _ string) bool {
 
 // newCommandClient builds the API client for executeCommand. Tests replace it
 // to point end-to-end runs at an httptest server.
+//
+//nolint:gochecknoglobals // test seam so end-to-end tests never reach the real API.
 var newCommandClient = func(apiKey, athleteID string) *icu.Client {
 	return icu.NewClient(apiKey, athleteID)
 }
