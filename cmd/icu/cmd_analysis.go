@@ -128,7 +128,7 @@ func analysisCoachingCommand() *Command {
 func analysisCoachingSchema() *CommandSchema {
 	return &CommandSchema{
 		RejectPositionals: true,
-		Flags: []CommandFlag{
+		Flags: append([]CommandFlag{
 			{Name: "history-oldest", ValueName: "DATE", Description: "History range start (YYYY-MM-DD)."},
 			{Name: "history-newest", ValueName: "DATE", Description: "History range end (YYYY-MM-DD)."},
 			{Name: "plan-oldest", ValueName: "DATE", Description: "Plan range start (YYYY-MM-DD)."},
@@ -145,7 +145,7 @@ func analysisCoachingSchema() *CommandSchema {
 			{Name: "adaptation-curves", ValueName: "CSV", Description: "Power curves used by adaptation.", Default: "42d,365d"},
 			{Name: "api-key", ValueName: "KEY", Description: "Intervals.icu API key."},
 			{Name: "athlete-id", ValueName: "ID", Description: "Intervals.icu athlete ID."},
-		},
+		}, decouplingSchemaFlags()...),
 	}
 }
 
@@ -243,6 +243,10 @@ func readCoachingActivities(client *icu.Client, flags map[string]string, dateRan
 	var activities []icu.Activity
 	if err := client.Get("activities", nil, query, &activities); err != nil {
 		return nil, wrapCommandError(err)
+	}
+
+	if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
+		return nil, err
 	}
 
 	return activities, nil
@@ -348,6 +352,9 @@ func analysisCyclingCommand() *Command {
 			if err := client.Get("activities", nil, query, &activities); err != nil {
 				return wrapCommandError(err)
 			}
+			if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
+				return err
+			}
 
 			tzInfo := analysisTimezone(explicit)
 			analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{
@@ -427,6 +434,9 @@ func analysisPlanCommand() *Command {
 			var activities []icu.Activity
 			if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
 				return wrapCommandError(err)
+			}
+			if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
+				return err
 			}
 
 			sportType := icu.StringFlag(flags, "sport-type", "Ride")
@@ -563,7 +573,7 @@ func readWorkoutExecutionInputs(
 
 	streamQuery := map[string]string{"types": icu.StringFlag(flags, "stream-types", "watts,heartrate,cadence")}
 	var rawStreams []icu.ActivityStream
-	if err := client.Get("activity", []string{activityID, "streams"}, streamQuery, &rawStreams); err != nil {
+	if err := client.Get("activity", []string{activityID, activityStreamsPath}, streamQuery, &rawStreams); err != nil {
 		return inputs, options, wrapCommandError(err)
 	}
 	streams, err := icu.NormalizeStreams(rawStreams)
@@ -1094,6 +1104,10 @@ func readMicrocycleActivities(
 	var activities []icu.Activity
 	if err := client.Get("activities", nil, activityQuery, &activities); err != nil {
 		return nil, wrapCommandError(err)
+	}
+
+	if err := enrichActivitiesDecoupling(client, activities, flags); err != nil {
+		return nil, err
 	}
 
 	return activities, nil

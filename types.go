@@ -103,30 +103,38 @@ type Activity struct {
 	HRLoadType string `json:"hrLoadType,omitempty"`
 	// PowerLoad and PaceLoad are the other two load channels alongside
 	// TrainingLoad/HRLoad (D-23/T2.5's tri-load byChannel breakdown).
-	PowerLoad         *int    `json:"powerLoad,omitempty"`
-	PaceLoad          *int    `json:"paceLoad,omitempty"`
-	PaceLoadType      string  `json:"paceLoadType,omitempty"`
-	TRIMP             float64 `json:"trimp,omitempty"`
-	Intensity         float64 `json:"icuIntensity,omitempty"`
-	FTP               int     `json:"icuFtp,omitempty"`
-	CriticalPower     int     `json:"icuPmCp,omitempty"`
-	WPrime            int     `json:"icuPmWPrime,omitempty"`
-	PMax              int     `json:"icuPmPMax,omitempty"`
-	FTPWatts          int     `json:"icuPmFtp,omitempty"`
-	RollingFTP        int     `json:"icuRollingFtp,omitempty"`
-	JoulesAboveFTP    int     `json:"icuJoulesAboveFtp,omitempty"`
-	MaxWbalDepletion  int     `json:"icuMaxWbalDepletion,omitempty"`
-	Decoupling        float64 `json:"decoupling,omitempty"`
-	EfficiencyFactor  float64 `json:"icuEfficiencyFactor,omitempty"`
-	VariabilityIndex  float64 `json:"icuVariabilityIndex,omitempty"`
-	PowerHR           float64 `json:"icuPowerHr,omitempty"`
-	PowerHRZ2         float64 `json:"icuPowerHrZ2,omitempty"`
-	PowerHRZ2Mins     int     `json:"icuPowerHrZ2Mins,omitempty"`
-	CadenceZ2         int     `json:"icuCadenceZ2,omitempty"`
-	RPE               int     `json:"icuRpe,omitempty"`
-	Feel              int     `json:"feel,omitempty"`
-	PerceivedExertion float64 `json:"perceivedExertion,omitempty"`
-	SessionRPE        int     `json:"sessionRpe,omitempty"`
+	PowerLoad        *int    `json:"powerLoad,omitempty"`
+	PaceLoad         *int    `json:"paceLoad,omitempty"`
+	PaceLoadType     string  `json:"paceLoadType,omitempty"`
+	TRIMP            float64 `json:"trimp,omitempty"`
+	Intensity        float64 `json:"icuIntensity,omitempty"`
+	FTP              int     `json:"icuFtp,omitempty"`
+	CriticalPower    int     `json:"icuPmCp,omitempty"`
+	WPrime           int     `json:"icuPmWPrime,omitempty"`
+	PMax             int     `json:"icuPmPMax,omitempty"`
+	FTPWatts         int     `json:"icuPmFtp,omitempty"`
+	RollingFTP       int     `json:"icuRollingFtp,omitempty"`
+	JoulesAboveFTP   int     `json:"icuJoulesAboveFtp,omitempty"`
+	MaxWbalDepletion int     `json:"icuMaxWbalDepletion,omitempty"`
+	Decoupling       float64 `json:"decoupling,omitempty"`
+	// DecouplingSource labels where Decoupling came from (B15): "streams"
+	// (recomputed by the CLI) or "api_fallback" (intervals.icu's field, used
+	// only when streams are unavailable). Empty = raw API value, not enriched.
+	DecouplingSource string `json:"decouplingSource,omitempty"`
+	// DecouplingAPI keeps intervals.icu's original value for comparison.
+	DecouplingAPI     *float64 `json:"decouplingApi,omitempty"`
+	DecouplingBasis   string   `json:"decouplingBasis,omitempty"`
+	DecouplingNote    string   `json:"decouplingNote,omitempty"`
+	EfficiencyFactor  float64  `json:"icuEfficiencyFactor,omitempty"`
+	VariabilityIndex  float64  `json:"icuVariabilityIndex,omitempty"`
+	PowerHR           float64  `json:"icuPowerHr,omitempty"`
+	PowerHRZ2         float64  `json:"icuPowerHrZ2,omitempty"`
+	PowerHRZ2Mins     int      `json:"icuPowerHrZ2Mins,omitempty"`
+	CadenceZ2         int      `json:"icuCadenceZ2,omitempty"`
+	RPE               int      `json:"icuRpe,omitempty"`
+	Feel              int      `json:"feel,omitempty"`
+	PerceivedExertion float64  `json:"perceivedExertion,omitempty"`
+	SessionRPE        int      `json:"sessionRpe,omitempty"`
 	// Compliance is pointer + omitempty (D-5): never fetched before wave-2
 	// (F-8), so it has zero existing consumers. F-18/D-21: 0.0 means
 	// "unpaired", not "0% adherence" — all 36 live zero-compliance activities

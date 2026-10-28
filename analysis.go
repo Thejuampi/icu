@@ -264,8 +264,11 @@ type CyclingIntensity struct {
 type CyclingDurability struct {
 	AverageDecoupling        float64 `json:"averageDecoupling"`
 	HighDecouplingActivities int     `json:"highDecouplingActivities"`
-	AverageEfficiencyFactor  float64 `json:"averageEfficiencyFactor"`
-	AverageVariabilityIndex  float64 `json:"averageVariabilityIndex"`
+	// DecouplingSources counts contributing activities by decoupling source
+	// (B15): "streams" or "api_fallback" (omitted when not enriched).
+	DecouplingSources       map[string]int `json:"decouplingSources,omitempty"`
+	AverageEfficiencyFactor float64        `json:"averageEfficiencyFactor"`
+	AverageVariabilityIndex float64        `json:"averageVariabilityIndex"`
 	// NIncluded is D-3's per-section inclusion count (T2.3): decoupling and
 	// efficiency both compare power against heart rate, so either
 	// icu_ignore_power or icu_ignore_hr (or icu_ignore_time) excludes an
@@ -320,6 +323,8 @@ type CyclingSession struct {
 	WeightedAvgPower   int        `json:"weightedAvgPower,omitempty"`
 	AverageHeartRate   int        `json:"averageHeartRate,omitempty"`
 	Decoupling         float64    `json:"decoupling,omitempty"`
+	DecouplingSource   string     `json:"decouplingSource,omitempty"`
+	DecouplingAPI      *float64   `json:"decouplingApi,omitempty"`
 	EfficiencyFactor   float64    `json:"efficiencyFactor,omitempty"`
 	VariabilityIndex   float64    `json:"variabilityIndex,omitempty"`
 	JoulesAboveFTP     int        `json:"joulesAboveFtp,omitempty"`
@@ -660,7 +665,8 @@ func (accumulator *cyclingAnalysisAccumulator) addHRIntensity(activity *Activity
 }
 
 func (accumulator *cyclingAnalysisAccumulator) addDurability(activity *Activity) {
-	if activity.Decoupling != 0 {
+	if activity.HasDecoupling() {
+		accumulator.addDecouplingSource(activity.DecouplingSource)
 		accumulator.decoupling.add(activity.Decoupling)
 		accumulator.updateMaxDecoupling(activity.Decoupling)
 		accumulator.addHighDecoupling(activity.Decoupling)
@@ -673,6 +679,26 @@ func (accumulator *cyclingAnalysisAccumulator) addDurability(activity *Activity)
 	if activity.VariabilityIndex != 0 {
 		accumulator.variability.add(activity.VariabilityIndex)
 	}
+}
+
+func (accumulator *cyclingAnalysisAccumulator) addDecouplingSource(source string) {
+	durability := &accumulator.analysis.Durability
+	durability.DecouplingSources = addDecouplingSourceCount(durability.DecouplingSources, source)
+}
+
+// addDecouplingSourceCount counts enriched sources only; raw API values
+// from library callers that never enriched (source "") are not labeled, so
+// existing outputs keep their shape.
+func addDecouplingSourceCount(counts map[string]int, source string) map[string]int {
+	if source == "" {
+		return counts
+	}
+	if counts == nil {
+		counts = map[string]int{}
+	}
+	counts[source]++
+
+	return counts
 }
 
 func (accumulator *cyclingAnalysisAccumulator) updateMaxDecoupling(decoupling float64) {
@@ -1274,6 +1300,8 @@ func cyclingSessionFromActivity(activity *Activity) CyclingSession {
 		WeightedAvgPower:   activity.WeightedAvgPower,
 		AverageHeartRate:   activity.AverageHeartRate,
 		Decoupling:         activity.Decoupling,
+		DecouplingSource:   activity.DecouplingSource,
+		DecouplingAPI:      activity.DecouplingAPI,
 		EfficiencyFactor:   activity.EfficiencyFactor,
 		VariabilityIndex:   activity.VariabilityIndex,
 		JoulesAboveFTP:     activity.JoulesAboveFTP,

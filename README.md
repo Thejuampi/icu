@@ -252,6 +252,15 @@ Details: [docs/cli-reference.md](docs/cli-reference.md), [docs/library.md](docs/
 
 `analysis cycling`, `analysis coaching`, and `analysis microcycle` exclude STRAVA-stub records (5 raw keys, `_note` present, `source == "STRAVA"`) from every activity count and load aggregate, and `analysis cycling` reports a `validity` block naming which activities were excluded and why (`icu_ignore_power`/`icu_ignore_hr`/`icu_ignore_time`, D-2). That ignore-flag filtering is correct and tested, but has been measured `false` on every real activity checked against a live account so far — see [docs/analysis.md](docs/analysis.md) for the inertness statement before crediting it with a reported number change.
 
+### Aerobic decoupling (B15)
+
+intervals.icu's `decoupling` field is not reliable (on i202545713 it reports 8.26% for a Z2 ride whose streams show ~2.9% once coasting is excluded), so `analysis cycling`, `analysis coaching`, `analysis plan` and `analysis microcycle` recompute it from each ride's streams (`GET /activity/{id}/streams`, read-only) and label it:
+
+- **Method**: Friel Pa:HR (pace:HR for runs without power) on per-minute averages. (1) Trim warm-up/cool-down by whole minutes (`--decoupling-warmup-min`, default 20; `--decoupling-cooldown-min`, default 12). (2) Pair each power sample with HR `--decoupling-hr-lag` seconds later (default 23). (3) Exclude minutes averaging below `--decoupling-min-power` W (default 50: coasting/stops → `low_power`) and minutes with <50% HR coverage (`missing_hr`). (4) Exclude minutes whose power/HR ratio is outside Tukey fences `Q1 − k·IQR … Q3 + k·IQR` (`--decoupling-iqr-k`, default 1.5, 0 disables → `ratio_outlier`). (5) Split the kept minutes at the time midpoint of the trimmed range: `decoupling = (1 − (P2/HR2)/(P1/HR1)) × 100`. Needs ≥20 kept minutes.
+- **Labels**: each session has `decouplingSource` (`streams`, or `api_fallback` when the streams are unavailable/too short, with the reason in `decouplingNote`) and `decouplingApi` (intervals.icu's value, for comparison); `durability.decouplingSources`, `history.decouplingSources` and microcycle `fatigueDurability.decouplingSources` count them. `--decoupling-source api` skips the stream fetch and uses the API field, labeled.
+- **API volume**: one streams GET per cycling/running activity with HR, 4 in parallel, cached under `~/.icu/cache/decoupling/` (keyed by activity, algorithm version and options; `estimate-power-accept` invalidates its activity). Fetch errors are not cached.
+- `icu activity <id> decoupling` shows the full breakdown for one activity: kept/excluded minutes by reason, fences, both halves, and the API value.
+
 See [docs/analysis.md](docs/analysis.md) for defaults, inputs, output sections, and current limitations.
 
 ## Development

@@ -57,6 +57,7 @@ func registerActivityCommands(registry *CommandRegistry) {
 			"streams",
 		),
 	)
+	registry.Register("activity", "decoupling", activityDecouplingCommand())
 	registry.Register(
 		"activity", "power-vs-hr",
 		getByIDCommand[any]("activity", "activity <id> power-vs-hr", "Get power vs HR data.", "activity id", nil, "power-vs-hr"),

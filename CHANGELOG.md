@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- B15: aerobic decoupling is recomputed from activity streams instead of trusting intervals.icu's `decoupling` field (per-minute Pa:HR, 20/12 min warm-up/cool-down trim, <50 W minutes excluded, 23 s HR lag, IQR 1.5 ratio outliers excluded; all configurable). Used by `analysis cycling|coaching|plan|microcycle`; outputs label `decouplingSource` (`streams`/`api_fallback`) with `decouplingApi` for comparison. New `icu activity <id> decoupling`. Streams results are cached on disk. i202545713: API 8.26% → streams 2.89% (71/75 minutes kept).
+
 ## v0.1.0 — 2026-10-26
 
 First tagged release. It is pre-1.0, so the breaking output changes listed below go out in a minor release; upgrade notes are under "Breaking changes".
