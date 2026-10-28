@@ -41,20 +41,24 @@ func (registry *CommandRegistry) Register(resource, action string, cmd *Command)
 // allow-list for unknown-flag rejection, so they are appended here.
 func undocumentedUsageFlags(key string) string {
 	return map[string]string{
-		"activities interval-search": "[--minReps N] [--maxReps N] [--limit N]",
-		"activities list":            "[--route-id ID]",
-		"activities upload":          "[--device-name NAME] [--paired-event-id ID]",
-		"activity best-efforts":      "[--stream NAME] [--duration SECS] [--distance M] [--count N]",
-		"activity map":               "[--bounds BOOL] [--weather BOOL]",
-		"activity weather-summary":   "[--descr-config VALUE]",
-		"analysis adaptation":        "[--filters FILTERS] [--limit N] [--activity-fields CSV]",
-		"analysis cycling":           "[--fields CSV] [--limit N]",
+		"activities interval-search":       "[--minReps N] [--maxReps N] [--limit N]",
+		"activities list":                  "[--route-id ID]",
+		"activities upload":                "[--device-name NAME] [--paired-event-id ID]",
+		"activity best-efforts":            "[--stream NAME] [--duration SECS] [--distance M] [--count N]",
+		"activity estimate-power-backtest": "[--cda N] [--air-density N]",
+		"activity map":                     "[--bounds BOOL] [--weather BOOL]",
+		"activity weather-summary":         "[--descr-config VALUE]",
+		"analysis adaptation":              "[--filters FILTERS] [--limit N] [--activity-fields CSV]",
+		"analysis cycling":                 "[--fields CSV] [--limit N] [--timezone TZ]",
+		"analysis micro":                   "[--limit N] [--calendar-id ID] [--resolve]",
+		"analysis microcycle":              "[--limit N] [--calendar-id ID] [--resolve]",
 		"analysis plan": "[--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve] " +
-			"[--activity-fields CSV]",
-		"curves hr":    "[--curves CURVES]",
-		"curves pace":  "[--curves CURVES]",
-		"curves power": "[--newest DATE] [--filters FILTERS]",
-		"events list":  "[--limit N] [--calendar-id ID]",
+			"[--activity-fields CSV] [--limit N] [--timezone TZ]",
+		"curves hr":          "[--curves CURVES]",
+		"curves pace":        "[--curves CURVES]",
+		"curves power":       "[--newest DATE] [--filters FILTERS]",
+		"events list":        "[--limit N] [--calendar-id ID]",
+		"workouts calculate": "[--description DESC]",
 	}[key]
 }
 

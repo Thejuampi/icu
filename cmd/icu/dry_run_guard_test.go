@@ -165,72 +165,220 @@ func TestResolveRevertBackupOnlyPendingPointsToBackupFlag(t *testing.T) {
 
 func timeNowForTest() time.Time { return time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC) }
 
+// readOnlyCommands never write. Every other registered command is treated as
+// a write command by TestEveryCommandRejectsUnsupportedFlagsWithoutWrites, so
+// a new command is guarded until it is classified here.
+func readOnlyCommands() map[string]bool {
+	return map[string]bool{
+		"activities around":                true,
+		"activities csv":                   true,
+		"activities get":                   true,
+		"activities interval-search":       true,
+		"activities list":                  true,
+		"activities search":                true,
+		"activities search-full":           true,
+		"activity best-efforts":            true,
+		"activity decoupling":              true,
+		"activity estimate-power":          true,
+		"activity estimate-power-backtest": true,
+		"activity file":                    true,
+		"activity fit-file":                true,
+		"activity gpx-file":                true,
+		"activity hr-curve":                true,
+		"activity intervals":               true,
+		"activity map":                     true,
+		"activity messages":                true,
+		"activity pace-curve":              true,
+		"activity power-curve":             true,
+		"activity power-vs-hr":             true,
+		"activity segments":                true,
+		"activity show":                    true,
+		"activity streams":                 true,
+		"activity weather":                 true,
+		"activity weather-summary":         true,
+		"analysis adaptation":              true,
+		"analysis coaching":                true,
+		"analysis cycling":                 true,
+		"analysis micro":                   true,
+		"analysis microcycle":              true,
+		"analysis plan":                    true,
+		"analysis wellness":                true,
+		"analysis workout":                 true,
+		"athlete profile":                  true,
+		"athlete settings":                 true,
+		"athlete show":                     true,
+		"athlete summary":                  true,
+		"chats get":                        true,
+		"chats list":                       true,
+		"chats messages":                   true,
+		"config diagnose":                  true,
+		"config path":                      true,
+		"config show":                      true,
+		"curves hr":                        true,
+		"curves mmp":                       true,
+		"curves pace":                      true,
+		"curves power":                     true,
+		"curves power-hr":                  true,
+		"custom get":                       true,
+		"custom list":                      true,
+		"events backups":                   true,
+		"events download":                  true,
+		"events get":                       true,
+		"events list":                      true,
+		"events tags":                      true,
+		"fitness-events list":              true,
+		"folders list":                     true,
+		"ftp show":                         true,
+		"gear list":                        true,
+		"plan show":                        true,
+		"profile show":                     true,
+		"rebalance preview":                true,
+		"rebalance show":                   true,
+		"routes get":                       true,
+		"routes list":                      true,
+		"shared-event get":                 true,
+		"sports get":                       true,
+		"sports list":                      true,
+		"tags activities":                  true,
+		"tags events":                      true,
+		"tags workouts":                    true,
+		"weather forecast":                 true,
+		"wellness get":                     true,
+		"wellness list":                    true,
+		"workouts calculate":               true,
+		"workouts get":                     true,
+		"workouts list":                    true,
+		"workouts tags":                    true,
+		"zepp biocharge":                   true,
+		"zepp blood-pressure":              true,
+		"zepp body-battery":                true,
+		"zepp events":                      true,
+		"zepp health-summary":              true,
+		"zepp heart-rate":                  true,
+		"zepp hrv":                         true,
+		"zepp hybridcharge":                true,
+		"zepp manual-data":                 true,
+		"zepp mood":                        true,
+		"zepp pai":                         true,
+		"zepp profile":                     true,
+		"zepp readiness":                   true,
+		"zepp respiratory-rate":            true,
+		"zepp second-heart-rate":           true,
+		"zepp skin-temp":                   true,
+		"zepp sleep":                       true,
+		"zepp spo2":                        true,
+		"zepp spo2-windows":                true,
+		"zepp sport-load":                  true,
+		"zepp status":                      true,
+		"zepp stress":                      true,
+		"zepp stress-minute":               true,
+		"zepp summary":                     true,
+		"zepp vo2":                         true,
+		"zepp weight":                      true,
+		"zepp workout":                     true,
+		"zepp workouts":                    true,
+	}
+}
+
+// dryRunCommands implement --dry-run and must make no write with it.
+func dryRunCommands() map[string]bool {
+	return map[string]bool{
+		"events update": true, "events delete": true, "events revert": true, "sports update": true,
+	}
+}
+
+func commandArgs(resource, action string, extra ...string) []string {
+	args := make([]string, 0, 4+len(extra))
+	args = append(args, "icu", resource)
+	if isIDFirstResource(resource) {
+		args = append(args, "1")
+	}
+	args = append(args, action)
+
+	return append(args, extra...)
+}
+
 //nolint:paralleltest // replaces newCommandClient and sets env.
-func TestWriteCommandsRejectUnsupportedFlagsWithoutRequests(t *testing.T) {
+func TestEveryCommandRejectsUnsupportedFlagsWithoutWrites(t *testing.T) {
 	t.Setenv(eventBackupDirEnv, t.TempDir())
+	t.Setenv("ICU_CONFIG_DIR", t.TempDir())
 	t.Setenv("INTERVALS_ICU_API_KEY", "k")
-	requests := 0
+	t.Setenv("INTERVALS_ICU_ATHLETE_ID", "i1")
+	var mu sync.Mutex
+	writes := map[string]int{}
+	current := ""
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests++
-		t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		mu.Lock()
+		defer mu.Unlock()
+		if r.Method != http.MethodGet {
+			writes[current]++
+			w.WriteHeader(http.StatusTeapot)
+
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"name":"Z2","type":"Ride","start_date_local":"2026-10-28T07:00:00"}`))
 	}))
 	t.Cleanup(server.Close)
 	withMockCommandClient(t, icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL)))
 
-	// Commands that implement --dry-run are only checked with a bogus flag.
-	supportsDryRun := map[string]bool{
-		"events update": true, "events delete": true, "events revert": true, "sports update": true,
-		"rebalance accept": true, "plan accept": true,
-	}
-	writes := [][]string{
-		{"events", "create", "--name", "x"},
-		{"events", "update", "1", "--name", "X"},
-		{"events", "delete", "1"},
-		{"events", "revert", "--id", "1"},
-		{"workouts", "create", "--name", "x"},
-		{"workouts", "update", "1"},
-		{"workouts", "delete", "1"},
-		{"folders", "create", "--name", "x"},
-		{"folders", "update", "1"},
-		{"folders", "delete", "1"},
-		{"gear", "create", "--name", "x"},
-		{"gear", "update", "1"},
-		{"gear", "delete", "1"},
-		{"custom", "create", "--name", "x"},
-		{"custom", "update", "1"},
-		{"custom", "delete", "1"},
-		{"wellness", "update", "2026-10-26", "--weight", "70"},
-		{"wellness", "bulk", "--file", "/nonexistent.json"},
-		{"wellness", "upload", "/nonexistent.csv"},
-		{"activities", "upload", "/nonexistent.fit"},
-		{"activities", "manual", "--name", "x"},
-		{"activity", "1", "update", "--name", "x"},
-		{"activity", "1", "estimate-power-accept", "--file", "/nonexistent.json"},
-		{"chats", "send", "--content", "x"},
-		{"sports", "update", "Ride", "--ftp", "250"},
-		{"sports", "delete", "1"},
-		{"athlete", "settings", "--device", "phone"},
-		{"rebalance", "accept", "--file", "/nonexistent.json"},
-		{"plan", "accept", "--file", "/nonexistent.json"},
-	}
-	for _, args := range writes {
-		key := args[0] + " " + args[1]
-		if args[0] == "activity" {
-			key = args[0] + " " + args[2]
-		}
-		extras := [][]string{{"--not-a-flag", "1"}}
-		if !supportsDryRun[key] {
-			extras = append(extras, []string{"--dry-run"})
-		}
-		for _, extra := range extras {
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	accepted := map[string]bool{}
+	for _, resource := range registry.Resources() {
+		for _, action := range registry.Actions(resource) {
+			key := resource + " " + action
+			cmd, _ := registry.Lookup(resource, action)
+
 			var stdout, stderr bytes.Buffer
-			full := append(append([]string{"icu"}, args...), extra...)
-			if code := run(full, &stdout, &stderr); code == 0 || !strings.Contains(stderr.String(), "unknown flag") {
-				t.Errorf("%v: code=%d stderr=%q", full, code, stderr.String())
+			if code := run(commandArgs(resource, action, "--not-a-flag", "1"), &stdout, &stderr); code == 0 ||
+				!strings.Contains(stderr.String(), "unknown flag --not-a-flag") {
+				t.Errorf("%s --not-a-flag: code=%d stderr=%q", key, code, stderr.String())
 			}
+
+			if validateCommandInput(cmd, nil, map[string]string{"dry-run": ""}) != nil {
+				continue
+			}
+			accepted[key] = true
+			if readOnlyCommands()[key] {
+				t.Errorf("%s is listed read-only but accepts --dry-run", key)
+			}
+			mu.Lock()
+			current = key
+			mu.Unlock()
+			stdout.Reset()
+			stderr.Reset()
+			_ = run(commandArgs(resource, action, "1", "--name", "X", "--dry-run"), &stdout, &stderr)
 		}
 	}
-	if requests != 0 {
-		t.Fatalf("requests = %d, want 0", requests)
+	for key := range readOnlyCommands() {
+		parts := strings.SplitN(key, " ", 2)
+		if _, ok := registry.Lookup(parts[0], parts[1]); !ok {
+			t.Errorf("readOnlyCommands lists unknown command %s", key)
+		}
+		// Plain runs against the write-failing mock confirm the
+		// classification. Zepp, config and estimate-power reach other
+		// services or local files, so they are only classified.
+		if parts[0] == "zepp" || parts[0] == "config" || strings.HasPrefix(parts[1], "estimate-power") {
+			continue
+		}
+		mu.Lock()
+		current = key + " (plain)"
+		mu.Unlock()
+		var stdout, stderr bytes.Buffer
+		_ = run(commandArgs(parts[0], parts[1], "1"), &stdout, &stderr)
+	}
+	for key := range accepted {
+		if !dryRunCommands()[key] {
+			t.Errorf("%s accepts --dry-run but is not in dryRunCommands", key)
+		}
+	}
+	for key := range dryRunCommands() {
+		if !accepted[key] {
+			t.Errorf("%s is in dryRunCommands but rejects --dry-run", key)
+		}
+	}
+	for key, n := range writes {
+		t.Errorf("%s --dry-run sent %d write request(s)", key, n)
 	}
 }
