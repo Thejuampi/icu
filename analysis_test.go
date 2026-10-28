@@ -151,7 +151,7 @@ func TestAnalyzeCyclingActivitiesSessionSummary(t *testing.T) {
 			Intensity:          0.73,
 			WeightedAvgPower:   208,
 			AverageHeartRate:   145,
-			Decoupling:         3.1,
+			Decoupling:         new(3.1),
 			EfficiencyFactor:   1.44,
 			VariabilityIndex:   1.29,
 			JoulesAboveFTP:     12000,

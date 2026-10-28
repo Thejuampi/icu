@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- B15: stream-based aerobic decoupling reported next to intervals.icu's `decoupling` field. The API value stays the default. `--decoupling-source streams` consumes the stream value in `analysis cycling|coaching|plan|microcycle`. Trims come from the paired workout steps plus steady-state detection, HR lag from cross-correlation, the stop speed from moving time, and the VI gate from the athlete's history. Coasting and missing-HR minutes and Tukey ratio outliers are excluded. Sessions label `decouplingSource` (`api`/`streams`), `decouplingApi`, `decouplingStreams` and `decouplingStreamsStatus`. New `icu activity <id> decoupling`. The cache is invalidated on activity edits, and not-measured results expire after 24 h. Experimental and opt-in (`[EXPERIMENTAL]` help, `experimental: true` JSON). Interval and ladder workouts (from the paired workout doc) are `not_measurable`; the VI cutoff comes from rides paired with steady workouts in the last 84 days, and rides with no cutoff and no steady plan are `not_measurable`. Non-measured results never expose or consume a stream value. `activity decoupling` adds a `summary`.
+
 Behaviour changes (#22):
 - `activity estimate-power`: athlete fields are now decoded from the API's snake_case (`icu_weight`, `icu_resting_hr`, `height_units`). Without `--rider-mass-kg`, rider mass now comes from `icu_weight` (source `athlete_icu_weight`) where it used to fall through to `weight`, so the estimated power values change when the two differ.
 - `athlete show` omits date of birth and Strava id unless `--include-private` is set.

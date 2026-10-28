@@ -103,20 +103,37 @@ type Activity struct {
 	HRLoadType string `json:"hrLoadType,omitempty"`
 	// PowerLoad and PaceLoad are the other two load channels alongside
 	// TrainingLoad/HRLoad (D-23/T2.5's tri-load byChannel breakdown).
-	PowerLoad         *int    `json:"powerLoad,omitempty"`
-	PaceLoad          *int    `json:"paceLoad,omitempty"`
-	PaceLoadType      string  `json:"paceLoadType,omitempty"`
-	TRIMP             float64 `json:"trimp,omitempty"`
-	Intensity         float64 `json:"icuIntensity,omitempty"`
-	FTP               int     `json:"icuFtp,omitempty"`
-	CriticalPower     int     `json:"icuPmCp,omitempty"`
-	WPrime            int     `json:"icuPmWPrime,omitempty"`
-	PMax              int     `json:"icuPmPMax,omitempty"`
-	FTPWatts          int     `json:"icuPmFtp,omitempty"`
-	RollingFTP        int     `json:"icuRollingFtp,omitempty"`
-	JoulesAboveFTP    int     `json:"icuJoulesAboveFtp,omitempty"`
-	MaxWbalDepletion  int     `json:"icuMaxWbalDepletion,omitempty"`
-	Decoupling        float64 `json:"decoupling,omitempty"`
+	PowerLoad        *int    `json:"powerLoad,omitempty"`
+	PaceLoad         *int    `json:"paceLoad,omitempty"`
+	PaceLoadType     string  `json:"paceLoadType,omitempty"`
+	TRIMP            float64 `json:"trimp,omitempty"`
+	Intensity        float64 `json:"icuIntensity,omitempty"`
+	FTP              int     `json:"icuFtp,omitempty"`
+	CriticalPower    int     `json:"icuPmCp,omitempty"`
+	WPrime           int     `json:"icuPmWPrime,omitempty"`
+	PMax             int     `json:"icuPmPMax,omitempty"`
+	FTPWatts         int     `json:"icuPmFtp,omitempty"`
+	RollingFTP       int     `json:"icuRollingFtp,omitempty"`
+	JoulesAboveFTP   int     `json:"icuJoulesAboveFtp,omitempty"`
+	MaxWbalDepletion int     `json:"icuMaxWbalDepletion,omitempty"`
+	Decoupling       float64 `json:"decoupling,omitempty"`
+	// DecouplingSource labels the consumed Decoupling (B15): "api"
+	// (intervals.icu's field, the default) or "streams" (recomputed by the
+	// CLI with --decoupling-source streams). Empty = not enriched.
+	DecouplingSource string `json:"decouplingSource,omitempty"`
+	// DecouplingAPI keeps intervals.icu's original value (nil when absent).
+	DecouplingAPI *float64 `json:"decouplingApi,omitempty"`
+	// DecouplingStreams is the stream-method value, reported next to the API
+	// one; a real 0.0 is kept (pointer).
+	DecouplingStreams       *float64 `json:"decouplingStreams,omitempty"`
+	DecouplingStreamsStatus string   `json:"decouplingStreamsStatus,omitempty"`
+	// DecouplingExperimental flags the stream method as experimental.
+	DecouplingExperimental bool   `json:"decouplingExperimental,omitempty"`
+	DecouplingBasis        string `json:"decouplingBasis,omitempty"`
+	DecouplingNote         string `json:"decouplingNote,omitempty"`
+	// Analyzed is intervals.icu's last-analysis timestamp; it changes when
+	// the activity is edited/reprocessed and keys the decoupling cache.
+	Analyzed          string  `json:"analyzed,omitempty"`
 	EfficiencyFactor  float64 `json:"icuEfficiencyFactor,omitempty"`
 	VariabilityIndex  float64 `json:"icuVariabilityIndex,omitempty"`
 	PowerHR           float64 `json:"icuPowerHr,omitempty"`

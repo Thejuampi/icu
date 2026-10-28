@@ -135,8 +135,11 @@ type TrainingPlanHistory struct {
 	// judged against DecouplingThreshold derived from the rides before them.
 	RecentDecoupling    float64           `json:"recentDecoupling,omitempty"`
 	DecouplingThreshold *DerivedThreshold `json:"decouplingThreshold,omitempty"`
-	CurrentHotSessions  int               `json:"currentHotSessions,omitempty"`
-	CurrentStateSource  string            `json:"currentStateSource,omitempty"`
+	// DecouplingSources counts history rides by decoupling source (B15):
+	// "streams" or "api_fallback" (omitted when not enriched).
+	DecouplingSources  map[string]int `json:"decouplingSources,omitempty"`
+	CurrentHotSessions int            `json:"currentHotSessions,omitempty"`
+	CurrentStateSource string         `json:"currentStateSource,omitempty"`
 	// CurrentLoadSource labels CurrentCTL/ATL/TSB: "wellness" (daily row at
 	// the history end) or "last_activity" (frozen at the newest ride).
 	CurrentLoadSource    string                      `json:"currentLoadSource,omitempty"`
@@ -1302,7 +1305,8 @@ func summarizeTrainingPlanHistory(activities []Activity, options TrainingPlanOpt
 		week.startDate = weekStart.Format(analysisDateLayout)
 		week.endDate = weekEnd.Format(analysisDateLayout)
 		week.intensity.addIfNonZero(activity.Intensity)
-		if activity.Decoupling != 0 {
+		if activity.HasDecoupling() {
+			history.DecouplingSources = addDecouplingSourceCount(history.DecouplingSources, activity.DecouplingSource)
 			week.decouplingValues = append(week.decouplingValues, activity.Decoupling)
 			week.decouplingSeconds = append(week.decouplingSeconds, activity.MovingTime)
 			week.decouplingDates = append(week.decouplingDates, date)

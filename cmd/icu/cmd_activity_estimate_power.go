@@ -107,7 +107,7 @@ func runEstimatePowerBacktestCommand(args []string, flags map[string]string, cli
 
 	types := icu.StringFlag(flags, "types", estimatePowerDefaultTypes)
 	var raw []icu.ActivityStream
-	if err := client.Get("activity", []string{activityID, "streams"}, map[string]string{"types": types}, &raw); err != nil {
+	if err := client.Get("activity", []string{activityID, activityStreamsPath}, map[string]string{"types": types}, &raw); err != nil {
 		return wrapCommandError(err)
 	}
 	streams, err := icu.PreserveNullableStreams(raw)
@@ -186,9 +186,10 @@ func runEstimatePowerAcceptCommand(args []string, flags map[string]string, clien
 		Data: watts,
 	}}
 	var updateResult icu.UpdateStreamsResult
-	if err := client.Put("activity", []string{activityID, "streams"}, nil, body, &updateResult); err != nil {
+	if err := client.Put("activity", []string{activityID, activityStreamsPath}, nil, body, &updateResult); err != nil {
 		return wrapCommandError(err)
 	}
+	invalidateDecouplingCache(activityID)
 
 	var activity icu.Activity
 	if getErr := client.Get("activity", []string{activityID}, nil, &activity); getErr != nil {
@@ -216,7 +217,7 @@ func runEstimatePowerShow(client *icu.Client, activityID string, flags map[strin
 
 	types := icu.StringFlag(flags, "types", estimatePowerDefaultTypes)
 	var raw []icu.ActivityStream
-	if err := client.Get("activity", []string{activityID, "streams"}, map[string]string{"types": types}, &raw); err != nil {
+	if err := client.Get("activity", []string{activityID, activityStreamsPath}, map[string]string{"types": types}, &raw); err != nil {
 		return icu.PowerFillResult{}, wrapCommandError(err)
 	}
 
