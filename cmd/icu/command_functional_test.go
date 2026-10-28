@@ -647,8 +647,8 @@ func sportCommandCases() []commandCase {
 		commandFlow("sports get", "sports", "get", []string{"Ride"}, nil,
 			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "Ride"),
 		commandFlow("sports update", "sports", "update", []string{"Ride"},
-			flags("ftp", "285", "lthr", "178", "max-hr", "198", "indoor-ftp", "280"),
-			http.MethodPut, "/api/v1/athlete/0/sport-settings/Ride", "Ride"),
+			flags("ftp", "291", "lthr", "179", "max-hr", "199", "indoor-ftp", "281", "dry-run", "true"),
+			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "Ride"), // static fixture cannot echo writes; PUT paths covered in cmd_sports_test.go
 		commandFlow("sports delete", "sports", "delete", []string{"1"}, nil,
 			http.MethodDelete, "/api/v1/athlete/0/sport-settings/1", ""),
 		commandFlow("ftp show", "ftp", "show", nil, flags("sport", "Ride"),

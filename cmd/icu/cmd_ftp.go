@@ -49,15 +49,16 @@ func ftpUpdateCommand() *Command {
 				return errMissing("--value (watts)")
 			}
 
-			var ss icu.SportSettings
+			// Wire names are snake_case (indoor_ftp); the SportSettings struct
+			// tags are camelCase and the API ignores them on PUT.
+			field := "ftp"
 			if BoolFlag(flags, "indoor") {
-				ss.IndoorFTP = val
-			} else {
-				ss.FTP = val
+				field = "indoor_ftp"
 			}
+			body := map[string]int{field: val}
 
 			var result icu.SportSettings
-			if err := client.Put("sport-settings", []string{sport}, map[string]string{"recalcHrZones": "false"}, ss, &result); err != nil {
+			if err := client.Put("sport-settings", []string{sport}, map[string]string{"recalcHrZones": "false"}, body, &result); err != nil {
 				return wrapCommandError(err)
 			}
 
