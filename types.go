@@ -485,23 +485,25 @@ type FolderCreate struct {
 }
 
 type SportSettings struct {
-	ID            int       `json:"id,omitempty"`
-	AthleteID     string    `json:"athleteId,omitempty"`
-	Types         []string  `json:"types,omitempty"`
-	FTP           int       `json:"ftp,omitempty"`
-	IndoorFTP     int       `json:"indoorFtp,omitempty"`
-	WPrime        int       `json:"wPrime,omitempty"`
-	PMax          int       `json:"pMax,omitempty"`
-	LTHR          int       `json:"lthr,omitempty"`
-	MaxHR         int       `json:"maxHr,omitempty"`
-	PowerZones    []int     `json:"powerZones,omitempty"`
-	HRZones       []int     `json:"hrZones,omitempty"`
-	PaceZones     []float64 `json:"paceZones,omitempty"`
-	ThresholdPace float64   `json:"thresholdPace,omitempty"`
-	PaceUnits     string    `json:"paceUnits,omitempty"`
-	HRLoadType    string    `json:"hrLoadType,omitempty"`
-	PaceLoadType  string    `json:"paceLoadType,omitempty"`
-	GapModel      string    `json:"gapModel,omitempty"`
+	ID             int       `json:"id,omitempty"`
+	AthleteID      string    `json:"athleteId,omitempty"`
+	Types          []string  `json:"types,omitempty"`
+	FTP            int       `json:"ftp,omitempty"`
+	IndoorFTP      int       `json:"indoorFtp,omitempty"`
+	WPrime         int       `json:"wPrime,omitempty"`
+	PMax           int       `json:"pMax,omitempty"`
+	LTHR           int       `json:"lthr,omitempty"`
+	MaxHR          int       `json:"maxHr,omitempty"`
+	PowerZones     []int     `json:"powerZones,omitempty"`
+	HRZones        []int     `json:"hrZones,omitempty"`
+	PowerZoneNames []string  `json:"powerZoneNames,omitempty"`
+	HRZoneNames    []string  `json:"hrZoneNames,omitempty"`
+	PaceZones      []float64 `json:"paceZones,omitempty"`
+	ThresholdPace  float64   `json:"thresholdPace,omitempty"`
+	PaceUnits      string    `json:"paceUnits,omitempty"`
+	HRLoadType     string    `json:"hrLoadType,omitempty"`
+	PaceLoadType   string    `json:"paceLoadType,omitempty"`
+	GapModel       string    `json:"gapModel,omitempty"`
 }
 
 type Interval struct {

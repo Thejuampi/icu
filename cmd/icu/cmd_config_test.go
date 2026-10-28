@@ -138,9 +138,8 @@ func TestConfigShowShortAPIKeyUsesFingerprint(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // swaps the package-level stdout override; running in parallel races with other tests' output.
 func TestConfigDiagnoseVerboseFlag(t *testing.T) {
-	t.Parallel()
-
 	registry := NewCommandRegistry()
 	registerConfigCommands(registry)
 
