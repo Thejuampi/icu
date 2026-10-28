@@ -21,7 +21,7 @@ func registerFoldersCommands(registry *CommandRegistry) {
 
 	registry.Register("folders", "update", updateByIDCommand[icu.FolderCreate, icu.Folder](
 		"folders",
-		"folders update <id> --name NAME",
+		"folders update <id> [--name NAME] [--desc DESC]",
 		"Update a folder or plan.",
 		"icu.Folder id",
 		nil,

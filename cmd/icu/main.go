@@ -205,6 +205,12 @@ func commandRequiresAuth(resource, _ string) bool {
 	return true
 }
 
+// newCommandClient builds the API client for executeCommand. Tests replace it
+// to point end-to-end runs at an httptest server.
+var newCommandClient = func(apiKey, athleteID string) *icu.Client {
+	return icu.NewClient(apiKey, athleteID)
+}
+
 func executeCommand(
 	registry *CommandRegistry,
 	resource, action string,
@@ -237,7 +243,7 @@ func executeCommand(
 	}
 
 	athleteID := icu.ResolveAthleteID(flags)
-	client := icu.NewClient(apiKey, athleteID)
+	client := newCommandClient(apiKey, athleteID)
 
 	if err := cmd.Run(posArgs, flags, client, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)

@@ -14,7 +14,7 @@ func registerWorkoutsCommands(registry *CommandRegistry) {
 
 	registry.Register("workouts", "create", createCommand[icu.WorkoutEx, icu.Workout](
 		"workouts",
-		"workouts create --name NAME --type Ride [--folder-id ID] [--desc DESC] [--training-load N]",
+		"workouts create --name NAME --type Ride [--folder-id ID] [--desc DESC] [--training-load N] [--moving-time SECS]",
 		"Create a workout.",
 		nil,
 		func(flags map[string]string) icu.WorkoutEx {
@@ -31,7 +31,7 @@ func registerWorkoutsCommands(registry *CommandRegistry) {
 
 	registry.Register("workouts", "update", updateByIDCommand[icu.WorkoutEx, icu.Workout](
 		"workouts",
-		"workouts update <id> --name NAME",
+		"workouts update <id> [--name NAME] [--desc DESC]",
 		"Update a workout.",
 		"icu.Workout id",
 		nil,

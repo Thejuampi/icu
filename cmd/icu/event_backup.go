@@ -347,6 +347,7 @@ func resolveRevertBackup(flags map[string]string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	var pending []string
 	// A pre-revert snapshot holds the state the revert replaced; picking it
 	// would make a second revert undo the first.
 	for _, path := range paths {
@@ -358,10 +359,18 @@ func resolveRevertBackup(flags map[string]string) (string, error) {
 		// unknown), so it is not a state this CLI moved away from. Pass
 		// --backup PATH to restore one explicitly.
 		if backup.WritePending {
+			pending = append(pending, path)
+
 			continue
 		}
 
 		return path, nil
+	}
+
+	if len(pending) > 0 {
+		return "", fmt.Errorf("no usable backup for event %d in %s: %d pending backup(s) exist (their write never "+
+			"completed or its outcome is unknown); inspect one and pass --backup PATH to restore it explicitly, e.g. --backup %s",
+			eventID, eventBackupDir(), len(pending), pending[0])
 	}
 
 	return "", fmt.Errorf("no local backup for event %d in %s", eventID, eventBackupDir())
@@ -446,16 +455,27 @@ func sameEventJSON(left, right json.RawMessage) bool {
 func eventsDeleteCommand() *Command {
 	return &Command{
 		Name:  "",
-		Usage: "events delete <id>",
+		Usage: "events delete <id> [--dry-run]",
 		Description: "Delete calendar event. Backs the event up locally first; restore it with " +
 			"events revert --id ID.",
-		Run: func(args []string, _ map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
+		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("event id")
 			}
 			eventID, err := strconv.Atoi(args[0])
 			if err != nil {
 				return fmt.Errorf("%w: event id %q", errInvalidValue, args[0])
+			}
+			if BoolFlag(flags, "dry-run") {
+				var event icu.Event
+				if err := client.Get("events", []string{args[0]}, nil, &event); err != nil {
+					return wrapCommandError(err)
+				}
+
+				return writeJSON(stdout, map[string]any{
+					"wouldDelete": eventID, "name": event.Name, "dryRun": true, "applied": false,
+					"message": "dry-run: nothing written",
+				})
 			}
 			path, err := backupEvent(client, eventID, eventBackupReasonDelete)
 			if err != nil {

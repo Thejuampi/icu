@@ -328,11 +328,17 @@ func TestAnalysisCoachingBooleanValuesAreValid(t *testing.T) {
 	}
 }
 
-func TestLegacyCommandWithoutSchemaKeepsLegacyValidation(t *testing.T) {
+func TestCommandWithoutSchemaRejectsUndocumentedFlags(t *testing.T) {
 	t.Parallel()
 
-	if err := validateCommandInput(&Command{}, []string{"legacy"}, map[string]string{"unknown": "value"}); err != nil {
-		t.Fatalf("validateCommandInput legacy error = %v, want nil", err)
+	cmd := &Command{Usage: "x run <id> [--name NAME] [--force]"}
+	if err := validateCommandInput(cmd, []string{"legacy"}, map[string]string{"unknown": "value"}); err == nil ||
+		!strings.Contains(err.Error(), "unknown flag --unknown") {
+		t.Fatalf("validateCommandInput error = %v, want unknown flag", err)
+	}
+	ok := map[string]string{"name": "n", "force": "", "api-key": "k", "athlete-id": "i1"}
+	if err := validateCommandInput(cmd, []string{"legacy"}, ok); err != nil {
+		t.Fatalf("validateCommandInput documented flags error = %v", err)
 	}
 }
 

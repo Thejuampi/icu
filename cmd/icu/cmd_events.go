@@ -79,7 +79,7 @@ func eventsCreateCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert]",
+			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert] [--color COLOR] [--indoor] [--external-id ID]",
 		Description: "Create calendar event.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			request, err := buildEventCreate(flags)
@@ -115,7 +115,7 @@ func eventsCreateCommand() *Command {
 func eventsUpdateCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--force]",
+		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--force] [--dry-run]",
 		Description: "Update calendar event.",
 		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
@@ -137,7 +137,7 @@ func eventsUpdateCommand() *Command {
 			// Validate (third-party edit, then the request itself) before the
 			// backup is written, so a rejected update leaves no backup behind.
 			var request calculatedEventRequest
-			path, _, err := backupEventChecked(client, eventID, "events update", func(raw json.RawMessage) error {
+			validate := func(raw json.RawMessage) error {
 				if err := checkThirdPartyEdit(eventID, last, raw, BoolFlag(flags, "force")); err != nil {
 					return err
 				}
@@ -152,7 +152,24 @@ func eventsUpdateCommand() *Command {
 				request = built
 
 				return nil
-			})
+			}
+			// --dry-run validates against the live event (GET only) and
+			// prints the body it would send: no backup, no PUT.
+			if BoolFlag(flags, "dry-run") {
+				var raw json.RawMessage
+				if err := client.Get("events", []string{args[0]}, nil, &raw); err != nil {
+					return wrapCommandError(err)
+				}
+				if err := validate(raw); err != nil {
+					return err
+				}
+
+				return writeJSON(stdout, map[string]any{
+					"id": eventID, "dryRun": true, "applied": false, "body": request.Body,
+					"message": "dry-run: nothing written",
+				})
+			}
+			path, _, err := backupEventChecked(client, eventID, "events update", validate)
 			if err != nil {
 				return err
 			}

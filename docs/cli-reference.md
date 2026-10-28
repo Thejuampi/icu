@@ -436,7 +436,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu events revert --id 12345 --dry-run`
 
 - `delete`
-  Invocation: `icu events delete <id>`
+  Invocation: `icu events delete <id> [--dry-run]`
   Notes: Backs the event up locally first (aborts if the backup fails), then DELETEs it and prints `{deleted, backupPath}`. Undo with `icu events revert --id ID` (recreated under a new id).
   Example: `icu events delete 123`
 
