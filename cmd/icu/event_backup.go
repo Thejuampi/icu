@@ -40,6 +40,10 @@ type eventBackup struct {
 	// can tell whether someone else edited the event since.
 	PostWriteHash string `json:"postWriteHash,omitempty"`
 	PostWriteAt   string `json:"postWriteAt,omitempty"`
+	// WritePending is set when the backup is taken and cleared by
+	// recordPostWrite. A backup still pending means its write never happened
+	// (or failed), so it says nothing about what this CLI last wrote.
+	WritePending bool `json:"writePending,omitempty"`
 }
 
 // recordPostWrite stores the hash of the event just written in the backup
@@ -54,6 +58,7 @@ func recordPostWrite(path string, written *icu.Event) error {
 	}
 	backup.PostWriteHash = icu.EventBackupHash(written)
 	backup.PostWriteAt = time.Now().UTC().Format(time.RFC3339Nano)
+	backup.WritePending = false
 
 	return rewriteEventBackup(path, &backup)
 }
@@ -66,22 +71,30 @@ type lastWrite struct {
 	legacy bool // newest backup predates postWriteHash
 }
 
-// findLastWrite reads the newest backup of eventID. Backups taken before a
-// delete or cancel record no write to this event id.
+// findLastWrite reads the newest backup of eventID that records a write.
+// Backups taken before a delete or cancel record no write to this event id;
+// backups whose write never happened (writePending) are skipped.
 func findLastWrite(eventID int) (lastWrite, error) {
 	paths, err := listEventBackups(eventID)
-	if err != nil || len(paths) == 0 {
+	if err != nil {
 		return lastWrite{}, err
 	}
-	backup, err := readEventBackup(paths[0])
-	if err != nil {
-		return lastWrite{}, nil //nolint:nilerr // an unreadable backup carries no write record.
-	}
-	if backup.Reason == eventBackupReasonDelete || backup.Reason == eventBackupReasonDrop {
-		return lastWrite{}, nil
+	for _, path := range paths {
+		backup, err := readEventBackup(path)
+		if err != nil {
+			return lastWrite{}, nil //nolint:nilerr // an unreadable backup carries no write record.
+		}
+		if backup.Reason == eventBackupReasonDelete || backup.Reason == eventBackupReasonDrop {
+			return lastWrite{}, nil
+		}
+		if backup.WritePending {
+			continue
+		}
+
+		return lastWrite{path: path, hash: backup.PostWriteHash, legacy: backup.PostWriteHash == ""}, nil
 	}
 
-	return lastWrite{path: paths[0], hash: backup.PostWriteHash, legacy: backup.PostWriteHash == ""}, nil
+	return lastWrite{}, nil
 }
 
 // checkThirdPartyEdit aborts (unless force) when the event changed since this
@@ -143,7 +156,7 @@ func backupEventChecked(
 			return "", nil, err
 		}
 	}
-	path, err := writeEventBackup(&eventBackup{EventID: eventID, Reason: reason, Event: raw}, time.Now())
+	path, err := writeEventBackup(&eventBackup{EventID: eventID, Reason: reason, Event: raw, WritePending: true}, time.Now())
 
 	return path, raw, err
 }

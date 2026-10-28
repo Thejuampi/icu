@@ -133,20 +133,27 @@ func eventsUpdateCommand() *Command {
 			if err != nil {
 				return err
 			}
-			path, raw, err := backupEventChecked(client, eventID, "events update", func(current json.RawMessage) error {
-				return checkThirdPartyEdit(eventID, last, current, BoolFlag(flags, "force"))
+			// Validate (third-party edit, then the request itself) before the
+			// backup is written, so a rejected update leaves no backup behind.
+			var request calculatedEventRequest
+			path, _, err := backupEventChecked(client, eventID, "events update", func(raw json.RawMessage) error {
+				if err := checkThirdPartyEdit(eventID, last, raw, BoolFlag(flags, "force")); err != nil {
+					return err
+				}
+				var current icu.Event
+				if err := json.Unmarshal(raw, &current); err != nil {
+					return fmt.Errorf("decode event %d: %w", eventID, err)
+				}
+				built, err := buildEventUpdate(flags, current.Type)
+				if err != nil {
+					return wrapCommandError(err)
+				}
+				request = built
+
+				return nil
 			})
 			if err != nil {
 				return err
-			}
-			var current icu.Event
-			if err := json.Unmarshal(raw, &current); err != nil {
-				return fmt.Errorf("decode event %d: %w", eventID, err)
-			}
-
-			request, err := buildEventUpdate(flags, current.Type)
-			if err != nil {
-				return wrapCommandError(err)
 			}
 
 			var result icu.Event
