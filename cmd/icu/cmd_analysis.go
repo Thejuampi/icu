@@ -122,7 +122,7 @@ func analysisCoachingCommand() *Command {
 			})
 			if context.Athlete != nil {
 				athlete := *context.Athlete
-				redactAthletePrivate(&athlete, flags)
+				redactAthleteForCoaching(&athlete, flags)
 				context.Athlete = &athlete
 			}
 
@@ -148,7 +148,7 @@ func analysisCoachingSchema() *CommandSchema {
 				"uses its own fixed field list so wave-2's validity/pairing/compliance fields are never dropped."},
 			{Name: "limit", ValueName: "N", Description: "Maximum history activities fetched.", Kind: commandFlagPositiveInteger},
 			{Name: "include-adaptation", ValueName: "BOOL", Description: "Include adaptation analysis.", Kind: commandFlagBoolean},
-			{Name: "include-private", ValueName: "BOOL", Description: "Keep athlete date of birth and Strava id in the output.", Kind: commandFlagBoolean},
+			{Name: "include-private", ValueName: "BOOL", Description: "Keep athlete identity, contact, date of birth and Strava id in the output.", Kind: commandFlagBoolean},
 			{Name: "adaptation-curves", ValueName: "CSV", Description: "Power curves used by adaptation.", Default: "42d,365d"},
 			{Name: "api-key", ValueName: "KEY", Description: "Intervals.icu API key."},
 			{Name: "athlete-id", ValueName: "ID", Description: "Intervals.icu athlete ID."},

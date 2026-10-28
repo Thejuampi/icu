@@ -370,7 +370,9 @@ func TestAnalysisCoachingRedactsPrivateAthleteFields(t *testing.T) {
 		case strings.Contains(r.URL.Path, "/sport-settings"):
 			_, _ = w.Write([]byte(`{"id":1,"types":["Ride"],"ftp":250}`))
 		default:
-			_, _ = w.Write([]byte(`{"id":"i1","name":"A","icu_date_of_birth":"1990-01-02","strava_id":12345}`))
+			_, _ = w.Write([]byte(`{"id":"i1","name":"Juan Example","firstname":"Juan","lastname":"Example",` +
+				`"email":"juan@example.com","city":"Gotham","state":"NY","country":"US","bio":"hi",` +
+				`"timezone":"America/New_York","icuApiKey":"SECRET","icu_date_of_birth":"1990-01-02","strava_id":12345}`))
 		}
 	}))
 	t.Cleanup(server.Close)
@@ -382,14 +384,20 @@ func TestAnalysisCoachingRedactsPrivateAthleteFields(t *testing.T) {
 	out, err := captureStdout(t, func(stdout io.Writer) error {
 		return analysisCoachingCommand().Run(nil, flags, client, stdout, io.Discard)
 	})
-	if err != nil || !strings.Contains(out, `"name": "A"`) || strings.Contains(out, "1990-01-02") || strings.Contains(out, "12345") {
-		t.Fatalf("default out leaks or misses athlete: err=%v out=%s", err, out)
+	if err != nil || !strings.Contains(out, `"timezone": "America/New_York"`) {
+		t.Fatalf("default out misses athlete: err=%v out=%s", err, out)
+	}
+	for _, leak := range []string{"1990-01-02", "12345", "Juan", "Example", "juan@example.com", "Gotham", `"NY"`, `"US"`, `"hi"`, "SECRET"} {
+		if strings.Contains(out, leak) {
+			t.Fatalf("default coaching output leaks %s: %s", leak, out)
+		}
 	}
 	flags["include-private"] = "true"
 	out, err = captureStdout(t, func(stdout io.Writer) error {
 		return analysisCoachingCommand().Run(nil, flags, client, stdout, io.Discard)
 	})
-	if err != nil || !strings.Contains(out, "1990-01-02") || !strings.Contains(out, "12345") {
+	if err != nil || !strings.Contains(out, "1990-01-02") || !strings.Contains(out, "12345") ||
+		!strings.Contains(out, "juan@example.com") || !strings.Contains(out, "Gotham") || strings.Contains(out, "SECRET") {
 		t.Fatalf("include-private out: err=%v out=%s", err, out)
 	}
 }
@@ -397,4 +405,44 @@ func TestAnalysisCoachingRedactsPrivateAthleteFields(t *testing.T) {
 func TestRedactAthletePrivateNil(t *testing.T) {
 	t.Parallel()
 	redactAthletePrivate(nil, nil)
+}
+
+func TestAthleteUpdateReadBackRedactsPrivateFields(t *testing.T) {
+	t.Parallel()
+	const private = `{"id":"i1","name":"A","icu_weight":79.5,"icu_date_of_birth":"1990-01-02","strava_id":12345,"icuApiKey":"SECRET"}`
+	for _, include := range []bool{false, true} {
+		rec, client := newWriteRecorder(t, private)
+		rec.applyPut = true
+		flags := map[string]string{"icu-weight": "78"}
+		if include {
+			flags["include-private"] = "true"
+		}
+		out, err := captureStdout(t, func(stdout io.Writer) error { return runAthleteUpdate(nil, flags, client, stdout, io.Discard) })
+		if err != nil || !strings.Contains(out, "readBack") || strings.Contains(out, "SECRET") {
+			t.Fatalf("include=%v err=%v out=%s", include, err, out)
+		}
+		leaked := strings.Contains(out, "1990-01-02") || strings.Contains(out, "12345")
+		if leaked != include {
+			t.Fatalf("include-private=%v but DOB/Strava present=%v: %s", include, leaked, out)
+		}
+	}
+}
+
+func TestWellnessBulkWarnsForLoadOnlyComputedFields(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "w.json")
+	file := `[{"id":"2026-10-25","rampRate":1.5},{"id":"2026-10-26","ctlLoad":40},{"id":"2026-10-27","atlLoad":55},{"id":"2026-10-28","weight":70}]`
+	if err := os.WriteFile(path, []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{}`)) }))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	var stderr bytes.Buffer
+	if err := wellnessBulkCommand().Run(nil, map[string]string{"file": path}, client, io.Discard, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "3 record(s) (2026-10-25,2026-10-26,2026-10-27)") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
 }

@@ -38,7 +38,7 @@ type athleteUpdateResult struct {
 func athleteUpdateCommand() *Command {
 	return &Command{
 		Name:  "",
-		Usage: "athlete update [--weight KG] [--icu-weight KG] [--height M] [--name NAME] [--bio TEXT] [--dry-run]",
+		Usage: "athlete update [--weight KG] [--icu-weight KG] [--height M] [--name NAME] [--bio TEXT] [--dry-run] [--include-private]",
 		Description: "Update athlete profile fields. Shows current values and a read-back; --dry-run only previews. " +
 			"A read-back mismatch exits non-zero.",
 		Run: runAthleteUpdate,
@@ -113,8 +113,9 @@ func runAthleteUpdate(_ []string, flags map[string]string, client *icu.Client, s
 	if err := client.Get("athlete", nil, nil, &after); err != nil {
 		return wrapCommandError(fmt.Errorf("write succeeded but read-back failed: %w", err))
 	}
-	result.ReadBack = &after
 	want, got := athleteUpdateFields(&u, &after)
+	redactAthletePrivate(&after, flags)
+	result.ReadBack = &after
 	var bad []string
 	for k, v := range want {
 		if got[k] != v {
@@ -200,12 +201,30 @@ func athleteShowCommand() *Command {
 	}
 }
 
-// redactAthletePrivate clears date of birth and Strava id unless
-// --include-private is set. Used by every command that prints the athlete.
+// redactAthletePrivate clears the API key always, and date of birth and
+// Strava id unless --include-private is set. athlete show, the athlete update
+// read-back and analysis coaching (via redactAthleteForCoaching) use it.
 func redactAthletePrivate(athlete *icu.Athlete, flags map[string]string) {
-	if athlete == nil || BoolFlag(flags, "include-private") {
+	if athlete == nil {
+		return
+	}
+	athlete.APIKey = ""
+	if BoolFlag(flags, "include-private") {
 		return
 	}
 	athlete.DateOfBirth = ""
 	athlete.StravaID = 0
+}
+
+// redactAthleteForCoaching also drops identity and contact fields (name,
+// email, bio, city/state/country) that a coaching context has no use for,
+// unless --include-private is set. Timezone, sex and physiology stay.
+func redactAthleteForCoaching(athlete *icu.Athlete, flags map[string]string) {
+	redactAthletePrivate(athlete, flags)
+	if athlete == nil || BoolFlag(flags, "include-private") {
+		return
+	}
+	athlete.Name, athlete.FirstName, athlete.LastName = "", "", ""
+	athlete.Email, athlete.Bio = "", ""
+	athlete.City, athlete.State, athlete.Country = "", "", ""
 }

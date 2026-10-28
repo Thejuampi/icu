@@ -6,7 +6,7 @@
 
 Behaviour changes (#22):
 - `activity estimate-power`: athlete fields are now decoded from the API's snake_case (`icu_weight`, `icu_resting_hr`, `height_units`). Without `--rider-mass-kg`, rider mass now comes from `icu_weight` (source `athlete_icu_weight`) where it used to fall through to `weight`, so the estimated power values change when the two differ.
-- `athlete show` and `analysis coaching` omit date of birth and Strava id unless `--include-private` is set.
+- `athlete show` and the `athlete update` read-back omit date of birth and Strava id unless `--include-private` is set; `analysis coaching` additionally omits name, email, bio, city/state/country. The athlete API key field is never printed.
 - `athlete update` errors when no field flag is given (it used to send `PUT {}`), takes `--dry-run`, and reads back after writing; a mismatch exits non-zero.
 - `ftp update` skips the write when the value already matches.
 - Writes now use the API's key names (snake_case; wellness `restingHR`/`hrvSDNN`/`avgSleepingHR`/`baevskySI`). Wellness output keys (`restingHr`, ...) are unchanged.
