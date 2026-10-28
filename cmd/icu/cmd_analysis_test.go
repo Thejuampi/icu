@@ -886,7 +886,7 @@ func TestReadCoachingContextInputsReportsEachUpstreamFailure(t *testing.T) {
 			_, err := readCoachingContextInputs(client, flags, trainingPlanRanges{
 				History: analysisRange{Oldest: "2026-04-06", Newest: "2026-06-28"},
 				Plan:    analysisRange{Oldest: "2026-06-29", Newest: "2026-07-26"},
-			}, true)
+			}, analysisTimezoneFrom("", ""))
 			if err == nil {
 				t.Fatal("readCoachingContextInputs error = nil, want upstream error")
 			}
@@ -914,7 +914,7 @@ func TestReadCoachingContextInputsAllowsMissingSportSettings(t *testing.T) {
 	inputs, err := readCoachingContextInputs(client, map[string]string{}, trainingPlanRanges{
 		History: analysisRange{Oldest: "2026-04-06", Newest: "2026-06-28"},
 		Plan:    analysisRange{Oldest: "2026-06-29", Newest: "2026-07-26"},
-	}, true)
+	}, analysisTimezoneFrom("", ""))
 	if err != nil || inputs.SportSettings != nil {
 		t.Fatalf("readCoachingContextInputs = sportSettings %+v error %v, want absent settings and no error", inputs.SportSettings, err)
 	}
