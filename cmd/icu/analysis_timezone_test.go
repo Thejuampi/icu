@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+	_ "time/tzdata" // zone data on any CI image
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -19,7 +21,6 @@ func TestAnalysisTimezoneFromPrecedence(t *testing.T) {
 	}{
 		{"", "America/New_York", "America/New_York", timezoneSourceAthlete},
 		{"Europe/Madrid", "America/New_York", "Europe/Madrid", timezoneSourceFlag},
-		{"Not/AZone", "America/New_York", "America/New_York", timezoneSourceAthlete},
 		{"", "Not/AZone", icu.DefaultAnalysisTimezone, icu.DefaultAnalysisTimezoneSource},
 		{"", "", icu.DefaultAnalysisTimezone, icu.DefaultAnalysisTimezoneSource},
 	} {
@@ -40,11 +41,11 @@ func TestResolveAnalysisTimezoneUsesAthleteProfile(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	client := icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
-	if got := resolveAnalysisTimezone(client, map[string]string{}); got.timezone != "America/New_York" || got.source != timezoneSourceAthlete {
+	if got, err := resolveAnalysisTimezone(client, map[string]string{}); err != nil || got.timezone != "America/New_York" || got.source != timezoneSourceAthlete {
 		t.Fatalf("athlete tz = %+v", got)
 	}
 	broken := icu.NewClient("k", "i1", icu.WithBaseURL("http://127.0.0.1:1"))
-	if got := resolveAnalysisTimezone(broken, map[string]string{}); got.source != icu.DefaultAnalysisTimezoneSource {
+	if got, err := resolveAnalysisTimezone(broken, map[string]string{}); err != nil || got.source != icu.DefaultAnalysisTimezoneSource {
 		t.Fatalf("fallback = %+v", got)
 	}
 }
@@ -129,5 +130,68 @@ func TestTrainingPlanWindowsNewYorkLateEvening(t *testing.T) {
 	cycling, _, _ := analysisDateRange(map[string]string{}, now)
 	if cycling.Newest != "2026-10-27" {
 		t.Fatalf("NY cycling window = %+v", cycling)
+	}
+}
+
+// info.now() reads the injected clock in the analysis timezone.
+func TestAnalysisTimezoneInfoNowUsesInjectedClock(t *testing.T) {
+	t.Parallel()
+	info := analysisTimezoneFrom("", "America/New_York")
+	info.clock = func() time.Time { return time.Date(2026, 10, 28, 3, 30, 0, 0, time.UTC) }
+	now := info.now()
+	if now.Format("2006-01-02 15:04") != "2026-10-27 23:30" || now.Location().String() != "America/New_York" {
+		t.Fatalf("now = %v", now)
+	}
+	got, _, err := trainingPlanDateRanges(map[string]string{}, info.now())
+	if err != nil || got.History.Newest != "2026-10-27" || got.Plan.Oldest != "2026-10-28" {
+		t.Fatalf("windows = %+v %v", got, err)
+	}
+	if since := time.Since(analysisTimezoneFrom("", "").now()); since < 0 || since > time.Minute {
+		t.Fatalf("default clock is not time.Now: %v", since)
+	}
+}
+
+// 2026-11-01 01:30 in New York happens twice (EDT 05:30Z, then EST
+// 06:30Z after the fall-back): both are Nov 1 locally, so history ends
+// 11-01 and the plan starts 11-02.
+func TestAnalysisWindowsNewYorkDSTFallBack(t *testing.T) {
+	t.Parallel()
+	info := analysisTimezoneFrom("", "America/New_York")
+	for _, instant := range []time.Time{
+		time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC), time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC),
+	} {
+		info.clock = func() time.Time { return instant }
+		now := info.now()
+		if now.Format("2006-01-02 15:04") != "2026-11-01 01:30" {
+			t.Fatalf("%v local = %v", instant, now)
+		}
+		got, _, err := trainingPlanDateRanges(map[string]string{}, now)
+		if err != nil || got.History.Newest != "2026-11-01" || got.Plan.Oldest != "2026-11-02" {
+			t.Fatalf("%v windows = %+v %v", instant, got, err)
+		}
+		if cycling, _, _ := analysisDateRange(map[string]string{}, now); cycling.Newest != "2026-11-01" {
+			t.Fatalf("%v cycling = %+v", instant, cycling)
+		}
+	}
+}
+
+// Explicit plan dates still snap to ISO weeks (documented in --help).
+func TestExplicitPlanWindowSnapsToISOWeek(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 27, 23, 30, 0, 0, analysisTimezoneFrom("", "America/New_York").location)
+	got, explicit, err := trainingPlanDateRanges(map[string]string{"plan-oldest": "2026-10-28", "plan-newest": "2026-11-04"}, now)
+	if err != nil || !explicit || got.Plan.Oldest != "2026-10-26" || got.Plan.Newest != "2026-11-08" {
+		t.Fatalf("explicit = %+v %v %v", got, explicit, err)
+	}
+}
+
+// An invalid --timezone is an error, not a silent UTC fallback.
+func TestResolveAnalysisTimezoneRejectsInvalidFlag(t *testing.T) {
+	t.Parallel()
+	if _, err := resolveAnalysisTimezone(nil, map[string]string{"timezone": "Not/AZone"}); !errors.Is(err, errInvalidValue) {
+		t.Fatalf("err = %v, want errInvalidValue", err)
+	}
+	if got, err := resolveAnalysisTimezone(nil, map[string]string{"timezone": "Europe/Madrid"}); err != nil || got.source != timezoneSourceFlag {
+		t.Fatalf("flag = %+v %v", got, err)
 	}
 }
