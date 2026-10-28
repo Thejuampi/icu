@@ -131,6 +131,7 @@ func analysisCoachingSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "history-oldest", ValueName: "DATE", Description: "History range start (YYYY-MM-DD)."},
+			{Name: "timezone", ValueName: "TZ", Description: "IANA timezone for 'today'; default is the athlete profile timezone."},
 			{Name: "history-newest", ValueName: "DATE", Description: "History range end (YYYY-MM-DD)."},
 			{Name: "plan-oldest", ValueName: "DATE", Description: "Plan range start (YYYY-MM-DD)."},
 			{Name: "plan-newest", ValueName: "DATE", Description: "Plan range end (YYYY-MM-DD)."},

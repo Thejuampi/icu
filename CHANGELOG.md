@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Accept flags the code reads but usage omitted: `analysis micro`/`microcycle` `--limit --calendar-id --resolve`, `analysis plan` `--limit --timezone`, `analysis cycling` `--timezone`, `workouts calculate` `--description`, `activity estimate-power-backtest` `--cda --air-density`, and `--limit` on `plan show|preview|accept` and `rebalance preview|accept|approve`. Tests now check every registered command against the code's flag reads (AST scan) and run every command with `--dry-run` and an unknown flag against a write-failing mock.
+- Accept `--timezone` on `analysis coaching`, `analysis wellness` and `analysis adaptation` ahead of #25.
 - Commands now reject flags their usage does not document (`unknown flag --x`) before making any request. Previously commands without a flag schema silently ignored unknown flags, so `events update <id> --name x --dry-run` performed a real PUT.
 - `events update` and `events delete` take `--dry-run`: GET only, no backup, no write.
 - `events revert --id` explains when only pending backups exist and points to `--backup PATH`.

@@ -48,8 +48,9 @@ func undocumentedUsageFlags(key string) string {
 		"activity estimate-power-backtest": "[--cda N] [--air-density N]",
 		"activity map":                     "[--bounds BOOL] [--weather BOOL]",
 		"activity weather-summary":         "[--descr-config VALUE]",
-		"analysis adaptation":              "[--filters FILTERS] [--limit N] [--activity-fields CSV]",
+		"analysis adaptation":              "[--filters FILTERS] [--limit N] [--activity-fields CSV] [--timezone TZ]",
 		"analysis cycling":                 "[--fields CSV] [--limit N] [--timezone TZ]",
+		"analysis wellness":                "[--timezone TZ]",
 		"analysis micro":                   "[--limit N] [--calendar-id ID] [--resolve]",
 		"analysis microcycle":              "[--limit N] [--calendar-id ID] [--resolve]",
 		"analysis plan": "[--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve] " +

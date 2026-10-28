@@ -207,3 +207,35 @@ func TestAnalysisCoachingAcceptsOutputJSON(t *testing.T) {
 		t.Fatalf("analysis coaching --output json rejected: %v", err)
 	}
 }
+
+// TestAnalysisTimezoneAndLimitFlagsAccepted pins the flags #25's timezone
+// work reads, so TestFlagsReadByCodeAreAccepted keeps passing after it lands.
+func TestAnalysisTimezoneAndLimitFlagsAccepted(t *testing.T) {
+	t.Parallel()
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	cases := map[string][]string{
+		"coaching":   {"timezone"},
+		"wellness":   {"timezone"},
+		"adaptation": {"timezone"},
+		"plan":       {"timezone", "limit"},
+		"cycling":    {"timezone"},
+		"micro":      {"limit"},
+		"microcycle": {"limit"},
+	}
+	for action, flagNames := range cases {
+		command, ok := registry.Lookup("analysis", action)
+		if !ok {
+			t.Fatalf("analysis %s not registered", action)
+		}
+		for _, flag := range flagNames {
+			value := "1"
+			if flag == "timezone" {
+				value = "America/New_York"
+			}
+			if err := validateCommandInput(command, nil, map[string]string{flag: value}); err != nil {
+				t.Errorf("analysis %s --%s rejected: %v", action, flag, err)
+			}
+		}
+	}
+}
