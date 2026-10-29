@@ -299,7 +299,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
 - `profile`
   Invocation: `icu athlete profile`
   Example: `icu athlete profile`
-  Note: the output includes your name and city.
+  Note: the output is not redacted (there is no `--include-private` here): `athlete` carries your id, name, city, state, country, timezone, sex and bio (and `icuCoach` when set), plus any `customItems` and `sharedFolders`.
 
 - `summary`
   Invocation: `icu athlete summary [--start DATE] [--end DATE]`
