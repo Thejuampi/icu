@@ -24,6 +24,8 @@ type syncFake struct {
 	hrvStatus  int
 	bulkStatus int
 	existing   string
+	hrvBody    string
+	hrvQueries []string
 }
 
 func (f *syncFake) serve(t *testing.T) *httptest.Server {
@@ -44,6 +46,12 @@ func (f *syncFake) serve(t *testing.T) *httptest.Server {
 		case r.URL.Path == "/v2/users/me/events":
 			if f.hrvStatus != 0 {
 				w.WriteHeader(f.hrvStatus)
+
+				return
+			}
+			f.hrvQueries = append(f.hrvQueries, r.URL.RawQuery)
+			if f.hrvBody != "" {
+				_, _ = io.WriteString(w, f.hrvBody)
 
 				return
 			}
@@ -140,7 +148,7 @@ func TestWellnessSyncApplyOverwrite(t *testing.T) {
 func TestWellnessSyncApplyNothingToWrite(t *testing.T) {
 	fake := &syncFake{existing: `[{"id":"2026-08-10","restingHR":50,"sleepSecs":18000,"sleepScore":80},{"id":"2026-08-11","restingHR":50,"hrv":44.5,"sleepSecs":18000,"sleepScore":80}]`}
 	code, out, _ := runSync(t, fake.serve(t), "--apply")
-	if code != 0 || len(fake.puts) != 0 || !strings.Contains(out, "APPLY (nothing to write)") {
+	if code != 0 || len(fake.puts) != 0 || !strings.Contains(out, "APPLY (nothing to write)") || !strings.Contains(out, "\nnothing to write\n") {
 		t.Fatalf("code=%d puts=%v out=%s", code, fake.puts, out)
 	}
 }
@@ -256,7 +264,7 @@ func TestWellnessSyncFlagsPartialSleep(t *testing.T) {
 		"2026-08-11  sleepSecs   5000       18000  keep    partial sync?",
 		"note: 2026-08-11 sleepSecs in intervals.icu is under half of Zepp's",
 		"icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore --apply",
-		"would write 0 day(s)",
+		"nothing to write",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in\n%s", want, out)
@@ -287,10 +295,78 @@ func TestWellnessSyncFlagsPartialSleep(t *testing.T) {
 }
 
 //nolint:paralleltest // sets env
+func TestWellnessSyncHRVWindowCoversDayBeforeOldest(t *testing.T) {
+	// 20:00 New York on 2026-08-09 (oldest-1) = 00:00Z on 08-10: the evening
+	// rule puts it on 08-10 (oldest), so the HRV fetch must start a day early.
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Date(2026, 8, 9, 20, 0, 0, 0, ny).UnixMilli()
+	fake := &syncFake{existing: `[]`, hrvBody: `{"items":[{"timestamp":` + itoa64(ts) + `,"value":"61.5"}]}`}
+	code, out, errOut := runSync(t, fake.serve(t), "--fields", "hrv", "--oldest", "2026-08-10", "--newest", "2026-08-10", "--json")
+	if code != 0 || len(fake.hrvQueries) != 1 {
+		t.Fatalf("code=%d queries=%v stderr=%s", code, fake.hrvQueries, errOut)
+	}
+	from := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC).UnixMilli()
+	to := time.Date(2026, 8, 11, 23, 59, 59, 999000000, time.UTC).UnixMilli()
+	if q := fake.hrvQueries[0]; !strings.Contains(q, "from="+itoa64(from)) || !strings.Contains(q, "to="+itoa64(to)) {
+		t.Fatalf("hrv window query %s, want from=%d to=%d", q, from, to)
+	}
+	var parsed wellnessSyncOutput
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil || len(parsed.Changes) != 1 ||
+		parsed.Changes[0].Date != "2026-08-10" || parsed.Changes[0].Zepp != 61.5 {
+		t.Fatalf("changes %+v err=%v", parsed.Changes, err)
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncRefusesNonZeppHost(t *testing.T) {
+	fake := &syncFake{existing: `[]`}
+	srv := fake.serve(t)
+	code, _, errOut := runSync(t, srv, "--zepp-base-url", "https://zepp.example.org", "--apply")
+	if code == 0 || fake.hits != 0 || len(fake.puts) != 0 || !strings.Contains(errOut, "app token") || !strings.Contains(errOut, "--allow-insecure-zepp-host") {
+		t.Fatalf("code=%d hits=%d stderr=%s", code, fake.hits, errOut)
+	}
+}
+
+func TestCheckZeppBaseURLAllowInsecureHostWarnsWithSecret(t *testing.T) {
+	t.Parallel()
+	for _, secret := range []string{zeppSecretAppToken, zeppSecretPassword} {
+		var stderr bytes.Buffer
+		if err := checkZeppBaseURL("https://zepp.example.org", secret, true, &stderr); err != nil || !strings.Contains(stderr.String(), "warning:") || !strings.Contains(stderr.String(), secret) {
+			t.Fatalf("%s: err=%v stderr=%q", secret, err, stderr.String())
+		}
+		stderr.Reset()
+		err := checkZeppBaseURL("https://zepp.example.org", secret, false, &stderr)
+		if err == nil || !strings.Contains(err.Error(), secret) || stderr.Len() != 0 {
+			t.Fatalf("%s refused: err=%v stderr=%q", secret, err, stderr.String())
+		}
+		// plain http to a non-loopback host stays refused even when allowed.
+		if err := checkZeppBaseURL("http://zepp.example.org", secret, true, &stderr); err == nil {
+			t.Fatalf("%s: plain http allowed", secret)
+		}
+	}
+	if !strings.Contains(zeppSecretAppToken, "app token") || !strings.Contains(zeppSecretPassword, "password") {
+		t.Fatal("secret names")
+	}
+}
+
+//nolint:paralleltest // sets env
 func TestWellnessSyncJSONPartialSleepEmpty(t *testing.T) {
 	fake := &syncFake{existing: syncExisting}
 	_, out, _ := runSync(t, fake.serve(t), "--json")
 	if !strings.Contains(out, `"partialSleep": []`) {
 		t.Fatalf("want empty partialSleep:\n%s", out)
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestZeppLoginRefusesNonZeppHostMentionsPassword(t *testing.T) {
+	withZeppTestEnv(t)
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"icu", "zepp", "login", "--email", "u@example.com", "--password", "secret", "--zepp-base-url", "https://zepp.example.org"}, &stdout, &stderr)
+	if code == 0 || !strings.Contains(stderr.String(), "password") {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
 	}
 }

@@ -20,7 +20,7 @@ func wellnessSyncCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "wellness sync [--oldest DATE] [--newest DATE] [--fields restingHR,hrv,sleepSecs,sleepScore] " +
-			"[--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--json]",
+			"[--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--json]",
 		Description: "Copy resting HR, HRV (rMSSD) and sleep from Zepp into intervals.icu wellness. " +
 			"Dry run by default: prints the diff and writes nothing; --apply sends one PUT wellness-bulk. " +
 			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day). " +
@@ -38,6 +38,7 @@ func wellnessSyncCommand() *Command {
 				{Name: "lock", ValueName: "BOOL", Description: "Set locked on written days so intervals.icu's own sync keeps them.", Kind: commandFlagBoolean},
 				{Name: "timezone", ValueName: "TZ", Description: "IANA timezone for the day mapping; default is the athlete profile timezone."},
 				{Name: zeppBaseURLFlag, ValueName: "URL", Description: "Zepp data and events host (e.g. a local mock)."},
+				{Name: zeppAllowInsecureHostFlag, ValueName: "BOOL", Description: "Allow a --zepp-base-url host that is neither loopback nor zepp.com/huami.com (the app token is sent there).", Kind: commandFlagBoolean},
 				{Name: "json", ValueName: "BOOL", Description: "Print JSON instead of a table.", Kind: commandFlagBoolean},
 				{Name: "api-key", ValueName: "KEY", Description: "Intervals.icu API key."},
 				{Name: "athlete-id", ValueName: "ID", Description: "Intervals.icu athlete ID."},
@@ -89,7 +90,7 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 		return fmt.Errorf("%w: --fields: %w", errInvalidValue, err)
 	}
 	zeppBase := strings.TrimRight(icu.StringFlag(flags, zeppBaseURLFlag, ""), "/")
-	if err := checkZeppBaseURL(zeppBase, stderr); err != nil {
+	if err := checkZeppBaseURL(zeppBase, zeppSecretAppToken, BoolFlag(flags, zeppAllowInsecureHostFlag), stderr); err != nil {
 		return err
 	}
 	tzInfo, err := resolveAnalysisTimezone(client, flags)
@@ -262,11 +263,14 @@ func printWellnessSync(stdout io.Writer, out *wellnessSyncOutput, asJSON bool) e
 		fmt.Fprintf(stdout, "note: %s sleepSecs in intervals.icu is under half of Zepp's (suspected partial sync); to replace it run:\n  %s\n",
 			suggestion.Date, suggestion.Suggest)
 	}
-	verb := "would write"
-	if out.Applied {
-		verb = "wrote"
+	switch {
+	case len(out.Writes) == 0:
+		fmt.Fprintln(stdout, "nothing to write")
+	case out.Applied:
+		fmt.Fprintf(stdout, "wrote %d day(s) via wellness-bulk\n", len(out.Writes))
+	default:
+		fmt.Fprintf(stdout, "would write %d day(s) via wellness-bulk\n", len(out.Writes))
 	}
-	fmt.Fprintf(stdout, "%s %d day(s) via wellness-bulk\n", verb, len(out.Writes))
 
 	return nil
 }

@@ -113,9 +113,9 @@ func TestCheckZeppBaseURL(t *testing.T) {
 		{"https://api-user.zepp.com", false, false},
 		{"https://account.huami.com/", false, false},
 		{"https://zepp.com.", false, false},
-		{"https://evil.example.com", false, true},
-		{"https://notzepp.com", false, true},
-		{"https://zepp.com.evil.io", false, true},
+		{"https://evil.example.com", true, false},
+		{"https://notzepp.com", true, false},
+		{"https://zepp.com.evil.io", true, false},
 		{"http://api-user.zepp.com", true, false},
 		{"http://evil.example.com", true, false},
 		{"ftp://127.0.0.1", true, false},
@@ -126,7 +126,7 @@ func TestCheckZeppBaseURL(t *testing.T) {
 	for _, tc := range cases {
 		var stderr bytes.Buffer
 
-		err := checkZeppBaseURL(tc.raw, &stderr)
+		err := checkZeppBaseURL(tc.raw, zeppSecretPassword, false, &stderr)
 		if (err != nil) != tc.wantErr {
 			t.Errorf("%q: err=%v, wantErr=%v", tc.raw, err, tc.wantErr)
 		}

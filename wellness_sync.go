@@ -26,8 +26,13 @@ const (
 	SyncActionSame      = "same"      // already equal: not written.
 )
 
-// HRVEveningCutoffHour is the local hour from which an HRV reading counts as
-// the start of the night and belongs to the next calendar day.
+// HRVEveningCutoffHour is the local hour (24h clock, athlete timezone) from
+// which an HRV reading counts as the start of the night and belongs to the
+// next calendar day. Zepp measures HRV during sleep; a reading taken in the
+// evening (falling asleep) belongs to the night that ends next morning,
+// which intervals.icu files under that morning's date. 18:00 is well after
+// any daytime nap reading and before any realistic bedtime, so readings
+// from 00:00 to 17:59:59 stay on their day and 18:00 to 23:59:59 move on.
 const HRVEveningCutoffHour = 18
 
 // PartialSleepRatio is the threshold below which an intervals.icu sleepSecs
@@ -89,14 +94,12 @@ func ParseSyncFields(csv string) ([]string, error) {
 // HRVLocalDay maps a Zepp HRV reading (epoch millis) to the wellness day it
 // belongs to, in the athlete's timezone loc: the local calendar date of the
 // reading, except readings from HRVEveningCutoffHour (18:00) to midnight,
-// which belong to the next day (the night that ends that morning). Days are
+// which belong to the next day (the night that ends that morning). loc must
+// be non-nil (callers pass the resolved analysis timezone). Days are
 // local calendar days, never UTC (issue #29): 23:30 in New York is already
 // the next UTC day but stays a New York evening, so it maps to tomorrow by
 // the evening rule, not by the UTC rollover.
 func HRVLocalDay(timestampMillis int64, loc *time.Location) string {
-	if loc == nil {
-		loc = time.UTC
-	}
 	local := time.UnixMilli(timestampMillis).In(loc)
 	if local.Hour() >= HRVEveningCutoffHour {
 		local = local.AddDate(0, 0, 1)
@@ -121,6 +124,7 @@ const (
 
 // SleepSecondsFromBand returns the asleep time of a band sleep record: the
 // sum of non-awake stages when stages exist, else deep+light minutes.
+// Stage durations come from SleepStageMinutes (midnight wrap handled).
 func SleepSecondsFromBand(sleep *BandDataSleep) int {
 	if sleep == nil {
 		return 0
@@ -130,19 +134,39 @@ func SleepSecondsFromBand(sleep *BandDataSleep) int {
 	}
 	total := 0
 	for _, stage := range sleep.Stages {
-		if stage.Mode != sleepModeAwake && stage.Stop > stage.Start {
-			total += stage.Stop - stage.Start
+		if stage.Mode != sleepModeAwake {
+			total += SleepStageMinutes(stage)
 		}
 	}
 
 	return total * secondsPerMin
 }
 
+const minutesPerDay = 24 * 60
+
+// SleepStageMinutes is a stage's length in minutes. Zepp encodes start/stop
+// as minutes since a local midnight on a 0..1439 clock, so a stage that
+// crosses midnight (e.g. 23:30 -> 00:40, start=1410 stop=40) has
+// stop < start: its length wraps by one day (stop + 1440 - start). A stage
+// with stop == start is zero-length (Zepp emits these for dropped samples).
+func SleepStageMinutes(stage BandDataSleepStage) int {
+	switch {
+	case stage.Stop > stage.Start:
+		return stage.Stop - stage.Start
+	case stage.Stop < stage.Start:
+		return stage.Stop + minutesPerDay - stage.Start
+	default:
+		return 0
+	}
+}
+
 // BuildZeppWellnessDays merges band days (resting HR, sleep: Zepp already
 // buckets them by the watch's local day in date_time, the night that ends
 // that morning) and HRV readings (mapped with HRVLocalDay) into one record
 // per day within [oldest, newest]. When several HRV readings map to one
-// day the latest wins. Output is sorted by date.
+// day the latest timestamp wins; on an exact timestamp tie the higher value
+// wins, so the result does not depend on Zepp's response order. Output is
+// sorted by date.
 func BuildZeppWellnessDays(band []BandDataDay, hrv []ZeppHRVEvent, loc *time.Location, oldest, newest string) []ZeppWellnessDay {
 	days := map[string]*ZeppWellnessDay{}
 	get := func(date string) *ZeppWellnessDay {
@@ -174,7 +198,7 @@ func BuildZeppWellnessDays(band []BandDataDay, hrv []ZeppHRVEvent, loc *time.Loc
 		if !inDateRange(date, oldest, newest) {
 			continue
 		}
-		if ts, seen := latest[date]; seen && ts > reading.Timestamp {
+		if ts, seen := latest[date]; seen && (ts > reading.Timestamp || (ts == reading.Timestamp && days[date].HRV >= reading.Value)) {
 			continue
 		}
 		latest[date] = reading.Timestamp

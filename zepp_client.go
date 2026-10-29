@@ -1394,7 +1394,8 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 
 	for i := range sleepRaw.Stages {
 		sleepRaw.Stages[i].StartEpoch = midnightSec + int64(sleepRaw.Stages[i].Start*secondsPerMinute)
-		sleepRaw.Stages[i].EndEpoch = midnightSec + int64(sleepRaw.Stages[i].Stop*secondsPerMinute)
+		// A stage crossing midnight has Stop < Start (see SleepStageMinutes).
+		sleepRaw.Stages[i].EndEpoch = sleepRaw.Stages[i].StartEpoch + int64(SleepStageMinutes(sleepRaw.Stages[i])*secondsPerMinute)
 	}
 
 	return &BandDataSleep{
