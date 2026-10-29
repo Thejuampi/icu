@@ -575,3 +575,18 @@ func TestWarnRealAPIFiresForDefaultBaseURL(t *testing.T) {
 		t.Fatalf("unexpected warning for loopback: %q", stderr.String())
 	}
 }
+
+func TestActivityDetailUsageText(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr bytes.Buffer
+	_ = run([]string{"icu", "activity", "--help"}, &stdout, &stderr)
+	help := stdout.String() + stderr.String()
+	if strings.Contains(help, "icu.Activity") || strings.Contains(help, "icu icu ") {
+		t.Fatalf("bad activity usage text:\n%s", help)
+	}
+	for _, want := range []string{"icu activity <id> best-efforts", "icu activity <id> fit-file", "icu activity <id> power-curve"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("activity help missing %q", want)
+		}
+	}
+}
