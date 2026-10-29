@@ -249,7 +249,7 @@ func TestCommittedFixturesCoverCLIEndpoints(t *testing.T) {
 		}
 
 		var value any
-		if err := json.Unmarshal(body, &value); err != nil {
+		if err := decodeJSON(body, &value); err != nil {
 			t.Fatal(err)
 		}
 
@@ -259,7 +259,7 @@ func TestCommittedFixturesCoverCLIEndpoints(t *testing.T) {
 		}
 
 		var orig any
-		if err := json.Unmarshal(body, &orig); err != nil {
+		if err := decodeJSON(body, &orig); err != nil {
 			t.Fatal(err)
 		}
 

@@ -127,7 +127,7 @@ func TestPlanUsesIntervalsIndoorFTPWithoutTypeFlag(t *testing.T) {
 		}
 		if strings.Contains(request.URL.Path, "sport-settings") {
 			settingsPaths = append(settingsPaths, request.URL.Path)
-			_, _ = response.Write([]byte(`{"id":1858902,"types":["Ride","VirtualRide","MountainBikeRide","GravelRide","TrackRide","Cyclocross"],"ftp":266,"indoor_ftp":250}`))
+			_, _ = response.Write([]byte(`{"id":900001,"types":["Ride","VirtualRide","MountainBikeRide","GravelRide","TrackRide","Cyclocross"],"ftp":266,"indoor_ftp":250}`))
 
 			return
 		}

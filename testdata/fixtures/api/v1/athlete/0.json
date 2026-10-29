@@ -291,7 +291,7 @@
         198
       ],
       "hrrc_min_percent": 100,
-      "id": 1858902,
+      "id": 900001,
       "ignore_velocity": false,
       "indoor_ftp": 250,
       "interval_display": "POWER_HR_PACE",
@@ -461,7 +461,7 @@
         194
       ],
       "hrrc_min_percent": 100,
-      "id": 1858903,
+      "id": 900002,
       "ignore_velocity": false,
       "indoor_ftp": null,
       "interval_display": "POWER_HR_PACE",
@@ -634,7 +634,7 @@
         194
       ],
       "hrrc_min_percent": 100,
-      "id": 1858904,
+      "id": 900003,
       "ignore_velocity": false,
       "indoor_ftp": null,
       "interval_display": "POWER_PACE_HR",
@@ -774,7 +774,7 @@
         194
       ],
       "hrrc_min_percent": 100,
-      "id": 1858905,
+      "id": 900004,
       "ignore_velocity": false,
       "indoor_ftp": null,
       "interval_display": "POWER_HR_PACE",

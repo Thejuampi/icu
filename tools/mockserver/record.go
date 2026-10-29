@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/fs"
+	"math"
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -160,16 +164,21 @@ func mergeKey(item map[string]any) (string, bool) {
 
 func prettyJSON(body []byte) []byte {
 	var value any
-	if json.Unmarshal(body, &value) != nil {
+	if decodeJSON(body, &value) != nil {
 		return body
 	}
 
-	out, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
+	var out bytes.Buffer
+
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+
+	if encoder.Encode(value) != nil {
 		return body
 	}
 
-	return append(out, '\n')
+	return out.Bytes()
 }
 
 // Placeholder values written over private data.
@@ -247,16 +256,20 @@ func isGearObject(obj map[string]any) bool {
 
 func anonymizeJSON(body []byte) []byte {
 	var value any
-	if json.Unmarshal(body, &value) != nil {
+	if decodeJSON(body, &value) != nil {
 		return body
 	}
 
-	out, err := json.Marshal(anonymize(value))
-	if err != nil {
+	var out bytes.Buffer
+
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(false)
+
+	if encoder.Encode(anonymize(value)) != nil {
 		return body
 	}
 
-	return out
+	return bytes.TrimRight(out.Bytes(), "\n")
 }
 
 func anonymize(value any) any {
@@ -289,7 +302,21 @@ func anonymize(value any) any {
 				continue
 			}
 
+			if isWeightKey(key) {
+				if _, ok := inner.(json.Number); ok {
+					typed[key] = anonWeight
+
+					continue
+				}
+			}
+
 			typed[key] = anonymize(inner)
+		}
+
+		rescaleWattsPerKg(typed)
+
+		if curves, ok := typed["activities"].(map[string]any); ok {
+			typed["activities"] = anonymizeCurveActivities(curves)
 		}
 
 		// GPS streams are location data: drop them entirely.
@@ -305,9 +332,85 @@ func anonymize(value any) any {
 		}
 
 		return typed
+	case string:
+		if isExternalID(typed) {
+			return remapExternalID(typed)
+		}
+
+		return typed
 	default:
 		return value
 	}
+}
+
+// anonWeight is the single fuzzed body weight written over every weight
+// field; it is deliberately far from the athlete's real weight.
+const anonWeight = json.Number("72.8")
+
+// curveDateShift moves the dates of curve activities that still carry an
+// external (Strava) id, so their real ride dates are not published. It is
+// applied together with the id remap, which keeps re-runs idempotent.
+const curveDateShift = -9 * 24 * time.Hour
+
+func isWeightKey(key string) bool {
+	switch strings.ToLower(key) {
+	case "weight", "icu_weight":
+		return true
+	}
+
+	return false
+}
+
+// isExternalID matches all-digit ids of 10+ digits (Strava activity ids).
+func isExternalID(value string) bool {
+	if len(value) < 10 {
+		return false
+	}
+
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+
+	return true
+}
+
+// remapExternalID turns an external id into a stable fake intervals.icu id
+// ("i8" + 8 digits), so the same id maps to the same value in every file.
+func remapExternalID(id string) string {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(id))
+
+	return fmt.Sprintf("i8%08d", hash.Sum32()%100_000_000)
+}
+
+// anonymizeCurveActivities rewrites the activity map embedded in power and
+// HR curve responses: keys and ids are remapped, names replaced and the
+// dates of not-yet-remapped entries shifted.
+func anonymizeCurveActivities(curves map[string]any) map[string]any {
+	out := make(map[string]any, len(curves))
+	for key, inner := range curves {
+		external := isExternalID(key)
+		if external {
+			key = remapExternalID(key)
+		}
+
+		if activity, ok := inner.(map[string]any); ok {
+			activity["id"] = key
+			activity["name"] = "Activity " + key
+
+			if date, ok := activity["start_date_local"].(string); ok && external {
+				if parsed, err := time.Parse("2006-01-02T15:04:05", date); err == nil {
+					activity["start_date_local"] = parsed.Add(curveDateShift).Format("2006-01-02T15:04:05")
+				}
+			}
+		}
+
+		out[key] = inner
+	}
+
+	return out
 }
 
 // anonymizeDir rewrites every fixture under dir through the anonymizer.
@@ -351,4 +454,53 @@ func sameOriginRedirect(req *http.Request, via []*http.Request) error {
 	}
 
 	return nil
+}
+
+// decodeJSON keeps numbers as written, so rewriting a fixture never changes
+// their formatting.
+func decodeJSON(body []byte, value any) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+
+	if err := decoder.Decode(value); err != nil {
+		return fmt.Errorf("decode json: %w", err)
+	}
+
+	return nil
+}
+
+// rescaleWattsPerKg recomputes watts_per_kg from watts and the fuzzed weight,
+// so the real weight cannot be derived from the ratio.
+func rescaleWattsPerKg(obj map[string]any) {
+	watts, ok := obj["watts"].([]any)
+	if !ok {
+		return
+	}
+
+	if _, ok := obj["watts_per_kg"].([]any); !ok {
+		return
+	}
+
+	weight, _ := strconv.ParseFloat(string(anonWeight), 64)
+	perKg := make([]any, len(watts))
+
+	for i, raw := range watts {
+		number, ok := raw.(json.Number)
+		if !ok {
+			perKg[i] = raw
+
+			continue
+		}
+
+		value, err := number.Float64()
+		if err != nil {
+			perKg[i] = raw
+
+			continue
+		}
+
+		perKg[i] = json.Number(strconv.FormatFloat(math.Round(value/weight*1e6)/1e6, 'f', -1, 64))
+	}
+
+	obj["watts_per_kg"] = perKg
 }
