@@ -699,12 +699,13 @@ the raw components.
   Example: `icu zepp pai --oldest 2026-05-01 --newest 2026-05-07`
 
 - `events`
-  Invocation: `icu zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Invocation: `icu zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD [--raw]`
   Notes: Calls `/v2/users/me/events` on the Zepp events host
   `api-mifit.zepp.com`. Presets map
   to Zepp `eventType`/`subType` pairs (e.g. `body-battery` →
   `Charge`/`real_data`). Use `icu zepp events --help` to list presets.
   Example: `icu zepp events --preset body-battery --oldest 2026-06-01 --newest 2026-06-07`
+  Notes: Non-numeric `value` payloads (objects, JSON-in-string) are kept under `extra.value`. `--raw` prints the untouched Zepp response instead, with every identifier or secret redacted to `"[redacted]"` at any depth (key match is case-insensitive and ignores `_`/`-`: userId, uid, deviceId, sn, serial/mac/imei, email/phone, name/nickname, code, id and any `*Id`/`*_id` key, and any key containing token/secret/password/session/credential/apikey). JSON held in a string is redacted too. A non-JSON response is not printed.
 
 - `hrv`
   Invocation: `icu zepp hrv --metric sdnn|rmssd --oldest YYYY-MM-DD --newest YYYY-MM-DD`
@@ -713,7 +714,7 @@ the raw components.
   Example: `icu zepp hrv --metric rmssd --oldest 2026-06-01 --newest 2026-06-07`
 
 - `readiness`
-  Invocation: `icu zepp readiness --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Invocation: `icu zepp readiness --oldest YYYY-MM-DD --newest YYYY-MM-DD [--raw]`
   Notes: Daily readiness scores from `/v2/users/me/events`.
   Example: `icu zepp readiness --oldest 2026-06-01 --newest 2026-06-07`
 
