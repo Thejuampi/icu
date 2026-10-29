@@ -205,7 +205,9 @@ func (s *server) handleWrite(w http.ResponseWriter, r *http.Request) {
 
 // record stores the write and returns the response body: DELETE answers {},
 // PUT/PATCH merge the JSON object body over the current resource (and keep
-// it in memory so a later GET sees it), POST echoes the body.
+// it in memory so a later GET sees it), POST echoes the body. Exception:
+// PUT/PATCH on */streams answers {"updated":[types...]} like intervals.icu
+// and is not kept in memory, so a later GET still returns the fixture.
 func (s *server) record(entry Write, key string, raw []byte) []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,6 +218,9 @@ func (s *server) record(entry Write, key string, raw []byte) []byte {
 	case http.MethodDelete:
 		return []byte(`{}`)
 	case http.MethodPut, http.MethodPatch:
+		if strings.HasSuffix(entry.Path, "/streams") {
+			return streamsUpdateResponse(raw)
+		}
 		current := s.overlay[key]
 		if current == nil {
 			current = s.fixtures[key]
@@ -325,4 +330,23 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	body, _ := json.Marshal(map[string]string{"error": msg}) //nolint:errchkjson // map[string]string always marshals
 
 	writeJSON(w, status, body)
+}
+
+// streamsUpdateResponse mirrors PUT /api/v1/activity/{id}/streams, which
+// answers {"updated":[types...]} for the stream types in the body.
+func streamsUpdateResponse(raw []byte) []byte {
+	var streams []struct {
+		Type string `json:"type"`
+	}
+	updated := []string{}
+	if json.Unmarshal(raw, &streams) == nil {
+		for _, stream := range streams {
+			if stream.Type != "" {
+				updated = append(updated, stream.Type)
+			}
+		}
+	}
+	body, _ := json.Marshal(map[string][]string{"updated": updated}) //nolint:errchkjson // a string slice map cannot fail
+
+	return body
 }

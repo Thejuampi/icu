@@ -23,8 +23,6 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 
 ## Help Quirks
 
-- Some generated `activity` subcommand help strings currently print `icu.Activity <id> ...`.
-  The real invocation is always `icu activity <id> ...`.
 - `athlete plan` and `weather config` help show an optional literal `update` token.
   The implementation does not require it.
 
