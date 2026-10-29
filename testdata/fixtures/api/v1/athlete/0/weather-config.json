@@ -1,0 +1,13 @@
+{
+  "forecasts": [
+    {
+      "enabled": true,
+      "id": 0,
+      "label": "Home",
+      "lat": 0,
+      "location": "redacted",
+      "lon": 0,
+      "provider": "OPEN_WEATHER"
+    }
+  ]
+}

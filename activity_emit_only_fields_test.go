@@ -150,7 +150,7 @@ func TestActivityUnmarshalStubNoteCarriesThrough(t *testing.T) {
 
 	var activity icu.Activity
 
-	data := []byte(`{"id":"16634106216","icu_athlete_id":"i445643",` +
+	data := []byte(`{"id":"19999999998","icu_athlete_id":"i445643",` +
 		`"start_date_local":"2025-12-02T18:37:27","source":"STRAVA",` +
 		`"_note":"STRAVA activities are not available via the API"}`)
 

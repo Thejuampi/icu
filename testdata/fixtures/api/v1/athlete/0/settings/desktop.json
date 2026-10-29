@@ -1,0 +1,340 @@
+{
+  "ActivityDetail.options": {
+    "curves": {
+      "curves": "42d,s0",
+      "f1": false,
+      "f2": false,
+      "f3": false,
+      "filter1": null,
+      "filter2": null,
+      "filter3": null,
+      "gap": false,
+      "indoor": false,
+      "outdoor": false,
+      "types": [
+        "watts"
+      ],
+      "version": 2
+    },
+    "paceCurves": {
+      "curves": "42d,s0",
+      "f1": false,
+      "f2": false,
+      "f3": false,
+      "filter1": null,
+      "filter2": null,
+      "filter3": null,
+      "gap": false,
+      "indoor": false,
+      "outdoor": false,
+      "version": 2
+    },
+    "showPower": "watts",
+    "tabs": []
+  },
+  "ActivityHistogram.power": {
+    "bucketSize": 20,
+    "excludeFirstBar": true
+  },
+  "ActivityListView.options": {
+    "activeTab": 0,
+    "tabs": [
+      {
+        "colIds": [
+          "type",
+          "start_date_local",
+          "distance",
+          "moving_time",
+          "name",
+          "average_heartrate",
+          "icu_weighted_avg_watts",
+          "icu_intensity",
+          "icu_training_load",
+          "icu_ftp",
+          "icu_weight",
+          "icu_w_prime"
+        ],
+        "filters": [],
+        "id": "t0",
+        "label": "Tab 1",
+        "sort": {
+          "dir": [
+            "desc"
+          ],
+          "fields": [
+            "start_date_local"
+          ]
+        }
+      }
+    ]
+  },
+  "ActivityOverlayView.items": [
+    {
+      "activityId": "i900000122",
+      "athleteId": "i0",
+      "distanceShift": 0,
+      "selected": true,
+      "timeShift": 0
+    }
+  ],
+  "ActivityPowerHRTraceChart.options": {
+    "hideTemp": false,
+    "showCadence": true
+  },
+  "AddCalendarEntry.options": {
+    "types": [
+      "Ride",
+      "Walk",
+      "WeightTraining",
+      "Run",
+      "Swim",
+      "Yoga",
+      "Rowing"
+    ]
+  },
+  "AddCalendarEntry.pos": {
+    "pos": {
+      "left": 668,
+      "top": 412
+    }
+  },
+  "AddCalenderEntryDialog.options": {
+    "pos": {
+      "left": 0,
+      "top": 0
+    }
+  },
+  "AnalyseActivity.Ride": {
+    "keepAllLaps": false,
+    "keepCustomFields": true,
+    "keepIntervals": false,
+    "useWorkoutSteps": true
+  },
+  "AnalyseActivity.Walk": {
+    "keepAllLaps": true,
+    "keepCustomFields": true,
+    "keepIntervals": false,
+    "useWorkoutSteps": false
+  },
+  "App.mini": false,
+  "ComparePage.options": {
+    "athleteIds": [],
+    "charts": [
+      {
+        "captionPos": "topLeft",
+        "filters": [],
+        "hrScale": "%lthr",
+        "id": 1,
+        "minMinutes": 5,
+        "name": "Power vs Heart rate",
+        "type": "PowerHRCurveChart",
+        "width": 500
+      }
+    ],
+    "dateRanges": [
+      {
+        "end": "2025-08-07",
+        "id": 1,
+        "start": "2025-05-10"
+      },
+      {
+        "end": "2025-11-05",
+        "id": 2,
+        "start": "2025-08-08"
+      }
+    ],
+    "selectedAthleteIndex": 0
+  },
+  "EditEventDialog.options": {
+    "category": "WORKOUT",
+    "pos": {
+      "left": 462,
+      "top": 187.734375
+    },
+    "type": "Ride"
+  },
+  "EditEventDialog.options.MANUAL_ACTIVITY": {},
+  "EditEventDialog.options.NOTE": {
+    "color": null
+  },
+  "EditEventDialog.options.WORKOUT": {
+    "color": null
+  },
+  "EditWorkoutDialog.options": {
+    "color": null,
+    "type": "Ride"
+  },
+  "FindEffortsToolbar.options": {
+    "Ride": {
+      "count": 8,
+      "distance": 1000,
+      "duration": 240,
+      "minValue": 0,
+      "mode": "duration",
+      "stream": "watts"
+    },
+    "left": 1377,
+    "top": 745
+  },
+  "FitnessView.options": {
+    "activeTab": 0,
+    "dateRange": {
+      "end": "2026-09-27",
+      "start": "2026-06-30"
+    },
+    "days": 89,
+    "futureDays": 0,
+    "recentDateRanges": [
+      {
+        "i18nLabelKey": "7 days",
+        "id": "7d",
+        "label": "7 days"
+      },
+      {
+        "i18nLabelKey": "1 month",
+        "id": "1m",
+        "label": "1 month"
+      },
+      {
+        "i18nLabelKey": "42 days",
+        "id": "42d",
+        "label": "42 days"
+      },
+      {
+        "i18nLabelKey": "3 months",
+        "id": "3m",
+        "label": "3 months"
+      },
+      {
+        "i18nLabelKey": "6 months",
+        "id": "6m",
+        "label": "6 months"
+      },
+      {
+        "i18nLabelKey": "Year",
+        "id": "1y",
+        "label": "Year"
+      }
+    ],
+    "tabs": [
+      {
+        "clipFormChart": false,
+        "fitnessHeight": 196,
+        "id": "t0",
+        "label": "Fitness",
+        "showAchievements": true,
+        "showActivities": true,
+        "showCommutes": true,
+        "showCustom": [],
+        "showFitness": true,
+        "showForm": true,
+        "showNotes": true,
+        "showRampRate": false,
+        "showWeeks": true
+      }
+    ]
+  },
+  "PlanningToolbox.options": {
+    "height": 1.75,
+    "left": 432,
+    "showWorkoutCharts": true,
+    "top": 282,
+    "width": 773
+  },
+  "PowerView.options": {
+    "curves": {
+      "after_kj0": false,
+      "after_kj1": false,
+      "curves": "42d,s0,s1",
+      "f1": false,
+      "f2": false,
+      "f3": false,
+      "filter1": null,
+      "filter2": null,
+      "filter3": null,
+      "indoor": false,
+      "normal": true,
+      "outdoor": false,
+      "version": 2
+    },
+    "options": {
+      "powerModelType": "default",
+      "show": "watts",
+      "showEstimatedFTP": true,
+      "showModelCurve": false,
+      "showSubMaxEfforts": false
+    }
+  },
+  "RideTimelineChart.distanceCheck": "true",
+  "RideTimelineChart.options": {
+    "hideHelp": false,
+    "hideRecoveryIntervals": false,
+    "showIntervalList": false,
+    "showMap": false,
+    "showPairedWorkout": true,
+    "tallerCharts": true,
+    "zoomYAxis": false
+  },
+  "RideTimelineChart.options.Ride": {
+    "fields": [
+      "elapsed_time",
+      "average_watts",
+      "average_heartrate",
+      "zone",
+      "intensity"
+    ],
+    "streams": [
+      "watts",
+      "watts_30s",
+      "heartrate",
+      "cadence",
+      "altitude",
+      "w_bal",
+      "distance",
+      "left_right_balance",
+      "watts_hr"
+    ]
+  },
+  "TrainingLog.options": {
+    "allColsInWellnessCSV": false,
+    "darkerSkylineChart": false,
+    "display": "normal",
+    "filterActivities": false,
+    "filters": [],
+    "fitnessInWellnessCSV": true,
+    "groupMultisport": false,
+    "includeCommutes": true,
+    "includePlannedInCurrentWeek": true,
+    "inverted": true,
+    "mobileColumns": 2,
+    "showCoachTick": true,
+    "showCompliance": true,
+    "showFitness": true,
+    "showFitnessChart": false,
+    "showFitnessPlots": true,
+    "showNextWeek": true,
+    "showPastWorkouts": true,
+    "showPlan": true,
+    "showPlanFitnessChart": false,
+    "showPlanName": false,
+    "showProgressBars": true,
+    "showRacesOnPlan": true,
+    "showSource": false,
+    "showTimeIn3Zones": true,
+    "showTimeInZones": true,
+    "showTombstones": false,
+    "showTotalsAndTargets": true,
+    "showWeather": true,
+    "showWeekNotes": true,
+    "shrinkActivities": false,
+    "shrinkFilters": [],
+    "timeInZonesExpanded": false,
+    "totalsOnTop": false,
+    "useTickColorsForProgress": false,
+    "view": "calendar",
+    "zonePercentages": false
+  },
+  "ViewEventDialog.options": {
+    "expandPercentages": true
+  }
+}

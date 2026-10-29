@@ -21,7 +21,7 @@ func registerGearCommands(registry *CommandRegistry) {
 
 	registry.Register("gear", "update", updateByIDCommand[icu.Gear, icu.Gear](
 		"gear",
-		"gear update <id> --name NAME",
+		"gear update <id> [--name NAME] [--distance M]",
 		"Update gear.",
 		"gear id",
 		nil,

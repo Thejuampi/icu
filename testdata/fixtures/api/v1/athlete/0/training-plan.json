@@ -1,0 +1,50 @@
+{
+  "athlete_id": "i0",
+  "timezone": "America/Toronto",
+  "training_plan": {
+    "activity_types": [
+      "Ride"
+    ],
+    "athlete_id": "i0",
+    "auto_rollout_day": null,
+    "blurb": null,
+    "canEdit": true,
+    "children": null,
+    "description": "Alternative 4-week build for side-by-side comparison. Leaves current calendar untouched. Weekly targets: 370 / 420 / 470 / 310. Use power and RPE first on cold or stress-heavy days; treat HR drift contextually, not mechanically.",
+    "duration_weeks": 4,
+    "hours_per_week_max": 9,
+    "hours_per_week_min": 6,
+    "id": 827693,
+    "name": "ALT Build Jun 2026",
+    "num_workouts": 16,
+    "owner": {
+      "bio": "redacted",
+      "city": "redacted",
+      "country": "redacted",
+      "email": "athlete@example.invalid",
+      "id": "i0",
+      "name": "Mock Athlete",
+      "profile_medium": "redacted",
+      "sex": "M",
+      "state": "redacted",
+      "timezone": "America/Toronto",
+      "website": "redacted"
+    },
+    "read_only_workouts": false,
+    "rollout_weeks": null,
+    "shareToken": null,
+    "sharedWithCount": 0,
+    "start_date_local": "2026-05-04T00:00:00",
+    "starting_atl": null,
+    "starting_ctl": null,
+    "type": "PLAN",
+    "visibility": "PRIVATE",
+    "workout_targets": [
+      "POWER"
+    ]
+  },
+  "training_plan_alias": null,
+  "training_plan_id": 827693,
+  "training_plan_last_applied": "2026-05-03T18:00:00.000+00:00",
+  "training_plan_start_date": "2026-05-04"
+}

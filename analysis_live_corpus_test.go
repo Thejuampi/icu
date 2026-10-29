@@ -25,6 +25,15 @@ import (
 // reviewed action (re-fetch, re-freeze, re-diff both halves below by hand);
 // never regenerate to silence a failing assertion.
 //
+// Since PR #28 the corpus is anonymized offline with the mock server's
+// machinery (go run ./tools/mockserver -anonymize <dir> -shift-days -28
+// -shift-salt <salt>, the same date offset as testdata/fixtures): ids
+// remapped, athlete i0, weight 72.8, free text replaced, dates shifted and
+// distance/moving time jittered. Both goldens were then regenerated: this
+// one with the current code, the pre-wave-2 one by compiling b892133 in a
+// throwaway worktree over the same anonymized corpus; the split invariant
+// below held unchanged.
+//
 // The golden file is every field AnalyzeCyclingActivities emits for this
 // exact corpus today. Diffing it against the same call run at
 // b8921333954b1bcad25236113972185262b62caa (reconstructed via

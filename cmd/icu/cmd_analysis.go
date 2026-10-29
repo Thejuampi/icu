@@ -190,6 +190,7 @@ func analysisCoachingSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "history-oldest", ValueName: "DATE", Description: "History range start (YYYY-MM-DD)."},
+			{Name: "timezone", ValueName: "TZ", Description: "IANA timezone for 'today'; default is the athlete profile timezone."},
 			{Name: "history-newest", ValueName: "DATE", Description: "History range end (YYYY-MM-DD)."},
 			{Name: "plan-oldest", ValueName: "DATE", Description: "Plan range start (YYYY-MM-DD)."},
 			{Name: "plan-newest", ValueName: "DATE", Description: "Plan range end (YYYY-MM-DD)."},
@@ -572,7 +573,7 @@ func analysisPlanCommand() *Command {
 func analysisWellnessCommand() *Command {
 	return &Command{
 		Name:  "",
-		Usage: "analysis wellness [--oldest DATE --newest DATE | --days N]",
+		Usage: "analysis wellness [--oldest DATE --newest DATE | --days N] [--fields CSV]",
 		Description: "Compute wellness and physiology analysis from wellness records. " +
 			"Default ranges use the athlete's timezone (profile; --timezone overrides; UTC if unavailable).",
 		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
@@ -611,7 +612,7 @@ func analysisWellnessCommand() *Command {
 func analysisWorkoutCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "analysis workout <activity-id> [--event-id ID] [--calendar-id ID] [--sport-type TYPE] [--match-window-hours N]",
+		Usage:       "analysis workout <activity-id> [--event-id ID] [--calendar-id ID] [--sport-type TYPE] [--match-window-hours N] [--stream-types CSV]",
 		Description: "Analyze one completed workout against its planned workout event, intervals, and streams.",
 		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
@@ -748,7 +749,7 @@ func workoutActivityDate(activity *icu.Activity) string {
 func analysisAdaptationCommand() *Command {
 	return &Command{
 		Name:  "",
-		Usage: "analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride]",
+		Usage: "analysis adaptation [--oldest DATE --newest DATE | --days N] [--type Ride] [--curves CSV]",
 		Description: "Analyze cycling adaptation from power curves, MMP model, sport anchors, activities, and wellness. " +
 			"Default ranges use the athlete's timezone (profile; --timezone overrides; UTC if unavailable).",
 		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {

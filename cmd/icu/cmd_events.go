@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -79,7 +81,7 @@ func eventsCreateCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "events create --category WORKOUT --type Ride --name NAME --start-date DATE" +
-			" [--moving-time SECS] [--training-load N] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert]",
+			" [--moving-time SECS] [--training-load N] [--desc DESC | --description DESC | --desc-file PATH] [--calculate-load --ftp N] [--uid UID --upsert] [--color COLOR] [--indoor] [--external-id ID]",
 		Description: "Create calendar event.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			request, err := buildEventCreate(flags)
@@ -114,8 +116,9 @@ func eventsCreateCommand() *Command {
 
 func eventsUpdateCommand() *Command {
 	return &Command{
-		Name:        "",
-		Usage:       "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--calculate-load --ftp N] [--force]",
+		Name: "",
+		Usage: "events update <id> [--name NAME] [--type TYPE] [--desc DESC | --description DESC | --desc-file PATH] " +
+			"[--training-load N] [--moving-time SECS] [--calculate-load --ftp N] [--force] [--dry-run]",
 		Description: "Update calendar event.",
 		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
@@ -134,20 +137,44 @@ func eventsUpdateCommand() *Command {
 			if err != nil {
 				return err
 			}
-			path, raw, err := backupEventChecked(client, eventID, "events update", func(current json.RawMessage) error {
-				return checkThirdPartyEdit(eventID, last, current, BoolFlag(flags, "force"))
-			})
+			// Validate (third-party edit, then the request itself) before the
+			// backup is written, so a rejected update leaves no backup behind.
+			var request calculatedEventRequest
+			validate := func(raw json.RawMessage) error {
+				if err := checkThirdPartyEdit(eventID, last, raw, BoolFlag(flags, "force")); err != nil {
+					return err
+				}
+				var current icu.Event
+				if err := json.Unmarshal(raw, &current); err != nil {
+					return fmt.Errorf("decode event %d: %w", eventID, err)
+				}
+				built, err := buildEventUpdate(flags, current.Type)
+				if err != nil {
+					return wrapCommandError(err)
+				}
+				request = built
+
+				return nil
+			}
+			// --dry-run validates against the live event (GET only) and
+			// prints the body it would send: no backup, no PUT.
+			if BoolFlag(flags, "dry-run") {
+				var raw json.RawMessage
+				if err := client.Get("events", []string{args[0]}, nil, &raw); err != nil {
+					return wrapCommandError(err)
+				}
+				if err := validate(raw); err != nil {
+					return err
+				}
+
+				return writeJSON(stdout, map[string]any{
+					"id": eventID, "dryRun": true, "applied": false, "body": request.Body,
+					"changes": eventUpdateChanges(raw, request.Body), "message": "dry-run: nothing written",
+				})
+			}
+			path, _, err := backupEventChecked(client, eventID, "events update", validate)
 			if err != nil {
 				return err
-			}
-			var current icu.Event
-			if err := json.Unmarshal(raw, &current); err != nil {
-				return fmt.Errorf("decode event %d: %w", eventID, err)
-			}
-
-			request, err := buildEventUpdate(flags, current.Type)
-			if err != nil {
-				return wrapCommandError(err)
 			}
 
 			var result icu.Event
@@ -440,4 +467,34 @@ func eventDay(startDateLocal string) string {
 	}
 
 	return startDateLocal[:len("2006-01-02")]
+}
+
+type eventFieldChange struct {
+	Field  string `json:"field"`
+	Before any    `json:"before"`
+	After  any    `json:"after"`
+}
+
+// eventUpdateChanges diffs the update body against the live event, by wire
+// field name, for --dry-run output.
+func eventUpdateChanges(current json.RawMessage, body any) []eventFieldChange {
+	var before, after map[string]any
+	_ = json.Unmarshal(current, &before)
+	data, err := json.Marshal(body)
+	if err != nil || json.Unmarshal(data, &after) != nil {
+		return nil
+	}
+	keys := make([]string, 0, len(after))
+	for key := range after {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	changes := []eventFieldChange{}
+	for _, key := range keys {
+		if !reflect.DeepEqual(before[key], after[key]) {
+			changes = append(changes, eventFieldChange{Field: key, Before: before[key], After: after[key]})
+		}
+	}
+
+	return changes
 }

@@ -1060,7 +1060,7 @@ func TestRunZeppTokenPrintsTokensWithoutSaving(t *testing.T) {
 	t.Setenv("ZEPP_TOKENS_URL", tokensSrv.URL+"/v2/registrations/tokens")
 	t.Setenv("ZEPP_LOGIN_URL", loginSrv.URL+"/v2/client/login")
 
-	out, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, "u@example.com", "secret") })
+	out, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, "u@example.com", "secret", "") })
 	if err != nil || !strings.Contains(out, `"loginToken": "lt"`) {
 		t.Fatalf("out=%s err=%v", out, err)
 	}
@@ -1068,7 +1068,7 @@ func TestRunZeppTokenPrintsTokensWithoutSaving(t *testing.T) {
 		t.Fatal("zepp token saved config")
 	}
 	t.Setenv("ZEPP_LOGIN_URL", tokensSrv.URL+"/missing")
-	if _, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, "u@example.com", "secret") }); err == nil {
+	if _, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, "u@example.com", "secret", "") }); err == nil {
 		t.Fatal("failed login accepted")
 	}
 }
