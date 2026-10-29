@@ -195,8 +195,8 @@ func zeppHRVCommand() *Command {
 func zeppEventsCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD",
-		Description: "Fetch V2 wellness events by preset.",
+		Usage:       "zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD [--raw]",
+		Description: "Fetch V2 wellness events by preset." + rawHelp,
 		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			presetName := icu.StringFlag(flags, "preset", "")
 			if presetName == "" {
@@ -214,6 +214,10 @@ func zeppEventsCommand() *Command {
 				raw, err := client.FetchV2Events(ctx, preset, oldest, newest)
 				if err != nil {
 					return fmt.Errorf("fetch events: %w", err)
+				}
+
+				if BoolFlag(flags, zeppRawFlag) {
+					return writeZeppRaw(stdout, raw)
 				}
 
 				events, err := icu.DecodeV2Events(raw)
@@ -284,8 +288,8 @@ func registerV2EventCommand[T any](
 ) {
 	registry.Register("zepp", name, &Command{
 		Name:        "",
-		Usage:       fmt.Sprintf("zepp %s --oldest YYYY-MM-DD --newest YYYY-MM-DD", name),
-		Description: description,
+		Usage:       fmt.Sprintf("zepp %s --oldest YYYY-MM-DD --newest YYYY-MM-DD [--raw]", name),
+		Description: description + rawHelp,
 		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			oldest, newest := zeppDateRange(flags)
 
@@ -293,6 +297,10 @@ func registerV2EventCommand[T any](
 				raw, err := client.FetchV2Events(ctx, preset, oldest, newest)
 				if err != nil {
 					return fmt.Errorf("fetch %s: %w", name, err)
+				}
+
+				if BoolFlag(flags, zeppRawFlag) {
+					return writeZeppRaw(stdout, raw)
 				}
 
 				decoded, err := decoder(raw)
@@ -677,4 +685,26 @@ func isLoopbackHost(host string) bool {
 	ip := net.ParseIP(host)
 
 	return ip != nil && ip.IsLoopback()
+}
+
+const (
+	zeppRawFlag = "raw"
+	rawHelp     = " --raw prints the Zepp JSON as received with identifiers and secrets redacted" +
+		" (identifier keys, any key ending in id/ids; strings unless their key is a known-safe field;" +
+		" emails, MACs, JWTs, UUIDs, URLs and blobs everywhere; JSON inside strings too). See docs/cli-reference.md."
+)
+
+// writeZeppRaw prints the Zepp response as received, with every identifier
+// and secret redacted. It never prints the unredacted body, even on error.
+func writeZeppRaw(stdout io.Writer, raw []byte) error {
+	redacted, err := icu.RedactZeppJSON(raw)
+	if err != nil {
+		return fmt.Errorf("raw output: response is not JSON, not printed: %w", err)
+	}
+
+	if _, err := stdout.Write(append(redacted, '\n')); err != nil {
+		return fmt.Errorf("write raw: %w", err)
+	}
+
+	return nil
 }

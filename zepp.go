@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -364,6 +365,11 @@ func DecodeV2Events(raw []byte) ([]ZeppV2Event, error) {
 
 		if v, ok := item["value"]; ok {
 			ev.Value = zeppAnyToFloat(v)
+			if _, scalar := v.(float64); !scalar && !zeppNumericString(v) {
+				// Object payloads (readiness watch_score, HybridCharge,
+				// HRV samples) or JSON-in-string: keep them, never drop.
+				ev.Extra["value"] = zeppDecodeNested(v)
+			}
 		}
 
 		for k, v := range item {
@@ -379,6 +385,32 @@ func DecodeV2Events(raw []byte) ([]ZeppV2Event, error) {
 	}
 
 	return events, nil
+}
+
+// zeppNumericString reports whether v is a string holding a number.
+func zeppNumericString(v any) bool {
+	s, ok := v.(string)
+	if !ok {
+		return false
+	}
+	_, err := strconv.ParseFloat(s, 64)
+
+	return err == nil
+}
+
+// zeppDecodeNested unwraps a string holding a JSON object/array; anything
+// else is returned unchanged.
+func zeppDecodeNested(v any) any {
+	s, ok := v.(string)
+	if !ok {
+		return v
+	}
+	var nested any
+	if t := strings.TrimSpace(s); t != "" && (t[0] == '{' || t[0] == '[') && json.Unmarshal([]byte(t), &nested) == nil {
+		return nested
+	}
+
+	return v
 }
 
 // zeppAnyToFloat coerces a JSON value (number or numeric string) to float64.

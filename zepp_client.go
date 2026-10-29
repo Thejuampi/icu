@@ -980,7 +980,7 @@ func (c *ZeppClient) FetchV2Events(ctx context.Context, preset V2EventPreset, ol
 		return nil, zeppStatusError(resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readZeppBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -1197,7 +1197,7 @@ func (c *ZeppClient) watchSportStatistics(ctx context.Context, statType, oldest,
 		return nil, zeppStatusError(resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readZeppBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -1289,7 +1289,7 @@ func (c *ZeppClient) fetchDataHostURL(ctx context.Context, endpoint string) ([]b
 		return nil, zeppStatusError(resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readZeppBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -1530,4 +1530,23 @@ func zeppStatusError(status int) error {
 	}
 
 	return fmt.Errorf("%w: status %d", ErrZeppServer, status)
+}
+
+// zeppMaxBody caps a Zepp response body (32 MiB).
+const zeppMaxBody = 32 << 20
+
+// errZeppBodyTooLarge reports a response over zeppMaxBody.
+var errZeppBodyTooLarge = errors.New("zepp response exceeds 32 MiB")
+
+// readZeppBody reads at most zeppMaxBody bytes and errors if there is more.
+func readZeppBody(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, zeppMaxBody+1))
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	if len(body) > zeppMaxBody {
+		return nil, errZeppBodyTooLarge
+	}
+
+	return body, nil
 }
