@@ -23,7 +23,10 @@ func wellnessSyncCommand() *Command {
 			"[--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--json]",
 		Description: "Copy resting HR, HRV (rMSSD) and sleep from Zepp into intervals.icu wellness. " +
 			"Dry run by default: prints the diff and writes nothing; --apply sends one PUT wellness-bulk. " +
-			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day).",
+			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day). " +
+			"If intervals.icu's own Zepp sync lags, a manual alternative is in the intervals.icu web app: " +
+			"Settings > Zepp > Download old data > Wellness for the affected range. " +
+			"That is a web-only action; this CLI does not automate it.",
 		Schema: &CommandSchema{
 			RejectPositionals: true,
 			Flags: []CommandFlag{

@@ -162,6 +162,14 @@ When Zepp auth is configured, `analysis wellness`, `analysis coaching`,
 `HybridCharge`/`BioCharge` for the sleep/recovery signal and only fall back to
 the Intervals wellness `sleepScore` when the Zepp score is unavailable.
 
+#### Wellness sync from Zepp
+
+`icu wellness sync` copies resting HR, HRV and sleep from Zepp into intervals.icu
+wellness (dry run by default; `--apply` writes). If intervals.icu's own Zepp sync
+lags, a manual alternative is in the intervals.icu web app:
+**Settings > Zepp > Download old data > Wellness** for the affected range. That is
+a web-only action; this CLI does not automate it.
+
 ## Help And Discovery
 
 The CLI has resource-aware help:
