@@ -598,6 +598,11 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Invocation: `icu wellness upload <file.csv>`
   Example: `icu wellness upload wellness.csv`
 
+- `sync`
+  Invocation: `icu wellness sync [--oldest DATE] [--newest DATE] [--fields restingHR,hrv,sleepSecs,sleepScore] [--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--json]`
+  Notes: Reads Zepp (needs `icu zepp login`) and prints a diff; nothing is written without `--apply`. Default range: the last 7 days in the athlete timezone. Without `--overwrite` only empty intervals.icu fields are filled (`fill`); differing values are reported as `keep`. Day mapping: resting HR and sleep use Zepp's local day (the night ending that morning); an HRV reading goes on its local calendar day in the athlete timezone, and readings from 18:00 local count for the next day. Exit code is non-zero if a Zepp source failed (the other source is still synced). `--zepp-base-url` must be loopback or under zepp.com/huami.com (it receives the app token) unless `--allow-insecure-zepp-host`. If intervals.icu's own Zepp sync lags, a manual alternative is in the intervals.icu web app: **Settings > Zepp > Download old data > Wellness** for the affected range. That is a web-only action; this CLI does not automate it.
+  Example: `icu wellness sync --oldest 2026-05-01 --newest 2026-05-07`
+
 ## zepp
 
 Zepp (Amazfit) read-only access to wellness data not exposed by Intervals.icu.
@@ -621,12 +626,12 @@ readiness/body-battery/health-summary inputs available when you need to inspect
 the raw components.
 
 - `token`
-  Invocation: `icu zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL]`
+  Invocation: `icu zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL] [--allow-insecure-zepp-host]`
   Notes: Obtain Zepp API tokens without saving to config. WARNING: outputs tokens in plaintext. Use `login` for normal authentication. This command is intended for debugging and manual token management.
   Example: `icu zepp token --email jane@example.com` (the CLI will prompt for the password if it is not provided).
 
 - `login`
-  Invocation: `icu zepp login --email EMAIL --password PASSWORD [--zepp-base-url URL]`
+  Invocation: `icu zepp login --email EMAIL --password PASSWORD [--zepp-base-url URL] [--allow-insecure-zepp-host]`
   Notes: Persists `zeppLoginToken`, `zeppAppToken`, `zeppUserID`, and
   `zeppCountryCode` in the config file. `--zepp-base-url URL` must be https unless the host is loopback, and warns on stderr when the host is not loopback, `zepp.com` or `huami.com` (or a subdomain). It points both auth calls
   (`URL/v2/registrations/tokens`, `URL/v2/client/login`) at another host such

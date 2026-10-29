@@ -19,9 +19,12 @@ const (
 
 	// zeppBaseURLFlag points zepp login/token at another Zepp auth host
 	// (e.g. a local mock). It is distinct from the global --base-url.
-	zeppBaseURLFlag   = "zepp-base-url"
-	zeppTokensPath    = "/v2/registrations/tokens"
-	zeppLoginPathPart = "/v2/client/login"
+	zeppBaseURLFlag = "zepp-base-url"
+	// zeppAllowInsecureHostFlag lets --zepp-base-url name a host that is
+	// neither loopback nor a Zepp domain.
+	zeppAllowInsecureHostFlag = "allow-insecure-zepp-host"
+	zeppTokensPath            = "/v2/registrations/tokens"
+	zeppLoginPathPart         = "/v2/client/login"
 )
 
 func registerZeppCommands(registry *CommandRegistry) {
@@ -91,7 +94,7 @@ func zeppAuthCommand(usage, description string, run func(stdout io.Writer, email
 			// --zepp-base-url is Zepp-only; the global --base-url (intervals.icu)
 			// is stripped in executeCommand and never reaches Zepp.
 			zeppBaseURL := icu.StringFlag(flags, zeppBaseURLFlag, "")
-			if err := checkZeppBaseURL(zeppBaseURL, stderr); err != nil {
+			if err := checkZeppBaseURL(zeppBaseURL, zeppSecretPassword, BoolFlag(flags, zeppAllowInsecureHostFlag), stderr); err != nil {
 				return err
 			}
 
@@ -102,7 +105,7 @@ func zeppAuthCommand(usage, description string, run func(stdout io.Writer, email
 
 func zeppTokenCommand() *Command {
 	return zeppAuthCommand(
-		"zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL]",
+		"zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL] [--allow-insecure-zepp-host]",
 		"[debug] Get Zepp API tokens. WARNING: outputs tokens in plaintext. Use 'zepp login' for normal auth. Use this only when you need to inspect or manually manage tokens.", //nolint:lll // security warning
 		runZeppToken,
 	)
@@ -110,7 +113,7 @@ func zeppTokenCommand() *Command {
 
 func zeppLoginCommand() *Command {
 	return zeppAuthCommand(
-		"zepp login --email EMAIL [--password PASSWORD] [--zepp-base-url URL]",
+		"zepp login --email EMAIL [--password PASSWORD] [--zepp-base-url URL] [--allow-insecure-zepp-host]",
 		"Authenticate with Zepp using email and password to obtain login tokens.",
 		runZeppLogin,
 	)
@@ -427,6 +430,10 @@ func zeppDefaultDateRange() (string, string) { //nolint:gocritic // unnamed resu
 }
 
 func runZeppWithClient(fn func(ctx context.Context, client *icu.ZeppClient) error) error {
+	return runZeppWithClientOptions(zeppClientOptionsForRun(), fn)
+}
+
+func runZeppWithClientOptions(options []icu.ZeppClientOption, fn func(ctx context.Context, client *icu.ZeppClient) error) error {
 	loginToken := icu.ResolveZeppLoginToken(nil)
 	appToken := icu.ResolveZeppAppToken(nil)
 	userID := icu.ResolveZeppUserID(nil)
@@ -443,7 +450,7 @@ func runZeppWithClient(fn func(ctx context.Context, client *icu.ZeppClient) erro
 		CountryCode: countryCode,
 	}
 
-	client := icu.NewZeppClientFromAuth(auth, zeppClientOptionsForRun()...)
+	client := icu.NewZeppClientFromAuth(auth, options...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) //nolint:mnd // reasonable timeout for Zepp API
 	defer cancel()
@@ -613,10 +620,18 @@ func fingerprintForDisplay(value string) string {
 	return icu.SecretFingerprint(value)
 }
 
-// checkZeppBaseURL guards --zepp-base-url, which receives the Zepp password:
-// plain http is refused unless the host is loopback, and any host that is
-// neither loopback nor a Zepp domain gets a warning on stderr.
-func checkZeppBaseURL(raw string, stderr io.Writer) error {
+// Secrets --zepp-base-url receives, named in checkZeppBaseURL messages.
+const (
+	zeppSecretPassword = "Zepp password"
+	zeppSecretAppToken = "Zepp app token" //nolint:gosec // G101: a label for messages, not a credential
+)
+
+// checkZeppBaseURL guards --zepp-base-url, which receives a Zepp secret (the
+// password for zepp login/token, the app token for wellness sync): plain http
+// is refused unless the host is loopback, and any host that is neither
+// loopback nor under zepp.com/huami.com is refused unless allowOther
+// (--allow-insecure-zepp-host), in which case it only warns on stderr.
+func checkZeppBaseURL(raw, secret string, allowOther bool, stderr io.Writer) error {
 	if raw == "" {
 		return nil
 	}
@@ -644,7 +659,12 @@ func checkZeppBaseURL(raw string, stderr io.Writer) error {
 		}
 	}
 
-	_, _ = fmt.Fprintf(stderr, "warning: --%s host %q is not a Zepp host (zepp.com, huami.com); your Zepp password will be sent there\n", zeppBaseURLFlag, host)
+	if !allowOther {
+		return fmt.Errorf("%w: --%s host %q is not a Zepp host (zepp.com, huami.com) or loopback; your %s would be sent there. Pass --%s to allow it",
+			errInvalidValue, zeppBaseURLFlag, host, secret, zeppAllowInsecureHostFlag)
+	}
+
+	_, _ = fmt.Fprintf(stderr, "warning: --%s host %q is not a Zepp host (zepp.com, huami.com); your %s will be sent there\n", zeppBaseURLFlag, host, secret)
 
 	return nil
 }

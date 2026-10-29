@@ -62,6 +62,7 @@ func registerWellnessCommands(registry *CommandRegistry) {
 
 	registry.Register("wellness", "bulk", wellnessBulkCommand())
 	registry.Register("wellness", "upload", wellnessUploadCommand())
+	registry.Register("wellness", "sync", wellnessSyncCommand())
 }
 
 func wellnessBulkCommand() *Command {

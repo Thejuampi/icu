@@ -98,7 +98,10 @@ func atoiOrZero(s string) int {
 var (
 	ErrZeppNotAuthenticated = errors.New("zepp not authenticated: run 'icu zepp login'")
 	ErrZeppServer           = errors.New("zepp server error")
-	ErrZeppUnknownSport     = errors.New("unknown zepp sport")
+	// ErrZeppUnauthorized is a 401/403 from Zepp: the stored tokens were
+	// rejected (expired or revoked); 'icu zepp login' refreshes them.
+	ErrZeppUnauthorized = errors.New("zepp rejected the stored tokens (401/403); run 'icu zepp login' again")
+	ErrZeppUnknownSport = errors.New("unknown zepp sport")
 )
 
 type ZeppClient struct {
@@ -116,7 +119,7 @@ type ZeppClientOption func(*ZeppClient)
 func WithZeppHTTPClient(httpClient *http.Client) ZeppClientOption {
 	return func(client *ZeppClient) {
 		if httpClient != nil {
-			client.httpClient = httpClient
+			client.httpClient = withSameOriginRedirects(httpClient)
 		}
 	}
 }
@@ -146,12 +149,28 @@ func WithZeppCountryCode(countryCode string) ZeppClientOption {
 	}
 }
 
+// withSameOriginRedirects returns a copy of httpClient whose redirects stay on
+// the original scheme and host, so the Apptoken header can never follow a
+// redirect to another host (which would bypass the --zepp-base-url host
+// check). A client that already sets CheckRedirect is used as is.
+func withSameOriginRedirects(httpClient *http.Client) *http.Client {
+	if httpClient.CheckRedirect != nil {
+		return httpClient
+	}
+
+	clone := *httpClient
+	clone.CheckRedirect = SameOriginRedirects
+
+	return &clone
+}
+
 const defaultZeppClientTimeout = 30 * time.Second
 
 func NewZeppClientFromAuth(auth *ZeppAuthResult, options ...ZeppClientOption) *ZeppClient {
 	client := &ZeppClient{
 		httpClient: &http.Client{
-			Timeout: defaultZeppClientTimeout,
+			Timeout:       defaultZeppClientTimeout,
+			CheckRedirect: SameOriginRedirects,
 		},
 		loginToken:  auth.LoginToken,
 		appToken:    auth.AppToken,
@@ -250,7 +269,7 @@ func (c *ZeppClient) BandData(ctx context.Context, oldest, newest string) ([]Ban
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+		return nil, zeppStatusError(resp.StatusCode)
 	}
 
 	var raw struct {
@@ -372,7 +391,7 @@ func (c *ZeppClient) StressDays(ctx context.Context, oldest, newest string) ([]S
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+		return nil, zeppStatusError(resp.StatusCode)
 	}
 
 	var raw struct {
@@ -458,7 +477,7 @@ func (c *ZeppClient) SpO2Readings(ctx context.Context, oldest, newest string) ([
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+		return nil, zeppStatusError(resp.StatusCode)
 	}
 
 	var raw struct {
@@ -544,7 +563,7 @@ func (c *ZeppClient) PAIDays(ctx context.Context, oldest, newest string) ([]PAID
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+		return nil, zeppStatusError(resp.StatusCode)
 	}
 
 	var raw struct {
@@ -956,7 +975,7 @@ func (c *ZeppClient) FetchV2Events(ctx context.Context, preset V2EventPreset, ol
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+		return nil, zeppStatusError(resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -1173,7 +1192,7 @@ func (c *ZeppClient) watchSportStatistics(ctx context.Context, statType, oldest,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+		return nil, zeppStatusError(resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -1265,7 +1284,7 @@ func (c *ZeppClient) fetchDataHostURL(ctx context.Context, endpoint string) ([]b
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrZeppServer, resp.StatusCode)
+		return nil, zeppStatusError(resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -1373,6 +1392,8 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 		EndEpoch     int64                `json:"ed,omitempty"`
 		DeepMinutes  int                  `json:"dp,omitempty"`
 		LightMinutes int                  `json:"lt,omitempty"`
+		RestingHR    int                  `json:"rhr,omitempty"`
+		SleepScore   int                  `json:"ss,omitempty"`
 		Stages       []BandDataSleepStage `json:"stage,omitempty"`
 	}
 
@@ -1389,7 +1410,8 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 
 	for i := range sleepRaw.Stages {
 		sleepRaw.Stages[i].StartEpoch = midnightSec + int64(sleepRaw.Stages[i].Start*secondsPerMinute)
-		sleepRaw.Stages[i].EndEpoch = midnightSec + int64(sleepRaw.Stages[i].Stop*secondsPerMinute)
+		// A stage crossing midnight has Stop < Start (see SleepStageMinutes).
+		sleepRaw.Stages[i].EndEpoch = sleepRaw.Stages[i].StartEpoch + int64(SleepStageMinutes(sleepRaw.Stages[i])*secondsPerMinute)
 	}
 
 	return &BandDataSleep{
@@ -1397,6 +1419,8 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 		EndEpoch:     sleepRaw.EndEpoch,
 		DeepMinutes:  sleepRaw.DeepMinutes,
 		LightMinutes: sleepRaw.LightMinutes,
+		RestingHR:    sleepRaw.RestingHR,
+		SleepScore:   sleepRaw.SleepScore,
 		Stages:       sleepRaw.Stages,
 	}, nil
 }
@@ -1493,4 +1517,15 @@ func decodeDeltaEncodedShorts(encoded string) ([]int, error) {
 // required by some Zepp endpoints. We don't need cryptographic strength here.
 func randomRequestID() string {
 	return generateUUID()
+}
+
+// zeppStatusError maps a non-200 Zepp status to an error: 401/403 wrap
+// ErrZeppUnauthorized (so callers can tell auth from server failures), the
+// rest ErrZeppServer.
+func zeppStatusError(status int) error {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return fmt.Errorf("%w: status %d", ErrZeppUnauthorized, status)
+	}
+
+	return fmt.Errorf("%w: status %d", ErrZeppServer, status)
 }

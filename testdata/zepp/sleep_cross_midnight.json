@@ -1,0 +1,14 @@
+{
+  "_comment": "Synthetic band_data summary.slp. Stage start/stop are minutes since local midnight on a 0..1439 clock; the light stage 1410->40 crosses midnight (23:30 -> 00:40) and wraps (stop < start).",
+  "dp": 999,
+  "lt": 999,
+  "rhr": 48,
+  "ss": 77,
+  "stage": [
+    {"start": 1380, "stop": 1410, "mode": 7},
+    {"start": 1410, "stop": 40, "mode": 4},
+    {"start": 40, "stop": 130, "mode": 5},
+    {"start": 130, "stop": 130, "mode": 4},
+    {"start": 130, "stop": 400, "mode": 8}
+  ]
+}

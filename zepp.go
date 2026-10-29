@@ -87,11 +87,15 @@ type BandDataStage struct {
 // st/ed are epoch seconds. dp = deep sleep minutes, lt = light sleep minutes.
 // mode 4 = light, mode 5 = deep, mode 7 = awake, mode 8 = REM.
 type BandDataSleep struct {
-	StartEpoch   int64                `json:"st,omitempty"`
-	EndEpoch     int64                `json:"ed,omitempty"`
-	DeepMinutes  int                  `json:"dp,omitempty"`
-	LightMinutes int                  `json:"lt,omitempty"`
-	Stages       []BandDataSleepStage `json:"stage,omitempty"`
+	StartEpoch   int64 `json:"st,omitempty"`
+	EndEpoch     int64 `json:"ed,omitempty"`
+	DeepMinutes  int   `json:"dp,omitempty"`
+	LightMinutes int   `json:"lt,omitempty"`
+	// RestingHR (rhr) and SleepScore (ss) are optional summary.slp keys;
+	// zero when the band did not report them.
+	RestingHR  int                  `json:"rhr,omitempty"`
+	SleepScore int                  `json:"ss,omitempty"`
+	Stages     []BandDataSleepStage `json:"stage,omitempty"`
 }
 
 type BandDataSleepStage struct {
