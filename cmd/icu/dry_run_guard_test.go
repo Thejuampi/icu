@@ -581,7 +581,7 @@ func TestActivityDetailUsageText(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	_ = run([]string{"icu", "activity", "--help"}, &stdout, &stderr)
 	help := stdout.String() + stderr.String()
-	if strings.Contains(help, "icu.Activity") || strings.Contains(help, "icu icu ") {
+	if strings.Contains(help, "icu.Activity") || strings.Contains(help, strings.Repeat("icu ", 2)) {
 		t.Fatalf("bad activity usage text:\n%s", help)
 	}
 	for _, want := range []string{"icu activity <id> best-efforts", "icu activity <id> fit-file", "icu activity <id> power-curve"} {
