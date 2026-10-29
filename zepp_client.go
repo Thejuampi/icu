@@ -152,7 +152,9 @@ func WithZeppCountryCode(countryCode string) ZeppClientOption {
 // withSameOriginRedirects returns a copy of httpClient whose redirects stay on
 // the original scheme and host, so the Apptoken header can never follow a
 // redirect to another host (which would bypass the --zepp-base-url host
-// check). A client that already sets CheckRedirect is used as is.
+// check). A client that already sets CheckRedirect is used as is: the caller
+// is then responsible for its redirect policy, including keeping secrets
+// (Apptoken, API key) off other hosts.
 func withSameOriginRedirects(httpClient *http.Client) *http.Client {
 	if httpClient.CheckRedirect != nil {
 		return httpClient

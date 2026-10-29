@@ -159,7 +159,11 @@ func performLoginWithURL(loginURL, accessToken, countryCode string) (*ZeppAuthRe
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 
-	resp, err := http.DefaultClient.Do(req)
+	// Not http.DefaultClient: on a 307/308 it would resend this body (which
+	// carries the access code) to whatever host the Location names.
+	client := &http.Client{Timeout: defaultZeppClientTimeout, CheckRedirect: SameOriginRedirects}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
