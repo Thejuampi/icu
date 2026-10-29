@@ -33,3 +33,10 @@ coverage_pkg/
 power-fill-*.png
 /icu
 /icu-mock
+
+# Built binaries (go build ./tools/mockserver, ./cmd/icu)
+/mockserver
+/icu-mock.exe
+/icu.exe
+/tools/mockserver/mockserver
+/cmd/icu/icu
