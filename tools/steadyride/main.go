@@ -26,6 +26,10 @@ const (
 	basePower   = 172.0
 	ftp         = 266
 	weightKg    = 72.8
+	// hrLagSec is the pure HR delay put into the generator. Lag detection
+	// (cross-correlation) measures about 53 s on the generated ride: the 45 s
+	// delay plus the hrTau (25 s) first-order smoothing, which adds its own
+	// phase lag at the power wave period.
 	hrLagSec    = 45
 	apiDecouple = 2.5
 
@@ -45,6 +49,7 @@ const (
 	cadencePerWatt = 1.0 / 60
 	cadenceNoise   = 1.5
 	speedK         = 0.26 // P = k v^3 on flat road, no wind
+	speedTau       = 8.0  // speed inertia: first-order lag behind power, seconds
 	npWindow       = 30
 	millis         = 1000
 	tenths         = 10
@@ -113,7 +118,7 @@ func target(sec int) float64 {
 func Simulate() Ride {
 	rng := rand.New(rand.NewPCG(seed1, seed2)) //nolint:gosec // deterministic fixture data, not security
 	ride := Ride{}
-	noise, smooth, distance := 0.0, target(0), 0.0
+	noise, smooth, distance, speed := 0.0, target(0), 0.0, math.Cbrt(target(0)/speedK)
 	power := make([]float64, durationSec)
 	for sec := range durationSec {
 		noise = noiseAR*noise + rng.NormFloat64()*noiseWatts
@@ -127,7 +132,9 @@ func Simulate() Ride {
 		hr := hrBase + hrPerWatt*smooth + drift + rng.NormFloat64()*hrNoiseBPM
 		ride.HR = append(ride.HR, int(math.Round(hr)))
 		ride.Cadence = append(ride.Cadence, int(math.Round(cadenceBase+power[sec]*cadencePerWatt+rng.NormFloat64()*cadenceNoise)))
-		velocity := math.Round(math.Cbrt(power[sec]/speedK)*millis) / millis
+		// Speed follows power with inertia instead of tracking it instantly.
+		speed += (math.Cbrt(power[sec]/speedK) - speed) / speedTau
+		velocity := math.Round(speed*millis) / millis
 		ride.Velocity = append(ride.Velocity, velocity)
 		ride.Distance = append(ride.Distance, math.Round(distance*tenths)/tenths)
 		distance += velocity
