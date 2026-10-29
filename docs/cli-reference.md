@@ -699,12 +699,13 @@ the raw components.
   Example: `icu zepp pai --oldest 2026-05-01 --newest 2026-05-07`
 
 - `events`
-  Invocation: `icu zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Invocation: `icu zepp events --preset NAME --oldest YYYY-MM-DD --newest YYYY-MM-DD [--raw]`
   Notes: Calls `/v2/users/me/events` on the Zepp events host
   `api-mifit.zepp.com`. Presets map
   to Zepp `eventType`/`subType` pairs (e.g. `body-battery` →
   `Charge`/`real_data`). Use `icu zepp events --help` to list presets.
   Example: `icu zepp events --preset body-battery --oldest 2026-06-01 --newest 2026-06-07`
+  Notes: Non-numeric `value` payloads (objects, JSON-in-string) are kept under `extra.value`. `--raw` prints the Zepp response as received with defense-in-depth redaction to `"[redacted]"`: (1) denylist: keys naming identifiers, personal data, location, secrets or links (case-insensitive, `_`/`-`/`.` ignored; e.g. userId, uid, deviceId(s), sn, serial, imei/imsi/iccid, uuid/guid, mac, email, phone, name, birthday, gender, lat/lon, gps, address, ip, ssid, timezone, token, access/refresh, auth, sign/signature, key, session, cookie, url, avatar, account, and any key ending in `id`/`ids`/`url`/`key`/`token`/`name` except words like `valid`, `paid`) lose their value whatever its type; (2) allowlist: every other string is redacted unless its key is a known-safe field and the string has that field's shape: ISO date/time, `HH:MM`/`HH:MM:SS`, or a 10-digit (s) / 13-digit (ms) epoch between 2000 and 2100 for date/day/time/timestamp/startTime/endTime; `^[A-Za-z_]{1,32}$` but not a single capitalised word like `Testy` (known Zepp enums such as `Charge` are kept) for eventType/subType/type/unit/status/result; a number of up to 6 digits (optional sign and decimals) for value/hrv/sdnn/rmssd/sleepHRV/score/samples/skinTemp*; up to 8 digits for `s` (sample offset in ms); strings inside arrays are never allowlisted; numbers and booleans are kept, except numbers whose integer part has 9+ digits (floats and exponents included, e.g. `123456789.0`, `1.23456789e8`), unless an integer 10/13-digit epoch between 2000 and 2100 under a time key; also denied: birth, dob, zip, postcode, city, country, region, geo, coord, position, owner, friend, member, wearer, host, msisdn, and `ip` as an exact key or ipaddr/ipv4/ipv6/clientIp-style names (not as a fragment, so tip/trip/chip stay); (3) value scrubbing: emails, MACs, JWTs, UUIDs, URLs, IPv4/IPv6 addresses, 24+ char base64 or 12+ char hex blobs and JSON-looking strings that do not parse are redacted even under safe keys; (4) JSON inside strings (also double-encoded) is redacted with the same rules; (5) object keys that are only digits or 8+ hex chars become `[redacted-key-N]`. Responses over 32 MiB are refused. Accepted risks: a number of up to 6 digits under a metric key, an integer of up to 8 digits under any non-denied key, and a 24-32 char letters-only string under an enum key are printed; an identifier in one of those forms would show. A non-JSON response is not printed.
 
 - `hrv`
   Invocation: `icu zepp hrv --metric sdnn|rmssd --oldest YYYY-MM-DD --newest YYYY-MM-DD`
@@ -713,7 +714,7 @@ the raw components.
   Example: `icu zepp hrv --metric rmssd --oldest 2026-06-01 --newest 2026-06-07`
 
 - `readiness`
-  Invocation: `icu zepp readiness --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Invocation: `icu zepp readiness --oldest YYYY-MM-DD --newest YYYY-MM-DD [--raw]`
   Notes: Daily readiness scores from `/v2/users/me/events`.
   Example: `icu zepp readiness --oldest 2026-06-01 --newest 2026-06-07`
 

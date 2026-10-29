@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"hash/fnv"
 	"net/http"
+	"path"
 	"strconv"
 	"time"
 )
@@ -41,8 +42,8 @@ const (
 	mockZeppHRVMinute  = 30
 )
 
-func isZeppPath(path string) bool {
-	return path == mockZeppBandPath || path == mockZeppEventsPath
+func isZeppPath(p string) bool {
+	return p == mockZeppBandPath || p == mockZeppEventsPath
 }
 
 // MockZeppDay is the synthetic Zepp wellness for one date, exported for
@@ -130,6 +131,13 @@ func (s *server) zeppBand(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) zeppEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	// A fixture at <fixtures>/_zepp/events/<eventType>/<subType>.json is
+	// served as-is (for raw-output checks with synthetic payloads).
+	if body, ok := s.fixtures[path.Join("/_zepp/events", path.Base("/"+q.Get("eventType")), path.Base("/"+q.Get("subType")))]; ok {
+		writeJSON(w, http.StatusOK, body)
+
+		return
+	}
 	items := []map[string]any{}
 	et, st := q.Get("eventType"), q.Get("subType")
 	if et == "HRVRMSSD" || (et == "readiness" && st == "watch_score") {
