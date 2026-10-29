@@ -26,12 +26,13 @@ var errZeppRedactTooDeep = errors.New("json nested too deep")
 //     secret or link (normalized: lower-case, "_", "-", "." and spaces
 //     removed) has its value replaced whatever its type, objects included.
 //  2. Allowlist: any other string is replaced too, unless its key is a
-//     known-safe field (dates, timestamps, event type enums and the
-//     HRV/readiness/skin-temp metric keys). Numbers, booleans and null are
-//     kept: they are the payload we need, and an identifier in a number
-//     sits under a denylisted key.
+//     known-safe field AND the string has that field's shape: ISO date/time
+//     or epoch for time keys, ^[A-Za-z_]{1,32}$ for enum keys, a short
+//     number for metric keys. Strings inside arrays are never allowlisted.
+//     Numbers, booleans and null are kept (they are the payload), except an
+//     integer of 9+ digits, unless it is an epoch under a time-like key.
 //  3. Value scrubbing: an allowlisted string is still replaced when it looks
-//     like an email, MAC, JWT, UUID, URL, a base64/hex blob, or JSON that
+//     like an email, MAC, JWT, UUID, URL, IPv4/IPv6, a base64/hex blob, or JSON that
 //     does not parse.
 //  4. Strings holding JSON (also double-encoded) are unwrapped and the same
 //     rules apply inside; the result stays a string.
@@ -46,6 +47,9 @@ func zeppDeniedKeys() map[string]bool {
 		"displayname", "username", "huamiid", "openid", "unionid", "imei", "imsi", "iccid", "serial", "serialno",
 		"birthday", "mobile", "photo", "avatar", "account", "location", "address", "gps", "ssid", "bssid",
 		"latitude", "longitude", "signature", "cookie", "auth", "authorization",
+		// "ip" is exact (plus the ipaddr/ipv4/ipv6 fragments and these common
+		// names), not a suffix or fragment: that would hit tip, zip, chip, trip.
+		"clientip", "remoteip", "lastip", "loginip", "userip", "deviceip",
 	}
 	out := make(map[string]bool, len(keys))
 	for _, k := range keys {
@@ -62,6 +66,8 @@ func zeppDeniedFragments() []string {
 		"iccid", "uuid", "guid", "serial", "avatar", "address", "latitude", "longitude", "signature", "account",
 		"nickname", "birthday", "cookie", "auth", "userid", "deviceid", "macaddr", "ssid", "photo", "gps",
 		"location", "nick", "alias", "fullname", "firstname", "lastname", "displayname", "devicename",
+		"birth", "dob", "zip", "postcode", "city", "country", "region", "geo", "coord", "position", "owner", "friend",
+		"member", "wearer", "host", "msisdn", "ipaddr", "ipv4", "ipv6",
 	}
 }
 
@@ -78,19 +84,43 @@ func zeppSuffixExceptions() map[string]bool {
 	}
 }
 
-// zeppSafeStringKeys are the keys whose string values are kept (after value
-// scrubbing). They carry dates, event enums and the metrics --raw exists for.
-func zeppSafeStringKeys() map[string]bool {
-	keys := []string{
-		"date", "day", "time", "timestamp", "starttime", "endtime", "eventtype", "subtype", "type", "unit",
-		"value", "hrv", "sdnn", "rmssd", "sleephrv", "score", "samples", "s", "status", "result",
+// zeppSafeClass is the expected shape of a string under a safe key.
+type zeppSafeClass int
+
+const (
+	zeppClassNone   zeppSafeClass = iota
+	zeppClassTime                 // ISO date/time or a numeric epoch (<= 13 digits)
+	zeppClassEnum                 // ^[A-Za-z_]{1,32}$
+	zeppClassMetric               // up to 6 digits, optional sign and decimals
+)
+
+// zeppSafeStringKeys maps the keys whose string values may be kept to the
+// shape they must have; anything else under them is redacted. They carry the
+// dates, event enums and metric values --raw exists for.
+func zeppSafeStringKeys() map[string]zeppSafeClass {
+	return map[string]zeppSafeClass{
+		"date": zeppClassTime, "day": zeppClassTime, "time": zeppClassTime, "timestamp": zeppClassTime,
+		"starttime": zeppClassTime, "endtime": zeppClassTime,
+		"eventtype": zeppClassEnum, "subtype": zeppClassEnum, "type": zeppClassEnum, "unit": zeppClassEnum,
+		"status": zeppClassEnum, "result": zeppClassEnum,
+		"value": zeppClassMetric, "hrv": zeppClassMetric, "sdnn": zeppClassMetric, "rmssd": zeppClassMetric,
+		"sleephrv": zeppClassMetric, "score": zeppClassMetric, "samples": zeppClassMetric, "s": zeppClassMetric,
 	}
-	out := make(map[string]bool, len(keys))
-	for _, k := range keys {
-		out[k] = true
+}
+
+func zeppKeyClass(key string) zeppSafeClass {
+	if key == "" || IsZeppSecretKey(key) {
+		return zeppClassNone
+	}
+	norm := normalizeZeppKey(key)
+	if c, ok := zeppSafeStringKeys()[norm]; ok {
+		return c
+	}
+	if strings.HasPrefix(norm, "skintemp") {
+		return zeppClassMetric
 	}
 
-	return out
+	return zeppClassNone
 }
 
 func normalizeZeppKey(key string) string {
@@ -121,26 +151,58 @@ func IsZeppSecretKey(key string) bool {
 	return false
 }
 
-// IsZeppSafeStringKey reports whether a string under key is kept (step 2).
-func IsZeppSafeStringKey(key string) bool {
-	if IsZeppSecretKey(key) {
+// IsZeppSafeString reports whether str under key is kept: the key must be
+// on the safe list, str must have the key's expected shape, and it must not
+// match a sensitive value pattern.
+func IsZeppSafeString(key, str string) bool {
+	var ok bool
+	switch zeppKeyClass(key) {
+	case zeppClassTime:
+		ok = zeppISOTimeRe.MatchString(str) || zeppEpochRe.MatchString(str)
+	case zeppClassEnum:
+		ok = zeppEnumRe.MatchString(str)
+	case zeppClassMetric:
+		ok = zeppMetricRe.MatchString(str)
+	case zeppClassNone:
+		ok = false
+	}
+
+	return ok && !zeppValueLooksSensitive(str)
+}
+
+// zeppIsTimeKey reports whether key holds dates or epochs.
+func zeppIsTimeKey(key string) bool {
+	return zeppKeyClass(key) == zeppClassTime
+}
+
+// zeppNumberIsSensitive reports whether a number under a non-denied key
+// looks like an identifier: an integer of 9+ digits, unless it is a
+// plausible epoch (<= 13 digits) under a time-like key.
+func zeppNumberIsSensitive(key, num string) bool {
+	digits := strings.TrimPrefix(num, "-")
+	if strings.ContainsAny(digits, ".eE") || len(digits) < 9 {
 		return false
 	}
-	norm := normalizeZeppKey(key)
 
-	return zeppSafeStringKeys()[norm] || strings.HasPrefix(norm, "skintemp")
+	return !zeppIsTimeKey(key) || len(digits) > 13
 }
 
 var (
-	zeppEmailRe  = regexp.MustCompile(`(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}`)
-	zeppMACRe    = regexp.MustCompile(`(?i)\b[0-9a-f]{2}([:-][0-9a-f]{2}){5}\b`)
-	zeppJWTRe    = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.?[A-Za-z0-9_-]*`)
-	zeppUUIDRe   = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\b`)
-	zeppURLRe    = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://`)
-	zeppBlobRe   = regexp.MustCompile(`[A-Za-z0-9+/_-]{24,}={0,2}`)
-	zeppHexRe    = regexp.MustCompile(`(?i)\b[0-9a-f]{12,}\b`)
-	zeppIDKeyRe  = regexp.MustCompile(`^(?:\d+|(?i)[0-9a-f]{8,})$`)
-	zeppNumberRe = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
+	zeppEmailRe   = regexp.MustCompile(`(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}`)
+	zeppMACRe     = regexp.MustCompile(`(?i)\b[0-9a-f]{2}([:-][0-9a-f]{2}){5}\b`)
+	zeppJWTRe     = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.?[A-Za-z0-9_-]*`)
+	zeppUUIDRe    = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\b`)
+	zeppURLRe     = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://`)
+	zeppBlobRe    = regexp.MustCompile(`[A-Za-z0-9+/_-]{24,}={0,2}`)
+	zeppHexRe     = regexp.MustCompile(`(?i)\b[0-9a-f]{12,}\b`)
+	zeppIPv4Re    = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
+	zeppIPv6Re    = regexp.MustCompile(`(?i)\b(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}\b|[0-9a-f]{0,4}::[0-9a-f:]*`)
+	zeppISOTimeRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$`)
+	zeppEpochRe   = regexp.MustCompile(`^\d{1,13}$`)
+	zeppEnumRe    = regexp.MustCompile(`^[A-Za-z_]{1,32}$`)
+	zeppMetricRe  = regexp.MustCompile(`^-?\d{1,6}(?:\.\d{1,6})?$`)
+	zeppIDKeyRe   = regexp.MustCompile(`^(?:\d+|(?i)[0-9a-f]{8,})$`)
+	zeppNumberRe  = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
 )
 
 // zeppValueLooksSensitive reports whether a string value matches a
@@ -149,7 +211,7 @@ func zeppValueLooksSensitive(s string) bool {
 	if zeppNumberRe.MatchString(s) {
 		return false // plain numbers (e.g. "57", timestamps) are payload
 	}
-	for _, re := range []*regexp.Regexp{zeppEmailRe, zeppMACRe, zeppJWTRe, zeppUUIDRe, zeppURLRe, zeppBlobRe, zeppHexRe} {
+	for _, re := range []*regexp.Regexp{zeppEmailRe, zeppMACRe, zeppJWTRe, zeppUUIDRe, zeppURLRe, zeppBlobRe, zeppHexRe, zeppIPv4Re, zeppIPv6Re} {
 		if re.MatchString(s) {
 			return true
 		}
@@ -170,7 +232,7 @@ func redactZeppJSONDepth(raw []byte, depth int) ([]byte, error) {
 	dec.UseNumber()
 
 	var out bytes.Buffer
-	if err := redactValue(dec, &out, "", depth); err != nil {
+	if err := redactValue(dec, &out, "", false, depth); err != nil {
 		return nil, fmt.Errorf("redact zepp json: %w", err)
 	}
 
@@ -213,14 +275,14 @@ func redactString(str, key string, depth int) string {
 
 		return ZeppRedacted // looks like JSON but does not parse (or too deep)
 	}
-	if !IsZeppSafeStringKey(key) || zeppValueLooksSensitive(str) {
+	if !IsZeppSafeString(key, str) {
 		return ZeppRedacted
 	}
 
 	return str
 }
 
-func redactValue(dec *json.Decoder, out *bytes.Buffer, key string, depth int) error {
+func redactValue(dec *json.Decoder, out *bytes.Buffer, key string, inArray bool, depth int) error {
 	if depth > zeppRedactMaxDepth {
 		return errZeppRedactTooDeep
 	}
@@ -233,9 +295,17 @@ func redactValue(dec *json.Decoder, out *bytes.Buffer, key string, depth int) er
 	case json.Delim:
 		return redactContainer(dec, out, t, key, depth)
 	case string:
-		writeJSONString(out, redactString(t, key, depth))
+		strKey := key
+		if inArray {
+			strKey = "" // strings in arrays get no allowlist
+		}
+		writeJSONString(out, redactString(t, strKey, depth))
 	case json.Number:
-		out.WriteString(t.String())
+		if zeppNumberIsSensitive(key, t.String()) {
+			writeJSONString(out, ZeppRedacted)
+		} else {
+			out.WriteString(t.String())
+		}
 	case bool:
 		out.WriteString(strconv.FormatBool(t))
 	case nil:
@@ -245,9 +315,9 @@ func redactValue(dec *json.Decoder, out *bytes.Buffer, key string, depth int) er
 	return nil
 }
 
-// redactContainer copies an object or array. Array elements inherit the
-// array's key, so ["a@b.c"] under "emails" or "note" is handled like a
-// single value under that key.
+// redactContainer copies an object or array. Numbers in an array inherit the
+// array's key (samples: [41, 38]); strings in an array never match the
+// allowlist and are redacted.
 func redactContainer(dec *json.Decoder, out *bytes.Buffer, open json.Delim, parentKey string, depth int) error {
 	out.WriteRune(rune(open))
 	first := true
@@ -283,7 +353,7 @@ func redactContainer(dec *json.Decoder, out *bytes.Buffer, open json.Delim, pare
 			}
 		}
 
-		if err := redactValue(dec, out, key, depth+1); err != nil {
+		if err := redactValue(dec, out, key, open == '[', depth+1); err != nil {
 			return err
 		}
 	}

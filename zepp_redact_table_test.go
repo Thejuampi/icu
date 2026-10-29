@@ -84,9 +84,25 @@ func TestRedactKeepsPayloadKeys(t *testing.T) {
 			t.Errorf("%q: number lost: %s", k, got)
 		}
 	}
-	for _, k := range []string{"date", "timestamp", "startTime", "eventType", "subType", "type", "value", "skinTempInsight"} {
-		if got := redactOne(t, k, "2026-10-29"); got != `"2026-10-29"` {
-			t.Errorf("%q: safe string lost: %s", k, got)
+	kept := []struct{ key, value string }{
+		{"date", "2026-10-29"},
+		{"timestamp", "2026-10-29T06:30:00Z"},
+		{"startTime", "1761710400000"},
+		{"time", "2026-10-29 06:30"},
+		{"eventType", "readiness"},
+		{"subType", "watch_score"},
+		{"type", "HRVRMSSD"},
+		{"unit", "ms"},
+		{"status", "ok"},
+		{"value", "57"},
+		{"hrv", "38"},
+		{"sleepHRV", "37.5"},
+		{"skinTempCalibrated", "-12"},
+		{"score", "0.85"},
+	}
+	for _, c := range kept {
+		if got := redactOne(t, c.key, c.value); got != `"`+c.value+`"` {
+			t.Errorf("%q=%q: safe string lost: %s", c.key, c.value, got)
 		}
 	}
 	if got := redactOne(t, "valid", true); got != "true" {
@@ -145,11 +161,11 @@ func TestRedactEmbeddedJSON(t *testing.T) {
 	}
 	arr := `[{"deviceId":"SYN-IN-DEV","sdnn":52},7]`
 
-	raw := map[string]string{
+	raw := map[string]any{
 		"value":  inner,
 		"double": string(double),
 		"arr":    arr,
-		"type":   "a<b&c>d",
+		"a<b&c>": 5,
 	}
 	in, err := json.Marshal(raw)
 	if err != nil {
@@ -167,17 +183,18 @@ func TestRedactEmbeddedJSON(t *testing.T) {
 	}
 	// JSON object in a string, double-encoded JSON and a JSON array in a
 	// string are unwrapped: their safe numbers survive.
-	for _, keep := range []string{`\"hrv\":41`, `\"sdnn\":52`, `,7]`, `a<b&c>d`} {
+	for _, keep := range []string{`\"hrv\":41`, `\"sdnn\":52`, `,7]`, `"a<b&c>":5`} {
 		if !strings.Contains(s, keep) {
 			t.Fatalf("missing %s in %s", keep, s)
 		}
 	}
-	var back map[string]string
+	var back map[string]any
 	if err := json.Unmarshal(out, &back); err != nil {
 		t.Fatal(err)
 	}
+	dbl, _ := back["double"].(string)
 	var d string
-	if err := json.Unmarshal([]byte(back["double"]), &d); err != nil || !strings.Contains(d, `"hrv":41`) {
+	if err := json.Unmarshal([]byte(dbl), &d); err != nil || !strings.Contains(d, `"hrv":41`) {
 		t.Fatalf("double-encoded not kept as a JSON string: %q %v", back["double"], err)
 	}
 }
@@ -209,5 +226,90 @@ func TestRedactDepthLimit(t *testing.T) {
 	deep := strings.Repeat("[", 200) + strings.Repeat("]", 200)
 	if _, err := icu.RedactZeppJSON([]byte(deep)); err == nil {
 		t.Fatal("expected depth error")
+	}
+}
+
+// Free text under safe keys must have the key's shape; all example values
+// are obviously fake.
+func TestRedactShapeRestrictedSafeKeys(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct{ key, value string }{
+		{"status", "Testy Mc Testface"},
+		{"result", "+00 00 0000-0000"},
+		{"unit", "0000000000000"},
+		{"subType", "Fake Street 0000 Nowhere"},
+		{"type", "a<b"},
+		{"type", strings.Repeat("a", 33)},
+		{"eventType", "x1"},
+		{"date", "yesterday"},
+		{"date", "2026-10-29 at the park"},
+		{"timestamp", "12345678901234"},
+		{"value", "1234567"},
+		{"value", "55555551234"},
+		{"hrv", "38 ms"},
+		{"status", "192.0.2.10"},
+		{"value", "203.0.113.7"},
+		{"unit", "2001:db8::1"},
+	}
+	for _, c := range cases {
+		if got := redactOne(t, c.key, c.value); got != `"[redacted]"` {
+			t.Errorf("%q=%q kept: %s", c.key, c.value, got)
+		}
+	}
+}
+
+func TestRedactArraysHaveNoStringAllowlist(t *testing.T) {
+	t.Parallel()
+
+	if got := redactOne(t, "samples", []any{"Testy", "192.0.2.10", "57"}); got != `["[redacted]","[redacted]","[redacted]"]` {
+		t.Fatalf("strings in array kept: %s", got)
+	}
+	if got := redactOne(t, "samples", []any{41, 38.5, -2}); got != `[41,38.5,-2]` {
+		t.Fatalf("numeric array changed: %s", got)
+	}
+}
+
+func TestRedactLongIntegers(t *testing.T) {
+	t.Parallel()
+
+	for _, k := range []string{"note", "insight", "samples", "hrv", "value"} {
+		if got := redactOne(t, k, int64(123456789)); got != `"[redacted]"` {
+			t.Errorf("%q: 9-digit int kept: %s", k, got)
+		}
+	}
+	if got := redactOne(t, "insight", 12345678); got != "12345678" {
+		t.Errorf("8-digit int lost: %s", got)
+	}
+	if got := redactOne(t, "insight", 1234567890.5); got != "1234567890.5" {
+		t.Errorf("decimal lost: %s", got)
+	}
+	for _, k := range []string{"timestamp", "startTime", "date"} {
+		if got := redactOne(t, k, int64(1761710400000)); got != "1761710400000" {
+			t.Errorf("%q: epoch lost: %s", k, got)
+		}
+		if got := redactOne(t, k, int64(12345678901234)); got != `"[redacted]"` {
+			t.Errorf("%q: 14-digit kept: %s", k, got)
+		}
+	}
+}
+
+func TestRedactNewFragments(t *testing.T) {
+	t.Parallel()
+
+	for _, k := range []string{
+		"birthDate", "dob", "zipCode", "postcode", "city", "countryCode", "region", "geoHash",
+		"coords", "position", "ownerName", "friendList", "memberSince", "wearer", "hostName", "msisdn", "ip",
+		"clientIp", "ip_addr", "ipv4", "userIdentifier", "USER_IDENTIFIER",
+	} {
+		if got := redactOne(t, k, 7); got != `"[redacted]"` {
+			t.Errorf("%q kept: %s", k, got)
+		}
+	}
+	// "ip" is exact, not a fragment/suffix: these stay.
+	for _, k := range []string{"tip", "trip", "chip", "skip"} {
+		if icu.IsZeppSecretKey(k) {
+			t.Errorf("%q should not be a secret key", k)
+		}
 	}
 }

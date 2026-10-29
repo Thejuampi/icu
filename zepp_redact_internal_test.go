@@ -32,7 +32,7 @@ func TestZeppRedactRuleListsPinned(t *testing.T) {
 	}
 	safe := zeppSafeStringKeys()
 	for _, k := range []string{"date", "timestamp", "starttime", "eventtype", "subtype", "type", "value"} {
-		if !safe[k] {
+		if safe[k] == zeppClassNone {
 			t.Errorf("safe list lost %q", k)
 		}
 	}
