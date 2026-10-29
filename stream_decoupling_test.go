@@ -321,7 +321,7 @@ func TestDecouplingVIGate(t *testing.T) {
 
 func TestPlannedDecouplingTrim(t *testing.T) {
 	t.Parallel()
-	// i202545713's paired workout: 10' ramp 50-65%, 3x(5' 65, 5' 65,
+	// i686255833's paired workout: 10' ramp 50-65%, 3x(5' 65, 5' 65,
 	// 5' 67), 25' 62, 10' 55. Duration-weighted median target 62%.
 	doc := &icu.WorkoutDoc{Steps: []icu.WorkoutStep{
 		{Duration: 600, Ramp: true, Power: &icu.WorkoutTarget{Start: 50, End: 65}},
@@ -387,7 +387,7 @@ func TestActivityDecouplingSourceLabels(t *testing.T) {
 
 func loadReferenceStreams(t *testing.T) icu.NullableStreamData {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/streams_i202545713.json")
+	raw, err := os.ReadFile("testdata/streams_i686255833.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,14 +403,16 @@ func loadReferenceStreams(t *testing.T) icu.NullableStreamData {
 	return streams
 }
 
-// TestStreamDecouplingReferenceRideI202545713 replays the recorded streams of
-// i202545713 (Z2, 2026-10-27). It asserts structure only: the method is not
+// TestStreamDecouplingReferenceRideI632977173 replays the recorded streams of
+// i686255833 (Z2, 2026-09-29; anonymized with the fixtures: time and
+// velocity jittered like the activity, so moving time 6086 s * 0.9726).
+// It asserts structure only: the method is not
 // tuned to any target number; the value is logged and reported in the PR.
-func TestStreamDecouplingReferenceRideI202545713(t *testing.T) {
+func TestStreamDecouplingReferenceRideI632977173(t *testing.T) {
 	t.Parallel()
 	streams := loadReferenceStreams(t)
 	plan := &icu.DecouplingPlanTrim{WarmupSeconds: 600, CooldownSeconds: 600}
-	got := icu.ComputeStreamDecoupling(streams, icu.DefaultDecouplingOptions(), icu.DecouplingContext{MovingTimeSeconds: 6086, Plan: plan})
+	got := icu.ComputeStreamDecoupling(streams, icu.DefaultDecouplingOptions(), icu.DecouplingContext{MovingTimeSeconds: 5919, Plan: plan})
 	if got.Status != icu.DecouplingStatusMeasured || got.Basis != icu.DecouplingBasisPowerHR {
 		t.Fatalf("got %+v", got)
 	}
@@ -418,10 +420,10 @@ func TestStreamDecouplingReferenceRideI202545713(t *testing.T) {
 	for _, count := range got.Excluded {
 		excluded += count
 	}
-	if got.MinutesKept+excluded != got.MinutesInRange || math.Abs(float64(got.MovingSeconds-6086)) > 0.01*6086 { // ties at the stop speed
+	if got.MinutesKept+excluded != got.MinutesInRange || math.Abs(float64(got.MovingSeconds-5919)) > 0.01*5919 { // ties at the stop speed
 		t.Fatalf("kept %d + excluded %d != %d, moving %d", got.MinutesKept, excluded, got.MinutesInRange, got.MovingSeconds)
 	}
-	t.Logf("i202545713: %.2f%% trim %+v lag %d (%s) kept %d/%d excluded %v",
+	t.Logf("i686255833: %.2f%% trim %+v lag %d (%s) kept %d/%d excluded %v",
 		*got.Value, got.Trim, got.HRLagSeconds, got.HRLagMethod, got.MinutesKept, got.MinutesInRange, got.Excluded)
 }
 

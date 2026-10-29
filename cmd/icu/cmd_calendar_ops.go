@@ -58,6 +58,13 @@ func applyCalendarOperation(stderr io.Writer, client *icu.Client, operation *icu
 
 		return result
 	}
+	if operation.Action == icu.CalendarActionCancel {
+		if err := markWriteDone(result.BackupPath); err != nil {
+			result.Warning = fmt.Sprintf("event %d cancelled, but marking its backup %s as written failed (%v); "+
+				"events revert --id will skip it, pass --backup %s", operation.EventID, result.BackupPath, err, result.BackupPath)
+			fmt.Fprintln(stderr, "warning: "+result.Warning)
+		}
+	}
 	if operation.Action == icu.CalendarActionUpdate {
 		// The update is already applied; a failed hash record only means the
 		// next update/revert of this event will need --force.

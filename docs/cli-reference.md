@@ -18,6 +18,7 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 
 - `--api-key KEY`: overrides all other API key sources
 - `--athlete-id ID`: overrides all other athlete ID sources
+- `--base-url URL`: API base URL; overrides the `ICU_BASE_URL` env var; default `https://intervals.icu`. Accepted by every command (it is stripped before per-command flag validation). Commands that call the API print `Warning: using the real intervals.icu API ...` on stderr whenever the URL points at intervals.icu or a subdomain. May also be given before the resource (`icu --base-url URL athlete show`). HTTP redirects that change scheme or host are refused. Does not apply to Open-Meteo (use `--no-weather` on `activity estimate-power` against the mock) or Zepp: `zepp login`/`zepp token` take their own `--zepp-base-url`, other `zepp` commands use the `ZEPP_*` settings; the global `--base-url` never reaches Zepp. Use it with the local mock (`scripts/rc-mock.sh`, see README "Testing against the mock").
 - `--output json|csv|table`: persisted and resolved, but not broadly wired into current command renderers
 
 ## Help Quirks
@@ -419,7 +420,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu events create --name "Endurance" --start-date 2026-06-03 --desc "- 60m 70%" --calculate-load --ftp 300`
 
 - `update`
-  Invocation: `icu events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N] [--force]`
+  Invocation: `icu events update <id> [--name NAME] [--type TYPE] [--desc DESC | --desc-file PATH] [--training-load N] [--moving-time SECS] [--calculate-load --ftp N] [--force] [--dry-run]`
   Notes: `--calculate-load` is explicit only; descriptions are not parsed unless the flag is present. When enabled, calculated `moving_time` and `icu_training_load` override manual values for the request body. FTP pricing applies only to cycling types: `--type`, else the stored event type read by the backup GET. `--desc-file` and the literal-escape check behave as on `create`.
   Example: `icu events update 123 --name "Threshold 4x8" --training-load 92`
   Example: `icu events update 123 --desc "- 60m 70%" --calculate-load --ftp 300`
@@ -436,7 +437,7 @@ Local training profile stored in the config file under `profile`. Nothing here i
   Example: `icu events revert --id 12345 --dry-run`
 
 - `delete`
-  Invocation: `icu events delete <id>`
+  Invocation: `icu events delete <id> [--dry-run]`
   Notes: Backs the event up locally first (aborts if the backup fails), then DELETEs it and prints `{deleted, backupPath}`. Undo with `icu events revert --id ID` (recreated under a new id).
   Example: `icu events delete 123`
 
@@ -616,15 +617,18 @@ readiness/body-battery/health-summary inputs available when you need to inspect
 the raw components.
 
 - `token`
-  Invocation: `icu zepp token --email EMAIL [--password PASSWORD]`
+  Invocation: `icu zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL]`
   Notes: Obtain Zepp API tokens without saving to config. WARNING: outputs tokens in plaintext. Use `login` for normal authentication. This command is intended for debugging and manual token management.
   Example: `icu zepp token --email jane@example.com` (the CLI will prompt for the password if it is not provided).
 
 - `login`
-  Invocation: `icu zepp login --email EMAIL --password PASSWORD`
+  Invocation: `icu zepp login --email EMAIL --password PASSWORD [--zepp-base-url URL]`
   Notes: Persists `zeppLoginToken`, `zeppAppToken`, `zeppUserID`, and
-  `zeppCountryCode` in the config file. Set `ZEPP_TOKENS_URL` and
-  `ZEPP_LOGIN_URL` to point at a mock server when running the tests.
+  `zeppCountryCode` in the config file. `--zepp-base-url URL` must be https unless the host is loopback, and warns on stderr when the host is not loopback, `zepp.com` or `huami.com` (or a subdomain). It points both auth calls
+  (`URL/v2/registrations/tokens`, `URL/v2/client/login`) at another host such
+  as a mock and wins over `ZEPP_TOKENS_URL`/`ZEPP_LOGIN_URL`. It is separate
+  from the global intervals.icu `--base-url`, which never reaches Zepp. The
+  same applies to `zepp token`.
   Example: `icu zepp login --email jane@example.com --password '...'` (the CLI
   will prompt for the password if it is not provided).
 

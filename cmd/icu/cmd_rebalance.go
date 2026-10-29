@@ -266,7 +266,7 @@ func rebalanceShowSchema() *CommandSchema {
 			},
 			{Name: "activity-fields", ValueName: "CSV", Description: "Deprecated, ignored (D-8): the activity fetch always " +
 				"uses its own fixed field list so wave-2's validity/pairing/compliance fields are never dropped."},
-			{Name: "limit", ValueName: "N", Description: "Activity fetch limit."},
+			activityFetchLimitFlag(),
 		}, commonAuthFlags()...),
 	}
 }
@@ -276,6 +276,7 @@ func rebalancePreviewSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
+			activityFetchLimitFlag(),
 			{Name: "no-live-check", ValueName: "BOOL", Description: "Skip live source-hash and baseline drift checks.", Kind: commandFlagBoolean},
 		}, commonAuthFlags()...),
 	}
@@ -286,6 +287,7 @@ func rebalanceAcceptSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
+			activityFetchLimitFlag(),
 		}, commonAuthFlags()...),
 	}
 }
@@ -295,6 +297,7 @@ func rebalanceApproveSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
+			activityFetchLimitFlag(),
 			{Name: "reason", ValueName: "TEXT", Description: "Approval rationale."},
 			{Name: "target-load", ValueName: "N", Description: "Approved target load."},
 			{Name: "level", ValueName: "X", Description: "Approved envelope level."},
@@ -609,4 +612,10 @@ func rebalanceWellnessStart(oldest string, lookbackDays int) string {
 	}
 
 	return parsed.AddDate(0, 0, -lookbackDays).Format("2006-01-02")
+}
+
+// activityFetchLimitFlag is the --limit flag the plan and rebalance commands
+// pass to the activity fetch.
+func activityFetchLimitFlag() CommandFlag {
+	return CommandFlag{Name: "limit", ValueName: "N", Description: "Activity fetch limit."}
 }

@@ -144,7 +144,7 @@ Per-flag semantics (D-2), applied per activity, before any aggregate sees it:
 
 `durability` additionally requires **both** channels trustworthy for an activity to be included (decoupling/efficiency/variability compare power against HR), so an `icu_ignore_power`- or `icu_ignore_hr`-scoped activity is excluded from `durability` even though only one channel was flagged.
 
-**Inertness statement (must be read before relying on ignore-flag filtering):** as of wave-2, every `icu_ignore_power`/`icu_ignore_hr`/`icu_ignore_time` flag has been measured **`false` across all real activities in the live Intervals.icu corpus this feature was built and verified against** (`testdata/wave2_live_corpus.json`, 230 real activities). The per-flag filtering logic above is correct and unit-tested (`W2-P02`/`W2-P03` in `analysis_test.go`), but on that corpus it is **inert** — it changes nothing, because no live activity in it sets any ignore flag. Its only current acceptance evidence is synthetic fixtures constructed in tests. Do not report "ignore-flag filtering fixed activity count N" as an observed live effect; report it as a correct, tested, but so-far-unexercised-in-production code path. The stub-exclusion behavior (D-24) is the opposite: it is measured live and material — 73 of 303 raw records in the same corpus are STRAVA stubs (F-19).
+**Inertness statement (must be read before relying on ignore-flag filtering):** as of wave-2, every `icu_ignore_power`/`icu_ignore_hr`/`icu_ignore_time` flag has been measured **`false` across all activities in the Intervals.icu corpus this feature was built and verified against** (`testdata/wave2_live_corpus.json`, 230 activities captured from one account; the committed copy is anonymized — ids, names, devices and body weight replaced, dates shifted, distance/time jittered — and the flags and counts are unchanged). The per-flag filtering logic above is correct and unit-tested (`W2-P02`/`W2-P03` in `analysis_test.go`), but on that corpus it is **inert** — it changes nothing, because no activity in it sets any ignore flag. Its only current acceptance evidence is synthetic fixtures constructed in tests. Do not report "ignore-flag filtering fixed activity count N" as an observed live effect; report it as a correct, tested, but so-far-unexercised-in-production code path. The stub-exclusion behavior (D-24) is the opposite: it is measured live and material — 73 of 303 raw records in the same corpus are STRAVA stubs (F-19).
 
 ### D-4 Structural Refusal
 
@@ -697,7 +697,7 @@ boundaries and is not a like-for-like comparison.
 
 Wave-4 typed nine fields on `Activity` that intervals.icu's API already returned but this CLI previously dropped silently on the unmarshal/re-marshal round trip. **These fields are emit-only (D-1): they are present on the wire for a caller with programmatic needs to read verbatim, but no `analysis`/`rebalance`/`plan` command consumes any of them, and no command's output number changes as a result of this wave.** They surface only through commands that emit the raw `Activity` JSON directly — `activities list`, `activities get`, `activities search-full` (see `docs/cli-reference.md`) — not through `analysis cycling`'s per-session `sessions` rows or any other analysis output, which deliberately were not extended so the wave-2 golden-corpus regression artifacts (`testdata/wave2_live_corpus_cycling_analysis.golden.json`) stay byte-for-byte unchanged. `AGENTS.md`'s "Emit-Only Field Classification" section governs the exercise required before any future change may promote one of these into a computed output number.
 
-| Field (JSON) | Go field | Type | Non-null on live corpus (230 real activities) |
+| Field (JSON) | Go field | Type | Non-null on the anonymized wave-2 corpus (230 activities) |
 | --- | --- | --- | --- |
 | `polarizationIndex` | `PolarizationIndex` | `*float64` | 178/230 |
 | `ssCp` | `SSCP` | `*float64` | 151/230 |
@@ -711,8 +711,8 @@ Wave-4 typed nine fields on `Activity` that intervals.icu's API already returned
 
 **Two disclosures, not silently absorbed:**
 
-1. **`icuHrr.averageWatts` is `null` on all 49 non-null `icuHrr` records in the live corpus — every single one.** The member is correctly typed as a nullable pointer (`*int`) per the schema, but there is currently **zero live evidence it is ever populated**; only a synthetic test fixture can exercise a non-null value (see `TestActivityUnmarshalHRRAverageWattsOnlyExercisedSynthetically`). This is the same shape of claim as wave-2's ignore-flag inertness statement above — say so, do not report a populated `averageWatts` as an observed live effect.
-2. **`carbsIngested` is non-null in 0 of 230 real activities.** Present in the schema and correctly emitted when populated, but this account has never once recorded a value for it. Emitting it is still correct for an emit-only surface; there is simply no live evidence it ever carries a value.
+1. **`icuHrr.averageWatts` is `null` on all 49 non-null `icuHrr` records in the wave-2 corpus — every single one.** The member is correctly typed as a nullable pointer (`*int`) per the schema, but there is currently **zero live evidence it is ever populated**; only a synthetic test fixture can exercise a non-null value (see `TestActivityUnmarshalHRRAverageWattsOnlyExercisedSynthetically`). This is the same shape of claim as wave-2's ignore-flag inertness statement above — say so, do not report a populated `averageWatts` as an observed live effect.
+2. **`carbsIngested` is non-null in 0 of the 230 corpus activities.** Present in the schema and correctly emitted when populated, but this account has never once recorded a value for it. Emitting it is still correct for an emit-only surface; there is simply no live evidence it ever carries a value.
 
 **Dropped, with reasons (not typed):**
 
@@ -723,7 +723,7 @@ Wave-4 typed nine fields on `Activity` that intervals.icu's API already returned
 | `fatigue_load` | Absent from both the schema and the live payload. |
 | `carbs_per_hour` | This is an `Event` **planned target**, not an activity **actual** — a different entity, out of scope for `Activity`'s emit-only surface. |
 
-**Negative `decoupling` constraint.** `Activity.Decoupling` (already existing, not new) takes negative values on the live corpus (49 negative values observed, minimum −43.877388). Any consumer — existing or future — that assumes `decoupling >= 0` is wrong; a negative value is a real, meaningful decoupling reading (HR drifting down relative to power/pace), not an error sentinel.
+**Negative `decoupling` constraint.** `Activity.Decoupling` (already existing, not new) takes negative values on the wave-2 corpus (49 negative values observed, minimum −43.877388). Any consumer — existing or future — that assumes `decoupling >= 0` is wrong; a negative value is a real, meaningful decoupling reading (HR drifting down relative to power/pace), not an error sentinel.
 
 ## Choosing The Right Analysis Command
 

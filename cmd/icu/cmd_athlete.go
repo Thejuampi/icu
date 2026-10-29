@@ -26,7 +26,7 @@ func registerAthleteCommands(registry *CommandRegistry) {
 func athleteUpdateCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "athlete update --weight 81 --icu-weight 81 --height 1.81",
+		Usage:       "athlete update [--weight KG] [--icu-weight KG] [--height M] [--name NAME] [--bio TEXT]",
 		Description: "Update athlete profile fields.",
 		Run: func(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			var u icu.AthleteUpdate
