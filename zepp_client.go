@@ -119,7 +119,7 @@ type ZeppClientOption func(*ZeppClient)
 func WithZeppHTTPClient(httpClient *http.Client) ZeppClientOption {
 	return func(client *ZeppClient) {
 		if httpClient != nil {
-			client.httpClient = httpClient
+			client.httpClient = withSameOriginRedirects(httpClient)
 		}
 	}
 }
@@ -149,12 +149,28 @@ func WithZeppCountryCode(countryCode string) ZeppClientOption {
 	}
 }
 
+// withSameOriginRedirects returns a copy of httpClient whose redirects stay on
+// the original scheme and host, so the Apptoken header can never follow a
+// redirect to another host (which would bypass the --zepp-base-url host
+// check). A client that already sets CheckRedirect is used as is.
+func withSameOriginRedirects(httpClient *http.Client) *http.Client {
+	if httpClient.CheckRedirect != nil {
+		return httpClient
+	}
+
+	clone := *httpClient
+	clone.CheckRedirect = SameOriginRedirects
+
+	return &clone
+}
+
 const defaultZeppClientTimeout = 30 * time.Second
 
 func NewZeppClientFromAuth(auth *ZeppAuthResult, options ...ZeppClientOption) *ZeppClient {
 	client := &ZeppClient{
 		httpClient: &http.Client{
-			Timeout: defaultZeppClientTimeout,
+			Timeout:       defaultZeppClientTimeout,
+			CheckRedirect: SameOriginRedirects,
 		},
 		loginToken:  auth.LoginToken,
 		appToken:    auth.AppToken,
