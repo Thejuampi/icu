@@ -469,7 +469,7 @@ func TestEveryCommandRejectsUnsupportedFlagsWithoutWrites(t *testing.T) {
 // --id 1 --dry-run has something to preview.
 func seedRevertBackup(t *testing.T) {
 	t.Helper()
-	client := newCommandClient("k", "i1", "")
+	client := newCommandClient("k", "i1", "http://127.0.0.1:1")
 	if _, err := backupEvent(client, 1, eventBackupReasonDelete); err != nil {
 		t.Fatal(err)
 	}
@@ -605,6 +605,35 @@ func TestActivityDetailUsageText(t *testing.T) {
 	for _, want := range []string{"icu activity <id> best-efforts", "icu activity <id> fit-file", "icu activity <id> power-curve"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("activity help missing %q", want)
+		}
+	}
+}
+
+// --no-weather belongs to activity estimate-power(-backtest) only; analysis
+// commands never fetch weather and must reject it before any request.
+//
+//nolint:paralleltest // replaces newCommandClient and sets env.
+func TestNoWeatherOnlyOnEstimatePower(t *testing.T) {
+	guardEnv(t)
+	mock := newGuardMock(t)
+	mock.phase("analysis coaching", false)
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"icu", "analysis", "coaching", "--no-weather"}, &stdout, &stderr); code == 0 ||
+		!strings.Contains(stderr.String(), "unknown flag --no-weather") {
+		t.Fatalf("code=%d stderr=%q", code, stderr.String())
+	}
+	if requests, _ := mock.counts("analysis coaching"); requests != 0 {
+		t.Fatalf("analysis coaching --no-weather sent %d request(s)", requests)
+	}
+	registry := NewCommandRegistry()
+	registerAllCommands(registry)
+	for resource, actions := range registry.commands {
+		for action, command := range actions {
+			has := usageFlags(command.Usage)["no-weather"]
+			want := resource == "activity" && (action == "estimate-power" || action == "estimate-power-backtest")
+			if has != want {
+				t.Errorf("%s %s: usage lists --no-weather = %v, want %v", resource, action, has, want)
+			}
 		}
 	}
 }
