@@ -151,8 +151,8 @@ func TestRedactUKey(t *testing.T) {
 			t.Errorf("top-level u=%v kept: %s", v, got)
 		}
 	}
-	// Inside samples[]: like an ms offset, up to 8 digits.
-	for v, keep := range map[string]bool{"0": true, "517865": true, "52627800": true, "99999999": true, "123456789": false, "-5": false, "1.5": false} {
+	// Inside samples[]: like an ms offset, up to one day (86,400,000).
+	for v, keep := range map[string]bool{"0": true, "517865": true, "52627800": true, "86400000": true, "86400001": false, "99999999": false, "123456789": false, "-5": false, "1.5": false} {
 		out, err := icu.RedactZeppJSON([]byte(`{"value":{"samples":[{"s":0,"u":` + v + `,"hrv":48}]}}`))
 		if err != nil {
 			t.Fatal(err)
@@ -183,6 +183,28 @@ func TestRedactPinnedEntries(t *testing.T) {
 	for _, key := range []string{"bluetoothChannel", "bluetoothVersion", "BLUETOOTH"} {
 		if got := redactOne(t, key, int64(1234567)); got != `"[redacted]"` {
 			t.Errorf("%s kept: %s", key, got)
+		}
+	}
+}
+
+// "e" (and "s") inside samples[] follow the same offset rule as "u".
+func TestRedactSampleOffsetsSAndE(t *testing.T) {
+	t.Parallel()
+	for _, k := range []string{"s", "e"} {
+		for v, keep := range map[string]bool{"0": true, "60000": true, "52627800": true, "86400000": true, "86400001": false, "99999999": false, "-1": false, "2.5": false} {
+			out, err := icu.RedactZeppJSON([]byte(`{"value":{"samples":[{"hrv":48,"` + k + `":` + v + `}]}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kept := strings.Contains(string(out), `"`+k+`":`+v+`}`); kept != keep {
+				t.Errorf("samples %s=%s: %s (keep=%v)", k, v, out, keep)
+			}
+		}
+	}
+	// Outside samples[]: e is capped like u; s keeps the general 8-digit rule.
+	for v, keep := range map[int64]bool{600: true, 65535: true, 65536: false, 52627800: false} {
+		if got := redactOne(t, "e", v); (got != `"[redacted]"`) != keep {
+			t.Errorf("top-level e=%d: %s (keep=%v)", v, got, keep)
 		}
 	}
 }
