@@ -399,10 +399,21 @@ func TestRedactEnumShapes(t *testing.T) {
 	// Known enums only, compared case- and separator-insensitively.
 	for _, v := range []string{
 		"readiness", "watch_score", "WATCH_SCORE", "Watch-Score", "real_data", "insightData", "insight_data",
-		"HRVRMSSD", "hrvrmssd", "ms", "Charge", "Emotion", "DailyHealth", "skinTemp", "hrv_sdnn", "SUCCESS", "OK", "ok",
+		"HRVRMSSD", "hrvrmssd", "stress_data", "summary", "Charge", "Emotion", "DailyHealth", "skinTemp", "hrv_sdnn", "SUCCESS", "OK", "ok",
 	} {
 		if got := redactOne(t, "type", v); got != `"`+v+`"` {
 			t.Errorf("enum %q lost: %s", v, got)
+		}
+	}
+	// Units: only under a unit key and with the exact spelling.
+	for v, keep := range map[string]bool{"ms": true, "bpm": true, "%": true, "M.": false, "M": false, "MS": false, "Kg": false} {
+		if got := redactOne(t, "unit", v); (got == `"`+v+`"`) != keep {
+			t.Errorf("unit %q: %s (keep=%v)", v, got, keep)
+		}
+	}
+	for _, v := range []string{"ms", "m", "s", "M.", "kg"} {
+		if got := redactOne(t, "type", v); got != `"[redacted]"` {
+			t.Errorf("unit word %q kept under type: %s", v, got)
 		}
 	}
 	// Invented names in every code case and separator shape, plus generic
