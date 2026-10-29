@@ -35,6 +35,17 @@ const (
 // from 00:00 to 17:59:59 stay on their day and 18:00 to 23:59:59 move on.
 const HRVEveningCutoffHour = 18
 
+// PartialSleepRatio is the threshold below which an intervals.icu sleepSecs
+// value is flagged as a suspected partial sync: intervals.icu has a value,
+// but strictly less than this fraction of Zepp's (for example about 1.6 h
+// against a full night, when intervals.icu imported only the first part).
+const PartialSleepRatio = 0.5
+
+// Notes on a wellness sync change.
+const (
+	SyncNotePartialSleep = "suspected-partial-sync"
+)
+
 // syncEpsilon treats float values this close as equal.
 const syncEpsilon = 1e-9
 
@@ -216,6 +227,9 @@ type WellnessSyncChange struct {
 	Intervals float64 `json:"intervals"`
 	Zepp      float64 `json:"zepp"`
 	Action    string  `json:"action"`
+	// Note flags a row for attention (SyncNotePartialSleep); it never
+	// changes Action.
+	Note string `json:"note,omitempty"`
 }
 
 // WellnessSyncPlan is the diff between Zepp and intervals.icu and the
@@ -246,7 +260,11 @@ func PlanWellnessSync(zepp []ZeppWellnessDay, existing []Wellness, fields []stri
 				continue
 			}
 			action := syncAction(oldValue, newValue, overwrite)
-			plan.Changes = append(plan.Changes, WellnessSyncChange{Date: day.Date, Field: field, Intervals: oldValue, Zepp: newValue, Action: action})
+			change := WellnessSyncChange{Date: day.Date, Field: field, Intervals: oldValue, Zepp: newValue, Action: action}
+			if field == SyncFieldSleepSecs && IsSuspectedPartialSleep(oldValue, newValue) {
+				change.Note = SyncNotePartialSleep
+			}
+			plan.Changes = append(plan.Changes, change)
 			if action == SyncActionFill || action == SyncActionOverwrite {
 				setSyncField(&write, field, newValue)
 				dirty = true
@@ -258,6 +276,28 @@ func PlanWellnessSync(zepp []ZeppWellnessDay, existing []Wellness, fields []stri
 	}
 
 	return plan
+}
+
+// IsSuspectedPartialSleep reports whether an intervals.icu sleepSecs value
+// looks like a partial sync of Zepp's: intervals > 0, Zepp > 0 and
+// intervals strictly below PartialSleepRatio of Zepp.
+func IsSuspectedPartialSleep(intervals, zepp float64) bool {
+	return intervals > 0 && zepp > 0 && intervals < zepp*PartialSleepRatio
+}
+
+// PartialSleepDates returns the dates of changes flagged
+// SyncNotePartialSleep, in plan order without duplicates.
+func PartialSleepDates(changes []WellnessSyncChange) []string {
+	dates := []string{}
+	seen := map[string]bool{}
+	for _, change := range changes {
+		if change.Note == SyncNotePartialSleep && !seen[change.Date] {
+			seen[change.Date] = true
+			dates = append(dates, change.Date)
+		}
+	}
+
+	return dates
 }
 
 func syncAction(oldValue, newValue float64, overwrite bool) string {

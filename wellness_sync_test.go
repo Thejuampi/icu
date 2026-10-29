@@ -215,6 +215,77 @@ func TestDecodeSleepRestingHRAndScore(t *testing.T) {
 	}
 }
 
+func TestIsSuspectedPartialSleepEdges(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name            string
+		intervals, zepp float64
+		want            bool
+	}{
+		{"exactly half", 10000, 20000, false},
+		{"just under half", 9999, 20000, true},
+		{"well under half", 5700, 21240, true},
+		{"above half", 15000, 20000, false},
+		{"intervals zero (missing)", 0, 20000, false},
+		{"zepp zero", 5000, 0, false},
+		{"both zero", 0, 0, false},
+		{"intervals above zepp", 30000, 20000, false},
+	}
+	for _, tc := range cases {
+		if got := IsSuspectedPartialSleep(tc.intervals, tc.zepp); got != tc.want {
+			t.Errorf("%s: IsSuspectedPartialSleep(%v, %v) = %v, want %v", tc.name, tc.intervals, tc.zepp, got, tc.want)
+		}
+	}
+}
+
+func TestPlanWellnessSyncFlagsPartialSleep(t *testing.T) {
+	t.Parallel()
+	zepp := []ZeppWellnessDay{
+		{Date: "2026-08-01", SleepSecs: 20000, SleepScore: 80, RestingHR: 50},
+		{Date: "2026-08-02", SleepSecs: 20000, SleepScore: 80},
+		{Date: "2026-08-03", SleepSecs: 20000},
+		{Date: "2026-08-04", SleepSecs: 20000},
+	}
+	existing := []Wellness{
+		{ID: "2026-08-01", SleepSecs: 5800, SleepScore: 40, RestingHR: 10}, // partial
+		{ID: "2026-08-02", SleepSecs: 10000, SleepScore: 80},               // exactly half
+		{ID: "2026-08-03"},                  // missing: fill
+		{ID: "2026-08-04", SleepSecs: 9999}, // just under
+	}
+
+	plan := PlanWellnessSync(zepp, existing, SyncFields(), false, false)
+	notes := map[string]string{}
+	for _, c := range plan.Changes {
+		notes[c.Date+"/"+c.Field] = c.Action + ":" + c.Note
+	}
+	want := map[string]string{
+		"2026-08-01/restingHR":  "keep:",
+		"2026-08-01/sleepSecs":  "keep:" + SyncNotePartialSleep,
+		"2026-08-01/sleepScore": "keep:",
+		"2026-08-02/sleepSecs":  "keep:",
+		"2026-08-02/sleepScore": "same:",
+		"2026-08-03/sleepSecs":  "fill:",
+		"2026-08-04/sleepSecs":  "keep:" + SyncNotePartialSleep,
+	}
+	if !reflect.DeepEqual(notes, want) {
+		t.Fatalf("changes %v\nwant %v", notes, want)
+	}
+	if len(plan.Writes) != 1 || plan.Writes[0].ID != "2026-08-03" {
+		t.Fatalf("fill-only writes changed: %+v", plan.Writes)
+	}
+	if got := PartialSleepDates(plan.Changes); !reflect.DeepEqual(got, []string{"2026-08-01", "2026-08-04"}) {
+		t.Fatalf("dates %v", got)
+	}
+
+	over := PlanWellnessSync(zepp, existing, []string{SyncFieldSleepSecs, SyncFieldSleepScore}, true, false)
+	if over.Changes[0].Action != SyncActionOverwrite || over.Changes[0].Note != SyncNotePartialSleep {
+		t.Fatalf("overwrite row %+v", over.Changes[0])
+	}
+	if PartialSleepDates(nil) == nil {
+		t.Fatal("want empty, non-nil slice")
+	}
+}
+
 func TestSleepCrossingMidnightFixture(t *testing.T) {
 	t.Parallel()
 	raw, err := os.ReadFile("testdata/zepp/sleep_cross_midnight.json")

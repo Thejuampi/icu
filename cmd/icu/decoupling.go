@@ -369,18 +369,33 @@ func apiDecouplingValue(activity *icu.Activity) *float64 {
 	return &value
 }
 
+// activityDecouplingDescription builds the help text from the icu.Coach*
+// constants so it cannot drift from the thresholds the code applies.
+//
+//nolint:mnd // unit conversions only
+func activityDecouplingDescription() string {
+	return fmt.Sprintf("[EXPERIMENTAL] Aerobic decoupling from the activity streams (Pa:HR; GAP:HR without power) on "+
+		"moving-time minutes, always next to intervals.icu's decoupling field (the default consumed value). Uses "+
+		"the coach's criteria on the analyzed range: fixed trim (warm-up max(%d min, HR stabilization), cut at %d min "+
+		"with low confidence when HR does not stabilize; cool-down %d min; overrides can only lengthen it); "+
+		"VI <= %.2f valid, %.2f-%.2f low confidence, > %.2f not valid; >= %d min; >= %g%% of the time in "+
+		"power Z1-Z2; no minute above %g%% FTP; coasting < %g%%. Any failed criterion: not valid; the raw stream value is shown "+
+		"(rawValue) but never consumed, and the failed criteria are listed with their values (failedCriteria). "+
+		"Interpretation: < %g%% good, %g-%g%% moderate, > %g%% high; < %g%% possible fatigue. HR lag by "+
+		"cross-correlation, coasting/missing-HR minutes and Tukey ratio outliers excluded. Read-only.",
+		icu.CoachWarmupMinSeconds/60, icu.CoachWarmupMaxSeconds/60, icu.CoachCooldownSeconds/60,
+		icu.CoachVIOK, icu.CoachVIOK, icu.CoachVILowConfidence, icu.CoachVILowConfidence, icu.CoachMinAnalyzedMinutes,
+		icu.CoachMinZ1Z2Share*100, icu.CoachMaxMinutePctFTP, icu.CoachMaxCoastingShare*100,
+		icu.CoachDecouplingGood, icu.CoachDecouplingGood, icu.CoachDecouplingModerate, icu.CoachDecouplingModerate,
+		icu.CoachPossibleFatigue)
+}
+
 func activityDecouplingCommand() *Command {
 	return &Command{
 		Name: "",
 		Usage: "activity <id> decoupling [--decoupling-source api|streams] [--decoupling-warmup-min N] " +
 			"[--decoupling-cooldown-min N] [--decoupling-hr-lag S] [--decoupling-iqr-k K]",
-		Description: "[EXPERIMENTAL] Aerobic decoupling from the activity streams (Pa:HR; GAP:HR without power) on " +
-			"moving-time minutes, always next to intervals.icu's decoupling field (the default consumed value). Uses " +
-			"the coach's criteria on the analyzed range: fixed trim (warm-up max(15 min, HR stabilization), cut at 20 min " +
-			"with low confidence when HR does not stabilize; cool-down 10 min; overrides can only lengthen it); VI <= 1.05 valid, 1.05-1.10 low confidence, > 1.10 not valid; >= 60 min; >= 85% of the time in " +
-			"power Z1-Z2; no minute above 105% FTP; coasting < 10%. Any failed criterion: not valid; the raw stream value is shown " +
-			"(rawValue) but never consumed, and the failed criteria are listed with their values (failedCriteria). Interpretation: < 5% good, 5-8% moderate, > 8% high; < -5% possible fatigue. HR lag by " +
-			"cross-correlation, coasting/missing-HR minutes and Tukey ratio outliers excluded. Read-only.",
+		Description: activityDecouplingDescription(),
 		Run: func(args []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
 			if len(args) == 0 {
 				return errMissing("activity id")

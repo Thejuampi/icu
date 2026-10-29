@@ -24,6 +24,10 @@ func wellnessSyncCommand() *Command {
 		Description: "Copy resting HR, HRV (rMSSD) and sleep from Zepp into intervals.icu wellness. " +
 			"Dry run by default: prints the diff and writes nothing; --apply sends one PUT wellness-bulk. " +
 			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day). " +
+			"Suspected partial sleep sync: when intervals.icu has sleepSecs below half of Zepp's (e.g. about 1.6 h against a full night), " +
+			"the row is flagged \"partial sync?\" (still keep in fill-only mode) and the output suggests " +
+			"--overwrite --fields sleepSecs,sleepScore for that day (sleepScore too: a partial sync also undercounts the score; " +
+			"no suggestion when the run already used --overwrite). " +
 			"If intervals.icu's own Zepp sync lags, a manual alternative is in the intervals.icu web app: " +
 			"Settings > Zepp > Download old data > Wellness for the affected range. " +
 			"That is a web-only action; this CLI does not automate it.",
@@ -61,6 +65,74 @@ type wellnessSyncOutput struct {
 	Changes   []icu.WellnessSyncChange `json:"changes"`
 	Writes    []icu.WellnessWrite      `json:"writes"`
 	Warnings  []string                 `json:"warnings"`
+	// PartialSleep lists days whose intervals.icu sleepSecs is below half of
+	// Zepp's, with the suggested command to fix each.
+	PartialSleep []partialSleepSuggestion `json:"partialSleep"`
+}
+
+type partialSleepSuggestion struct {
+	Date    string `json:"date"`
+	Suggest string `json:"suggest"`
+}
+
+// partialSleepSuggestions builds, per flagged day, the command that replaces
+// sleepSecs and sleepScore. It carries every non-secret target flag of the
+// run (--base-url when not the real API, --zepp-base-url,
+// --allow-insecure-zepp-host, --timezone, --athlete-id, --lock) so a
+// suggestion copied from a mock run stays on the mock. Never --api-key or
+// Zepp tokens. No suggestions when the run already used --overwrite.
+func partialSleepSuggestions(changes []icu.WellnessSyncChange, ctx suggestionContext) []partialSleepSuggestion {
+	out := []partialSleepSuggestion{}
+	if ctx.overwrite {
+		return out
+	}
+	for _, date := range icu.PartialSleepDates(changes) {
+		args := []string{
+			"icu", "wellness", "sync", "--oldest", date, "--newest", date,
+			"--overwrite", "--fields", icu.SyncFieldSleepSecs + "," + icu.SyncFieldSleepScore,
+		}
+		if ctx.timezone != "" {
+			args = append(args, "--timezone", ctx.timezone)
+		}
+		if ctx.athleteID != "" {
+			args = append(args, "--athlete-id", ctx.athleteID)
+		}
+		if ctx.baseURL != "" && ctx.baseURL != icu.BaseURL {
+			args = append(args, "--base-url", ctx.baseURL)
+		}
+		if ctx.zeppBaseURL != "" {
+			args = append(args, "--"+zeppBaseURLFlag, ctx.zeppBaseURL)
+		}
+		if ctx.allowInsecure {
+			args = append(args, "--"+zeppAllowInsecureHostFlag)
+		}
+		if ctx.lock {
+			args = append(args, "--lock")
+		}
+		args = append(args, "--apply")
+		quoted := make([]string, len(args))
+		for i, arg := range args {
+			quoted[i] = shellQuote(arg)
+		}
+		out = append(out, partialSleepSuggestion{Date: date, Suggest: strings.Join(quoted, " ")})
+	}
+
+	return out
+}
+
+type suggestionContext struct {
+	overwrite, lock, allowInsecure            bool
+	timezone, athleteID, baseURL, zeppBaseURL string
+}
+
+// shellQuote single-quotes arg when it has characters a POSIX shell would
+// interpret.
+func shellQuote(arg string) string {
+	if arg != "" && strings.Trim(arg, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./:,=+@%") == "" {
+		return arg
+	}
+
+	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
 }
 
 func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
@@ -82,7 +154,7 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 	}
 
 	out := wellnessSyncOutput{
-		DryRun: !BoolFlag(flags, "apply"), Timezone: tzInfo.timezone, Oldest: oldest, Newest: newest, Fields: fields,
+		DryRun: !BoolFlag(flags, "apply"), Timezone: tzInfo.timezone, Oldest: oldest, Newest: newest, Fields: fields, PartialSleep: []partialSleepSuggestion{},
 		Overwrite: BoolFlag(flags, "overwrite"), Lock: BoolFlag(flags, "lock"), Warnings: []string{},
 	}
 
@@ -101,6 +173,10 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 
 	plan := icu.PlanWellnessSync(zeppDays, existing, fields, out.Overwrite, out.Lock)
 	out.Changes, out.Writes = plan.Changes, plan.Writes
+	out.PartialSleep = partialSleepSuggestions(plan.Changes, suggestionContext{
+		overwrite: out.Overwrite, lock: out.Lock, allowInsecure: BoolFlag(flags, zeppAllowInsecureHostFlag),
+		timezone: out.Timezone, athleteID: icu.StringFlag(flags, "athlete-id", ""), baseURL: client.BaseURL(), zeppBaseURL: zeppBase,
+	})
 	if len(zeppDays) == 0 {
 		out.Warnings = append(out.Warnings, fmt.Sprintf("no Zepp wellness data between %s and %s", oldest, newest))
 	}
@@ -225,12 +301,21 @@ func printWellnessSync(stdout io.Writer, out *wellnessSyncOutput, asJSON bool) e
 	fmt.Fprintf(stdout, "wellness sync %s..%s (%s) %s\n", out.Oldest, out.Newest, out.Timezone, mode)
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "DATE\tFIELD\tINTERVALS\tZEPP\tACTION")
+	fmt.Fprintln(tw, "DATE\tFIELD\tINTERVALS\tZEPP\tACTION\tNOTE")
 	for _, change := range out.Changes {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", change.Date, change.Field, icu.FormatSyncValue(change.Intervals), icu.FormatSyncValue(change.Zepp), change.Action)
+		note := ""
+		if change.Note == icu.SyncNotePartialSleep {
+			note = "partial sync?"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", change.Date, change.Field,
+			icu.FormatSyncValue(change.Intervals), icu.FormatSyncValue(change.Zepp), change.Action, note)
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("print table: %w", err)
+	}
+	for _, suggestion := range out.PartialSleep {
+		fmt.Fprintf(stdout, "note: %s sleepSecs in intervals.icu is under half of Zepp's (suspected partial sync); to replace it run:\n  %s\n",
+			suggestion.Date, suggestion.Suggest)
 	}
 	switch {
 	case len(out.Writes) == 0:
