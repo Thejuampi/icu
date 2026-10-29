@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	icu "github.com/Thejuampi/icu"
 )
 
 // syncFake is one host serving the intervals.icu and Zepp endpoints that
@@ -263,7 +265,7 @@ func TestWellnessSyncFlagsPartialSleep(t *testing.T) {
 		"NOTE",
 		"2026-08-11  sleepSecs   5000       18000  keep    partial sync?",
 		"note: 2026-08-11 sleepSecs in intervals.icu is under half of Zepp's",
-		"icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore --apply",
+		"icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore --timezone America/New_York",
 		"nothing to write",
 	} {
 		if !strings.Contains(out, want) {
@@ -368,5 +370,58 @@ func TestZeppLoginRefusesNonZeppHostMentionsPassword(t *testing.T) {
 	code := run([]string{"icu", "zepp", "login", "--email", "u@example.com", "--password", "secret", "--zepp-base-url", "https://zepp.example.org"}, &stdout, &stderr)
 	if code == 0 || !strings.Contains(stderr.String(), "password") {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncSuggestionCarriesRunTargets(t *testing.T) {
+	fake := &syncFake{existing: syncExistingPartial}
+	srv := fake.serve(t)
+	_, out, errOut := runSync(t, srv, "--json", "--athlete-id", "i1", "--timezone", "America/Chicago", "--lock")
+	var parsed wellnessSyncOutput
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil || len(parsed.PartialSleep) != 1 {
+		t.Fatalf("json %v %s %s", err, out, errOut)
+	}
+	got := parsed.PartialSleep[0].Suggest
+	want := "icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore " +
+		"--timezone America/Chicago --athlete-id i1 --base-url " + srv.URL + " --zepp-base-url " + srv.URL + " --lock --apply"
+	if got != want {
+		t.Fatalf("suggest\n got %s\nwant %s", got, want)
+	}
+	for _, secret := range []string{"api-key", "token", "password", "mock-app", "mock-login"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("suggestion leaks %q: %s", secret, got)
+		}
+	}
+}
+
+func TestPartialSleepSuggestionsContext(t *testing.T) {
+	t.Parallel()
+	changes := []icu.WellnessSyncChange{{Date: "2026-08-11", Field: icu.SyncFieldSleepSecs, Note: icu.SyncNotePartialSleep}}
+	got := partialSleepSuggestions(changes, suggestionContext{
+		baseURL: icu.BaseURL, zeppBaseURL: "https://zepp.example.org", allowInsecure: true, timezone: "Etc/GMT+3",
+	})
+	want := "icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore " +
+		"--timezone Etc/GMT+3 --zepp-base-url https://zepp.example.org --allow-insecure-zepp-host --apply"
+	if len(got) != 1 || got[0].Suggest != want {
+		t.Fatalf("got %+v\nwant %s", got, want)
+	}
+	if strings.Contains(got[0].Suggest, "--base-url") {
+		t.Fatal("real API base URL must not be added")
+	}
+	if got := partialSleepSuggestions(changes, suggestionContext{overwrite: true}); len(got) != 0 {
+		t.Fatalf("overwrite run must not suggest: %+v", got)
+	}
+	if shellQuote("") != "''" || shellQuote("a b") != "'a b'" || shellQuote("it's") != `'it'\''s'` {
+		t.Fatal("shellQuote")
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncOverwriteRunSkipsSuggestion(t *testing.T) {
+	fake := &syncFake{existing: syncExistingPartial}
+	code, out, _ := runSync(t, fake.serve(t), "--overwrite")
+	if code != 0 || !strings.Contains(out, "partial sync?") || strings.Contains(out, "note:") || !strings.Contains(out, "overwrite") {
+		t.Fatalf("code=%d out=%s", code, out)
 	}
 }

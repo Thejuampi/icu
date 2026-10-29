@@ -162,12 +162,15 @@ When Zepp auth is configured, `analysis wellness`, `analysis coaching`,
 `HybridCharge`/`BioCharge` for the sleep/recovery signal and only fall back to
 the Intervals wellness `sleepScore` when the Zepp score is unavailable.
 
-#### Syncing Zepp wellness into intervals.icu
+#### Wellness sync from Zepp
 
-`icu wellness sync` copies resting HR, HRV and sleep from Zepp into
-intervals.icu wellness. It is a dry run by default (prints a diff, writes
-nothing); `--apply` writes, and only empty fields are filled unless
-`--overwrite` is passed.
+`icu wellness sync` copies resting HR, HRV and sleep from Zepp into intervals.icu
+wellness (dry run by default; `--apply` writes). If intervals.icu's own Zepp sync
+lags, a manual alternative is in the intervals.icu web app:
+**Settings > Zepp > Download old data > Wellness** for the affected range. That is
+a web-only action; this CLI does not automate it.
+
+Only empty fields are filled unless `--overwrite` is passed.
 
 **Suspected partial sleep sync.** intervals.icu sometimes imports only part
 of a night (for example it shows about 1.6 h while Zepp shows a full night).
@@ -180,6 +183,12 @@ until you run the suggested command for that day:
 ```bash
 icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore --apply
 ```
+
+sleepScore is overwritten together with sleepSecs on purpose: a partial
+sync also undercounts the sleep score. The suggestion carries the run's
+`--base-url`, `--zepp-base-url`, `--allow-insecure-zepp-host`, `--timezone`
+and `--athlete-id` (never a secret), and is not shown when the run already
+used `--overwrite` (sleepSecs is then written directly).
 
 ## Help And Discovery
 

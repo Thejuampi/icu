@@ -62,6 +62,9 @@ func NewClient(apiKey, athleteID string, options ...ClientOption) *Client {
 	return client
 }
 
+// BaseURL returns the API base URL the client sends requests to.
+func (c *Client) BaseURL() string { return c.baseURL }
+
 func (c *Client) Get(resource string, parts []string, query map[string]string, result any) error {
 	return c.do(http.MethodGet, resource, parts, query, nil, result)
 }
