@@ -570,9 +570,11 @@ func TestWellnessSyncWarnsWhenOneHRVSourceFails(t *testing.T) {
 	if code == 0 || !strings.Contains(errOut, "readiness sleepHRV failed") {
 		t.Fatalf("readiness: code=%d stderr=%s", code, errOut)
 	}
-	// HRVRMSSD samples are information only: their failure is not a sync failure.
+	// HRVRMSSD samples are information only: their failure is a note, not a
+	// sync failure.
 	fake = &syncFake{existing: syncExisting, failEvent: "HRVRMSSD"}
-	if code, _, errOut = runSync(t, fake.serve(t), "--fields", "hrv"); code != 0 || errOut != "" {
+	if code, _, errOut = runSync(t, fake.serve(t), "--fields", "hrv"); code != 0 ||
+		!strings.HasPrefix(errOut, "note: zepp hrv: HRVRMSSD samples failed") || strings.Contains(errOut, "warning:") {
 		t.Fatalf("HRVRMSSD: code=%d stderr=%s", code, errOut)
 	}
 }
@@ -610,6 +612,13 @@ func TestWellnessSyncApplyWritesReadinessSleepHRV(t *testing.T) {
 	code, out, errOut := runSync(t, fake.serve(t), "--fields", "hrv")
 	if code != 0 || len(fake.puts) != 0 || !strings.Contains(out, "info: 2026-08-11 HRVRMSSD samples mean 44 ms (not written") || strings.Contains(out, " fill") {
 		t.Fatalf("dry run code=%d out=%s stderr=%s", code, out, errOut)
+	}
+	// The info line is dry-run only: an applied run that writes other fields prints none.
+	if fake = (&syncFake{existing: syncExisting, eventBody: bodies}); func() bool {
+		_, o, _ := runSync(t, fake.serve(t), "--apply")
+		return strings.Contains(o, "info:") || len(fake.puts) != 1
+	}() {
+		t.Fatalf("applied run printed info or did not write: puts=%v", fake.puts)
 	}
 	// With readiness present for the day there is no info line.
 	fake = &syncFake{existing: syncExisting, eventBody: realOrderHRV()}
