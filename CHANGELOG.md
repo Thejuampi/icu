@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `zepp --raw`: the 9+ digit rule counts the integer part of floats/exponents; time keys accept only ISO, `HH:MM[:SS]` and 10/13-digit epochs in 2000-2100; enum keys reject single capitalised words (known Zepp enums kept); `samples[].s` offsets (up to 8 digits) survive. Accepted risks documented.
 - `zepp --raw`: safe-key strings must match the key's shape (ISO date/epoch, `^[A-Za-z_]{1,32}$` enums, short numbers for metrics); strings in arrays are never allowlisted; integers of 9+ digits are redacted unless an epoch under a time key; IPv4/IPv6 scrubbing; more denied key fragments (birth, dob, zip, city, country, geo, owner, member, host, msisdn, ip, ...).
 - `zepp --raw` redaction is now defense in depth: identifier/secret denylist on normalized keys, a safe-string allowlist (every other string redacted), value scrubbing (email, MAC, JWT, UUID, URL, base64/hex blobs, broken JSON), recursive unwrapping of JSON and double-encoded JSON in strings, digit/hex object keys renamed, a nesting limit. Zepp response bodies are capped at 32 MiB.
 - Mock server: `GET /v2/users/me/events` serves `<fixtures>/_zepp/events/<eventType>/<subType>.json` as-is when present (synthetic payloads for `--raw` checks).

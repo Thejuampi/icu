@@ -240,7 +240,7 @@ func TestRedactShapeRestrictedSafeKeys(t *testing.T) {
 		{"unit", "0000000000000"},
 		{"subType", "Fake Street 0000 Nowhere"},
 		{"type", "a<b"},
-		{"type", strings.Repeat("a", 33)},
+		{"type", strings.Repeat("x", 33)},
 		{"eventType", "x1"},
 		{"date", "yesterday"},
 		{"date", "2026-10-29 at the park"},
@@ -281,8 +281,8 @@ func TestRedactLongIntegers(t *testing.T) {
 	if got := redactOne(t, "insight", 12345678); got != "12345678" {
 		t.Errorf("8-digit int lost: %s", got)
 	}
-	if got := redactOne(t, "insight", 1234567890.5); got != "1234567890.5" {
-		t.Errorf("decimal lost: %s", got)
+	if got := redactOne(t, "insight", 12345678.5); got != "12345678.5" {
+		t.Errorf("8-digit decimal lost: %s", got)
 	}
 	for _, k := range []string{"timestamp", "startTime", "date"} {
 		if got := redactOne(t, k, int64(1761710400000)); got != "1761710400000" {
@@ -310,6 +310,131 @@ func TestRedactNewFragments(t *testing.T) {
 	for _, k := range []string{"tip", "trip", "chip", "skip"} {
 		if icu.IsZeppSecretKey(k) {
 			t.Errorf("%q should not be a secret key", k)
+		}
+	}
+}
+
+// Floats and exponents count the digits of their integer part.
+func TestRedactLongFloatsAndExponents(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{"123456789.0", "1.23456789e8", "1E9", "-123456789.5", "12345678901234567890123", "1e400"} {
+		out, err := icu.RedactZeppJSON([]byte(`{"insight":` + raw + `}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(out) != `{"insight":"[redacted]"}` {
+			t.Errorf("%s kept: %s", raw, out)
+		}
+	}
+	for _, raw := range []string{"99999999.9", "1.5e3", "-12.25", "0"} {
+		out, err := icu.RedactZeppJSON([]byte(`{"insight":` + raw + `}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(out) != `{"insight":`+raw+`}` {
+			t.Errorf("%s lost: %s", raw, out)
+		}
+	}
+	// A float epoch under a time key is not an integer epoch.
+	if out, _ := icu.RedactZeppJSON([]byte(`{"timestamp":1761710400000.5}`)); string(out) != `{"timestamp":"[redacted]"}` {
+		t.Errorf("float epoch kept: %s", out)
+	}
+	if out, _ := icu.RedactZeppJSON([]byte(`{"timestamp":1.7617104e12}`)); string(out) != `{"timestamp":1.7617104e12}` {
+		t.Errorf("exponent epoch lost: %s", out)
+	}
+}
+
+func TestRedactTimeKeysEpochRangeAndClock(t *testing.T) {
+	t.Parallel()
+
+	keep := []struct {
+		key string
+		val any
+	}{
+		{"timestamp", "1761710400"},
+		{"timestamp", "1761710400000"},
+		{"startTime", int64(1761710400)},
+		{"startTime", int64(1761710400000)},
+		{"time", "07:12"},
+		{"time", "23:59:59"},
+		{"endTime", "00:00"},
+		{"date", "2026-10-29"},
+	}
+	for _, c := range keep {
+		want, err := json.Marshal(c.val) //nolint:errchkjson // string or int64 only
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := redactOne(t, c.key, c.val); got != string(want) {
+			t.Errorf("%s=%v lost: %s", c.key, c.val, got)
+		}
+	}
+	drop := []struct {
+		key string
+		val any
+	}{
+		{"timestamp", "123456789"},
+		{"timestamp", "12345678901"},
+		{"timestamp", "4102444800001"},
+		{"timestamp", "0946684799"},
+		{"startTime", int64(9999999999)},
+		{"startTime", int64(123456789012)},
+		{"startTime", int64(4102444800001)},
+		{"time", "24:00"},
+		{"time", "7:12"},
+		{"time", "07:60"},
+		{"date", "12345"},
+	}
+	for _, c := range drop {
+		if got := redactOne(t, c.key, c.val); got != `"[redacted]"` {
+			t.Errorf("%s=%v kept: %s", c.key, c.val, got)
+		}
+	}
+}
+
+func TestRedactEnumShapes(t *testing.T) {
+	t.Parallel()
+
+	for _, v := range []string{
+		"readiness", "watch_score", "real_data", "insightData", "HRVRMSSD", "UPPER_SNAKE",
+		"ms", "Charge", "Emotion", "DailyHealth", strings.Repeat("x", 32), "very_long_enum_name_with_words",
+	} {
+		if got := redactOne(t, "type", v); got != `"`+v+`"` {
+			t.Errorf("enum %q lost: %s", v, got)
+		}
+	}
+	for _, v := range []string{"Testy", "Fakename", "Nowhere", strings.Repeat("x", 33)} {
+		if got := redactOne(t, "status", v); got != `"[redacted]"` {
+			t.Errorf("%q kept: %s", v, got)
+		}
+	}
+}
+
+// #40 needs samples[].s (ms offset) and samples[].hrv as numbers.
+func TestRedactKeepsHRVSampleOffsets(t *testing.T) {
+	t.Parallel()
+
+	in := `{"value":{"startTime":1761710400000,"deviceId":"SYN-DEV","samples":[{"hrv":41,"s":0},{"hrv":0,"s":60000},` +
+		`{"hrv":255,"s":36000000},{"sdnn":52,"s":"120000"}]}}`
+	out, err := icu.RedactZeppJSON([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"value":{"startTime":1761710400000,"deviceId":"[redacted]","samples":[{"hrv":41,"s":0},{"hrv":0,"s":60000},` +
+		`{"hrv":255,"s":36000000},{"sdnn":52,"s":"120000"}]}}`
+	if string(out) != want {
+		t.Fatalf("got  %s\nwant %s", out, want)
+	}
+}
+
+// Pins the owner fragment (ownerName alone is also caught by the name suffix).
+func TestRedactOwnerFragment(t *testing.T) {
+	t.Parallel()
+
+	for _, k := range []string{"owner", "ownerAge", "deviceOwner"} {
+		if got := redactOne(t, k, 7); got != `"[redacted]"` {
+			t.Errorf("%q kept: %s", k, got)
 		}
 	}
 }

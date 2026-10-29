@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -92,6 +93,7 @@ const (
 	zeppClassTime                 // ISO date/time or a numeric epoch (<= 13 digits)
 	zeppClassEnum                 // ^[A-Za-z_]{1,32}$
 	zeppClassMetric               // up to 6 digits, optional sign and decimals
+	zeppClassOffset               // sample offset in ms: up to 8 digits
 )
 
 // zeppSafeStringKeys maps the keys whose string values may be kept to the
@@ -104,7 +106,7 @@ func zeppSafeStringKeys() map[string]zeppSafeClass {
 		"eventtype": zeppClassEnum, "subtype": zeppClassEnum, "type": zeppClassEnum, "unit": zeppClassEnum,
 		"status": zeppClassEnum, "result": zeppClassEnum,
 		"value": zeppClassMetric, "hrv": zeppClassMetric, "sdnn": zeppClassMetric, "rmssd": zeppClassMetric,
-		"sleephrv": zeppClassMetric, "score": zeppClassMetric, "samples": zeppClassMetric, "s": zeppClassMetric,
+		"sleephrv": zeppClassMetric, "score": zeppClassMetric, "samples": zeppClassMetric, "s": zeppClassOffset,
 	}
 }
 
@@ -158,9 +160,11 @@ func IsZeppSafeString(key, str string) bool {
 	var ok bool
 	switch zeppKeyClass(key) {
 	case zeppClassTime:
-		ok = zeppISOTimeRe.MatchString(str) || zeppEpochRe.MatchString(str)
+		ok = zeppISOTimeRe.MatchString(str) || zeppClockRe.MatchString(str) || zeppEpochString(str)
 	case zeppClassEnum:
-		ok = zeppEnumRe.MatchString(str)
+		ok = zeppEnumString(str)
+	case zeppClassOffset:
+		ok = zeppOffsetRe.MatchString(str)
 	case zeppClassMetric:
 		ok = zeppMetricRe.MatchString(str)
 	case zeppClassNone:
@@ -179,12 +183,66 @@ func zeppIsTimeKey(key string) bool {
 // looks like an identifier: an integer of 9+ digits, unless it is a
 // plausible epoch (<= 13 digits) under a time-like key.
 func zeppNumberIsSensitive(key, num string) bool {
-	digits := strings.TrimPrefix(num, "-")
-	if strings.ContainsAny(digits, ".eE") || len(digits) < 9 {
+	f, ok := new(big.Float).SetString(num)
+	if !ok {
+		return true // not a number we understand: do not print it
+	}
+	abs := new(big.Float).Abs(f)
+	if abs.Cmp(big.NewFloat(zeppMaxPlainInt)) < 0 {
+		return false // integer part has at most 8 digits
+	}
+	if !zeppIsTimeKey(key) || !abs.IsInt() {
+		return true
+	}
+	n, _ := abs.Int64()
+
+	return !zeppPlausibleEpoch(n)
+}
+
+// zeppMaxPlainInt is the smallest value whose integer part has 9 digits.
+const zeppMaxPlainInt = 1e8
+
+// Epoch bounds: 2000-01-01 to 2100-01-01 UTC, in seconds and milliseconds.
+const (
+	zeppEpochMinSec = 946684800
+	zeppEpochMaxSec = 4102444800
+	zeppMsPerSec    = 1000
+)
+
+// zeppPlausibleEpoch reports whether n is a 10-digit epoch in seconds or a
+// 13-digit epoch in milliseconds between 2000 and 2100.
+func zeppPlausibleEpoch(n int64) bool {
+	return (n >= zeppEpochMinSec && n <= zeppEpochMaxSec) ||
+		(n >= zeppEpochMinSec*zeppMsPerSec && n <= zeppEpochMaxSec*zeppMsPerSec)
+}
+
+// zeppEpochString reports whether str is a plausible 10- or 13-digit epoch.
+func zeppEpochString(str string) bool {
+	if !zeppEpochRe.MatchString(str) {
 		return false
 	}
+	n, err := strconv.ParseInt(str, 10, 64)
 
-	return !zeppIsTimeKey(key) || len(digits) > 13
+	return err == nil && zeppPlausibleEpoch(n)
+}
+
+// zeppEnumString reports whether str looks like a code enum (lowercase,
+// camelCase, UPPER_SNAKE, snake_case). A single capitalised word ("Testy")
+// looks like a name and is rejected, unless it is a known Zepp event enum.
+func zeppEnumString(str string) bool {
+	if !zeppEnumRe.MatchString(str) {
+		return false
+	}
+	if !zeppCapWordRe.MatchString(str) {
+		return true
+	}
+	for _, p := range v2EventPresets() {
+		if str == p.EventType || str == p.SubType {
+			return true
+		}
+	}
+
+	return false
 }
 
 var (
@@ -198,7 +256,10 @@ var (
 	zeppIPv4Re    = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	zeppIPv6Re    = regexp.MustCompile(`(?i)\b(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}\b|[0-9a-f]{0,4}::[0-9a-f:]*`)
 	zeppISOTimeRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$`)
-	zeppEpochRe   = regexp.MustCompile(`^\d{1,13}$`)
+	zeppEpochRe   = regexp.MustCompile(`^(?:\d{10}|\d{13})$`)
+	zeppClockRe   = regexp.MustCompile(`^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$`)
+	zeppCapWordRe = regexp.MustCompile(`^[A-Z][a-z]+$`)
+	zeppOffsetRe  = regexp.MustCompile(`^\d{1,8}$`)
 	zeppEnumRe    = regexp.MustCompile(`^[A-Za-z_]{1,32}$`)
 	zeppMetricRe  = regexp.MustCompile(`^-?\d{1,6}(?:\.\d{1,6})?$`)
 	zeppIDKeyRe   = regexp.MustCompile(`^(?:\d+|(?i)[0-9a-f]{8,})$`)
@@ -207,16 +268,23 @@ var (
 
 // zeppValueLooksSensitive reports whether a string value matches a
 // sensitive pattern (step 3).
-func zeppValueLooksSensitive(s string) bool {
-	if zeppNumberRe.MatchString(s) {
+func zeppValueLooksSensitive(val string) bool {
+	if zeppNumberRe.MatchString(val) {
 		return false // plain numbers (e.g. "57", timestamps) are payload
 	}
-	for _, re := range []*regexp.Regexp{zeppEmailRe, zeppMACRe, zeppJWTRe, zeppUUIDRe, zeppURLRe, zeppBlobRe, zeppHexRe, zeppIPv4Re, zeppIPv6Re} {
-		if re.MatchString(s) {
+	// A blob counts when it has a digit or a base64 symbol, so a long
+	// letters-only enum (UPPER_SNAKE, camelCase) is left to the enum rule.
+	for _, m := range zeppBlobRe.FindAllString(val, -1) {
+		if strings.ContainsAny(m, "0123456789+/=") {
 			return true
 		}
 	}
-	t := strings.TrimSpace(s)
+	for _, re := range []*regexp.Regexp{zeppEmailRe, zeppMACRe, zeppJWTRe, zeppUUIDRe, zeppURLRe, zeppHexRe, zeppIPv4Re, zeppIPv6Re} {
+		if re.MatchString(val) {
+			return true
+		}
+	}
+	t := strings.TrimSpace(val)
 
 	return t != "" && (t[0] == '{' || t[0] == '[' || t[0] == '"')
 }
