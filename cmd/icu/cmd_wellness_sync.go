@@ -72,6 +72,17 @@ type wellnessSyncOutput struct {
 	// HRVSamplesInfo lists days with HRVRMSSD samples but no readiness
 	// sleepHRV. Information only: their mean is never written.
 	HRVSamplesInfo []icu.ZeppWellnessDay `json:"hrvSamplesInfo"`
+	// Notes are run-level, non-failing messages (printed to stderr as
+	// "note: ..."); always [] in JSON when there are none. Not to be confused
+	// with the per-row Note of a change (e.g. suspected-partial-sync).
+	Notes []string `json:"notes"`
+}
+
+// zeppHRVExtras is what fetchZeppWellness reports besides the days to sync:
+// information-only HRV sample means and non-failing notes.
+type zeppHRVExtras struct {
+	info  []icu.ZeppWellnessDay
+	notes []string
 }
 
 type partialSleepSuggestion struct {
@@ -182,12 +193,13 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 		Overwrite: BoolFlag(flags, "overwrite"), Lock: BoolFlag(flags, "lock"), Warnings: []string{},
 	}
 
-	zeppDays, hrvInfo, warnings, err := fetchZeppWellness(zeppBase, fields, tzInfo.location, oldest, newest)
+	zeppDays, extras, warnings, err := fetchZeppWellness(zeppBase, fields, tzInfo.location, oldest, newest)
 	if err != nil {
 		return wrapCommandError(err)
 	}
 	out.Warnings = warnings
-	out.HRVSamplesInfo = hrvInfo
+	out.HRVSamplesInfo = extras.info
+	out.Notes = extras.notes
 	out.ZeppDays = len(zeppDays)
 
 	var existing []icu.Wellness
@@ -221,6 +233,9 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 
 	if err := printWellnessSync(stdout, &out, BoolFlag(flags, "json")); err != nil {
 		return err
+	}
+	for _, note := range out.Notes {
+		_, _ = fmt.Fprintln(stderr, "note: "+note)
 	}
 	for _, warning := range out.Warnings {
 		_, _ = fmt.Fprintln(stderr, "warning: "+warning)
@@ -266,9 +281,9 @@ func wantsField(fields []string, names ...string) bool {
 // warning so the other source still syncs (the command then exits non-zero).
 // HRV is fetched one UTC day wider on each side because HRVLocalDay can move
 // a reading across the UTC date line.
-func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, oldest, newest string) ([]icu.ZeppWellnessDay, []icu.ZeppWellnessDay, []string, error) {
+func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, oldest, newest string) ([]icu.ZeppWellnessDay, zeppHRVExtras, []string, error) {
 	var days []icu.ZeppWellnessDay
-	hrvInfo := []icu.ZeppWellnessDay{}
+	extras := zeppHRVExtras{info: []icu.ZeppWellnessDay{}, notes: []string{}}
 	var warnings []string
 
 	err := runZeppWithClientOptions(zeppSyncOptions(zeppBase), func(ctx context.Context, zc *icu.ZeppClient) error {
@@ -306,8 +321,10 @@ func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, old
 			if errors.Is(errSamples, icu.ErrZeppUnauthorized) {
 				return errSamples
 			}
-			if errSamples == nil {
-				hrvInfo = samplesOnlyDays(sleepHRV, samples, loc, oldest, newest)
+			if errSamples != nil {
+				extras.notes = append(extras.notes, fmt.Sprintf("zepp hrv: HRVRMSSD samples failed (%v); only the dry-run samples info is missing, HRV sync is unaffected", errSamples))
+			} else {
+				extras.info = samplesOnlyDays(sleepHRV, samples, loc, oldest, newest)
 			}
 		}
 		days = icu.BuildZeppWellnessDays(band, hrv, loc, oldest, newest)
@@ -315,10 +332,10 @@ func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, old
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("zepp: %w", err)
+		return nil, zeppHRVExtras{}, nil, fmt.Errorf("zepp: %w", err)
 	}
 
-	return days, hrvInfo, warnings, nil
+	return days, extras, warnings, nil
 }
 
 // samplesOnlyDays returns the days in oldest..newest that have an HRVRMSSD

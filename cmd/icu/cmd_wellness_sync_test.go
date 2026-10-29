@@ -570,9 +570,11 @@ func TestWellnessSyncWarnsWhenOneHRVSourceFails(t *testing.T) {
 	if code == 0 || !strings.Contains(errOut, "readiness sleepHRV failed") {
 		t.Fatalf("readiness: code=%d stderr=%s", code, errOut)
 	}
-	// HRVRMSSD samples are information only: their failure is not a sync failure.
+	// HRVRMSSD samples are information only: their failure is a note, not a
+	// sync failure.
 	fake = &syncFake{existing: syncExisting, failEvent: "HRVRMSSD"}
-	if code, _, errOut = runSync(t, fake.serve(t), "--fields", "hrv"); code != 0 || errOut != "" {
+	if code, _, errOut = runSync(t, fake.serve(t), "--fields", "hrv"); code != 0 ||
+		!strings.HasPrefix(errOut, "note: zepp hrv: HRVRMSSD samples failed") || strings.Contains(errOut, "warning:") {
 		t.Fatalf("HRVRMSSD: code=%d stderr=%s", code, errOut)
 	}
 }
@@ -611,6 +613,13 @@ func TestWellnessSyncApplyWritesReadinessSleepHRV(t *testing.T) {
 	if code != 0 || len(fake.puts) != 0 || !strings.Contains(out, "info: 2026-08-11 HRVRMSSD samples mean 44 ms (not written") || strings.Contains(out, " fill") {
 		t.Fatalf("dry run code=%d out=%s stderr=%s", code, out, errOut)
 	}
+	// The info line is dry-run only: an applied run that writes other fields prints none.
+	if fake = (&syncFake{existing: syncExisting, eventBody: bodies}); func() bool {
+		_, o, _ := runSync(t, fake.serve(t), "--apply")
+		return strings.Contains(o, "info:") || len(fake.puts) != 1
+	}() {
+		t.Fatalf("applied run printed info or did not write: puts=%v", fake.puts)
+	}
 	// With readiness present for the day there is no info line.
 	fake = &syncFake{existing: syncExisting, eventBody: realOrderHRV()}
 	if _, out, _ = runSync(t, fake.serve(t), "--fields", "hrv"); strings.Contains(out, "info:") {
@@ -635,5 +644,24 @@ func TestWellnessSyncReadinessFailureSkipsHRVWrites(t *testing.T) {
 	code, _, errOut := runSync(t, fake.serve(t), "--apply")
 	if code == 0 || len(fake.puts) != 1 || strings.Contains(fake.puts[0], `"hrv"`) {
 		t.Fatalf("all fields: code=%d puts=%v stderr=%s", code, fake.puts, errOut)
+	}
+}
+
+// Top-level notes in --json: [] on success, one entry on an HRVRMSSD failure.
+//
+//nolint:paralleltest // sets env
+func TestWellnessSyncJSONNotes(t *testing.T) {
+	fake := &syncFake{existing: syncExisting}
+	code, out, _ := runSync(t, fake.serve(t), "--fields", "hrv", "--json")
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &raw); code != 0 || err != nil || string(raw["notes"]) != "[]" {
+		t.Fatalf("success: code=%d notes=%s err=%v", code, raw["notes"], err)
+	}
+	fake = &syncFake{existing: syncExisting, failEvent: "HRVRMSSD"}
+	code, out, _ = runSync(t, fake.serve(t), "--fields", "hrv", "--json")
+	var parsed wellnessSyncOutput
+	if err := json.Unmarshal([]byte(out), &parsed); code != 0 || err != nil || len(parsed.Notes) != 1 ||
+		!strings.Contains(parsed.Notes[0], "HRVRMSSD samples failed") {
+		t.Fatalf("failure: code=%d notes=%q err=%v", code, parsed.Notes, err)
 	}
 }
