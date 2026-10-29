@@ -15,6 +15,8 @@ func isGlobalFlag(name string) bool {
 	// deletes it from flags before per-command validation (and
 	// hoistLeadingBaseURL moves a leading --base-url to the end), so listing
 	// it here would only let it leak into commands' own flag handling.
+	// zepp-base-url is not global either: only zepp login and zepp token
+	// accept it (in their own Usage), and it never reaches intervals.icu.
 	switch name {
 	case "api-key", "athlete-id", "output", "session-environment":
 		return true

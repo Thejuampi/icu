@@ -88,6 +88,37 @@ func TestAnalysisPlanClampsWellnessToAthleteToday(t *testing.T) {
 		map[string]string{"history-oldest": "2026-10-05", "history-newest": "2026-10-31"})
 }
 
+// An explicit --plan-newest (with --plan-oldest) after the athlete's today
+// keeps the plan window but still clamps the wellness read to 10-27.
+func TestAnalysisPlanClampsWellnessWithPlanNewest(t *testing.T) {
+	t.Parallel()
+	fake := newClampFake(t)
+	var out strings.Builder
+	flags := map[string]string{
+		"history-oldest": "2026-10-05", "history-newest": "2026-10-31",
+		"plan-oldest": "2026-11-02", "plan-newest": "2026-11-15",
+	}
+	if err := analysisPlanCommandWithClock(clockNY1027).Run(nil, flags, fake.client, &out, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	for _, got := range fake.newest() {
+		if got != "2026-10-27" {
+			t.Fatalf("wellness newest = %v, want 2026-10-27", fake.newest())
+		}
+	}
+	var decoded struct {
+		Scope struct {
+			PlanEndDate string `json:"planEndDate"`
+		} `json:"scope"`
+	}
+	if err := json.Unmarshal([]byte(out.String()), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Scope.PlanEndDate != "2026-11-15" {
+		t.Fatalf("planEndDate = %q, want 2026-11-15", decoded.Scope.PlanEndDate)
+	}
+}
+
 func TestClampDateToTodayNewYorkEvening(t *testing.T) {
 	t.Parallel()
 	location, err := time.LoadLocation("America/New_York")

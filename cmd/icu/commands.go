@@ -56,13 +56,13 @@ func undocumentedUsageFlags(key string) string {
 		"analysis adaptation":              "[--filters FILTERS] [--limit N] [--activity-fields CSV] [--timezone TZ]",
 		"analysis cycling":                 "[--fields CSV] [--limit N] [--timezone TZ] " + decouplingUsageFlags,
 		"analysis wellness":                "[--timezone TZ]",
-		"analysis micro":                   "[--limit N] [--calendar-id ID] [--resolve] [--timezone TZ] " + decouplingUsageFlags,
-		"analysis microcycle":              "[--limit N] [--calendar-id ID] [--resolve] [--timezone TZ] " + decouplingUsageFlags,
+		"analysis micro":                   "[--limit N] [--calendar-id ID] [--resolve] " + decouplingUsageFlags,
+		"analysis microcycle":              "[--limit N] [--calendar-id ID] [--resolve] " + decouplingUsageFlags,
 		"analysis plan": "[--history-days N] [--plan-days N] [--sport-type TYPE] [--calendar-id ID] [--resolve] " +
 			"[--activity-fields CSV] [--limit N] [--timezone TZ] " + decouplingUsageFlags,
 		"curves hr":          "[--curves CURVES]",
 		"curves pace":        "[--curves CURVES]",
-		"curves power":       "[--newest DATE] [--filters FILTERS]",
+		"curves power":       "[--newest DATE]",
 		"events list":        "[--limit N] [--calendar-id ID]",
 		"workouts calculate": "[--description DESC]",
 	}[key]
