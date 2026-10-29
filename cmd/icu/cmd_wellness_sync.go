@@ -295,7 +295,9 @@ func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, old
 			if errSleep != nil && errSamples != nil {
 				warnings = append(warnings, fmt.Sprintf("zepp hrv failed: %v; %v", errSleep, errSamples))
 			}
-			hrv = append(sleepHRV, samples...)
+			hrv = make([]icu.ZeppHRVEvent, 0, len(sleepHRV)+len(samples))
+			hrv = append(hrv, sleepHRV...)
+			hrv = append(hrv, samples...)
 		}
 		days = icu.BuildZeppWellnessDays(band, hrv, loc, oldest, newest)
 

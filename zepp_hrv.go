@@ -80,7 +80,7 @@ func rawNumber(raw json.RawMessage) (float64, bool) {
 // object (Zepp sometimes nests JSON-in-string).
 func unwrapJSONString(raw json.RawMessage) json.RawMessage {
 	var s string
-	if json.Unmarshal(raw, &s) == nil && len(s) > 0 && s[0] == '{' {
+	if json.Unmarshal(raw, &s) == nil && s != "" && s[0] == '{' {
 		return json.RawMessage(s)
 	}
 

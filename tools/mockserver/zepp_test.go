@@ -71,8 +71,10 @@ func TestZeppMockBandAndEvents(t *testing.T) {
 	}
 	q = "?eventType=readiness&subType=watch_score&from=" + itoa(from) + "&to=" + itoa(to)
 	_, body = zeppGet(t, srv.URL+mockZeppEventsPath+q, "tok")
-	for _, it := range body["items"].([]any) {
-		v, _ := it.(map[string]any)["value"].(map[string]any)
+	items, _ = body["items"].([]any)
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		v, _ := m["value"].(map[string]any)
 		if hrv, ok := v["sleepHRV"].(float64); !ok || hrv <= 0 {
 			t.Fatalf("readiness shape %v", it)
 		}

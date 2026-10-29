@@ -94,8 +94,8 @@ func loadFixtures(dir string) (map[string][]byte, error) {
 
 // fixtureKey normalizes a request path so any athlete id maps onto the "0"
 // (self) fixtures and a trailing ".json" suffix is optional.
-func fixtureKey(path string) string {
-	parts := strings.Split(strings.TrimRight(path, "/"), "/")
+func fixtureKey(reqPath string) string {
+	parts := strings.Split(strings.TrimRight(reqPath, "/"), "/")
 	for i := 0; i+1 < len(parts); i++ {
 		if parts[i] == "athlete" && i > 0 && parts[i-1] == "v1" {
 			parts[i+1] = "0"

@@ -213,6 +213,11 @@ func (s *server) applyWellnessBulk(bulkKey string, raw []byte) []byte {
 // value is an object with startTime (ms) and samples [{hrv, s}] where s is
 // a millisecond offset. The 0 and 255 samples are failed reads; the valid
 // samples average to hrv.
+const (
+	mockSampleStepMs = 60000 // one sample per minute, offsets in ms
+	mockHRVNone      = 255   // Zepp's "no reading" sentinel
+)
+
 func mockHRVRMSSDItem(start int64, hrv float64) map[string]any {
 	return map[string]any{
 		"timestamp": start, "eventType": "HRVRMSSD", "subType": "real_data", "userId": "mock-user",
@@ -220,10 +225,10 @@ func mockHRVRMSSDItem(start int64, hrv float64) map[string]any {
 			"startTime": start, "deviceId": "MOCKDEVICE0000", "deviceSource": 1,
 			"samples": []map[string]any{
 				{"hrv": hrv - 3, "s": 0},
-				{"hrv": 0, "s": 60000},
-				{"hrv": hrv, "s": 120000},
-				{"hrv": 255, "s": 180000},
-				{"hrv": hrv + 3, "s": 240000},
+				{"hrv": 0, "s": 1 * mockSampleStepMs},
+				{"hrv": hrv, "s": 2 * mockSampleStepMs},
+				{"hrv": mockHRVNone, "s": 3 * mockSampleStepMs},
+				{"hrv": hrv + 3, "s": 4 * mockSampleStepMs},
 			},
 		},
 	}
