@@ -23,8 +23,6 @@ It is intentionally based on shipped behavior, including a few help-text quirks 
 
 ## Help Quirks
 
-- Some generated `activity` subcommand help strings currently print `icu.Activity <id> ...`.
-  The real invocation is always `icu activity <id> ...`.
 - `athlete plan` and `weather config` help show an optional literal `update` token.
   The implementation does not require it.
 
@@ -210,7 +208,7 @@ Invoke these commands as `icu activity <id> <action>`.
 
 - `microcycle`
   Invocation: `icu analysis microcycle [--date DATE | --week DATE | --from DATE --to DATE] [--json] [--full] [--no-plan] [--no-wellness] [--sport-type TYPE] [--timezone TZ]`
-  Defaults: current Monday-Sunday microcycle, `--sport-type Ride`, timezone from `--timezone`, else the athlete profile timezone, else the system timezone; wellness is read only up to today.
+  Defaults: current Monday-Sunday microcycle, `--sport-type Ride`, timezone from `--timezone`, else the athlete profile timezone, else UTC; wellness is read only up to today.
   Notes: Experimental read-only diagnostic contract for LLM/skill consumers. Reads activities with a 90-day lookback, planned events, wellness, and sport settings. When wellness is enabled, the readiness sleep/recovery signal prefers Zepp `HybridCharge`/`BioCharge` and falls back to `sleepScore` when needed. JSON is the primary contract; human output is a brief inspection view.
   Example: `icu analysis microcycle --from 2026-06-08 --to 2026-06-14 --json`
 

@@ -339,6 +339,10 @@ func microcycleDataQuality(
 		quality.Timezone = "system_fallback"
 		quality.Warnings = append(quality.Warnings, "missing athlete timezone; using system timezone")
 	}
+	if options.TimezoneSource == DefaultAnalysisTimezoneSource {
+		quality.Timezone = "utc_fallback"
+		quality.Warnings = append(quality.Warnings, "missing athlete timezone; using UTC")
+	}
 	if quality.Activities == microcycleStatusMissing {
 		quality.Warnings = append(quality.Warnings, "no completed activities found for this microcycle")
 	}

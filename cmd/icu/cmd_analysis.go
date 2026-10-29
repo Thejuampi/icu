@@ -57,6 +57,10 @@ type analysisTimezoneInfo struct {
 	timezone string
 	source   string
 	location *time.Location
+	// athlete is the profile read to resolve the timezone (nil when
+	// --timezone was given or the read failed), reused by commands that need
+	// it so /athlete is fetched once.
+	athlete *icu.Athlete
 	// clock is time.Now unless a test injects one.
 	clock func() time.Time
 }
@@ -84,14 +88,18 @@ func resolveAnalysisTimezone(client *icu.Client, flags map[string]string) (analy
 		}
 	}
 	athleteName := ""
+	var profile *icu.Athlete
 	if flagName == "" {
 		var athlete icu.Athlete
 		if client.Get("athlete", nil, nil, &athlete) == nil {
 			athleteName = athlete.Timezone
+			profile = &athlete
 		}
 	}
+	info := analysisTimezoneFrom(flagName, athleteName)
+	info.athlete = profile
 
-	return analysisTimezoneFrom(flagName, athleteName), nil
+	return info, nil
 }
 
 // analysisTimezoneFrom applies the precedence flag > athlete > default UTC;
@@ -218,11 +226,14 @@ func readCoachingContextInputs(
 ) (icu.CoachingContextInputs, error) {
 	var inputs icu.CoachingContextInputs
 
-	var athlete icu.Athlete
-	if err := client.Get("athlete", nil, nil, &athlete); err != nil {
-		return inputs, wrapCommandError(err)
+	inputs.Athlete = tzInfo.athlete
+	if inputs.Athlete == nil {
+		var athlete icu.Athlete
+		if err := client.Get("athlete", nil, nil, &athlete); err != nil {
+			return inputs, wrapCommandError(err)
+		}
+		inputs.Athlete = &athlete
 	}
-	inputs.Athlete = &athlete
 
 	sportType := icu.StringFlag(flags, "sport-type", "Ride")
 	var sportSettings icu.SportSettings
@@ -472,7 +483,7 @@ func readCurrentWellnessFitness(client *icu.Client, tzInfo analysisTimezoneInfo,
 }
 
 // clampDateToAthleteToday clamps date to today in the athlete's timezone
-// (--timezone, else the athlete profile, else the system zone).
+// (--timezone, else the athlete profile, else UTC).
 func clampDateToAthleteToday(client *icu.Client, flags map[string]string, date string, now time.Time) (string, error) {
 	location, _, err := resolveMicrocycleLocation(client, flags)
 	if err != nil {
@@ -571,6 +582,11 @@ func analysisPlanCommand() *Command {
 }
 
 func analysisWellnessCommand() *Command {
+	return analysisWellnessCommandWithClock(nil)
+}
+
+// analysisWellnessCommandWithClock lets tests inject "now" (nil: time.Now).
+func analysisWellnessCommandWithClock(clock func() time.Time) *Command {
 	return &Command{
 		Name:  "",
 		Usage: "analysis wellness [--oldest DATE --newest DATE | --days N] [--fields CSV]",
@@ -586,6 +602,7 @@ func analysisWellnessCommand() *Command {
 			if err != nil {
 				return err
 			}
+			tzInfo.clock = clock
 			dateRange, _, err := analysisDateRange(flags, tzInfo.now())
 			if err != nil {
 				return err
@@ -1273,39 +1290,16 @@ func microcycleDateRange(flags map[string]string, now time.Time, location *time.
 	return isoWeekRange(localNow.Format("2006-01-02"), location)
 }
 
-// resolveMicrocycleLocation applies timezone precedence: --timezone flag,
-// then the athlete profile timezone, then the system timezone. The athlete
-// profile is only fetched when no flag is given; a failed or empty lookup
-// falls back to the system timezone so the source label stays truthful.
+// resolveMicrocycleLocation is resolveAnalysisTimezone for the microcycle
+// commands: --timezone (invalid is an error), else the athlete profile,
+// else UTC (default_utc); there is no system-zone fallback.
 func resolveMicrocycleLocation(client *icu.Client, flags map[string]string) (*time.Location, string, error) {
-	flagName := icu.StringFlag(flags, "timezone", "")
-	athleteName := ""
-	if flagName == "" {
-		var athlete icu.Athlete
-		if err := client.Get("athlete", nil, nil, &athlete); err == nil {
-			athleteName = athlete.Timezone
-		}
+	info, err := resolveAnalysisTimezone(client, flags)
+	if err != nil {
+		return nil, "", err
 	}
 
-	return microcycleLocation(flagName, athleteName, time.Now().Location())
-}
-
-func microcycleLocation(flagName, athleteName string, system *time.Location) (*time.Location, string, error) {
-	if flagName != "" {
-		location, err := time.LoadLocation(flagName)
-		if err != nil {
-			return nil, "", fmt.Errorf("%w: invalid --timezone %s", errInvalidValue, flagName)
-		}
-
-		return location, timezoneSourceFlag, nil
-	}
-	if athleteName != "" {
-		if location, err := time.LoadLocation(athleteName); err == nil {
-			return location, timezoneSourceAthlete, nil
-		}
-	}
-
-	return system, "system", nil
+	return info.location, info.source, nil
 }
 
 // clampDateToToday returns the earlier of date and today's local date.
