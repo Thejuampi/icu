@@ -10,6 +10,11 @@
 // The optional -record mode is only for the one-time fixture capture: it
 // forwards GET requests to -upstream, anonymizes the responses into the
 // fixture directory, and refuses every non-GET request without forwarding it.
+//
+// The optional -redirect-sink mode (off by default) starts a second loopback
+// listener and serves /_redirect/<mode>/..., /_mock/leaks and a synthetic Zepp
+// login, so an RC can check that no secret follows a redirect to another host
+// (see redirect.go).
 package main
 
 import (
@@ -44,6 +49,8 @@ type options struct {
 	// set (the analysis corpus) can share the first one's offset.
 	shiftDays int
 	shiftSalt uint
+	// redirectSink turns on redirect mode (see redirect.go).
+	redirectSink bool
 }
 
 func main() {
@@ -63,6 +70,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	fs.BoolVar(&opts.record, "record", false, "fixture capture mode: forward GETs to -upstream and save anonymized responses")
 	fs.StringVar(&opts.upstream, "upstream", "", "upstream API for -record (required with -record; no default)")
 
+	fs.BoolVar(&opts.redirectSink, "redirect-sink", false,
+		"redirect mode: start a second loopback listener and serve /_redirect/<mode>/..., /_mock/leaks and synthetic Zepp login")
 	fs.StringVar(&opts.anonDir, "anonymize", "", "re-anonymize every fixture in this directory and exit")
 	fs.IntVar(&opts.shiftDays, "shift-days", 0, "with -anonymize: date shift in days (0 = random whole weeks back)")
 	fs.UintVar(&opts.shiftSalt, "shift-salt", 0, "with -anonymize: jitter salt (0 = random)")
@@ -111,6 +120,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "icu-mock: %v\n", loadErr)
 
 			return 1
+		}
+
+		if opts.redirectSink {
+			if sinkErr := startRedirectSink(ctx, opts.host, srv, stdout); sinkErr != nil {
+				fmt.Fprintf(stderr, "icu-mock: %v\n", sinkErr)
+
+				return 1
+			}
 		}
 
 		handler = srv
@@ -169,4 +186,29 @@ func (opts options) dateShift() dateShift {
 	}
 
 	return shift
+}
+
+// startRedirectSink starts the redirect-mode sink on another loopback port;
+// it stops when ctx is done.
+func startRedirectSink(ctx context.Context, host string, srv *server, stdout io.Writer) error {
+	var lc net.ListenConfig
+
+	listener, err := lc.Listen(ctx, "tcp", net.JoinHostPort(host, "0"))
+	if err != nil {
+		return fmt.Errorf("redirect sink: %w", err)
+	}
+
+	sinkURL := "http://" + listener.Addr().String()
+	srv.sink = newRedirectSink(sinkURL)
+	sinkServer := &http.Server{Handler: srv.sink, ReadHeaderTimeout: readHeaderTimeout}
+
+	go func() { _ = sinkServer.Serve(listener) }()
+	go func() {
+		<-ctx.Done()
+		_ = sinkServer.Close()
+	}()
+
+	fmt.Fprintf(stdout, "icu-mock redirect sink on %s\n", sinkURL)
+
+	return nil
 }
