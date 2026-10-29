@@ -207,6 +207,14 @@ func commandRequiresAuth(resource, _ string) bool {
 	return true
 }
 
+// newCommandClient builds the API client for executeCommand. Tests replace it
+// to point end-to-end runs at an httptest server.
+//
+//nolint:gochecknoglobals // test seam so end-to-end tests never reach the real API.
+var newCommandClient = func(apiKey, athleteID, baseURL string) *icu.Client {
+	return icu.NewClient(apiKey, athleteID, icu.WithBaseURL(baseURL))
+}
+
 func executeCommand(
 	registry *CommandRegistry,
 	resource, action string,
@@ -248,7 +256,7 @@ func executeCommand(
 		warnRealAPI(stderr, baseURL)
 	}
 
-	client := icu.NewClient(apiKey, athleteID, icu.WithBaseURL(baseURL))
+	client := newCommandClient(apiKey, athleteID, baseURL)
 
 	if err := cmd.Run(posArgs, flags, client, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)

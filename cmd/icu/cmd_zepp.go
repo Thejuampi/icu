@@ -130,7 +130,7 @@ func zeppLogoutCommand() *Command {
 func zeppStatusCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "zepp status",
+		Usage:       "zepp status [--zepp-login-token TOKEN] [--zepp-app-token TOKEN] [--zepp-user-id ID]",
 		Description: "Show whether a Zepp login token is configured (no raw value is printed).",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			return runZeppStatus(stdout, flags)

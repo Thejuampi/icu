@@ -2,9 +2,55 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 )
+
+// globalFlags are accepted by every command (auth, output and session
+// selection are resolved outside the command's own Run).
+func isGlobalFlag(name string) bool {
+	switch name {
+	case "api-key", "athlete-id", "output", "session-environment":
+		return true
+	}
+
+	return false
+}
+
+var usageFlagPattern = regexp.MustCompile(`(?:^|[\s\[(|])--?([A-Za-z0-9][A-Za-z0-9_-]*)`)
+
+// usageFlags lists the flag names a command's Usage line documents.
+func usageFlags(usage string) map[string]bool {
+	names := map[string]bool{}
+	for _, match := range usageFlagPattern.FindAllStringSubmatch(usage, -1) {
+		// parseFlags maps --a_b to a-b; match that here.
+		names[strings.ReplaceAll(match[1], "_", "-")] = true
+	}
+
+	return names
+}
+
+// validateUsageFlags rejects flags that neither the command's Usage nor the
+// global set documents. Commands without a Schema used to accept anything, so
+// a mistyped or unsupported flag (e.g. --dry-run on a command that had none)
+// was silently ignored and the write went through.
+func validateUsageFlags(command *Command, flags map[string]string) error {
+	allowed := usageFlags(command.Usage)
+	names := make([]string, 0, len(flags))
+	for name := range flags {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if !allowed[name] && !isGlobalFlag(name) {
+			return fmt.Errorf("unknown flag --%s", name)
+		}
+	}
+
+	return nil
+}
 
 type CommandFlagKind int
 
@@ -29,7 +75,7 @@ type CommandSchema struct {
 
 func validateCommandInput(command *Command, args []string, flags map[string]string) error {
 	if command.Schema == nil {
-		return nil
+		return validateUsageFlags(command, flags)
 	}
 
 	if command.Schema.RejectPositionals && len(args) > 0 {
@@ -49,6 +95,9 @@ func validateCommandInput(command *Command, args []string, flags map[string]stri
 
 	for _, name := range names {
 		flag, ok := allowed[name]
+		if !ok && isGlobalFlag(name) {
+			continue
+		}
 		if !ok {
 			return fmt.Errorf("unknown flag --%s", name)
 		}
