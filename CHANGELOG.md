@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Mock server: `GET /v2/users/me/events` serves `<fixtures>/_zepp/events/<eventType>/<subType>.json` as-is when present (synthetic payloads for `--raw` checks).
 - `icu zepp events --raw` and `icu zepp <v2 preset command> --raw` (e.g. `zepp readiness --raw`) print the untouched Zepp JSON with identifiers and secrets redacted recursively by key name (case-insensitive). `zepp events`/`readiness`/`hybridcharge` no longer drop object `value` payloads: they are kept under `extra.value`.
 - Zepp login: both steps (tokens and login) use a 30 s timeout (`zeppAuthTimeout`); the tokens client had none. Tests cover both with a hanging server.
 - Mock server: a non-loopback `-host` is refused unless `-allow-non-loopback`, and never allowed with `-redirect-sink`; `/_mock/writes` redacts the Zepp tokens form (password) values. New `scripts/redirect-check.sh`: binary-level cross-host redirect refusal for the intervals client, the Zepp data client (`WithHTTPClient`) and `zepp login`, with a same-host control.
