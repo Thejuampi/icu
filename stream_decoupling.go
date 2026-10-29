@@ -25,7 +25,7 @@ const (
 
 	// DecouplingAlgorithmVersion is bumped whenever the stream algorithm
 	// changes so cached results are recomputed.
-	DecouplingAlgorithmVersion = 3
+	DecouplingAlgorithmVersion = 5
 )
 
 // Stream decoupling status values.
@@ -54,12 +54,10 @@ const (
 
 // Trim and HR-lag provenance.
 const (
-	DecouplingTrimManual       = "manual"
-	DecouplingTrimWorkoutSteps = "workout_steps"
-	DecouplingTrimSteadyState  = "steady_state"
-	DecouplingLagManual        = "manual"
-	DecouplingLagCorrelation   = "cross_correlation"
-	DecouplingLagNone          = "none"
+	DecouplingTrimManual     = "manual"
+	DecouplingLagManual      = "manual"
+	DecouplingLagCorrelation = "cross_correlation"
+	DecouplingLagNone        = "none"
 )
 
 // Exclusion reasons reported in StreamDecoupling.Excluded.
@@ -91,8 +89,10 @@ func DefaultDecouplingOptions() DecouplingOptions {
 type DecouplingContext struct {
 	// MovingTimeSeconds (intervals.icu moving_time) derives the stop speed.
 	MovingTimeSeconds int `json:"movingTimeSeconds,omitempty"`
-	// Plan is the paired workout's warm-up/cool-down, when there is one.
-	Plan *DecouplingPlanTrim `json:"plan,omitempty"`
+	// FTP and PowerZones (upper bounds in % FTP, sport settings) feed the
+	// coaching criteria (Z1-Z2 share, max minute).
+	FTP        int   `json:"ftp,omitempty"`
+	PowerZones []int `json:"powerZones,omitempty"`
 }
 
 // DecouplingPlanTrim is the warm-up/cool-down read from a workout doc.
@@ -141,7 +141,6 @@ type StreamDecoupling struct {
 	SecondHalfOutput float64                    `json:"secondHalfOutput,omitempty"`
 	SecondHalfHR     float64                    `json:"secondHalfHr,omitempty"`
 	VariabilityIndex float64                    `json:"variabilityIndex,omitempty"`
-	VICutoff         *float64                   `json:"viCutoff,omitempty"`
 	// PowerCV is the coefficient of variation of kept-minute output
 	// (steadiness inside the analysis window), reported for context.
 	PowerCV     float64 `json:"powerCv,omitempty"`
@@ -149,6 +148,17 @@ type StreamDecoupling struct {
 	// StopRule: "moving_time_rank" (stop speed ranked to match moving_time)
 	// or "speed>0" (the rank fell on a zero speed).
 	StopRule string `json:"stopRule,omitempty"`
+	// Coaching criteria (decoupling_criteria.go): validity is valid,
+	// low_confidence or not_valid; failed criteria are listed by name.
+	// RawValue is the stream pipeline's number before the criteria: kept
+	// (shown, never consumed) when the ride is not valid.
+	RawValue            *float64              `json:"rawValue,omitempty"`
+	Validity            string                `json:"validity,omitempty"`
+	Criteria            []DecouplingCriterion `json:"criteria,omitempty"`
+	FailedCriteriaNames []string              `json:"failedCriteriaNames,omitempty"`
+	HRStabilized        bool                  `json:"hrStabilized"`
+	Interpretation      string                `json:"interpretation,omitempty"`
+	PossibleFatigue     bool                  `json:"possibleFatigue,omitempty"`
 }
 
 // DecouplingStreamTypes is the stream request used by the decoupling fetch
@@ -177,9 +187,9 @@ type decouplingRide struct {
 //
 //  1. moving samples: speed above a stop speed derived so the moving sample
 //     time matches intervals.icu's moving_time (all samples without speed);
-//  2. trim (moving seconds): user override, else the paired workout's
-//     warm-up/cool-down steps, then steady-state edges (leading/trailing
-//     minutes whose output is below the ride's own lower quartile);
+//  2. trim (moving seconds): user override, else the coach's fixed trim:
+//     warm-up max(15 min, HR stabilization), cool-down 10 min (never
+//     optimized; see coachWarmupSamples);
 //  3. HR lag: user override, else the 0-120 s lag maximizing the
 //     output/HR cross-correlation (0 when no positive correlation);
 //  4. 60-moving-second buckets from the trim start; a minute is missing_hr
@@ -189,7 +199,11 @@ type decouplingRide struct {
 //  5. Tukey fences (k*IQR) on the per-minute output/HR ratio of the
 //     minutes that survived step 4: ratio_outlier;
 //  6. kept minutes split at the range midpoint; decoupling =
-//     (1 - (out2/hr2)/(out1/hr1)) * 100 on each half's means.
+//     (1 - (out2/hr2)/(out1/hr1)) * 100 on each half's means;
+//  7. the coach's criteria (VI, duration, Z1-Z2 share, max minute,
+//     coasting) on the analyzed range are evaluated into result.Criteria;
+//     callers apply them with ApplyCoachCriteria (any failure drops the
+//     number, see decoupling_criteria.go).
 func ComputeStreamDecoupling(streams NullableStreamData, options DecouplingOptions, context DecouplingContext) StreamDecoupling {
 	result := StreamDecoupling{Options: options, Method: "moving_minutes_filtered_ratio", Status: DecouplingStatusNotMeasurable}
 	ride, ok := newDecouplingRide(streams, context, &result)
@@ -199,12 +213,14 @@ func ComputeStreamDecoupling(streams NullableStreamData, options DecouplingOptio
 		return result
 	}
 
-	start, end := ride.trim(options, context, &result)
+	start, end := ride.trim(options, &result)
 	if end-start <= 0 {
 		result.Reason = "nothing left after warm-up/cool-down trim"
+		result.Criteria = []DecouplingCriterion{{Name: CriterionDuration, Threshold: ">= 60 min"}}
 
 		return result
 	}
+	result.Criteria, result.VariabilityIndex = ride.evaluateCoachCriteria(start, end, context)
 	ride.hrLag(start, end, options, &result)
 	minutes := ride.minutes(start, end, result.HRLagSeconds)
 	result.MinutesInRange = len(minutes)
@@ -363,66 +379,25 @@ func (ride *decouplingRide) samplesPerMinute() int {
 }
 
 // trim returns [start, end) positions into ride.moving.
-func (ride *decouplingRide) trim(options DecouplingOptions, context DecouplingContext, result *StreamDecoupling) (int, int) {
+func (ride *decouplingRide) trim(options DecouplingOptions, result *StreamDecoupling) (int, int) {
 	toSamples := func(seconds int) int { return int(math.Round(float64(seconds) / ride.step)) }
-	if options.WarmupSeconds != nil || options.CooldownSeconds != nil {
+	warmup, stabilized := ride.coachWarmupSamples()
+	result.HRStabilized = stabilized
+	result.Trim.Method = DecouplingTrimCoachFixed
+	result.Trim.WarmupSeconds = int(math.Round(float64(warmup) * ride.step))
+	result.Trim.CooldownSeconds = CoachCooldownSeconds
+	// Manual overrides may only lengthen the coach's trim, never shorten it.
+	if options.WarmupSeconds != nil && *options.WarmupSeconds > result.Trim.WarmupSeconds {
 		result.Trim.Method = DecouplingTrimManual
-		if options.WarmupSeconds != nil {
-			result.Trim.WarmupSeconds = *options.WarmupSeconds
-		}
-		if options.CooldownSeconds != nil {
-			result.Trim.CooldownSeconds = *options.CooldownSeconds
-		}
-
-		return toSamples(result.Trim.WarmupSeconds), len(ride.moving) - toSamples(result.Trim.CooldownSeconds)
+		result.Trim.WarmupSeconds = *options.WarmupSeconds
+		warmup = toSamples(result.Trim.WarmupSeconds)
+	}
+	if options.CooldownSeconds != nil && *options.CooldownSeconds > result.Trim.CooldownSeconds {
+		result.Trim.Method = DecouplingTrimManual
+		result.Trim.CooldownSeconds = *options.CooldownSeconds
 	}
 
-	start, end := 0, len(ride.moving)
-	methods := []string{}
-	if context.Plan != nil {
-		start, end = toSamples(context.Plan.WarmupSeconds), end-toSamples(context.Plan.CooldownSeconds)
-		methods = append(methods, DecouplingTrimWorkoutSteps)
-	}
-	if end > start {
-		start, end = ride.steadyState(start, end)
-	}
-	methods = append(methods, DecouplingTrimSteadyState)
-	result.Trim.Method = strings.Join(methods, "+")
-	result.Trim.WarmupSeconds = int(math.Round(float64(start) * ride.step))
-	result.Trim.CooldownSeconds = int(math.Round(float64(len(ride.moving)-end) * ride.step))
-
-	return start, end
-}
-
-// steadyState drops leading and trailing whole moving minutes whose mean
-// output is below the lower quartile of the range's minutes.
-func (ride *decouplingRide) steadyState(start, end int) (int, int) {
-	perMinute := ride.samplesPerMinute()
-	var means []float64
-	for from := start; from+perMinute <= end; from += perMinute {
-		sum := 0.0
-		for _, index := range ride.moving[from : from+perMinute] {
-			value, _ := ride.output.At(index)
-			sum += value
-		}
-		means = append(means, sum/float64(perMinute))
-	}
-	if len(means) < 2*decouplingMinMinutesPerHalf {
-		return start, end
-	}
-	sorted := append([]float64(nil), means...)
-	sort.Float64s(sorted)
-	q1 := linearQuantile(sorted, quartileLow)
-	lead := 0
-	for lead < len(means) && means[lead] < q1 {
-		lead++
-	}
-	tail := 0
-	for tail < len(means)-lead && means[len(means)-1-tail] < q1 {
-		tail++
-	}
-
-	return start + lead*perMinute, start + (len(means)-tail)*perMinute
+	return warmup, len(ride.moving) - toSamples(result.Trim.CooldownSeconds)
 }
 
 // hrLag sets result.HRLagSeconds from the override or cross-correlation.
@@ -634,49 +609,6 @@ func plannedMedianTarget(steps []PlannedWorkoutStep) float64 {
 	return 0
 }
 
-// DecouplingVICutoff is the high Tukey fence (Q3 + 1.5*IQR) of the
-// variability indexes of the athlete's steady rides (rides paired with a
-// steady workout, see PlannedDecouplingWorkout): above it a ride is too
-// unsteady for decoupling. Needs at least four rides.
-func DecouplingVICutoff(values []float64) *float64 {
-	var positive []float64
-	for _, value := range values {
-		if value > 0 {
-			positive = append(positive, value)
-		}
-	}
-	if len(positive) < 4 {
-		return nil
-	}
-	sort.Float64s(positive)
-	q1, q3 := linearQuantile(positive, quartileLow), linearQuantile(positive, quartileHigh)
-	cutoff := round4(q3 + DefaultDecouplingIQRK*(q3-q1))
-
-	return &cutoff
-}
-
-// ApplyVIGate marks a measured result not measurable when the ride's VI
-// exceeds the athlete's steady-ride cutoff, or when steadiness cannot be
-// verified at all: no cutoff (fewer than four steady rides) and no paired
-// steady workout.
-func (result *StreamDecoupling) ApplyVIGate(vi float64, cutoff *float64, plannedSteady bool) {
-	result.VariabilityIndex = vi
-	result.VICutoff = cutoff
-	if result.Status != DecouplingStatusMeasured {
-		return
-	}
-	switch {
-	case cutoff != nil && vi > *cutoff:
-		result.Reason = "variability index above the athlete's steady-ride cutoff"
-	case cutoff == nil && !plannedSteady:
-		result.Reason = "steadiness unverified: no paired steady workout and fewer than 4 steady rides for a VI cutoff"
-	default:
-		return
-	}
-	result.Status = DecouplingStatusNotMeasurable
-	result.Value = nil
-}
-
 // HasDecoupling reports whether the activity carries a decoupling value.
 // A stream-computed value of exactly 0 is a real measurement (no drift), so
 // it counts; an API value of 0 means "absent".
@@ -721,7 +653,7 @@ const (
 	DecouplingWorkoutIntervals = "intervals"
 	DecouplingWorkoutLadder    = "ladder"
 	// DecouplingWorkoutUnverified: the main set uses targets this method does
-	// not classify (pace targets, or watt targets without an FTP).
+	// not classify (pace or HR-only targets, or watt targets without an FTP).
 	DecouplingWorkoutUnverified = "unverified"
 	powerZoneUnits              = "power_zone"
 )
@@ -790,7 +722,8 @@ func plannedWorkoutKind(steps []PlannedWorkoutStep, trim *DecouplingPlanTrim, zo
 		if step.StartOffset < trim.WarmupSeconds || step.EndOffset > total-trim.CooldownSeconds {
 			continue
 		}
-		if step.Power == nil && step.Pace != nil {
+		// Pace- or HR-only steps: the method cannot classify them.
+		if step.Power == nil && (step.Pace != nil || step.HR != nil) {
 			return DecouplingWorkoutUnverified
 		}
 		if target := targetReference(step.Power); target > 0 {
@@ -833,19 +766,6 @@ func decouplingStepZone(power *WorkoutTarget, target float64, zones []decoupling
 	}
 
 	return float64(len(zones) + 1)
-}
-
-// ApplyWorkoutGate marks a result not measurable for a non-steady workout.
-func (result *StreamDecoupling) ApplyWorkoutGate(kind string) {
-	result.WorkoutKind = kind
-	if kind != "" && kind != DecouplingWorkoutSteady && result.Status == DecouplingStatusMeasured {
-		result.Status = DecouplingStatusNotMeasurable
-		result.Reason = "structured workout (" + kind + ")"
-		if kind == DecouplingWorkoutUnverified {
-			result.Reason = "planned workout targets not classified (pace targets, or watt targets without FTP)"
-		}
-		result.Value = nil
-	}
 }
 
 func decouplingOutputCV(minutes []decouplingMinute) float64 {

@@ -129,6 +129,10 @@ Decision rules must:
 
 If a rule cannot be made dynamic with available data, expose it as an explicit user-configurable constraint and document that it is user-provided, not a model default. Do not silently bake it into the code.
 
+#### Exception: client coach constants (B15)
+
+The B15 stream-decoupling coaching criteria in `decoupling_criteria.go` (`Coach*` constants: VI 1.05/1.10, >= 60 min analyzed, >= 85 % Z1-Z2, no minute > 105 % FTP, coasting < 10 %, warm-up max(15 min, HR stabilization over 5 min within 3 bpm) capped at 20 min with low confidence, 10 min cool-down, interpretation bands 5/8/-5 %) are explicit constraints specified by the client's coach. They are fixed on purpose: do not derive, fit, or tune them to athlete data. Manual trim overrides may only lengthen the coach's trim.
+
 ## Testing Policy
 
 ### Tests required; agent-loop TDD is not
