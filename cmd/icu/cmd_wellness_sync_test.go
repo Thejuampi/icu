@@ -25,6 +25,8 @@ type syncFake struct {
 	hits       int
 	bandStatus int
 	hrvStatus  int
+	failEvent  string            // eventType answered with 503
+	eventBody  map[string]string // body per eventType (overrides hrvBody)
 	bulkStatus int
 	existing   string
 	hrvBody    string
@@ -52,7 +54,17 @@ func (f *syncFake) serve(t *testing.T) *httptest.Server {
 
 				return
 			}
+			if f.failEvent != "" && r.URL.Query().Get("eventType") == f.failEvent {
+				w.WriteHeader(http.StatusServiceUnavailable)
+
+				return
+			}
 			f.hrvQueries = append(f.hrvQueries, r.URL.RawQuery)
+			if body, ok := f.eventBody[r.URL.Query().Get("eventType")]; ok {
+				_, _ = io.WriteString(w, body)
+
+				return
+			}
 			if f.hrvBody != "" {
 				_, _ = io.WriteString(w, f.hrvBody)
 
@@ -60,6 +72,12 @@ func (f *syncFake) serve(t *testing.T) *httptest.Server {
 			}
 			// 23:30 New York on the 10th = 03:30Z on the 11th -> day 11.
 			ts := time.Date(2026, 8, 11, 3, 30, 0, 0, time.UTC).UnixMilli()
+			if r.URL.Query().Get("eventType") == "readiness" {
+				midnight := time.Date(2026, 8, 11, 4, 0, 0, 0, time.UTC).UnixMilli()
+				_, _ = io.WriteString(w, `{"items":[{"timestamp":`+itoa64(midnight+7*3600000)+`,"value":{"timestamp":`+itoa64(midnight)+`,"sleepHRV":44.5}}]}`)
+
+				return
+			}
 			_, _ = io.WriteString(w, `{"items":[{"timestamp":`+itoa64(ts)+`,"value":"44.5"}]}`)
 		case strings.HasSuffix(r.URL.Path, "/wellness-bulk") && r.Method == http.MethodPut:
 			body, _ := io.ReadAll(r.Body)
@@ -173,7 +191,7 @@ func TestWellnessSyncZeppAuthFailureAborts(t *testing.T) {
 func TestWellnessSyncPartialFailureStillSyncsOtherSource(t *testing.T) {
 	fake := &syncFake{existing: syncExisting, hrvStatus: http.StatusServiceUnavailable}
 	code, out, errOut := runSync(t, fake.serve(t), "--apply")
-	if code == 0 || len(fake.puts) != 1 || strings.Contains(fake.puts[0], "hrv") || !strings.Contains(errOut, "zepp hrv failed") || !strings.Contains(out, "wrote 1 day(s)") {
+	if code == 0 || len(fake.puts) != 1 || strings.Contains(fake.puts[0], "hrv") || !strings.Contains(errOut, "readiness sleepHRV failed") || !strings.Contains(out, "wrote 1 day(s)") {
 		t.Fatalf("code=%d puts=%v out=%s stderr=%s", code, fake.puts, out, errOut)
 	}
 	fake = &syncFake{existing: syncExisting, bandStatus: http.StatusBadGateway}
@@ -306,15 +324,17 @@ func TestWellnessSyncHRVWindowCoversDayBeforeOldest(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts := time.Date(2026, 8, 9, 20, 0, 0, 0, ny).UnixMilli()
-	fake := &syncFake{existing: `[]`, hrvBody: `{"items":[{"timestamp":` + itoa64(ts) + `,"value":"61.5"}]}`}
+	fake := &syncFake{existing: `[]`, hrvBody: `{"items":[{"timestamp":` + itoa64(ts) + `,"value":{"timestamp":` + itoa64(ts) + `,"sleepHRV":61.5}}]}`}
 	code, out, errOut := runSync(t, fake.serve(t), "--fields", "hrv", "--oldest", "2026-08-10", "--newest", "2026-08-10", "--json")
-	if code != 0 || len(fake.hrvQueries) != 1 {
+	if code != 0 || len(fake.hrvQueries) != 2 {
 		t.Fatalf("code=%d queries=%v stderr=%s", code, fake.hrvQueries, errOut)
 	}
 	from := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC).UnixMilli()
 	to := time.Date(2026, 8, 11, 23, 59, 59, 999000000, time.UTC).UnixMilli()
-	if q := fake.hrvQueries[0]; !strings.Contains(q, "from="+itoa64(from)) || !strings.Contains(q, "to="+itoa64(to)) {
-		t.Fatalf("hrv window query %s, want from=%d to=%d", q, from, to)
+	for _, q := range fake.hrvQueries {
+		if !strings.Contains(q, "from="+itoa64(from)) || !strings.Contains(q, "to="+itoa64(to)) {
+			t.Fatalf("hrv window query %s, want from=%d to=%d", q, from, to)
+		}
 	}
 	var parsed wellnessSyncOutput
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil || len(parsed.Changes) != 1 ||
@@ -525,5 +545,95 @@ func TestPartialSleepSuggestionsQueryStripped(t *testing.T) {
 	realAPI := partialSleepSuggestions(changes, suggestionContext{baseURL: "https://INTERVALS.icu/"})
 	if strings.Contains(realAPI[0].Suggest, "--base-url") {
 		t.Fatalf("real API must not be added: %s", realAPI[0].Suggest)
+	}
+}
+
+func TestPartialSleepSuggestionsNoneWhenURLUnparsable(t *testing.T) {
+	t.Parallel()
+	changes := []icu.WellnessSyncChange{{Date: "2026-08-11", Field: icu.SyncFieldSleepSecs, Intervals: 100, Zepp: 20000, Action: "keep", Note: icu.SyncNotePartialSleep}}
+	if len(partialSleepSuggestions(changes, suggestionContext{})) != 1 {
+		t.Fatal("control: want one suggestion")
+	}
+	bad, _ := redactURL("http://[::1")
+	if bad != "" {
+		t.Fatalf("redactURL of unparsable = %q", bad)
+	}
+	if got := partialSleepSuggestions(changes, suggestionContext{unparsableURL: true}); len(got) != 0 {
+		t.Fatalf("unparsable --base-url must yield no suggestion, got %+v", got)
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncWarnsWhenOneHRVSourceFails(t *testing.T) {
+	fake := &syncFake{existing: syncExisting, failEvent: "readiness"}
+	code, _, errOut := runSync(t, fake.serve(t), "--fields", "hrv")
+	if code == 0 || !strings.Contains(errOut, "readiness sleepHRV failed") {
+		t.Fatalf("readiness: code=%d stderr=%s", code, errOut)
+	}
+	// HRVRMSSD samples are information only: their failure is not a sync failure.
+	fake = &syncFake{existing: syncExisting, failEvent: "HRVRMSSD"}
+	if code, _, errOut = runSync(t, fake.serve(t), "--fields", "hrv"); code != 0 || errOut != "" {
+		t.Fatalf("HRVRMSSD: code=%d stderr=%s", code, errOut)
+	}
+}
+
+// realOrderHRV returns readiness and HRVRMSSD bodies for 2026-08-11 (New
+// York) in the real shape with distinct values: sleepHRV 61, samples mean 44.
+func realOrderHRV() map[string]string {
+	night := time.Date(2026, 8, 11, 3, 30, 0, 0, time.UTC).UnixMilli() // 23:30 NY on the 10th
+	midnight := time.Date(2026, 8, 11, 4, 0, 0, 0, time.UTC).UnixMilli()
+
+	return map[string]string{
+		"readiness": `{"items":[{"timestamp":` + itoa64(midnight+7*3600000) + `,"value":{"timestamp":` + itoa64(midnight) + `,"sleepHRV":61,"hrvInsight":255}}]}`,
+		"HRVRMSSD":  `{"items":[{"timestamp":` + itoa64(night) + `,"value":{"startTime":` + itoa64(night) + `,"samples":[{"hrv":43,"s":0},{"hrv":0,"s":60000},{"hrv":45,"s":120000},{"hrv":255,"s":180000}]}}]}`,
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncApplyWritesReadinessSleepHRV(t *testing.T) {
+	fake := &syncFake{existing: syncExisting, eventBody: realOrderHRV()}
+	code, _, errOut := runSync(t, fake.serve(t), "--fields", "hrv", "--apply")
+	if code != 0 || len(fake.puts) != 1 || !strings.Contains(fake.puts[0], `"hrv":61`) || strings.Contains(fake.puts[0], `"hrv":44`) {
+		t.Fatalf("code=%d puts=%v stderr=%s", code, fake.puts, errOut)
+	}
+	// Samples but no readiness sleepHRV: no HRV is written, with --apply
+	// or --overwrite; the dry run shows the mean as information only.
+	bodies := realOrderHRV()
+	bodies["readiness"] = `{"items":[]}`
+	for _, extra := range [][]string{{"--apply"}, {"--apply", "--overwrite"}} {
+		fake = &syncFake{existing: syncExisting, eventBody: bodies}
+		if code, _, errOut = runSync(t, fake.serve(t), append([]string{"--fields", "hrv"}, extra...)...); code != 0 || len(fake.puts) != 0 {
+			t.Fatalf("%v: code=%d puts=%v stderr=%s", extra, code, fake.puts, errOut)
+		}
+	}
+	fake = &syncFake{existing: syncExisting, eventBody: bodies}
+	code, out, errOut := runSync(t, fake.serve(t), "--fields", "hrv")
+	if code != 0 || len(fake.puts) != 0 || !strings.Contains(out, "info: 2026-08-11 HRVRMSSD samples mean 44 ms (not written") || strings.Contains(out, " fill") {
+		t.Fatalf("dry run code=%d out=%s stderr=%s", code, out, errOut)
+	}
+	// With readiness present for the day there is no info line.
+	fake = &syncFake{existing: syncExisting, eventBody: realOrderHRV()}
+	if _, out, _ = runSync(t, fake.serve(t), "--fields", "hrv"); strings.Contains(out, "info:") {
+		t.Fatalf("unexpected info line: %s", out)
+	}
+}
+
+// A failed readiness source must not write the samples-mean approximation:
+// fill-only would keep it forever instead of the later readiness value.
+//
+//nolint:paralleltest // sets env
+func TestWellnessSyncReadinessFailureSkipsHRVWrites(t *testing.T) {
+	for _, extra := range [][]string{{"--apply"}, {"--apply", "--overwrite"}} {
+		fake := &syncFake{existing: syncExisting, eventBody: realOrderHRV(), failEvent: "readiness"}
+		code, _, errOut := runSync(t, fake.serve(t), append([]string{"--fields", "hrv"}, extra...)...)
+		if code == 0 || len(fake.puts) != 0 || !strings.Contains(errOut, "HRV skipped") {
+			t.Fatalf("%v: code=%d puts=%v stderr=%s", extra, code, fake.puts, errOut)
+		}
+	}
+	// Other fields still sync; only HRV is skipped.
+	fake := &syncFake{existing: syncExisting, eventBody: realOrderHRV(), failEvent: "readiness"}
+	code, _, errOut := runSync(t, fake.serve(t), "--apply")
+	if code == 0 || len(fake.puts) != 1 || strings.Contains(fake.puts[0], `"hrv"`) {
+		t.Fatalf("all fields: code=%d puts=%v stderr=%s", code, fake.puts, errOut)
 	}
 }

@@ -189,19 +189,34 @@ func BuildZeppWellnessDays(band []BandDataDay, hrv []ZeppHRVEvent, loc *time.Loc
 		day.SleepScore = float64(sleep.SleepScore)
 	}
 
-	latest := map[string]int64{}
+	// Per local day the best source wins (readiness sleepHRV, the nightly
+	// value the app shows, over a sample mean over a scalar), then the latest
+	// reading, then the higher value on an exact tie. Invalid readings (0,
+	// negative, out of range) are never values.
+	type pick struct {
+		rank int
+		ts   int64
+	}
+	best := map[string]pick{}
 	for _, reading := range hrv {
-		if reading.Value <= 0 {
+		if !ValidZeppHRV(reading.Value) {
 			continue
 		}
 		date := HRVLocalDay(reading.Timestamp, loc)
 		if !inDateRange(date, oldest, newest) {
 			continue
 		}
-		if ts, seen := latest[date]; seen && (ts > reading.Timestamp || (ts == reading.Timestamp && days[date].HRV >= reading.Value)) {
-			continue
+		cand := pick{rank: hrvSourceRank(reading.Source), ts: reading.Timestamp}
+		if cur, seen := best[date]; seen {
+			if cur.rank != cand.rank {
+				if cur.rank > cand.rank {
+					continue
+				}
+			} else if cur.ts > cand.ts || (cur.ts == cand.ts && days[date].HRV >= reading.Value) {
+				continue
+			}
 		}
-		latest[date] = reading.Timestamp
+		best[date] = cand
 		get(date).HRV = reading.Value
 	}
 
@@ -214,6 +229,17 @@ func BuildZeppWellnessDays(band []BandDataDay, hrv []ZeppHRVEvent, loc *time.Loc
 	sort.Slice(out, func(i, j int) bool { return out[i].Date < out[j].Date })
 
 	return out
+}
+
+func hrvSourceRank(source string) int {
+	switch source {
+	case zeppHRVSourceSleep:
+		return 2 //nolint:mnd // ranking
+	case zeppHRVSourceSamples:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func inDateRange(date, oldest, newest string) bool {

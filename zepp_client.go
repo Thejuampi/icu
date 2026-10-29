@@ -1010,6 +1010,18 @@ func (c *ZeppClient) HRVRMSSDDays(ctx context.Context, oldest, newest string) ([
 	return DecodeHRV(raw, "rmssd")
 }
 
+// SleepHRVDays fetches Zepp's nightly HRV (readiness sleepHRV, ms) from readiness
+// watch_score value.sleepHRV: the per-night value the app shows.
+func (c *ZeppClient) SleepHRVDays(ctx context.Context, oldest, newest string) ([]ZeppHRVEvent, error) {
+	preset, _ := V2EventPresetByName("readiness")
+	raw, err := c.FetchV2Events(ctx, preset, oldest, newest)
+	if err != nil {
+		return nil, fmt.Errorf("fetch readiness sleepHRV: %w", err)
+	}
+
+	return DecodeSleepHRV(raw)
+}
+
 // ReadinessDays fetches daily readiness scores from /v2/users/me/events.
 func (c *ZeppClient) ReadinessDays(ctx context.Context, oldest, newest string) ([]ZeppReadinessEvent, error) {
 	preset, _ := V2EventPresetByName("readiness")

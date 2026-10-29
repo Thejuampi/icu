@@ -19,6 +19,29 @@ import (
 // fraction, quoted or not (Strava and other external ids).
 var longID = regexp.MustCompile(`(^|[^.0-9A-Za-z_-]|[^.0-9A-Za-z_]-)(-?[0-9]{10,})([^0-9A-Za-z_-]|$)`)
 
+// epochTimeLine is a pretty-printed `"timestamp"`/`"startTime"` line holding
+// a 13-digit epoch in milliseconds (the Zepp real-shape fixtures, whose
+// dates are synthetic: 2030 or later).
+const (
+	synthEpochMinMs = 1893456000000 // 2030-01-01T00:00:00Z
+	synthEpochMaxMs = 4102444800000 // 2100-01-01T00:00:00Z
+)
+
+var epochTimeLine = regexp.MustCompile(`^\s*"(timestamp|startTime)": ([0-9]{13}),?$`)
+
+// isEpochTimeLine reports whether line is only a time key with an epoch-ms
+// value in the synthetic window [2030-01-01, 2100-01-01) UTC: a made-up time,
+// not an external id or a real date.
+func isEpochTimeLine(line string) bool {
+	m := epochTimeLine.FindStringSubmatch(line)
+	if m == nil {
+		return false
+	}
+	ms, err := strconv.ParseInt(m[2], 10, 64)
+
+	return err == nil && ms >= synthEpochMinMs && ms < synthEpochMaxMs
+}
+
 // TestCommittedFixturesHaveNoExternalIDsOrRealWeight scans every committed
 // JSON under testdata: the mock fixtures, the analysis corpus
 // (wave2_live_corpus.json) and its goldens.
@@ -53,7 +76,7 @@ func TestCommittedFixturesHaveNoExternalIDsOrRealWeight(t *testing.T) {
 		checkDenylist(t, path, body, deniedTokens())
 
 		for _, line := range strings.Split(string(body), "\n") {
-			if match := longID.FindStringSubmatch(line); match != nil {
+			if match := longID.FindStringSubmatch(line); match != nil && !isEpochTimeLine(line) {
 				t.Errorf("%s: numeric id of 10+ digits %s", path, match[2])
 			}
 		}
@@ -496,5 +519,39 @@ func TestDenylistAndClockTimes(t *testing.T) {
 
 	if rec.errors != 3 {
 		t.Fatalf("clock times flagged %d times, want 3", rec.errors)
+	}
+}
+
+func TestIsEpochTimeLine(t *testing.T) {
+	t.Parallel()
+	for line, want := range map[string]bool{
+		`      "timestamp": 1894622400000,`:                     true,
+		`        "startTime": 1894597200000`:                    true,
+		`      "timestamp": 9994622400000,`:                     false,
+		`      "timestamp": 1792886400000,`:                     false, // 2026: real-looking date
+		`      "timestamp": 1893455999999,`:                     false,
+		`      "timestamp": 1893456000000,`:                     true,
+		`      "deviceId": 1894622400000,`:                      false,
+		`      "timestamp": 18946224000,`:                       false,
+		`      "timestamp": 1894622400000, "id": 1234567890123`: false,
+	} {
+		if got := isEpochTimeLine(line); got != want {
+			t.Errorf("%q: got %v, want %v", line, got, want)
+		}
+	}
+}
+
+// Minified JSON puts many keys on one line, so the time-line exemption never
+// applies and every 10+ digit number is still flagged.
+func TestLongIDMinifiedJSONFailsSafe(t *testing.T) {
+	t.Parallel()
+	for _, line := range []string{
+		`{"timestamp":1894622400000,"deviceId":1234567890123}`,
+		`{"timestamp":1894622400000}`,
+		`{"items":[{"startTime":1894597200000,"value":{"sleepHRV":41}}]}`,
+	} {
+		if longID.FindStringSubmatch(line) == nil || isEpochTimeLine(line) {
+			t.Errorf("minified line not flagged: %s", line)
+		}
 	}
 }

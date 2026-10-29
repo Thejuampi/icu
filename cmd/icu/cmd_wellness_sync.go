@@ -22,7 +22,7 @@ func wellnessSyncCommand() *Command {
 		Name: "",
 		Usage: "wellness sync [--oldest DATE] [--newest DATE] [--fields restingHR,hrv,sleepSecs,sleepScore] " +
 			"[--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--json]",
-		Description: "Copy resting HR, HRV (rMSSD) and sleep from Zepp into intervals.icu wellness. " +
+		Description: "Copy resting HR, HRV (rMSSD: readiness sleepHRV, the nightly value the Zepp app shows; else the HRVRMSSD sample mean, an approximation) and sleep from Zepp into intervals.icu wellness. " +
 			"Dry run by default: prints the diff and writes nothing; --apply sends one PUT wellness-bulk. " +
 			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day). " +
 			"Suspected partial sleep sync: when intervals.icu has sleepSecs below half of Zepp's (e.g. about 1.6 h against a full night), " +
@@ -69,6 +69,9 @@ type wellnessSyncOutput struct {
 	// PartialSleep lists days whose intervals.icu sleepSecs is below half of
 	// Zepp's, with the suggested command to fix each.
 	PartialSleep []partialSleepSuggestion `json:"partialSleep"`
+	// HRVSamplesInfo lists days with HRVRMSSD samples but no readiness
+	// sleepHRV. Information only: their mean is never written.
+	HRVSamplesInfo []icu.ZeppWellnessDay `json:"hrvSamplesInfo"`
 }
 
 type partialSleepSuggestion struct {
@@ -84,7 +87,9 @@ type partialSleepSuggestion struct {
 // Zepp tokens. No suggestions when the run already used --overwrite.
 func partialSleepSuggestions(changes []icu.WellnessSyncChange, ctx suggestionContext) []partialSleepSuggestion {
 	out := []partialSleepSuggestion{}
-	if ctx.overwrite {
+	// A --base-url/--zepp-base-url that does not parse cannot be repeated
+	// safely: dropping it would point the suggestion at the real API.
+	if ctx.overwrite || ctx.unparsableURL {
 		return out
 	}
 	for _, date := range icu.PartialSleepDates(changes) {
@@ -123,7 +128,8 @@ func partialSleepSuggestions(changes []icu.WellnessSyncChange, ctx suggestionCon
 
 // redactURL drops userinfo, query and fragment from raw so a suggested
 // command never repeats credentials; stripped reports whether anything was
-// removed. A value that does not parse is dropped entirely.
+// removed. A value that does not parse is dropped entirely (the caller then
+// emits no suggestion). Credentials in the URL path are NOT redacted.
 func redactURL(raw string) (string, bool) {
 	if raw == "" {
 		return "", false
@@ -139,8 +145,8 @@ func redactURL(raw string) (string, bool) {
 }
 
 type suggestionContext struct {
-	overwrite, lock, allowInsecure            bool
-	timezone, athleteID, baseURL, zeppBaseURL string
+	overwrite, lock, allowInsecure, unparsableURL bool
+	timezone, athleteID, baseURL, zeppBaseURL     string
 }
 
 // shellQuote single-quotes arg when it has characters a POSIX shell would
@@ -176,11 +182,12 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 		Overwrite: BoolFlag(flags, "overwrite"), Lock: BoolFlag(flags, "lock"), Warnings: []string{},
 	}
 
-	zeppDays, warnings, err := fetchZeppWellness(zeppBase, fields, tzInfo.location, oldest, newest)
+	zeppDays, hrvInfo, warnings, err := fetchZeppWellness(zeppBase, fields, tzInfo.location, oldest, newest)
 	if err != nil {
 		return wrapCommandError(err)
 	}
 	out.Warnings = warnings
+	out.HRVSamplesInfo = hrvInfo
 	out.ZeppDays = len(zeppDays)
 
 	var existing []icu.Wellness
@@ -196,6 +203,7 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 	out.PartialSleep = partialSleepSuggestions(plan.Changes, suggestionContext{
 		overwrite: out.Overwrite, lock: out.Lock, allowInsecure: BoolFlag(flags, zeppAllowInsecureHostFlag),
 		timezone: out.Timezone, athleteID: icu.StringFlag(flags, "athlete-id", ""), baseURL: suggestBase, zeppBaseURL: suggestZepp,
+		unparsableURL: (client.BaseURL() != "" && suggestBase == "") || (zeppBase != "" && suggestZepp == ""),
 	})
 	if len(out.PartialSleep) > 0 && (baseStripped || zeppStripped) {
 		out.Warnings = append(out.Warnings, "credentials, query or fragment removed from --base-url/--zepp-base-url in the suggested command; add them back if needed")
@@ -253,13 +261,14 @@ func wantsField(fields []string, names ...string) bool {
 	return false
 }
 
-// fetchZeppWellness reads band data (resting HR, sleep) and HRV rMSSD from
+// fetchZeppWellness reads band data (resting HR, sleep) and Zepp nightly HRV (readiness sleepHRV) from
 // Zepp. An auth failure aborts; any other source failure is returned as a
 // warning so the other source still syncs (the command then exits non-zero).
 // HRV is fetched one UTC day wider on each side because HRVLocalDay can move
 // a reading across the UTC date line.
-func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, oldest, newest string) ([]icu.ZeppWellnessDay, []string, error) {
+func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, oldest, newest string) ([]icu.ZeppWellnessDay, []icu.ZeppWellnessDay, []string, error) {
 	var days []icu.ZeppWellnessDay
+	hrvInfo := []icu.ZeppWellnessDay{}
 	var warnings []string
 
 	err := runZeppWithClientOptions(zeppSyncOptions(zeppBase), func(ctx context.Context, zc *icu.ZeppClient) error {
@@ -279,24 +288,54 @@ func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, old
 		if wantsField(fields, icu.SyncFieldHRV) {
 			from, _ := time.Parse(time.DateOnly, oldest)
 			to, _ := time.Parse(time.DateOnly, newest)
-			got, err := zc.HRVRMSSDDays(ctx, from.AddDate(0, 0, -1).Format(time.DateOnly), to.AddDate(0, 0, 1).Format(time.DateOnly))
-			if errors.Is(err, icu.ErrZeppUnauthorized) {
-				return err
+			hrvFrom, hrvTo := from.AddDate(0, 0, -1).Format(time.DateOnly), to.AddDate(0, 0, 1).Format(time.DateOnly)
+			sleepHRV, errSleep := zc.SleepHRVDays(ctx, hrvFrom, hrvTo)
+			if errors.Is(errSleep, icu.ErrZeppUnauthorized) {
+				return errSleep
 			}
-			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("zepp hrv failed: %v", err))
+			// Only readiness sleepHRV is written. Days without it get no HRV:
+			// the HRVRMSSD samples mean is an approximation, and fill-only
+			// mode would never replace it with the later readiness value.
+			if errSleep != nil {
+				warnings = append(warnings, fmt.Sprintf("zepp hrv: readiness sleepHRV failed (%v); HRV skipped for every day, rerun later", errSleep))
 			}
-			hrv = got
+			hrv = sleepHRV
+			// HRVRMSSD samples are fetched for the dry-run information line
+			// only; a failure there is not a sync failure.
+			samples, errSamples := zc.HRVRMSSDDays(ctx, hrvFrom, hrvTo)
+			if errors.Is(errSamples, icu.ErrZeppUnauthorized) {
+				return errSamples
+			}
+			if errSamples == nil {
+				hrvInfo = samplesOnlyDays(sleepHRV, samples, loc, oldest, newest)
+			}
 		}
 		days = icu.BuildZeppWellnessDays(band, hrv, loc, oldest, newest)
 
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("zepp: %w", err)
+		return nil, nil, nil, fmt.Errorf("zepp: %w", err)
 	}
 
-	return days, warnings, nil
+	return days, hrvInfo, warnings, nil
+}
+
+// samplesOnlyDays returns the days in oldest..newest that have an HRVRMSSD
+// samples mean but no readiness sleepHRV.
+func samplesOnlyDays(sleepHRV, samples []icu.ZeppHRVEvent, loc *time.Location, oldest, newest string) []icu.ZeppWellnessDay {
+	have := map[string]bool{}
+	for _, day := range icu.BuildZeppWellnessDays(nil, sleepHRV, loc, oldest, newest) {
+		have[day.Date] = day.HRV > 0
+	}
+	info := []icu.ZeppWellnessDay{}
+	for _, day := range icu.BuildZeppWellnessDays(nil, samples, loc, oldest, newest) {
+		if day.HRV > 0 && !have[day.Date] {
+			info = append(info, icu.ZeppWellnessDay{Date: day.Date, HRV: day.HRV})
+		}
+	}
+
+	return info
 }
 
 // zeppSyncOptions points both the Zepp data host and the events host at
@@ -339,6 +378,11 @@ func printWellnessSync(stdout io.Writer, out *wellnessSyncOutput, asJSON bool) e
 	for _, suggestion := range out.PartialSleep {
 		fmt.Fprintf(stdout, "note: %s sleepSecs in intervals.icu is under half of Zepp's (suspected partial sync); to replace it run:\n  %s\n",
 			suggestion.Date, suggestion.Suggest)
+	}
+	if !out.Applied {
+		for _, day := range out.HRVSamplesInfo {
+			fmt.Fprintf(stdout, "info: %s HRVRMSSD samples mean %g ms (not written: no readiness sleepHRV that day)\n", day.Date, day.HRV)
+		}
 	}
 	switch {
 	case len(out.Writes) == 0:

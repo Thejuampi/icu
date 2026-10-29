@@ -63,6 +63,22 @@ func TestZeppMockBandAndEvents(t *testing.T) {
 	if code != http.StatusOK || len(items) != 2 {
 		t.Fatalf("events code=%d body=%v", code, body)
 	}
+	// Real shape: value is an object with startTime and samples, never a scalar.
+	item0, _ := items[0].(map[string]any)
+	val0, _ := item0["value"].(map[string]any)
+	if samples, _ := val0["samples"].([]any); len(samples) == 0 || val0["startTime"] == nil {
+		t.Fatalf("HRVRMSSD shape %v", item0)
+	}
+	q = "?eventType=readiness&subType=watch_score&from=" + itoa(from) + "&to=" + itoa(to)
+	_, body = zeppGet(t, srv.URL+mockZeppEventsPath+q, "tok")
+	items, _ = body["items"].([]any)
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		v, _ := m["value"].(map[string]any)
+		if hrv, ok := v["sleepHRV"].(float64); !ok || hrv <= 0 {
+			t.Fatalf("readiness shape %v", it)
+		}
+	}
 
 	// Other event types are empty; before the first day nothing at all.
 	if _, body = zeppGet(t, srv.URL+mockZeppEventsPath+"?eventType=Charge&from=1&to=2", "tok"); listLen(body["items"]) != 0 {

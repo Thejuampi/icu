@@ -1,0 +1,159 @@
+{
+  "items": [
+    {
+      "userId": "[redacted]",
+      "eventType": "HRVRMSSD",
+      "subType": "real_data",
+      "timestamp": 1894579200000,
+      "value": {
+        "startTime": 1894590000000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "hrv": 52
+          },
+          {
+            "s": 180000,
+            "u": 7,
+            "hrv": 0
+          },
+          {
+            "s": 360000,
+            "u": 7,
+            "hrv": 55
+          },
+          {
+            "s": 540000,
+            "u": 7,
+            "hrv": 255
+          },
+          {
+            "s": 720000,
+            "u": 7,
+            "hrv": 50
+          }
+        ]
+      }
+    },
+    {
+      "userId": "[redacted]",
+      "eventType": "HRVRMSSD",
+      "subType": "real_data",
+      "timestamp": 1894665600000,
+      "value": {
+        "startTime": 1894676400000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "hrv": 60
+          },
+          {
+            "s": 180000,
+            "u": 7,
+            "hrv": 58
+          }
+        ]
+      }
+    },
+    {
+      "userId": "[redacted]",
+      "eventType": "HRVRMSSD",
+      "subType": "real_data",
+      "timestamp": 1894752000000,
+      "value": {
+        "startTime": 1894762800000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "hrv": 49
+          },
+          {
+            "s": 180000,
+            "u": 7,
+            "hrv": 47
+          },
+          {
+            "s": 360000,
+            "u": 7,
+            "hrv": 51
+          }
+        ]
+      }
+    },
+    {
+      "userId": "[redacted]",
+      "eventType": "HRVRMSSD",
+      "subType": "real_data",
+      "timestamp": 1894838400000,
+      "value": {
+        "startTime": 1894849200000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "hrv": 44
+          },
+          {
+            "s": 180000,
+            "u": 7,
+            "hrv": 46
+          }
+        ]
+      }
+    },
+    {
+      "userId": "[redacted]",
+      "eventType": "HRVRMSSD",
+      "subType": "real_data",
+      "timestamp": 1894924800000,
+      "value": {
+        "startTime": 1894935600000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "hrv": 57
+          },
+          {
+            "s": 180000,
+            "u": 7,
+            "hrv": 55
+          },
+          {
+            "s": 360000,
+            "u": 7,
+            "hrv": 59
+          }
+        ]
+      }
+    }
+  ]
+}
