@@ -476,6 +476,10 @@ func TestEveryCommandRejectsUnsupportedFlagsWithoutWrites(t *testing.T) {
 // --id 1 --dry-run has something to preview.
 func seedRevertBackup(t *testing.T) {
 	t.Helper()
+	// newGuardMock has already swapped newCommandClient (withMockCommandClient),
+	// so the base URL is ignored and the backup GET goes to the guard mock. The
+	// dead loopback port only matters if that swap is ever missing: the GET then
+	// fails fast (connection refused) instead of reaching the real API.
 	client := newCommandClient("k", "i1", "http://127.0.0.1:1")
 	if _, err := backupEvent(client, 1, eventBackupReasonDelete); err != nil {
 		t.Fatal(err)
