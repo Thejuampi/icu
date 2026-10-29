@@ -55,3 +55,16 @@ func TestZeppLoginStepTimesOut(t *testing.T) { //nolint:paralleltest // override
 		t.Fatalf("login step took %v", elapsed)
 	}
 }
+
+func TestZeppTokensStepTimesOut(t *testing.T) { //nolint:paralleltest // overrides zeppAuthTimeout
+	shortZeppAuthTimeout(t)
+	srv := hangingServer(t)
+	start := time.Now()
+	_, _, err := getAccessTokenWithURL(srv.URL, "user@example.com", "synthetic-password")
+	if err == nil || !isTimeout(err) {
+		t.Fatalf("err = %v, want a timeout", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("tokens step took %v", elapsed)
+	}
+}

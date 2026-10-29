@@ -91,6 +91,7 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	req.Header.Set("Accept-Encoding", "gzip")
 
 	client := &http.Client{
+		Timeout: zeppAuthTimeout,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
