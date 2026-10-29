@@ -83,7 +83,7 @@ func (rec *recorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if resp.StatusCode == http.StatusOK && json.Valid(body) {
 		// One random shift per capture session; captures from different
 		// sessions are not date-consistent with each other.
-		body = rec.shift.shiftJSON(anonymizeJSON(body))
+		body = rec.shift.shiftJSON(anonSalt(rec.shift.salt).anonymizeJSON(body))
 		if saveErr := rec.save(fixtureKey(r.URL.Path), body); saveErr != nil {
 			fmt.Fprintf(rec.log, "icu-mock record: %v\n", saveErr)
 		}
@@ -266,7 +266,13 @@ func isGearObject(obj map[string]any) bool {
 	return true
 }
 
-func anonymizeJSON(body []byte) []byte {
+// anonSalt keys the id and group remaps with the run's salt (the same one
+// that drives the jitter), so the fake ids cannot be reversed by hashing
+// candidate real ids. Within a run the mapping is deterministic; across runs
+// it is idempotent because remapped values match the synthetic patterns.
+type anonSalt uint32
+
+func (a anonSalt) anonymizeJSON(body []byte) []byte {
 	var value any
 	if decodeJSON(body, &value) != nil {
 		return body
@@ -277,14 +283,14 @@ func anonymizeJSON(body []byte) []byte {
 	encoder := json.NewEncoder(&out)
 	encoder.SetEscapeHTML(false)
 
-	if err := encoder.Encode(anonymize(value)); err != nil {
+	if err := encoder.Encode(a.anonymize(value)); err != nil {
 		return body
 	}
 
 	return bytes.TrimRight(out.Bytes(), "\n")
 }
 
-func anonymize(value any) any {
+func (a anonSalt) anonymize(value any) any {
 	switch typed := value.(type) {
 	case map[string]any:
 		person := isPersonObject(typed)
@@ -321,18 +327,18 @@ func anonymize(value any) any {
 			}
 
 			if isIDKey(key) {
-				typed[key] = remapIDValue(inner)
+				typed[key] = a.remapIDValue(inner)
 
 				continue
 			}
 
 			if group, ok := inner.(string); ok && key == "group" && realGroupHash.MatchString(group) {
-				typed[key] = remapGroupHash(group)
+				typed[key] = a.remapGroupHash(group)
 
 				continue
 			}
 
-			typed[key] = anonymize(inner)
+			typed[key] = a.anonymize(inner)
 		}
 
 		if _, ok := typed["name"]; ok && gear {
@@ -343,7 +349,7 @@ func anonymize(value any) any {
 		rescalePerKg(typed)
 
 		if curves, ok := typed["activities"].(map[string]any); ok {
-			typed["activities"] = anonymizeCurveActivities(curves)
+			typed["activities"] = a.anonymizeCurveActivities(curves)
 		}
 
 		// GPS streams are location data: drop them entirely.
@@ -355,13 +361,13 @@ func anonymize(value any) any {
 		return typed
 	case []any:
 		for i, inner := range typed {
-			typed[i] = anonymize(inner)
+			typed[i] = a.anonymize(inner)
 		}
 
 		return typed
 	case string:
 		if isExternalID(typed) {
-			return remapExternalID(typed)
+			return a.remapExternalID(typed)
 		}
 
 		return roundTimeOfDay(typed)
@@ -426,9 +432,9 @@ func isRealPrefixedID(value string) bool {
 
 // remapPrefixedID maps a real activity or gear id to a stable synthetic one
 // with the same prefix ("i173884602" -> "i6xxxxxxxx").
-func remapPrefixedID(id string) string {
+func (a anonSalt) remapPrefixedID(id string) string {
 	hash := fnv.New32a()
-	_, _ = hash.Write([]byte(id))
+	_, _ = fmt.Fprintf(hash, "%d:%s", a, id)
 
 	if id[0] == 'i' {
 		return fmt.Sprintf("i6%08d", hash.Sum32()%100_000_000)
@@ -444,9 +450,9 @@ var realGroupHash = regexp.MustCompile(`^[0-9a-f]{8}$`)
 
 // remapGroupHash maps a group hash to a stable fake one ("mk" + 6 hex), so
 // activities sharing a group still share one.
-func remapGroupHash(group string) string {
+func (a anonSalt) remapGroupHash(group string) string {
 	hash := fnv.New32a()
-	_, _ = hash.Write([]byte("group:" + group))
+	_, _ = fmt.Fprintf(hash, "%d:group:%s", a, group)
 
 	return fmt.Sprintf("mk%06x", hash.Sum32()&0xffffff)
 }
@@ -511,38 +517,38 @@ func isLongNumericID(value string) bool {
 
 // remapIDValue remaps 9+ digit numeric ids held in id-like keys (numbers or
 // strings, also inside arrays) to stable synthetic 700000xxx ids.
-func remapIDValue(value any) any {
+func (a anonSalt) remapIDValue(value any) any {
 	switch typed := value.(type) {
 	case json.Number:
 		if isLongNumericID(string(typed)) {
-			return json.Number(remapNumericID(string(typed)))
+			return json.Number(a.remapNumericID(string(typed)))
 		}
 	case string:
 		if isLongNumericID(typed) {
-			return remapNumericID(typed)
+			return a.remapNumericID(typed)
 		}
 
 		if isRealPrefixedID(typed) {
-			return remapPrefixedID(typed)
+			return a.remapPrefixedID(typed)
 		}
 
-		return anonymize(typed)
+		return a.anonymize(typed)
 	case []any:
 		for i, inner := range typed {
-			typed[i] = remapIDValue(inner)
+			typed[i] = a.remapIDValue(inner)
 		}
 
 		return typed
 	default:
-		return anonymize(value)
+		return a.anonymize(value)
 	}
 
 	return value
 }
 
-func remapNumericID(id string) string {
+func (a anonSalt) remapNumericID(id string) string {
 	hash := fnv.New32a()
-	_, _ = hash.Write([]byte(id))
+	_, _ = fmt.Fprintf(hash, "%d:%s", a, id)
 
 	return fmt.Sprintf("7%08d", hash.Sum32()%100_000_000)
 }
@@ -580,9 +586,9 @@ func isExternalID(value string) bool {
 
 // remapExternalID turns an external id into a stable fake intervals.icu id
 // ("i8" + 8 digits), so the same id maps to the same value in every file.
-func remapExternalID(id string) string {
+func (a anonSalt) remapExternalID(id string) string {
 	hash := fnv.New32a()
-	_, _ = hash.Write([]byte(id))
+	_, _ = fmt.Fprintf(hash, "%d:%s", a, id)
 
 	return fmt.Sprintf("i8%08d", hash.Sum32()%100_000_000)
 }
@@ -590,12 +596,12 @@ func remapExternalID(id string) string {
 // anonymizeCurveActivities rewrites the activity map embedded in power and
 // HR curve responses: keys and ids are remapped and names replaced. Dates
 // are moved by the shared date shift (see shift.go).
-func anonymizeCurveActivities(curves map[string]any) map[string]any {
+func (a anonSalt) anonymizeCurveActivities(curves map[string]any) map[string]any {
 	out := make(map[string]any, len(curves))
 	for key, inner := range curves {
 		external := isExternalID(key) || isLongNumericID(key)
 		if external {
-			key = remapExternalID(key)
+			key = a.remapExternalID(key)
 		}
 
 		if activity, ok := inner.(map[string]any); ok {
@@ -632,7 +638,7 @@ func anonymizeDirWith(dir string, shift dateShift) error {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 
-		body = anonymizeJSON(body)
+		body = anonSalt(shift.salt).anonymizeJSON(body)
 		if doShift {
 			body = shift.shiftFile(name, body)
 		}

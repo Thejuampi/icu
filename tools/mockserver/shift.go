@@ -49,7 +49,12 @@ const (
 	channelMoving   = "moving"
 )
 
-func distanceKeys() []string { return []string{"distance", "icu_distance"} }
+// distanceKeys scale by the activity's distance factor. Elevation gain and
+// loss ride on the same factor: on a fixed-gradient course climbing grows
+// with distance, so a separate factor would make the implied gradient drift.
+func distanceKeys() []string {
+	return []string{"distance", "icu_distance", "total_elevation_gain", "total_elevation_loss"}
+}
 
 func movingKeys() []string {
 	return []string{"moving_time", "elapsed_time", "icu_recording_time", "time"}

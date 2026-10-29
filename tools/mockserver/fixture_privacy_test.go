@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io/fs"
 	"math"
@@ -42,13 +45,12 @@ func TestCommittedFixturesHaveNoExternalIDsOrRealWeight(t *testing.T) {
 
 		checkFixtureName(t, path)
 
-		// Captured values that must never reappear: the real athlete number
-		// and the activity the reference streams came from (now i632977173).
-		for _, word := range []string{"445643", "202545713"} {
-			if strings.Contains(string(body), word) {
-				t.Errorf("%s: contains captured value %q", path, word)
-			}
+		// The real athlete number must never reappear.
+		if strings.Contains(string(body), "445643") {
+			t.Errorf("%s: contains the real athlete number", path)
 		}
+
+		checkDenylist(t, path, body, deniedTokens())
 
 		for _, line := range strings.Split(string(body), "\n") {
 			if match := longID.FindStringSubmatch(line); match != nil {
@@ -63,6 +65,7 @@ func TestCommittedFixturesHaveNoExternalIDsOrRealWeight(t *testing.T) {
 
 		walkWeights(t, path, value)
 		walkPrivacy(t, path, "", value)
+		walkClockTimes(t, path, value)
 
 		return nil
 	})
@@ -95,7 +98,7 @@ func walkWeights(t reporter, path string, value any) {
 }
 
 func TestLongIDPattern(t *testing.T) {
-	for _, line := range []string{`"16605333088"`, `"id": 16605333088,`, `16605333088`, `"id": -16605333088,`} {
+	for _, line := range []string{`"19999999999"`, `"id": 19999999999,`, `19999999999`, `"id": -19999999999,`} {
 		if !longID.MatchString(line) {
 			t.Errorf("missed %q", line)
 		}
@@ -109,19 +112,19 @@ func TestLongIDPattern(t *testing.T) {
 }
 
 func TestAnonymizeCurveActivities(t *testing.T) {
-	in := `{"list":[{"activity_id":["16605333088","i900000001"],"weight":84.2,` +
-		`"watts":[364],"watts_per_kg":[4.32]}],"activities":{"16605333088":{"id":"16605333088",` +
+	in := `{"list":[{"activity_id":["19999999999","i900000001"],"weight":84.2,` +
+		`"watts":[364],"watts_per_kg":[4.32]}],"activities":{"19999999999":{"id":"19999999999",` +
 		`"name":"Zwift - Real Ride","icu_weight":84.2,"start_date_local":"2025-11-10T18:00:00"},` +
 		`"i900000001":{"id":"i900000001","name":"Private","start_date_local":"2025-11-01T08:00:00"}}}`
 
-	out := string(anonymizeJSON([]byte(in)))
-	for _, leaked := range []string{"16605333088", "Real Ride", "Private", "84.2", "4.32"} {
+	out := string(anonSalt(0).anonymizeJSON([]byte(in)))
+	for _, leaked := range []string{"19999999999", "Real Ride", "Private", "84.2", "4.32"} {
 		if strings.Contains(out, leaked) {
 			t.Errorf("leaks %s: %s", leaked, out)
 		}
 	}
 
-	want := remapExternalID("16605333088")
+	want := anonSalt(0).remapExternalID("19999999999")
 	for _, fragment := range []string{
 		`"` + want + `":{`, `"id":"` + want + `"`, `"2025-11-01T08:00:00"`,
 		`"2025-11-10T18:00:00"`, `"weight":72.8`, `"watts_per_kg":[5]`, `"name":"Activity ` + want + `"`,
@@ -131,7 +134,7 @@ func TestAnonymizeCurveActivities(t *testing.T) {
 		}
 	}
 
-	if again := string(anonymizeJSON([]byte(out))); again != out {
+	if again := string(anonSalt(0).anonymizeJSON([]byte(out))); again != out {
 		t.Errorf("not idempotent:\n%s\n%s", out, again)
 	}
 }
@@ -271,8 +274,8 @@ func checkPerKg(t reporter, path, key string, power, perKg any) {
 
 func TestCheckFixtureName(t *testing.T) {
 	for path, want := range map[string]int{
-		"streams_i202545713.json":                 1,
-		"streams_i632977173.json":                 0,
+		"streams_i123456789.json":                 1,
+		"streams_i686255833.json":                 0,
 		"api/v1/activity/i900000001/streams.json": 0,
 		"wellness_replay.json":                    0,
 	} {
@@ -295,7 +298,7 @@ func TestPrivacyWalkersFlagLeaks(t *testing.T) {
 		"curve name":  `{"activities":{"i1":{"name":"Morning Ride"}}}`,
 		"per kg":      `{"average_watts":136,"average_watts_kg":1.67}`,
 		"eftp per kg": `{"eftp":265.9,"eftpPerKg":3.79}`,
-		"group hash":  `{"group":"d347ad98"}`,
+		"group hash":  `{"group":"abcdef01"}`,
 	}
 	for name, body := range cases {
 		var value any
@@ -387,21 +390,110 @@ func checkActivityText(t reporter, path string, obj map[string]any) {
 }
 
 func TestRemapGroupHashKeepsGroupingAndIsIdempotent(t *testing.T) {
-	a, b := remapGroupHash("d347ad98"), remapGroupHash("e11ee258")
-	if a != remapGroupHash("d347ad98") || a == b || realGroupHash.MatchString(a) {
+	a, b := anonSalt(0).remapGroupHash("abcdef01"), anonSalt(0).remapGroupHash("abcdef02")
+	if a != anonSalt(0).remapGroupHash("abcdef01") || a == b || realGroupHash.MatchString(a) {
 		t.Fatalf("remap %q %q", a, b)
 	}
 
 	var value any
-	if err := decodeJSON([]byte(`[{"group":"d347ad98"},{"group":"d347ad98"},{"group":"`+a+`"}]`), &value); err != nil {
+	if err := decodeJSON([]byte(`[{"group":"abcdef01"},{"group":"abcdef01"},{"group":"`+a+`"}]`), &value); err != nil {
 		t.Fatal(err)
 	}
 
-	items, _ := anonymize(value).([]any)
+	items, _ := anonSalt(0).anonymize(value).([]any)
 	for _, item := range items {
 		obj, _ := item.(map[string]any)
 		if obj["group"] != a {
 			t.Fatalf("group = %v, want %s", obj["group"], a)
 		}
+	}
+}
+
+// deniedTokens holds the sha256 of captured values (activity and Strava ids,
+// group hashes) that must never reappear in testdata. Only hashes are kept
+// so the values themselves are not written anywhere in the repository.
+func deniedTokens() map[string]bool {
+	return map[string]bool{
+		"fef403a235e54861d438f752ba9d37bfefd4958a2a09c31d9adc206e880b8819": true,
+		"bd4cc61ea916a335e4e564910d16cd459118e37e805ce69f4bed79d6b60c33f9": true,
+		"13e46c7a14b4f64e269132a56efcd199b20f52d6467e836553c2eff86e2f5243": true,
+		"8de07dd5015d0be7122ad1d4f39e47636dcda3ddd3267700ce5227060628a989": true,
+		"516cc28ded93fc242454d3c51f086906a2aea66f7ea32d17943efbb686069d4d": true,
+	}
+}
+
+// hexToken matches digit runs and hex tokens. Text is lowercased first, so
+// a leading "i" (activity ids) or "-" (negative ids) is never part of a
+// token: "i123" and "-123" both normalize to "123".
+var hexToken = regexp.MustCompile(`[0-9a-f]{6,}`)
+
+// checkDenylist hashes every normalized token of body and flags denied ones.
+func checkDenylist(t reporter, path string, body []byte, denied map[string]bool) {
+	t.Helper()
+
+	for _, token := range hexToken.FindAll(bytes.ToLower(body), -1) {
+		sum := sha256.Sum256(token)
+		if denied[hex.EncodeToString(sum[:])] {
+			t.Errorf("%s: contains a denylisted captured value (sha256 %x)", path, sum)
+		}
+	}
+}
+
+// walkClockTimes flags any timestamp that is not on the hour: the
+// anonymizer truncates every time of day, so a minute or second means a
+// captured start time leaked.
+func walkClockTimes(t reporter, path string, value any) {
+	t.Helper()
+
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, inner := range typed {
+			walkClockTimes(t, path, inner)
+		}
+	case []any:
+		for _, inner := range typed {
+			walkClockTimes(t, path, inner)
+		}
+	case string:
+		if roundTimeOfDay(typed) != typed {
+			t.Errorf("%s: timestamp %q is not on the hour", path, typed)
+		}
+	}
+}
+
+func TestDenylistAndClockTimes(t *testing.T) {
+	body := []byte(`{"id":"i19999999999","x":"-ABCDEF01","y":"abcdef01","z":123456}`)
+
+	rec := &recordingTB{}
+	checkDenylist(rec, "case", body, deniedTokens())
+
+	if rec.errors != 0 {
+		t.Fatalf("fake values flagged %d times", rec.errors)
+	}
+
+	fake := map[string]bool{}
+	for _, value := range []string{"19999999999", "abcdef01"} {
+		sum := sha256.Sum256([]byte(value))
+		fake[hex.EncodeToString(sum[:])] = true
+	}
+
+	checkDenylist(rec, "case", body, fake)
+
+	if rec.errors != 3 { // i-prefixed id, upper-case negative hex, plain hex
+		t.Fatalf("denylisted values flagged %d times, want 3", rec.errors)
+	}
+
+	rec = &recordingTB{}
+
+	var value any
+	if err := decodeJSON([]byte(`["2026-09-01T08:00:00","2026-09-01T08:13:00","2026-09-01T08:00:07Z",`+
+		`"2026-09-01",{"a":["2026-09-01T09:30:00.000+00:00"]}]`), &value); err != nil {
+		t.Fatal(err)
+	}
+
+	walkClockTimes(rec, "case", value)
+
+	if rec.errors != 3 {
+		t.Fatalf("clock times flagged %d times, want 3", rec.errors)
 	}
 }

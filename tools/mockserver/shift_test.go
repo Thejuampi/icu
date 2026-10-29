@@ -218,7 +218,7 @@ func TestRoundTimeOfDay(t *testing.T) {
 func TestAnonymizeRemapsLongIDsAndPerKg(t *testing.T) {
 	t.Parallel()
 
-	out := string(anonymizeJSON([]byte(`{"id":-123456789,"paired_event_id":800000001,"wkg_activity_id":["987654321","i1"],` +
+	out := string(anonSalt(0).anonymizeJSON([]byte(`{"id":-123456789,"paired_event_id":800000001,"wkg_activity_id":["987654321","i1"],` +
 		`"folder_id":{"x":1},"icu_weight_sync":"81.4","weight_pref_lb":false,"average_watts":136,"average_watts_kg":1.67,` +
 		`"eftp":265.9014,"eftpPerKg":3.79,"submax_watts":[[100]],"submax_watts_per_kg":[[1.2]],"max_watts_kg":null,` +
 		`"weight_kg":80,"curve":{"activities":{"123456789":{"name":"x"}}}}`)))
@@ -232,14 +232,33 @@ func TestAnonymizeRemapsLongIDsAndPerKg(t *testing.T) {
 	for _, want := range []string{
 		`"paired_event_id":800000001`, `"icu_weight_sync":"72.8"`, `"weight_pref_lb":false`, `"average_watts_kg":1.868132`,
 		`"eftpPerKg":3.652492`, `"submax_watts_per_kg":[[1.373626]]`, `"max_watts_kg":null`, `"weight_kg":72.8`,
-		`"Activity ` + remapExternalID("123456789") + `"`, `"folder_id":{"x":1}`,
+		`"Activity ` + anonSalt(0).remapExternalID("123456789") + `"`, `"folder_id":{"x":1}`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %s: %s", want, out)
 		}
 	}
 
-	if again := string(anonymizeJSON([]byte(out))); again != out {
+	if again := string(anonSalt(0).anonymizeJSON([]byte(out))); again != out {
 		t.Errorf("not idempotent:\n%s\n%s", out, again)
+	}
+}
+
+func TestJitterScalesElevationWithDistance(t *testing.T) {
+	shift := dateShift{salt: 7}
+	out := shift.shiftJSON([]byte(`{"id":"i900000001","start_date_local":"2026-10-01T08:00:00",` +
+		`"distance":100000,"total_elevation_gain":1000,"total_elevation_loss":1000}`))
+
+	var got struct {
+		Distance float64 `json:"distance"`
+		Gain     float64 `json:"total_elevation_gain"`
+		Loss     float64 `json:"total_elevation_loss"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Distance == 100000 || math.Abs(got.Gain-got.Distance/100) > 1 || got.Loss != got.Gain {
+		t.Fatalf("elevation not scaled with distance: %s", out)
 	}
 }

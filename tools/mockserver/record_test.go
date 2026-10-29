@@ -205,11 +205,11 @@ func TestCommittedStreamFixturesHaveUniqueTypes(t *testing.T) {
 func TestAnonymizeHelpers(t *testing.T) {
 	t.Parallel()
 
-	if got := string(anonymizeJSON([]byte("not json"))); got != "not json" {
+	if got := string(anonSalt(0).anonymizeJSON([]byte("not json"))); got != "not json" {
 		t.Fatalf("invalid = %s", got)
 	}
 
-	got := string(anonymizeJSON([]byte(`[{"type":"latlng","data":[1],"data2":[2]},{"type":"watts","data":[3]},` +
+	got := string(anonSalt(0).anonymizeJSON([]byte(`[{"type":"latlng","data":[1],"data2":[2]},{"type":"watts","data":[3]},` +
 		`{"start_latlng":[1,2],"lat":40.7,"refresh_token":"t","garmin_user_id":"g","created_by_id":"i9","countries":["AR"],"external_id":"999"}]`)))
 	for _, leaked := range []string{"[1]", "[2]", "40.7", `"t"`, `"g"`, "i9", "AR", "999"} {
 		if strings.Contains(got, leaked) {
@@ -221,7 +221,7 @@ func TestAnonymizeHelpers(t *testing.T) {
 		t.Errorf("non-GPS stream dropped: %s", got)
 	}
 
-	activity := string(anonymizeJSON([]byte(`{"id":"i900000002","name":"Morning Ride","strava_id":"55"}`)))
+	activity := string(anonSalt(0).anonymizeJSON([]byte(`{"id":"i900000002","name":"Morning Ride","strava_id":"55"}`)))
 	if !strings.Contains(activity, "i900000002") || !strings.Contains(activity, "Morning Ride") || strings.Contains(activity, "55") {
 		t.Errorf("activity with strava_id must keep id/name and drop strava_id: %s", activity)
 	}

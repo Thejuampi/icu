@@ -244,7 +244,7 @@ func TestCommittedFixturesCoverCLIEndpoints(t *testing.T) {
 
 	// Private data must stay anonymized in the committed fixtures.
 	for key, body := range srv.fixtures {
-		if !bytes.Equal(anonymizeJSON(body), anonymizeJSON(anonymizeJSON(body))) {
+		if !bytes.Equal(anonSalt(0).anonymizeJSON(body), anonSalt(0).anonymizeJSON(anonSalt(0).anonymizeJSON(body))) {
 			t.Errorf("%s: anonymizer not idempotent", key)
 		}
 
@@ -253,7 +253,7 @@ func TestCommittedFixturesCoverCLIEndpoints(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		again, err := json.Marshal(anonymize(value))
+		again, err := json.Marshal(anonSalt(0).anonymize(value))
 		if err != nil {
 			t.Fatal(err)
 		}
