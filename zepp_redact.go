@@ -28,7 +28,7 @@ var errZeppRedactTooDeep = errors.New("json nested too deep")
 //     removed) has its value replaced whatever its type, objects included.
 //  2. Allowlist: any other string is replaced too, unless its key is a
 //     known-safe field AND the string has that field's shape: ISO date/time
-//     or epoch for time keys, ^[A-Za-z_]{1,32}$ for enum keys, a short
+//     or epoch for time keys, known enums or strict code case (<= 20 chars) for enum keys, a short
 //     number for metric keys. Strings inside arrays are never allowlisted.
 //     Numbers, booleans and null are kept (they are the payload), except an
 //     integer of 9+ digits, unless it is an epoch under a time-like key.
@@ -69,6 +69,10 @@ func zeppDeniedFragments() []string {
 		"location", "nick", "alias", "fullname", "firstname", "lastname", "displayname", "devicename",
 		"birth", "dob", "zip", "postcode", "city", "country", "region", "geo", "coord", "position", "owner", "friend",
 		"member", "wearer", "host", "msisdn", "ipaddr", "ipv4", "ipv6",
+		// Device identity: deviceSource, deviceType, deviceModel, ... carry
+		// numeric device/model ids (a 7-digit deviceSource leaked through).
+		"device", "firmware", "hardware", "hwver", "fwver", "productid", "productver", "macaddress", "bluetooth",
+		"vendor", "brand", "model", "imsi", "meid", "esn", "sourceid",
 	}
 }
 
@@ -91,7 +95,7 @@ type zeppSafeClass int
 const (
 	zeppClassNone   zeppSafeClass = iota
 	zeppClassTime                 // ISO date/time or a numeric epoch (<= 13 digits)
-	zeppClassEnum                 // ^[A-Za-z_]{1,32}$
+	zeppClassEnum                 // known enum or strict code case, <= 20 chars
 	zeppClassMetric               // up to 6 digits, optional sign and decimals
 	zeppClassOffset               // sample offset in ms: up to 8 digits
 )
@@ -226,23 +230,35 @@ func zeppEpochString(str string) bool {
 	return err == nil && zeppPlausibleEpoch(n)
 }
 
-// zeppEnumString reports whether str looks like a code enum (lowercase,
-// camelCase, UPPER_SNAKE, snake_case). A single capitalised word ("Testy")
-// looks like a name and is rejected, unless it is a known Zepp event enum.
-func zeppEnumString(str string) bool {
-	if !zeppEnumRe.MatchString(str) {
-		return false
-	}
-	if !zeppCapWordRe.MatchString(str) {
-		return true
-	}
+// zeppEnumMaxLen caps the length of a pattern-matched enum string.
+const zeppEnumMaxLen = 20
+
+// zeppKnownEnums are enum strings Zepp is known to send that the strict
+// pattern alone would reject (single capitalised or all-caps words).
+func zeppKnownEnums() map[string]bool {
+	out := map[string]bool{"OK": true, "SUCCESS": true, "FAIL": true, "NONE": true, "UNKNOWN": true}
 	for _, p := range v2EventPresets() {
-		if str == p.EventType || str == p.SubType {
-			return true
+		out[p.EventType] = true
+		if p.SubType != "" {
+			out[p.SubType] = true
 		}
 	}
 
-	return false
+	return out
+}
+
+// zeppEnumString reports whether str is an enum value: a known Zepp enum,
+// or at most zeppEnumMaxLen chars of strict code case, i.e. snake_case
+// ("watch_score"), lowerCamelCase with at least one hump ("insightData") or
+// UPPER_SNAKE with at least one underscore ("REAL_DATA"). Single
+// capitalised or all-caps words ("Testy", "JUAN") and anything longer look
+// like names or free text and are redacted.
+func zeppEnumString(str string) bool {
+	if zeppKnownEnums()[str] {
+		return true
+	}
+
+	return len(str) <= zeppEnumMaxLen && zeppStrictEnumRe.MatchString(str)
 }
 
 var (
@@ -258,12 +274,12 @@ var (
 	zeppISOTimeRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$`)
 	zeppEpochRe   = regexp.MustCompile(`^(?:\d{10}|\d{13})$`)
 	zeppClockRe   = regexp.MustCompile(`^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$`)
-	zeppCapWordRe = regexp.MustCompile(`^[A-Z][a-z]+$`)
 	zeppOffsetRe  = regexp.MustCompile(`^\d{1,8}$`)
-	zeppEnumRe    = regexp.MustCompile(`^[A-Za-z_]{1,32}$`)
-	zeppMetricRe  = regexp.MustCompile(`^-?\d{1,6}(?:\.\d{1,6})?$`)
-	zeppIDKeyRe   = regexp.MustCompile(`^(?:\d+|(?i)[0-9a-f]{8,})$`)
-	zeppNumberRe  = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
+	// zeppStrictEnumRe: snake_case | lowerCamelCase (1+ hump) | UPPER_SNAKE (1+ "_").
+	zeppStrictEnumRe = regexp.MustCompile(`^(?:[a-z]+(?:_[a-z0-9]+)*|[a-z]+(?:[A-Z][a-z0-9]*)+|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)$`)
+	zeppMetricRe     = regexp.MustCompile(`^-?\d{1,6}(?:\.\d{1,6})?$`)
+	zeppIDKeyRe      = regexp.MustCompile(`^(?:\d+|(?i)[0-9a-f]{8,})$`)
+	zeppNumberRe     = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
 )
 
 // zeppValueLooksSensitive reports whether a string value matches a

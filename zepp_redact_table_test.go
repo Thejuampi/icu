@@ -398,13 +398,16 @@ func TestRedactEnumShapes(t *testing.T) {
 
 	for _, v := range []string{
 		"readiness", "watch_score", "real_data", "insightData", "HRVRMSSD", "UPPER_SNAKE",
-		"ms", "Charge", "Emotion", "DailyHealth", strings.Repeat("x", 32), "very_long_enum_name_with_words",
+		"ms", "Charge", "Emotion", "DailyHealth", "skinTemp", "hrv_sdnn", strings.Repeat("x", 20), "SUCCESS",
 	} {
 		if got := redactOne(t, "type", v); got != `"`+v+`"` {
 			t.Errorf("enum %q lost: %s", v, got)
 		}
 	}
-	for _, v := range []string{"Testy", "Fakename", "Nowhere", strings.Repeat("x", 33)} {
+	for _, v := range []string{
+		"Testy", "Fakename", "Nowhere", "JUAN", "TESTY", "Fake_Name", "FakeName", "fake__name", "_x", "x_",
+		strings.Repeat("x", 21), strings.Repeat("x", 33), "very_long_enum_name_with_words", "insightDataLongerThanTwenty",
+	} {
 		if got := redactOne(t, "status", v); got != `"[redacted]"` {
 			t.Errorf("%q kept: %s", v, got)
 		}
