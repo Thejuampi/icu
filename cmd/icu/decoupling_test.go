@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -333,7 +334,8 @@ func TestActivityDecouplingCommand(t *testing.T) {
 	// Exactly one failed criterion, duration, with its value and threshold:
 	// 59 min minus the 15/10 min coach trim leaves 34 min against >= 60 min.
 	// Top-level and summary failedCriteria are the same detail list.
-	wantFailed := []any{map[string]any{"name": icu.CriterionDuration, "value": 34.0, "threshold": ">= 60 min", "pass": false}}
+	durationLabel := fmt.Sprintf(">= %d min", icu.CoachMinAnalyzedMinutes)
+	wantFailed := []any{map[string]any{"name": icu.CriterionDuration, "value": 34.0, "threshold": durationLabel, "pass": false}}
 	if !reflect.DeepEqual(medium["failedCriteria"], wantFailed) || !reflect.DeepEqual(mediumSummary["failedCriteria"], wantFailed) ||
 		!reflect.DeepEqual(mediumSummary["failedCriteriaNames"], []any{icu.CriterionDuration}) {
 		t.Fatalf("medium failed criteria = %v / %v / %v", medium["failedCriteria"], mediumSummary["failedCriteria"], mediumSummary["failedCriteriaNames"])
@@ -346,8 +348,11 @@ func TestActivityDecouplingCommand(t *testing.T) {
 		thresholds[name], _ = entry["threshold"].(string)
 	}
 	if !reflect.DeepEqual(thresholds, map[string]string{
-		icu.CriterionDuration: ">= 60 min", icu.CriterionVI: "<= 1.10 (<= 1.05 ok)", icu.CriterionCoasting: "< 0.10",
-		icu.CriterionZ1Z2: ">= 0.85", icu.CriterionMaxMinute: "<= 105 % FTP",
+		icu.CriterionDuration:  durationLabel,
+		icu.CriterionVI:        fmt.Sprintf("<= %.2f (<= %.2f ok)", icu.CoachVILowConfidence, icu.CoachVIOK),
+		icu.CriterionCoasting:  fmt.Sprintf("< %.2f", icu.CoachMaxCoastingShare),
+		icu.CriterionZ1Z2:      fmt.Sprintf(">= %.2f", icu.CoachMinZ1Z2Share),
+		icu.CriterionMaxMinute: fmt.Sprintf("<= %g %% FTP", icu.CoachMaxMinutePctFTP),
 	}) {
 		t.Fatalf("thresholds = %v", thresholds)
 	}
@@ -359,7 +364,7 @@ func TestActivityDecouplingCommand(t *testing.T) {
 	}
 	first, _ := shortFailed[0].(map[string]any)
 	if short["validity"] != icu.DecouplingNotValid || first["name"] != icu.CriterionDuration || first["value"] != 0.0 ||
-		first["threshold"] != ">= 60 min" || first["pass"] != false {
+		first["threshold"] != durationLabel || first["pass"] != false {
 		t.Fatalf("short failed criteria = %v", short["failedCriteria"])
 	}
 

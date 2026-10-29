@@ -341,12 +341,12 @@ func loadReferenceStreams(t *testing.T) icu.NullableStreamData {
 	return streams
 }
 
-// TestStreamDecouplingReferenceRideI632977173 replays the recorded streams of
+// TestStreamDecouplingReferenceRideI686255833 replays the recorded streams of
 // i686255833 (Z2, 2026-09-29; anonymized with the fixtures: time and
 // velocity jittered like the activity, so moving time 6086 s * 0.9726).
 // It asserts structure only: the method is not
 // tuned to any target number; the value is logged and reported in the PR.
-func TestStreamDecouplingReferenceRideI632977173(t *testing.T) {
+func TestStreamDecouplingReferenceRideI686255833(t *testing.T) {
 	t.Parallel()
 	streams := loadReferenceStreams(t)
 	got := icu.ComputeStreamDecoupling(streams, icu.DefaultDecouplingOptions(), icu.DecouplingContext{MovingTimeSeconds: 5919})
@@ -359,6 +359,14 @@ func TestStreamDecouplingReferenceRideI632977173(t *testing.T) {
 	}
 	if got.MinutesKept+excluded != got.MinutesInRange || math.Abs(float64(got.MovingSeconds-5919)) > 0.01*5919 { // ties at the stop speed
 		t.Fatalf("kept %d + excluded %d != %d, moving %d", got.MinutesKept, excluded, got.MinutesInRange, got.MovingSeconds)
+	}
+	// Pinned on the anonymized fixture (a change here is an algorithm change:
+	// bump DecouplingAlgorithmVersion and re-pin).
+	if got.Value == nil || math.Abs(*got.Value-2.97) > 0.01 || got.Excluded[icu.DecouplingExcludedCoasting] != 3 ||
+		got.MinutesKept != 70 || got.Trim.WarmupSeconds != 905 || got.HRLagSeconds != 9 ||
+		math.Abs(got.VariabilityIndex-1.1343) > 0.00005 {
+		t.Fatalf("pins: value %v coasting %d kept %d warmup %d lag %d VI %.5f", got.Value,
+			got.Excluded[icu.DecouplingExcludedCoasting], got.MinutesKept, got.Trim.WarmupSeconds, got.HRLagSeconds, got.VariabilityIndex)
 	}
 	t.Logf("i686255833: %.2f%% trim %+v lag %d (%s) kept %d/%d excluded %v",
 		*got.Value, got.Trim, got.HRLagSeconds, got.HRLagMethod, got.MinutesKept, got.MinutesInRange, got.Excluded)
