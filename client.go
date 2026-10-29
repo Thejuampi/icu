@@ -28,10 +28,14 @@ type Client struct {
 
 type ClientOption func(*Client)
 
+// WithHTTPClient uses httpClient for API calls. A client without a
+// CheckRedirect is copied (not mutated) and given SameOriginRedirects so the
+// API key never follows a redirect to another host; a client that already
+// sets CheckRedirect is used as is and the caller owns its redirect policy.
 func WithHTTPClient(httpClient *http.Client) ClientOption {
 	return func(client *Client) {
 		if httpClient != nil {
-			client.httpClient = httpClient
+			client.httpClient = withSameOriginRedirects(httpClient)
 		}
 	}
 }

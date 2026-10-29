@@ -31,6 +31,8 @@ type server struct {
 	writes   []Write
 	log      io.Writer
 	now      func() time.Time
+	// sink is the second listener for -redirect-sink; nil = mode off.
+	sink *redirectSink
 }
 
 func newServer(dir string, log io.Writer) (*server, error) {
@@ -101,6 +103,10 @@ func fixtureKey(path string) string {
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.serveRedirectMode(w, r) {
+		return
+	}
+
 	switch {
 	case r.URL.Path == "/_mock/writes" && r.Method == http.MethodGet:
 		s.handleWrites(w)
@@ -139,6 +145,10 @@ func (s *server) handleReset(w http.ResponseWriter) {
 	s.writes = nil
 	s.overlay = map[string][]byte{}
 	s.mu.Unlock()
+
+	if s.sink != nil {
+		s.sink.reset()
+	}
 
 	writeJSON(w, http.StatusOK, []byte(`{"reset":true}`))
 }
