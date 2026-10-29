@@ -146,7 +146,7 @@ type Activity struct {
 	SessionRPE        int     `json:"sessionRpe,omitempty"`
 	// Compliance is pointer + omitempty (D-5): never fetched before wave-2
 	// (F-8), so it has zero existing consumers. F-18/D-21: 0.0 means
-	// "unpaired", not "0% adherence" — all 36 live zero-compliance activities
+	// "unpaired", not "0% adherence" — all 36 captured zero-compliance activities
 	// carry a null paired_event_id. Analysis-workout emits this jointly with
 	// a pairing or not at all (D-21); this pointer only guards nil-vs-zero at
 	// the wire, the pairing gate lives in workout_execution_analysis.go.
@@ -191,7 +191,7 @@ type Activity struct {
 	PairedEventID *int `json:"pairedEventId,omitempty"`
 	// IgnorePower, IgnoreHR and IgnoreTime are the icu_ignore_* per-flag
 	// exclusion signals (D-2). Plain bool + omitempty: false is the ordinary,
-	// unambiguous default and every occurrence is measured false on the live
+	// unambiguous default and every occurrence is measured false on the wave-2
 	// corpus (F-19's thesis — filtering is declared prevention, never yet
 	// observed to fire), so there is no absent-vs-zero ambiguity to guard.
 	IgnorePower bool `json:"icuIgnorePower,omitempty"`
@@ -205,11 +205,11 @@ type Activity struct {
 	// emit-only rule, T4.4, requires the classification exercise before any
 	// future change may promote one of them into a computed output number).
 	// Each is pointer + omitempty (D-5): absent must not read as measured
-	// zero. On the live corpus (testdata/wave2_live_corpus.json, 230 real
-	// activities), CarbsIngested is non-null on 0 of them and HRR's
+	// zero. On the wave-2 corpus (testdata/wave2_live_corpus.json, 230
+	// activities captured from one account, now anonymized), CarbsIngested is non-null on 0 of them and HRR's
 	// AverageWatts member is null on every one of the 49 non-null HRR
 	// records observed — both are typed correctly per the closed schema
-	// but have zero live evidence of ever carrying a non-null value; only a
+	// but have zero captured evidence of ever carrying a non-null value; only a
 	// synthetic fixture can exercise either as present.
 	PolarizationIndex *float64        `json:"polarizationIndex,omitempty"`
 	SSCP              *float64        `json:"ssCp,omitempty"`
@@ -239,14 +239,14 @@ type Activity struct {
 	Note *string `json:"note,omitempty"`
 }
 
-// HRRMeasurement is F-24's corrected identity for the live field `icu_hrr`
+// HRRMeasurement is F-24's corrected identity for the API field `icu_hrr`
 // (the field is not named `hrrc`, which does not exist in the schema or the
 // payload): a complete heart-rate-recovery measurement, not an opaque blob,
 // with one closed 8-key shape identical across all 49 non-null records
-// observed in the live corpus. Named distinctly from the existing pure
+// observed in the (anonymized) wave-2 corpus. Named distinctly from the existing pure
 // HeartRateRecovery(...) computation in metrics.go, which this type does
 // not wrap or replace. AverageWatts is the only nullable member (D-5) — on
-// the live corpus it is null in all 49 non-null HRR records, so a synthetic
+// the wave-2 corpus it is null in all 49 non-null HRR records, so a synthetic
 // fixture is the only way to exercise a populated value. Emit-only
 // (D-1/T4.3): no analysis/rebalance/plan output number depends on any
 // member of this type.

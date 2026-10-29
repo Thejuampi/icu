@@ -58,10 +58,10 @@ exported-field type change under Go's own module-versioning convention: no migra
 | `EndTime` | `int` | `endTime` |
 | `StartBPM` | `int` | `startBpm` |
 | `EndBPM` | `int` | `endBpm` |
-| `AverageWatts` | `*int` | `averageWatts` (nullable; observed `null` on every non-null `HRR` record in this project's live-corpus fixture — only a synthetic value exercises it as populated) |
+| `AverageWatts` | `*int` | `averageWatts` (nullable; observed `null` on every non-null `HRR` record in this project's anonymized wave-2 corpus fixture — only a synthetic value exercises it as populated) |
 | `HRR` | `int` | `hrr` |
 
-None of these ten fields feed `AnalyzeCyclingActivities`, `AnalyzeMicrocycle`, `BuildRebalanceProposal`, `BuildPlanProposal`, or any other analysis/rebalance/plan entry point — see `docs/analysis.md`'s "Emit-Only Activity Fields" section for the full field table, the dropped-field reasons, and both live-corpus disclosures.
+None of these ten fields feed `AnalyzeCyclingActivities`, `AnalyzeMicrocycle`, `BuildRebalanceProposal`, `BuildPlanProposal`, or any other analysis/rebalance/plan entry point — see `docs/analysis.md`'s "Emit-Only Activity Fields" section for the full field table, the dropped-field reasons, and both wave-2 corpus disclosures.
 
 ## What The Package Provides
 
@@ -336,8 +336,8 @@ rather than re-deriving the stub predicate independently (DRY).
 
 `CyclingAnalysis.Validity` (D-3) and `CyclingAnalysis.Load.ByChannel`/`.Divergence` (D-23/T2.5) are
 documented field-by-field in `docs/analysis.md`, including the **inertness statement**: ignore-flag
-filtering is implemented and unit-tested, but has been measured `false` on every real activity in
-this project's own live-corpus test fixture (`testdata/wave2_live_corpus.json`) — do not report a
+filtering is implemented and unit-tested, but has been measured `false` on every activity in
+this project's own anonymized wave-2 corpus fixture (`testdata/wave2_live_corpus.json`) — do not report a
 number change as caused by ignore-flag filtering without checking `Validity.Excluded > 0` for that
 specific analysis.
 

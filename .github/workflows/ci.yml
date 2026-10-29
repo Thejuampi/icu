@@ -29,6 +29,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: No large tracked files (built binaries)
+        run: bash scripts/check-large-files.sh
+
       - name: gofmt
         run: |
           out="$(gofmt -l .)"

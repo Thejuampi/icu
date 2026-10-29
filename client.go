@@ -47,7 +47,8 @@ func WithBaseURL(baseURL string) ClientOption {
 func NewClient(apiKey, athleteID string, options ...ClientOption) *Client {
 	client := &Client{
 		httpClient: &http.Client{
-			Timeout: defaultClientTimeout,
+			Timeout:       defaultClientTimeout,
+			CheckRedirect: SameOriginRedirects,
 		},
 		apiKey:    apiKey,
 		athleteID: athleteID,

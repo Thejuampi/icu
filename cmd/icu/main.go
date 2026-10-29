@@ -22,6 +22,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 
+	args = hoistLeadingBaseURL(args)
+
 	if len(args) >= minArgs && isHelpArg(args[1]) {
 		printHelp(registry, stdout, "")
 
@@ -220,6 +222,11 @@ func executeCommand(
 		return 1
 	}
 
+	// --base-url is a global flag: resolve and strip it before per-command
+	// schema validation so commands with a strict schema accept it.
+	baseURL := icu.ResolveBaseURL(flags)
+	delete(flags, "base-url")
+
 	if err := validateCommandInput(cmd, posArgs, flags); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 
@@ -237,7 +244,11 @@ func executeCommand(
 	}
 
 	athleteID := icu.ResolveAthleteID(flags)
-	client := icu.NewClient(apiKey, athleteID)
+	if commandRequiresAuth(resource, action) {
+		warnRealAPI(stderr, baseURL)
+	}
+
+	client := icu.NewClient(apiKey, athleteID, icu.WithBaseURL(baseURL))
 
 	if err := cmd.Run(posArgs, flags, client, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
@@ -331,6 +342,8 @@ func printGlobalHelp(registry *CommandRegistry, w io.Writer) {
 	fmt.Fprintln(w, "Global flags:")
 	fmt.Fprintln(w, "  --api-key KEY     API key from intervals.icu/settings (or INTERVALS_ICU_API_KEY env)")
 	fmt.Fprintln(w, "  --athlete-id ID   Athlete ID (default: 0 for self, or INTERVALS_ICU_ATHLETE_ID env)")
+	fmt.Fprintln(w, "  --base-url URL    API base URL (or ICU_BASE_URL env; default https://intervals.icu)")
+	fmt.Fprintln(w, "                    intervals.icu only; zepp login/token use --zepp-base-url URL")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Resources:")
 
@@ -399,4 +412,31 @@ func printCommandHelp(w io.Writer, command *Command) {
 		}
 		fmt.Fprintf(w, "  %-34s %s\n", label, description)
 	}
+}
+
+// warnRealAPI prints a stderr warning when baseURL targets the production
+// intervals.icu API, so RC and test runs notice they are not on the mock.
+func warnRealAPI(stderr io.Writer, baseURL string) {
+	if icu.IsRealAPIBaseURL(baseURL) {
+		fmt.Fprintf(stderr, "Warning: using the real intervals.icu API (%s). Set --base-url or %s to target a mock.\n", baseURL, icu.BaseURLEnv)
+	}
+}
+
+// hoistLeadingBaseURL lets the global --base-url flag appear before the
+// resource ("icu --base-url URL athlete show") by moving it to the end.
+func hoistLeadingBaseURL(args []string) []string {
+	if len(args) < 2 {
+		return args
+	}
+
+	first := args[1]
+
+	switch {
+	case strings.HasPrefix(first, "--base-url="):
+		return append(append([]string{args[0]}, args[2:]...), first)
+	case first == "--base-url" && len(args) >= 3:
+		return append(append([]string{args[0]}, args[3:]...), first, args[2])
+	}
+
+	return args
 }
