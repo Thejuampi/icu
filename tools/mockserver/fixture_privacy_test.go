@@ -15,15 +15,20 @@ import (
 var longID = regexp.MustCompile(`(^|[^.0-9A-Za-z_-])([0-9]{10,})([^0-9A-Za-z_-]|$)`)
 
 func TestCommittedFixturesHaveNoExternalIDsOrRealWeight(t *testing.T) {
-	root := filepath.Join("..", "..", "testdata", "fixtures")
+	root, err := os.OpenRoot(filepath.Join("..", "..", "testdata", "fixtures"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
 	checked := 0
 
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = fs.WalkDir(root.FS(), ".", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil || entry.IsDir() || !strings.HasSuffix(path, ".json") {
 			return walkErr
 		}
 
-		body, err := os.ReadFile(path)
+		body, err := root.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -101,8 +106,10 @@ func TestAnonymizeCurveActivities(t *testing.T) {
 	}
 
 	want := remapExternalID("16605333088")
-	for _, fragment := range []string{`"` + want + `":{`, `"id":"` + want + `"`, `"2025-11-01T08:00:00"`,
-		`"2025-11-01T18:00:00"`, `"weight":72.8`, `"watts_per_kg":[5]`} {
+	for _, fragment := range []string{
+		`"` + want + `":{`, `"id":"` + want + `"`, `"2025-11-01T08:00:00"`,
+		`"2025-11-01T18:00:00"`, `"weight":72.8`, `"watts_per_kg":[5]`,
+	} {
 		if !strings.Contains(out, fragment) {
 			t.Errorf("missing %s: %s", fragment, out)
 		}

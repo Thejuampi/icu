@@ -624,7 +624,7 @@ the raw components.
 - `login`
   Invocation: `icu zepp login --email EMAIL --password PASSWORD [--zepp-base-url URL]`
   Notes: Persists `zeppLoginToken`, `zeppAppToken`, `zeppUserID`, and
-  `zeppCountryCode` in the config file. `--zepp-base-url URL` points both auth calls
+  `zeppCountryCode` in the config file. `--zepp-base-url URL` must be https unless the host is loopback, and warns on stderr when the host is not loopback, `zepp.com` or `huami.com` (or a subdomain). It points both auth calls
   (`URL/v2/registrations/tokens`, `URL/v2/client/login`) at another host such
   as a mock and wins over `ZEPP_TOKENS_URL`/`ZEPP_LOGIN_URL`. It is separate
   from the global intervals.icu `--base-url`, which never reaches Zepp. The

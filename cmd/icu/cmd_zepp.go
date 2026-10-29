@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -88,7 +90,12 @@ func zeppAuthCommand(usage, description string, run func(stdout io.Writer, email
 
 			// --zepp-base-url is Zepp-only; the global --base-url (intervals.icu)
 			// is stripped in executeCommand and never reaches Zepp.
-			return run(stdout, email, password, icu.StringFlag(flags, zeppBaseURLFlag, ""))
+			zeppBaseURL := icu.StringFlag(flags, zeppBaseURLFlag, "")
+			if err := checkZeppBaseURL(zeppBaseURL, stderr); err != nil {
+				return err
+			}
+
+			return run(stdout, email, password, zeppBaseURL)
 		},
 	}
 }
@@ -604,4 +611,50 @@ func runZeppProfile(stdout io.Writer) error {
 
 func fingerprintForDisplay(value string) string {
 	return icu.SecretFingerprint(value)
+}
+
+// checkZeppBaseURL guards --zepp-base-url, which receives the Zepp password:
+// plain http is refused unless the host is loopback, and any host that is
+// neither loopback nor a Zepp domain gets a warning on stderr.
+func checkZeppBaseURL(raw string, stderr io.Writer) error {
+	if raw == "" {
+		return nil
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("%w: --%s must be an http(s) URL with a host, got %q", errInvalidValue, zeppBaseURLFlag, raw)
+	}
+
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	loopback := isLoopbackHost(host)
+
+	if parsed.Scheme == "http" && !loopback {
+		return fmt.Errorf("%w: --%s refuses plain http for non-loopback host %q; use https", errInvalidValue, zeppBaseURLFlag, host)
+	}
+
+	if loopback {
+		return nil
+	}
+
+	// Hosts (and subdomains) that legitimately serve Zepp authentication.
+	for _, domain := range []string{"zepp.com", "huami.com"} {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return nil
+		}
+	}
+
+	_, _ = fmt.Fprintf(stderr, "warning: --%s host %q is not a Zepp host (zepp.com, huami.com); your Zepp password will be sent there\n", zeppBaseURLFlag, host)
+
+	return nil
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+
+	return ip != nil && ip.IsLoopback()
 }

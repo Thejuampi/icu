@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,10 +21,10 @@ func newZeppAuthMock(t *testing.T, hits *atomic.Int32) *httptest.Server {
 		hits.Add(1)
 
 		switch r.URL.Path {
-		case zeppTokensPath:
+		case "/v2/registrations/tokens": // literal on purpose: pins the real Zepp path
 			w.Header().Set("Location", "https://example.com/callback?access=atok&country_code=US")
 			w.WriteHeader(http.StatusSeeOther)
-		case zeppLoginPathPart:
+		case "/v2/client/login": // literal on purpose: pins the real Zepp path
 			_, _ = w.Write([]byte(`{"result":"ok","token_info":{"login_token":"lt","app_token":"at","user_id":"u1"}}`))
 		default:
 			http.NotFound(w, r)
@@ -96,5 +97,57 @@ func TestZeppLoginBaseURLFlagOverridesEnv(t *testing.T) {
 	auth, err := zeppLogin("u@example.com", "secret", zepp.URL)
 	if err != nil || auth.LoginToken != "lt" || hits.Load() != 2 {
 		t.Fatalf("auth=%+v err=%v hits=%d", auth, err, hits.Load())
+	}
+}
+
+func TestCheckZeppBaseURL(t *testing.T) {
+	cases := []struct {
+		raw     string
+		wantErr bool
+		warn    bool
+	}{
+		{"", false, false},
+		{"http://127.0.0.1:8080", false, false},
+		{"http://localhost:9", false, false},
+		{"http://[::1]:9/", false, false},
+		{"https://api-user.zepp.com", false, false},
+		{"https://account.huami.com/", false, false},
+		{"https://zepp.com.", false, false},
+		{"https://evil.example.com", false, true},
+		{"https://notzepp.com", false, true},
+		{"https://zepp.com.evil.io", false, true},
+		{"http://api-user.zepp.com", true, false},
+		{"http://evil.example.com", true, false},
+		{"ftp://127.0.0.1", true, false},
+		{"127.0.0.1:8080", true, false},
+		{"://bad", true, false},
+	}
+
+	for _, tc := range cases {
+		var stderr bytes.Buffer
+
+		err := checkZeppBaseURL(tc.raw, &stderr)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("%q: err=%v, wantErr=%v", tc.raw, err, tc.wantErr)
+		}
+
+		if err != nil && !errors.Is(err, errInvalidValue) {
+			t.Errorf("%q: err=%v, want errInvalidValue", tc.raw, err)
+		}
+
+		if got := strings.Contains(stderr.String(), "warning:"); got != tc.warn {
+			t.Errorf("%q: warned=%v, want %v (stderr=%q)", tc.raw, got, tc.warn, stderr.String())
+		}
+	}
+}
+
+func TestZeppAuthRefusesPlainHTTPRemoteBeforeAnyRequest(t *testing.T) {
+	withZeppTestEnv(t)
+
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{"icu", "zepp", "token", "--email", "u@example.com", "--password", "secret", "--zepp-base-url", "http://zepp.example.com"}, &stdout, &stderr)
+	if code == 0 || !strings.Contains(stderr.String(), "refuses plain http") {
+		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 }

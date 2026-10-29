@@ -345,3 +345,40 @@ func TestRecordRequiresExplicitUpstream(t *testing.T) {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 }
+
+func TestRecorderRedirectCap(t *testing.T) {
+	t.Parallel()
+
+	var hits atomic.Int32
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		http.Redirect(w, r, "/loop", http.StatusFound)
+	}))
+	defer upstream.Close()
+
+	ts := httptest.NewServer(newRecorder(upstream.URL, t.TempDir(), io.Discard))
+	defer ts.Close()
+
+	if code, _ := do(t, http.MethodGet, ts.URL+"/loop", ""); code != http.StatusBadGateway {
+		t.Fatalf("redirect loop = %d, want 502", code)
+	}
+
+	if got := hits.Load(); got != maxRedirects {
+		t.Fatalf("upstream hits = %d, want exactly %d (cap)", got, maxRedirects)
+	}
+}
+
+func TestParseOptionsUpstreamAndTimeout(t *testing.T) {
+	t.Parallel()
+
+	opts, err := parseOptions([]string{"-record", "-upstream", "https://upstream.example", "-fixtures", "x"}, io.Discard)
+	if err != nil || !opts.record || opts.upstream != "https://upstream.example" {
+		t.Fatalf("opts=%+v err=%v", opts, err)
+	}
+
+	rec := newRecorder("https://upstream.example/", "x", io.Discard)
+	if rec.upstream != "https://upstream.example" || rec.client.Timeout != upstreamTimeout || upstreamTimeout <= 0 {
+		t.Fatalf("upstream=%q timeout=%v", rec.upstream, rec.client.Timeout)
+	}
+}

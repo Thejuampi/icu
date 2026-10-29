@@ -174,7 +174,7 @@ func prettyJSON(body []byte) []byte {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 
-	if encoder.Encode(value) != nil {
+	if err := encoder.Encode(value); err != nil {
 		return body
 	}
 
@@ -265,7 +265,7 @@ func anonymizeJSON(body []byte) []byte {
 	encoder := json.NewEncoder(&out)
 	encoder.SetEscapeHTML(false)
 
-	if encoder.Encode(anonymize(value)) != nil {
+	if err := encoder.Encode(anonymize(value)); err != nil {
 		return body
 	}
 
@@ -346,6 +346,9 @@ func anonymize(value any) any {
 // anonWeight is the single fuzzed body weight written over every weight
 // field; it is deliberately far from the athlete's real weight.
 const anonWeight = json.Number("72.8")
+
+// wkgPrecision rounds rescaled watts_per_kg to 6 decimals, as the API does.
+const wkgPrecision = 1e6
 
 // curveDateShift moves the dates of curve activities that still carry an
 // external (Strava) id, so their real ride dates are not published. It is
@@ -499,7 +502,7 @@ func rescaleWattsPerKg(obj map[string]any) {
 			continue
 		}
 
-		perKg[i] = json.Number(strconv.FormatFloat(math.Round(value/weight*1e6)/1e6, 'f', -1, 64))
+		perKg[i] = json.Number(strconv.FormatFloat(math.Round(value/weight*wkgPrecision)/wkgPrecision, 'f', -1, 64))
 	}
 
 	obj["watts_per_kg"] = perKg
