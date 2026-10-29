@@ -689,7 +689,9 @@ func isLoopbackHost(host string) bool {
 
 const (
 	zeppRawFlag = "raw"
-	rawHelp     = " --raw prints the untouched Zepp JSON instead, with identifiers and secrets (userId, deviceId, sn, tokens, any *Id key; case-insensitive, at any depth) replaced by \"[redacted]\"."
+	rawHelp     = " --raw prints the Zepp JSON as received with identifiers and secrets redacted" +
+		" (identifier keys, any key ending in id/ids; strings unless their key is a known-safe field;" +
+		" emails, MACs, JWTs, UUIDs, URLs and blobs everywhere; JSON inside strings too). See docs/cli-reference.md."
 )
 
 // writeZeppRaw prints the Zepp response as received, with every identifier

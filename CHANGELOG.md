@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `zepp --raw` redaction is now defense in depth: identifier/secret denylist on normalized keys, a safe-string allowlist (every other string redacted), value scrubbing (email, MAC, JWT, UUID, URL, base64/hex blobs, broken JSON), recursive unwrapping of JSON and double-encoded JSON in strings, digit/hex object keys renamed, a nesting limit. Zepp response bodies are capped at 32 MiB.
 - Mock server: `GET /v2/users/me/events` serves `<fixtures>/_zepp/events/<eventType>/<subType>.json` as-is when present (synthetic payloads for `--raw` checks).
 - `icu zepp events --raw` and `icu zepp <v2 preset command> --raw` (e.g. `zepp readiness --raw`) print the untouched Zepp JSON with identifiers and secrets redacted recursively by key name (case-insensitive). `zepp events`/`readiness`/`hybridcharge` no longer drop object `value` payloads: they are kept under `extra.value`.
 - Zepp login: both steps (tokens and login) use a 30 s timeout (`zeppAuthTimeout`); the tokens client had none. Tests cover both with a hanging server.
