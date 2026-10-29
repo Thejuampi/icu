@@ -216,6 +216,9 @@ func (s *server) record(entry Write, key string, raw []byte) []byte {
 	case http.MethodDelete:
 		return []byte(`{}`)
 	case http.MethodPut, http.MethodPatch:
+		if strings.HasSuffix(entry.Path, "/streams") {
+			return streamsUpdateResponse(raw)
+		}
 		current := s.overlay[key]
 		if current == nil {
 			current = s.fixtures[key]
@@ -325,4 +328,23 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	body, _ := json.Marshal(map[string]string{"error": msg}) //nolint:errchkjson // map[string]string always marshals
 
 	writeJSON(w, status, body)
+}
+
+// streamsUpdateResponse mirrors PUT /api/v1/activity/{id}/streams, which
+// answers {"updated":[types...]} for the stream types in the body.
+func streamsUpdateResponse(raw []byte) []byte {
+	var streams []struct {
+		Type string `json:"type"`
+	}
+	updated := []string{}
+	if json.Unmarshal(raw, &streams) == nil {
+		for _, stream := range streams {
+			if stream.Type != "" {
+				updated = append(updated, stream.Type)
+			}
+		}
+	}
+	body, _ := json.Marshal(map[string][]string{"updated": updated}) //nolint:errchkjson // a string slice map cannot fail
+
+	return body
 }

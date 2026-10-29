@@ -504,13 +504,16 @@ func TestCommandsRunAgainstMock(t *testing.T) {
 			extra := []string{"1"}
 			if key == "activity estimate-power-accept" {
 				path := filepath.Join(t.TempDir(), "estimate.json")
-				if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
+				if err := os.WriteFile(path, []byte(`{"activityId":"1","filledWatts":[150,160,170]}`), 0o600); err != nil {
 					t.Fatal(err)
 				}
 				extra = []string{"--file", path}
 			}
 			_ = run(commandArgs(resource, action, extra...), &stdout, &stderr)
 			_, writes := mock.counts(key)
+			if key == "activity estimate-power-accept" && writes < 1 {
+				t.Errorf("estimate-power-accept with filledWatts sent %d write(s), want >= 1", writes)
+			}
 			if !write && writes != 0 {
 				t.Errorf("read-only %s sent %d write request(s)", key, writes)
 			}
@@ -534,5 +537,41 @@ func TestAthleteUpdateDryRunRejectedWithoutRequests(t *testing.T) {
 	}
 	if requests, _ := mock.counts("athlete update"); requests != 0 {
 		t.Fatalf("athlete update --dry-run sent %d request(s)", requests)
+	}
+}
+
+//nolint:paralleltest // replaces newCommandClient and sets env.
+func TestWellnessWriteDryRunRejectedWithoutWrites(t *testing.T) {
+	for _, args := range [][]string{
+		{"icu", "wellness", "bulk", "--dry-run"},
+		{"icu", "wellness", "update", "--dry-run"},
+		{"icu", "wellness", "update", "2026-10-01", "--weight", "70", "--dry-run"},
+	} {
+		guardEnv(t)
+		mock := newGuardMock(t)
+		key := args[1] + " " + args[2]
+		mock.phase(key, false)
+		var stdout, stderr bytes.Buffer
+		code := run(args, &stdout, &stderr)
+		if code == 0 || !strings.Contains(stderr.String(), "unknown flag --dry-run") {
+			t.Fatalf("%v: code=%d stderr=%q", args, code, stderr.String())
+		}
+		if requests, writes := mock.counts(key); requests != 0 || writes != 0 {
+			t.Fatalf("%v sent %d request(s), %d write(s)", args, requests, writes)
+		}
+	}
+}
+
+func TestWarnRealAPIFiresForDefaultBaseURL(t *testing.T) {
+	t.Setenv(icu.BaseURLEnv, "")
+	var stderr bytes.Buffer
+	warnRealAPI(&stderr, icu.ResolveBaseURL(map[string]string{}))
+	if !strings.Contains(stderr.String(), "Warning: using the real intervals.icu API") {
+		t.Fatalf("no warning for default base URL: %q", stderr.String())
+	}
+	stderr.Reset()
+	warnRealAPI(&stderr, icu.ResolveBaseURL(map[string]string{"base-url": "http://127.0.0.1:1"}))
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected warning for loopback: %q", stderr.String())
 	}
 }
