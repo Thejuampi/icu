@@ -613,16 +613,22 @@ hosted on `api-mifit.huami.com` and uses its own auth flow. The flow is:
    `SpO2WindowsURL`, `SportHistoryURL`, `SportDetailURL`) are available for
    consumers that need to construct signed requests manually.
 
-   **HRV.** The nightly HRV the Zepp app shows is readiness/watch_score
-   `value.sleepHRV` (rMSSD, ms): `SleepHRVDays` / `DecodeSleepHRV`.
-   `wellness sync` uses it first. `HRVRMSSDDays` returns the mean of the
-   night's `value.samples[].hrv` (an approximation; used only for days without
-   readiness). `hrv_sdnn` may come back empty and HybridCharge
-   (`Charge`/`insight_data`) carries no HRV. 0 and 255 are never readings.
-   Shape sources: lingcang728/ZeppBridge @1012a00
-   `src-tauri/crates/core/src/normalizer/metrics.rs` L111-L145 (HRVRMSSD
-   samples), m4ary/zepp-health-cli @a466dfa `zepp_health.py` L703-L704
-   (event types), plus the structure of a real redacted response kept with
+   **HRV.** `SleepHRVDays` / `DecodeSleepHRV` read Zepp nightly HRV
+   (readiness sleepHRV): readiness/watch_score `value.sleepHRV` in ms, the
+   value the Zepp app shows (not documented as RMSSD). `wellness sync` writes
+   only this value. `HRVRMSSDDays` returns the mean of the night's
+   `value.samples[].hrv`; `wellness sync` never writes it and shows it only as
+   an `info:` line in the dry run for days without readiness sleepHRV.
+   `hrv_sdnn` may come back empty and HybridCharge (`Charge`/`insight_data`)
+   carries no HRV. 0 and 255 are never readings (255 = not measured).
+   Sources: lingcang728/ZeppBridge @1012a00
+   `src-tauri/crates/core/src/normalizer/band_items.rs` L614-L624 (sleepHRV as
+   a separate `sleep_hrv` metric, 1-254, 255 = not measured),
+   `normalizer/official.rs` L8 (ZeppBridge does not write sleepHrv into HRV
+   columns; this CLI writes it to intervals.icu `hrv` by choice) and
+   `normalizer/metrics.rs` L111-L145 (HRVRMSSD samples shape);
+   m4ary/zepp-health-cli @a466dfa `zepp_health.py` L703-L704 (preset event
+   type names only); plus the structure of a real redacted response kept with
    synthetic values in `testdata/zepp/real_shape/`.
 
 ```go

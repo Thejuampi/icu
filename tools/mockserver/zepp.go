@@ -245,7 +245,7 @@ func mockHRVRMSSDItem(start int64, hrv float64) map[string]any {
 }
 
 // mockReadinessItem is one readiness watch_score item in the real shape
-// (value object; sleepHRV is the nightly rMSSD; 255 means not measured).
+// (value object; sleepHRV is Zepp nightly HRV; 255 means not measured).
 //
 //nolint:mnd // synthetic scores
 func mockReadinessItem(start int64, hrv float64) map[string]any {

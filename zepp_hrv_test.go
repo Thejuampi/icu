@@ -56,7 +56,7 @@ func TestDecodeHRVSDNNSampleKey(t *testing.T) {
 }
 
 // Anonymized real shape of readiness/watch_score: value object, sleepHRV =
-// nightly rMSSD in ms, 255 = not measured.
+// Zepp nightly HRV in ms, 255 = not measured.
 func TestDecodeSleepHRV(t *testing.T) {
 	t.Parallel()
 	raw := `{"items":[

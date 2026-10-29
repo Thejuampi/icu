@@ -15,21 +15,29 @@ func timestampDateUTC(ms int64) string {
 
 // Zepp HRV shapes. Sources (public code; never our own calls to the real API):
 //
-//   - HRVRMSSD real_data: each item's "value" is an OBJECT
-//     {"startTime": <ms>, "deviceId": ..., "samples": [{"hrv": 41, "s": 0}, ...]}
-//     where "s" is a millisecond offset from startTime. See
-//     github.com/lingcang728/ZeppBridge @1012a00,
-//     src-tauri/crates/core/src/normalizer/metrics.rs L111-L145
-//     (hrv_rmssd_samples). hrv_sdnn uses "sdnn" as the sample key. The
-//     eventType/subType pairs (HRVRMSSD/real_data, hrv_sdnn/real_data) are in
-//     github.com/m4ary/zepp-health-cli @a466dfa, zepp_health.py L703-L704.
-//     Older or other payloads may carry the value as a JSON string or a number.
 //   - readiness watch_score: "value" is an object whose "sleepHRV" is the
-//     nightly rMSSD in ms, the value the Zepp app shows; 0/255 mean "not
-//     measured". Confirmed against the structure of a real (redacted)
+//     Zepp nightly HRV (readiness sleepHRV), in ms, the value the Zepp app
+//     shows; 1..254 are readings and 255 means "not measured". Zepp does not
+//     document it as RMSSD, so we do not call it that. ZeppBridge reads it as
+//     a separate sleep_hrv metric: github.com/lingcang728/ZeppBridge
+//     @1012a00abbb41865e8abcfb8f59b3d264fbafe1b,
+//     src-tauri/crates/core/src/normalizer/band_items.rs L614-L624
+//     (sentinel notes, ("sleep_hrv", &["sleepHRV"], "ms", (1.0, 254.0))), and
+//     normalizer/official.rs L8 refuses to write the official sleepHrv into
+//     any HRV column. This CLI does write it to intervals.icu "hrv" (owner's
+//     decision); the source is stated in the docs.
+//   - HRVRMSSD real_data: each item's "value" is an object
+//     {"startTime": <ms>, "samples": [{"hrv": 41, "s": 0}, ...]} where "s" is
+//     a millisecond offset from startTime (same ZeppBridge commit,
+//     normalizer/metrics.rs L111-L145). hrv_sdnn uses "sdnn" as the sample
+//     key. Older payloads may carry the value as a JSON string or a number.
+//     The eventType/subType names are the presets in
+//     github.com/m4ary/zepp-health-cli @a466dfa, zepp_health.py L703-L704
+//     (preset mapping only).
+//   - Both shapes were checked against the structure of a real (redacted)
 //     response read offline; testdata/zepp/real_shape keeps that structure
-//     with synthetic values. hrv_sdnn came back empty there and HybridCharge
-//     (Charge/insight_data) carries no HRV, so neither is an HRV source.
+//     with synthetic values. hrv_sdnn came back empty and HybridCharge
+//     (Charge/insight_data) carries no HRV.
 //
 // Zero, negative, non-finite and out-of-range readings are failed reads,
 // never values.
@@ -186,7 +194,7 @@ func finishHRV(ev ZeppHRVEvent) (ZeppHRVEvent, bool) {
 }
 
 // DecodeSleepHRV extracts readiness watch_score value.sleepHRV (Zepp's
-// nightly rMSSD) as HRV events. 0 and the 255 sentinel are skipped. The
+// Zepp nightly HRV) as HRV events. 0 and the 255 sentinel are skipped. The
 // event is stamped at value.timestamp (local midnight of the scored day)
 // when present, else the item timestamp (the morning update).
 func DecodeSleepHRV(raw []byte) ([]ZeppHRVEvent, error) {

@@ -72,6 +72,12 @@ func (f *syncFake) serve(t *testing.T) *httptest.Server {
 			}
 			// 23:30 New York on the 10th = 03:30Z on the 11th -> day 11.
 			ts := time.Date(2026, 8, 11, 3, 30, 0, 0, time.UTC).UnixMilli()
+			if r.URL.Query().Get("eventType") == "readiness" {
+				midnight := time.Date(2026, 8, 11, 4, 0, 0, 0, time.UTC).UnixMilli()
+				_, _ = io.WriteString(w, `{"items":[{"timestamp":`+itoa64(midnight+7*3600000)+`,"value":{"timestamp":`+itoa64(midnight)+`,"sleepHRV":44.5}}]}`)
+
+				return
+			}
 			_, _ = io.WriteString(w, `{"items":[{"timestamp":`+itoa64(ts)+`,"value":"44.5"}]}`)
 		case strings.HasSuffix(r.URL.Path, "/wellness-bulk") && r.Method == http.MethodPut:
 			body, _ := io.ReadAll(r.Body)
@@ -185,7 +191,7 @@ func TestWellnessSyncZeppAuthFailureAborts(t *testing.T) {
 func TestWellnessSyncPartialFailureStillSyncsOtherSource(t *testing.T) {
 	fake := &syncFake{existing: syncExisting, hrvStatus: http.StatusServiceUnavailable}
 	code, out, errOut := runSync(t, fake.serve(t), "--apply")
-	if code == 0 || len(fake.puts) != 1 || strings.Contains(fake.puts[0], "hrv") || !strings.Contains(errOut, "zepp hrv failed") || !strings.Contains(out, "wrote 1 day(s)") {
+	if code == 0 || len(fake.puts) != 1 || strings.Contains(fake.puts[0], "hrv") || !strings.Contains(errOut, "readiness sleepHRV failed") || !strings.Contains(out, "wrote 1 day(s)") {
 		t.Fatalf("code=%d puts=%v out=%s stderr=%s", code, fake.puts, out, errOut)
 	}
 	fake = &syncFake{existing: syncExisting, bandStatus: http.StatusBadGateway}
@@ -318,7 +324,7 @@ func TestWellnessSyncHRVWindowCoversDayBeforeOldest(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts := time.Date(2026, 8, 9, 20, 0, 0, 0, ny).UnixMilli()
-	fake := &syncFake{existing: `[]`, hrvBody: `{"items":[{"timestamp":` + itoa64(ts) + `,"value":"61.5"}]}`}
+	fake := &syncFake{existing: `[]`, hrvBody: `{"items":[{"timestamp":` + itoa64(ts) + `,"value":{"timestamp":` + itoa64(ts) + `,"sleepHRV":61.5}}]}`}
 	code, out, errOut := runSync(t, fake.serve(t), "--fields", "hrv", "--oldest", "2026-08-10", "--newest", "2026-08-10", "--json")
 	if code != 0 || len(fake.hrvQueries) != 2 {
 		t.Fatalf("code=%d queries=%v stderr=%s", code, fake.hrvQueries, errOut)
@@ -559,15 +565,15 @@ func TestPartialSleepSuggestionsNoneWhenURLUnparsable(t *testing.T) {
 
 //nolint:paralleltest // sets env
 func TestWellnessSyncWarnsWhenOneHRVSourceFails(t *testing.T) {
-	for event, want := range map[string]string{
-		"readiness": "readiness sleepHRV failed",
-		"HRVRMSSD":  "HRVRMSSD samples failed",
-	} {
-		fake := &syncFake{existing: syncExisting, failEvent: event}
-		code, _, errOut := runSync(t, fake.serve(t), "--fields", "hrv")
-		if code == 0 || !strings.Contains(errOut, want) || strings.Contains(errOut, "zepp hrv failed:") {
-			t.Fatalf("%s: code=%d stderr=%s", event, code, errOut)
-		}
+	fake := &syncFake{existing: syncExisting, failEvent: "readiness"}
+	code, _, errOut := runSync(t, fake.serve(t), "--fields", "hrv")
+	if code == 0 || !strings.Contains(errOut, "readiness sleepHRV failed") {
+		t.Fatalf("readiness: code=%d stderr=%s", code, errOut)
+	}
+	// HRVRMSSD samples are information only: their failure is not a sync failure.
+	fake = &syncFake{existing: syncExisting, failEvent: "HRVRMSSD"}
+	if code, _, errOut = runSync(t, fake.serve(t), "--fields", "hrv"); code != 0 || errOut != "" {
+		t.Fatalf("HRVRMSSD: code=%d stderr=%s", code, errOut)
 	}
 }
 
@@ -590,12 +596,25 @@ func TestWellnessSyncApplyWritesReadinessSleepHRV(t *testing.T) {
 	if code != 0 || len(fake.puts) != 1 || !strings.Contains(fake.puts[0], `"hrv":61`) || strings.Contains(fake.puts[0], `"hrv":44`) {
 		t.Fatalf("code=%d puts=%v stderr=%s", code, fake.puts, errOut)
 	}
-	// Samples only (no readiness item): the mean is the fallback.
+	// Samples but no readiness sleepHRV: no HRV is written, with --apply
+	// or --overwrite; the dry run shows the mean as information only.
 	bodies := realOrderHRV()
 	bodies["readiness"] = `{"items":[]}`
+	for _, extra := range [][]string{{"--apply"}, {"--apply", "--overwrite"}} {
+		fake = &syncFake{existing: syncExisting, eventBody: bodies}
+		if code, _, errOut = runSync(t, fake.serve(t), append([]string{"--fields", "hrv"}, extra...)...); code != 0 || len(fake.puts) != 0 {
+			t.Fatalf("%v: code=%d puts=%v stderr=%s", extra, code, fake.puts, errOut)
+		}
+	}
 	fake = &syncFake{existing: syncExisting, eventBody: bodies}
-	if code, _, errOut = runSync(t, fake.serve(t), "--fields", "hrv", "--apply"); code != 0 || len(fake.puts) != 1 || !strings.Contains(fake.puts[0], `"hrv":44`) {
-		t.Fatalf("fallback code=%d puts=%v stderr=%s", code, fake.puts, errOut)
+	code, out, errOut := runSync(t, fake.serve(t), "--fields", "hrv")
+	if code != 0 || len(fake.puts) != 0 || !strings.Contains(out, "info: 2026-08-11 HRVRMSSD samples mean 44 ms (not written") || strings.Contains(out, " fill") {
+		t.Fatalf("dry run code=%d out=%s stderr=%s", code, out, errOut)
+	}
+	// With readiness present for the day there is no info line.
+	fake = &syncFake{existing: syncExisting, eventBody: realOrderHRV()}
+	if _, out, _ = runSync(t, fake.serve(t), "--fields", "hrv"); strings.Contains(out, "info:") {
+		t.Fatalf("unexpected info line: %s", out)
 	}
 }
 
