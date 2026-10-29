@@ -2,17 +2,25 @@ package main
 
 import (
 	"go/ast"
+	"go/build"
+	"go/constant"
+	"go/importer"
 	"go/parser"
 	"go/token"
+	"go/types"
+	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 )
 
-// flagScan is a whole-program view of cmd/icu and the icu package that
-// answers "which flag names can this code read from a flags map".
+// flagScan is a whole-program, type-checked view of cmd/icu and the icu
+// package that answers "which flag names can this code read from a flags map".
+//
+// Calls, constants and variables are linked by their go/types object, not by
+// name, so a local func value that shadows a package helper, an alias of the
+// flags map, or a builtin such as delete is never mistaken for a read.
 //
 // It resolves names held in string constants, follows helper parameters that
 // carry a flag name (queryFromFlags, stringFlagAlias, BoolFlag, icu.Resolve*,
@@ -20,121 +28,161 @@ import (
 // key (loops over name lists such as sportIntFlags or the weather fields) as
 // reading every string literal in the composite literals the loop ranges over.
 type flagScan struct {
-	funcs      map[string]*ast.FuncDecl // "main.f" / "icu.f"
-	consts     map[string]string        // "main.c" / "icu.c"
-	nameParams map[string]map[int]bool  // param positions that carry a flag name
-	reads      map[string]map[string]bool
-	refs       map[string]map[string]bool
+	info       *types.Info
+	funcs      map[*types.Func]*ast.FuncDecl // package-level funcs with bodies
+	nameParams map[*types.Func]map[int]bool  // param positions that carry a flag name
+	reads      map[*types.Func]map[string]bool
+	refs       map[*types.Func]map[*types.Func]bool
+	pkgs       map[string]*types.Package
 }
 
-func isStringMapType(expr ast.Expr) bool {
-	m, ok := expr.(*ast.MapType)
+func isStringMap(typ types.Type) bool {
+	m, ok := typ.Underlying().(*types.Map)
 	if !ok {
 		return false
 	}
-	k, okK := m.Key.(*ast.Ident)
-	v, okV := m.Value.(*ast.Ident)
 
-	return okK && okV && k.Name == "string" && v.Name == "string"
+	return isString(m.Key()) && isString(m.Elem())
 }
 
-func parsePackage(t *testing.T, dir, pkg string, scan *flagScan) {
-	t.Helper()
-	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
-	if err != nil {
-		t.Fatal(err)
+func isString(typ types.Type) bool {
+	b, ok := typ.Underlying().(*types.Basic)
+
+	return ok && b.Kind() == types.String
+}
+
+// scanImporter type-checks the scanned packages from source, imports the
+// standard library from GOROOT sources, and hands back an empty package for
+// anything else (golang.org/x/term), whose uses never carry flag names.
+type scanImporter struct {
+	std  types.Importer
+	pkgs map[string]*types.Package
+}
+
+func (imp *scanImporter) Import(path string) (*types.Package, error) {
+	if pkg, ok := imp.pkgs[path]; ok {
+		return pkg, nil
 	}
+	if !strings.Contains(strings.Split(path, "/")[0], ".") {
+		return imp.std.Import(path)
+	}
+	pkg := types.NewPackage(path, path[strings.LastIndex(path, "/")+1:])
+	pkg.MarkComplete()
+	imp.pkgs[path] = pkg
+
+	return pkg, nil
+}
+
+type scanPackage struct{ path, dir string }
+
+// loadFlagScan parses and type-checks pkgs (dependencies first) and builds
+// the scan over their non-test files.
+func loadFlagScan(t *testing.T, pkgs ...scanPackage) *flagScan {
+	t.Helper()
 	fset := token.NewFileSet()
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
+	scan := &flagScan{
+		info: &types.Info{
+			Types: map[ast.Expr]types.TypeAndValue{},
+			Defs:  map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{},
+		},
+		funcs: map[*types.Func]*ast.FuncDecl{}, nameParams: map[*types.Func]map[int]bool{},
+		reads: map[*types.Func]map[string]bool{}, refs: map[*types.Func]map[*types.Func]bool{},
+		pkgs: map[string]*types.Package{},
+	}
+	imp := &scanImporter{
+		std:  importer.ForCompiler(fset, "source", nil),
+		pkgs: scan.pkgs,
+	}
+	for _, p := range pkgs {
+		bp, err := build.ImportDir(p.dir, 0)
+		if err != nil {
+			t.Fatal(err)
 		}
-		file, parseErr := parser.ParseFile(fset, path, nil, 0)
-		if parseErr != nil {
-			t.Fatal(parseErr)
+		files := make([]*ast.File, 0, len(bp.GoFiles))
+		for _, name := range bp.GoFiles {
+			file, parseErr := parser.ParseFile(fset, filepath.Join(p.dir, name), nil, 0)
+			if parseErr != nil {
+				t.Fatal(parseErr)
+			}
+			files = append(files, file)
 		}
-		for _, decl := range file.Decls {
-			switch d := decl.(type) {
-			case *ast.FuncDecl:
-				if d.Recv == nil {
-					scan.funcs[pkg+"."+d.Name.Name] = d
-				}
-			case *ast.GenDecl:
-				for _, spec := range d.Specs {
-					vs, ok := spec.(*ast.ValueSpec)
-					if !ok || d.Tok != token.CONST {
-						continue
-					}
-					for i, name := range vs.Names {
-						if i < len(vs.Values) {
-							if lit, isLit := vs.Values[i].(*ast.BasicLit); isLit && lit.Kind == token.STRING {
-								if v, uerr := strconv.Unquote(lit.Value); uerr == nil {
-									scan.consts[pkg+"."+name.Name] = v
-								}
-							}
-						}
+		var typeErrs []string
+		conf := types.Config{Importer: imp, Error: func(err error) {
+			// Only the stubbed third-party packages may fail to resolve.
+			if !strings.Contains(err.Error(), "term.") {
+				typeErrs = append(typeErrs, err.Error())
+			}
+		}}
+		pkg, _ := conf.Check(p.path, fset, files, scan.info)
+		if len(typeErrs) > 0 {
+			t.Fatalf("type-check %s: %s", p.path, strings.Join(typeErrs, "; "))
+		}
+		scan.pkgs[p.path] = pkg
+		for _, file := range files {
+			for _, decl := range file.Decls {
+				if fd, ok := decl.(*ast.FuncDecl); ok && fd.Recv == nil && fd.Body != nil {
+					if fn, isFunc := scan.info.Defs[fd.Name].(*types.Func); isFunc {
+						scan.funcs[fn] = fd
 					}
 				}
 			}
 		}
 	}
+	scan.fixpoint()
+
+	return scan
 }
 
 // funcCtx is the per-function state used while walking one body.
 type funcCtx struct {
-	pkg        string
-	flagMaps   map[string]bool            // idents holding a flags map
-	params     map[string]int             // string param name -> position
-	rangeNames map[string]map[string]bool // range var -> literal names it takes
-	rangeParam map[string]int             // range var over a variadic name param
-	skip       map[ast.Node]bool          // callee idents called without a flags map
+	flagMaps   map[types.Object]bool            // vars holding a flags map
+	params     map[types.Object]int             // string param -> position
+	rangeNames map[types.Object]map[string]bool // range var -> literal names it takes
+	rangeParam map[types.Object]int             // range var over a variadic name param
+	skip       map[ast.Node]bool                // callee exprs called without a flags map
 }
 
-func (scan *flagScan) resolveString(pkg string, expr ast.Expr) (string, bool) {
-	switch v := expr.(type) {
-	case *ast.BasicLit:
-		if v.Kind != token.STRING {
-			return "", false
-		}
-		s, err := strconv.Unquote(v.Value)
-
-		return s, err == nil && s != ""
-	case *ast.Ident:
-		s, ok := scan.consts[pkg+"."+v.Name]
-
-		return s, ok
-	case *ast.SelectorExpr:
-		if x, ok := v.X.(*ast.Ident); ok && x.Name == "icu" {
-			s, found := scan.consts["icu."+v.Sel.Name]
-
-			return s, found
-		}
+// resolveString returns the value of a constant string expression: a literal,
+// a named constant from any package, or a constant concatenation.
+func (scan *flagScan) resolveString(expr ast.Expr) (string, bool) {
+	tv, ok := scan.info.Types[expr]
+	if !ok || tv.Value == nil || tv.Value.Kind() != constant.String {
+		return "", false
 	}
+	s := constant.StringVal(tv.Value)
 
-	return "", false
+	return s, s != ""
 }
 
-func (scan *flagScan) callee(pkg string, fun ast.Expr) string {
-	switch v := fun.(type) {
+func (scan *flagScan) objectOf(expr ast.Expr) types.Object {
+	switch v := ast.Unparen(expr).(type) {
 	case *ast.Ident:
-		if _, ok := scan.funcs[pkg+"."+v.Name]; ok {
-			return pkg + "." + v.Name
-		}
+		return scan.info.ObjectOf(v)
 	case *ast.SelectorExpr:
-		if x, ok := v.X.(*ast.Ident); ok && x.Name == "icu" {
-			if _, found := scan.funcs["icu."+v.Sel.Name]; found {
-				return "icu." + v.Sel.Name
-			}
-		}
+		return scan.info.ObjectOf(v.Sel)
 	}
 
-	return ""
+	return nil
+}
+
+// callee returns the scanned package-level function fun refers to. Builtins
+// (delete, len, ...), methods, func values and unscanned packages yield nil.
+func (scan *flagScan) callee(fun ast.Expr) *types.Func {
+	fn, ok := scan.objectOf(fun).(*types.Func)
+	if !ok {
+		return nil
+	}
+	if _, scanned := scan.funcs[fn]; !scanned {
+		return nil
+	}
+
+	return fn
 }
 
 // literalStrings returns every string literal (or constant) element in the
 // composite literals under node, and in package functions node calls that
 // return a composite literal (e.g. sportIntFlags()).
-func (scan *flagScan) literalStrings(pkg string, node ast.Node, depth int) map[string]bool {
+func (scan *flagScan) literalStrings(node ast.Node, depth int) map[string]bool {
 	out := map[string]bool{}
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch v := n.(type) {
@@ -143,7 +191,7 @@ func (scan *flagScan) literalStrings(pkg string, node ast.Node, depth int) map[s
 				// Only literals: struct fields that hold wire-name
 				// constants (sportIntFlags) are not flag names.
 				if lit, ok := m.(*ast.BasicLit); ok {
-					if s, found := scan.resolveString(pkg, lit); found {
+					if s, found := scan.resolveString(lit); found {
 						out[s] = true
 					}
 				}
@@ -151,8 +199,8 @@ func (scan *flagScan) literalStrings(pkg string, node ast.Node, depth int) map[s
 				return true
 			})
 		case *ast.CallExpr:
-			if name := scan.callee(pkg, v.Fun); name != "" && depth < 2 {
-				for s := range scan.literalStrings(pkgOf(name), scan.funcs[name].Body, depth+1) {
+			if fn := scan.callee(v.Fun); fn != nil && depth < 2 {
+				for s := range scan.literalStrings(scan.funcs[fn].Body, depth+1) {
 					out[s] = true
 				}
 			}
@@ -164,132 +212,98 @@ func (scan *flagScan) literalStrings(pkg string, node ast.Node, depth int) map[s
 	return out
 }
 
-func pkgOf(qualified string) string {
-	return qualified[:strings.Index(qualified, ".")]
-}
-
 // nameArg records a flag name passed in expr: a constant is a read, a name
 // parameter makes this function's parameter a name position too, a range var
 // over literals reads those literals.
 func (scan *flagScan) nameArg(ctx *funcCtx, expr ast.Expr, reads map[string]bool, marks map[int]bool) {
-	if s, ok := scan.resolveString(ctx.pkg, expr); ok {
+	if s, ok := scan.resolveString(expr); ok {
 		reads[s] = true
 
 		return
 	}
-	if ident, ok := expr.(*ast.Ident); ok {
-		if pos, isParam := ctx.params[ident.Name]; isParam {
-			marks[pos] = true
-
-			return
-		}
-		if pos, isRange := ctx.rangeParam[ident.Name]; isRange {
-			marks[pos] = true
-
-			return
-		}
-		for s := range ctx.rangeNames[ident.Name] {
-			reads[s] = true
-		}
+	expr = ast.Unparen(expr)
+	if sel, ok := expr.(*ast.SelectorExpr); ok {
+		expr = sel.X
+	}
+	obj := scan.objectOf(expr)
+	if obj == nil {
+		return
+	}
+	if pos, isParam := ctx.params[obj]; isParam {
+		marks[pos] = true
 
 		return
 	}
-	if sel, ok := expr.(*ast.SelectorExpr); ok {
-		if x, isIdent := sel.X.(*ast.Ident); isIdent {
-			for s := range ctx.rangeNames[x.Name] {
-				reads[s] = true
-			}
-		}
+	if pos, isRange := ctx.rangeParam[obj]; isRange {
+		marks[pos] = true
+
+		return
+	}
+	for s := range ctx.rangeNames[obj] {
+		reads[s] = true
 	}
 }
 
 func (scan *flagScan) isFlagMap(ctx *funcCtx, expr ast.Expr) bool {
-	ident, ok := expr.(*ast.Ident)
+	ident, ok := ast.Unparen(expr).(*ast.Ident)
 
-	return ok && (ident.Name == "flags" || ctx.flagMaps[ident.Name])
+	return ok && ctx.flagMaps[scan.info.ObjectOf(ident)]
+}
+
+func (scan *flagScan) addFlagMapParams(ctx *funcCtx, params *ast.FieldList) {
+	for _, field := range params.List {
+		for _, name := range field.Names {
+			if obj := scan.info.Defs[name]; obj != nil && isStringMap(obj.Type()) {
+				ctx.flagMaps[obj] = true
+			}
+		}
+	}
 }
 
 // walk scans node, returning flag reads, referenced functions, and the
 // positions of params (from ctx.params) that carry flag names.
-func (scan *flagScan) walk(ctx *funcCtx, node ast.Node) (map[string]bool, map[string]bool, map[int]bool) {
-	reads, refs, marks := map[string]bool{}, map[string]bool{}, map[int]bool{}
+func (scan *flagScan) walk(ctx *funcCtx, node ast.Node) (map[string]bool, map[*types.Func]bool, map[int]bool) {
+	reads, refs, marks := map[string]bool{}, map[*types.Func]bool{}, map[int]bool{}
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch v := n.(type) {
 		case *ast.FuncLit:
-			for _, field := range v.Type.Params.List {
-				if isStringMapType(field.Type) {
-					for _, name := range field.Names {
-						ctx.flagMaps[name.Name] = true
-					}
-				}
-			}
+			scan.addFlagMapParams(ctx, v.Type.Params)
 		case *ast.AssignStmt:
 			// Aliases: f := flags.
 			for i, rhs := range v.Rhs {
-				if i < len(v.Lhs) && scan.isFlagMap(ctx, rhs) {
-					if id, ok := v.Lhs[i].(*ast.Ident); ok {
-						ctx.flagMaps[id.Name] = true
+				if i < len(v.Lhs) && len(v.Lhs) == len(v.Rhs) && scan.isFlagMap(ctx, rhs) {
+					if obj := scan.objectOf(v.Lhs[i]); obj != nil {
+						ctx.flagMaps[obj] = true
 					}
 				}
 			}
 		case *ast.RangeStmt:
-			value, ok := v.Value.(*ast.Ident)
-			if !ok {
+			value := scan.objectOf(v.Value)
+			if value == nil {
 				break
 			}
-			if x, isIdent := v.X.(*ast.Ident); isIdent {
-				if pos, isParam := ctx.params[x.Name]; isParam {
-					ctx.rangeParam[value.Name] = pos
+			if pos, isParam := ctx.params[scan.objectOf(v.X)]; isParam {
+				ctx.rangeParam[value] = pos
 
-					break
-				}
+				break
 			}
-			ctx.rangeNames[value.Name] = scan.literalStrings(ctx.pkg, v.X, 0)
+			ctx.rangeNames[value] = scan.literalStrings(v.X, 0)
 		case *ast.IndexExpr:
 			if scan.isFlagMap(ctx, v.X) {
 				scan.nameArg(ctx, v.Index, reads, marks)
 			}
 		case *ast.CallExpr:
-			name := scan.callee(ctx.pkg, v.Fun)
-			if name == "" {
-				break
-			}
-			hasMap := false
-			for _, arg := range v.Args {
-				if scan.isFlagMap(ctx, arg) {
-					hasMap = true
-				}
-			}
-			if !hasMap {
-				// A helper that takes a flags map but is handed nil or a
-				// literal map reads nothing the user passed.
-				if hasMapParam(scan.funcs[name]) {
-					ctx.skip[v.Fun] = true
-				}
-
-				break
-			}
-			for pos := range scan.nameParams[name] {
-				for i := pos; i < len(v.Args); i++ {
-					scan.nameArg(ctx, v.Args[i], reads, marks)
-					if !isVariadicAt(scan.funcs[name], pos) {
-						break
-					}
-				}
-			}
+			scan.walkCall(ctx, v, reads, marks)
 		case *ast.Ident:
 			if ctx.skip[v] {
 				break
 			}
-			if _, ok := scan.funcs[ctx.pkg+"."+v.Name]; ok {
-				refs[ctx.pkg+"."+v.Name] = true
+			if fn := scan.callee(v); fn != nil {
+				refs[fn] = true
 			}
 		case *ast.SelectorExpr:
 			if ctx.skip[v] {
 				return false
-			}
-			if name := scan.callee(ctx.pkg, v); name != "" {
-				refs[name] = true
 			}
 		}
 
@@ -299,9 +313,41 @@ func (scan *flagScan) walk(ctx *funcCtx, node ast.Node) (map[string]bool, map[st
 	return reads, refs, marks
 }
 
-func hasMapParam(fn *ast.FuncDecl) bool {
-	for _, field := range fn.Type.Params.List {
-		if isStringMapType(field.Type) {
+func (scan *flagScan) walkCall(ctx *funcCtx, call *ast.CallExpr, reads map[string]bool, marks map[int]bool) {
+	fn := scan.callee(call.Fun)
+	if fn == nil {
+		return
+	}
+	hasMap := false
+	for _, arg := range call.Args {
+		if scan.isFlagMap(ctx, arg) {
+			hasMap = true
+		}
+	}
+	if !hasMap {
+		// A helper that takes a flags map but is handed nil or a
+		// literal map reads nothing the user passed.
+		if hasMapParam(fn) {
+			ctx.skip[ast.Unparen(call.Fun)] = true
+		}
+
+		return
+	}
+	sig := fn.Signature()
+	for pos := range scan.nameParams[fn] {
+		for i := pos; i < len(call.Args); i++ {
+			scan.nameArg(ctx, call.Args[i], reads, marks)
+			if !sig.Variadic() || pos != sig.Params().Len()-1 {
+				break
+			}
+		}
+	}
+}
+
+func hasMapParam(fn *types.Func) bool {
+	params := fn.Signature().Params()
+	for i := range params.Len() {
+		if isStringMap(params.At(i).Type()) {
 			return true
 		}
 	}
@@ -309,42 +355,24 @@ func hasMapParam(fn *ast.FuncDecl) bool {
 	return false
 }
 
-func isVariadicAt(fn *ast.FuncDecl, pos int) bool {
-	i := 0
-	for _, field := range fn.Type.Params.List {
-		n := len(field.Names)
-		if n == 0 {
-			n = 1
-		}
-		if pos < i+n {
-			_, ok := field.Type.(*ast.Ellipsis)
-
-			return ok
-		}
-		i += n
-	}
-
-	return false
-}
-
-func newFuncCtx(pkg string, fn *ast.FuncDecl) *funcCtx {
+func (scan *flagScan) newFuncCtx(fn *ast.FuncDecl) *funcCtx {
 	ctx := &funcCtx{
-		pkg: pkg, flagMaps: map[string]bool{}, params: map[string]int{},
-		rangeNames: map[string]map[string]bool{}, rangeParam: map[string]int{},
+		flagMaps: map[types.Object]bool{}, params: map[types.Object]int{},
+		rangeNames: map[types.Object]map[string]bool{}, rangeParam: map[types.Object]int{},
 		skip: map[ast.Node]bool{},
 	}
+	scan.addFlagMapParams(ctx, fn.Type.Params)
 	pos := 0
 	for _, field := range fn.Type.Params.List {
+		_, variadic := field.Type.(*ast.Ellipsis)
 		for _, name := range field.Names {
-			if isStringMapType(field.Type) {
-				ctx.flagMaps[name.Name] = true
+			obj := scan.info.Defs[name]
+			typ := obj.Type()
+			if s, ok := typ.(*types.Slice); ok && variadic {
+				typ = s.Elem()
 			}
-			typ := field.Type
-			if e, ok := typ.(*ast.Ellipsis); ok {
-				typ = e.Elt
-			}
-			if id, ok := typ.(*ast.Ident); ok && id.Name == "string" {
-				ctx.params[name.Name] = pos
+			if isString(typ) {
+				ctx.params[obj] = pos
 			}
 			pos++
 		}
@@ -356,58 +384,46 @@ func newFuncCtx(pkg string, fn *ast.FuncDecl) *funcCtx {
 	return ctx
 }
 
-func buildFlagScan(t *testing.T) *flagScan {
-	t.Helper()
-	scan := &flagScan{
-		funcs: map[string]*ast.FuncDecl{}, consts: map[string]string{},
-		nameParams: map[string]map[int]bool{}, reads: map[string]map[string]bool{}, refs: map[string]map[string]bool{},
-	}
-	parsePackage(t, ".", "main", scan)
-	parsePackage(t, filepath.Join("..", ".."), "icu", scan)
+func (scan *flagScan) fixpoint() {
 	for changed := true; changed; {
 		changed = false
-		for name, fn := range scan.funcs {
-			if fn.Body == nil {
-				continue
-			}
-			reads, refs, marks := scan.walk(newFuncCtx(pkgOf(name), fn), fn.Body)
-			scan.reads[name], scan.refs[name] = reads, refs
-			if scan.nameParams[name] == nil {
-				scan.nameParams[name] = map[int]bool{}
+		for fn, decl := range scan.funcs {
+			reads, refs, marks := scan.walk(scan.newFuncCtx(decl), decl.Body)
+			scan.reads[fn], scan.refs[fn] = reads, refs
+			if scan.nameParams[fn] == nil {
+				scan.nameParams[fn] = map[int]bool{}
 			}
 			for pos := range marks {
-				if !scan.nameParams[name][pos] {
-					scan.nameParams[name][pos] = true
+				if !scan.nameParams[fn][pos] {
+					scan.nameParams[fn][pos] = true
 					changed = true
 				}
 			}
 		}
 	}
-
-	return scan
 }
 
-func (scan *flagScan) closure(reads, refs map[string]bool) map[string]bool {
+func (scan *flagScan) closure(reads map[string]bool, refs map[*types.Func]bool, stop *types.Func) map[string]bool {
 	out := map[string]bool{}
 	for k := range reads {
 		out[k] = true
 	}
-	seen := map[string]bool{}
-	queue := make([]string, 0, len(refs))
+	seen := map[*types.Func]bool{}
+	queue := make([]*types.Func, 0, len(refs))
 	for k := range refs {
 		queue = append(queue, k)
 	}
 	for len(queue) > 0 {
-		name := queue[0]
+		fn := queue[0]
 		queue = queue[1:]
-		if seen[name] || name == "main.registerAllCommands" {
+		if seen[fn] || fn == stop {
 			continue
 		}
-		seen[name] = true
-		for k := range scan.reads[name] {
+		seen[fn] = true
+		for k := range scan.reads[fn] {
 			out[k] = true
 		}
-		for k := range scan.refs[name] {
+		for k := range scan.refs[fn] {
 			queue = append(queue, k)
 		}
 	}
@@ -415,33 +431,47 @@ func (scan *flagScan) closure(reads, refs map[string]bool) map[string]bool {
 	return out
 }
 
+const icuImportPath = "github.com/Thejuampi/icu"
+
 // commandReads returns the flags each registered command can read, keyed by
-// "resource action".
+// "resource action", from a type-checked scan of cmd/icu and the icu package.
 func commandReads(t *testing.T) map[string]map[string]bool {
 	t.Helper()
-	scan := buildFlagScan(t)
+	scan := loadFlagScan(t,
+		scanPackage{icuImportPath, filepath.Join("..", "..")},
+		scanPackage{icuImportPath + "/cmd/icu", "."})
+
+	return scan.registeredReads()
+}
+
+func (scan *flagScan) registeredReads() map[string]map[string]bool {
+	mainPkg := scan.pkgs[icuImportPath+"/cmd/icu"]
+	stop, _ := mainPkg.Scope().Lookup("registerAllCommands").(*types.Func)
 	out := map[string]map[string]bool{}
-	for name, fn := range scan.funcs {
-		if pkgOf(name) != "main" || fn.Body == nil {
+	for fn, decl := range scan.funcs {
+		if fn.Pkg() != mainPkg {
 			continue
 		}
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
+		ast.Inspect(decl.Body, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok || len(call.Args) != 3 {
 				return true
 			}
 			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "Register" {
+			if !ok {
 				return true
 			}
-			resource, okR := scan.resolveString("main", call.Args[0])
-			action, okA := scan.resolveString("main", call.Args[1])
+			method, isFunc := scan.info.Uses[sel.Sel].(*types.Func)
+			if !isFunc || method.Name() != "Register" || method.Pkg() != mainPkg {
+				return true
+			}
+			resource, okR := scan.resolveString(call.Args[0])
+			action, okA := scan.resolveString(call.Args[1])
 			if !okR || !okA {
 				return true
 			}
-			ctx := newFuncCtx("main", fn)
-			reads, refs, _ := scan.walk(ctx, call.Args[2])
-			out[resource+" "+action] = scan.closure(reads, refs)
+			reads, refs, _ := scan.walk(scan.newFuncCtx(decl), call.Args[2])
+			out[resource+" "+action] = scan.closure(reads, refs, stop)
 
 			return true
 		})
@@ -547,6 +577,47 @@ func TestAnalysisTimezoneAndLimitFlagsAccepted(t *testing.T) {
 			if err := validateCommandInput(command, nil, map[string]string{flag: value}); err != nil {
 				t.Errorf("analysis %s --%s rejected: %v", action, flag, err)
 			}
+		}
+	}
+}
+
+// TestFlagScanLinksByObject pins that the scan ignores builtins and links
+// calls by object: delete(flags, ...) is not a read, and a local func value
+// that shadows a package helper's name does not inherit its name parameter.
+func TestFlagScanLinksByObject(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := `package p
+
+const keyName = "via-const"
+
+func read(flags map[string]string, name string) string { return flags[name] }
+
+func run(flags map[string]string) {
+	delete(flags, "deleted")
+	_ = read(flags, keyName)
+	f := flags
+	_ = f["via-alias"]
+	{
+		read := func(m map[string]string, s string) string { return "" }
+		_ = read(flags, "shadowed")
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "p.go"), []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	scan := loadFlagScan(t, scanPackage{"example.com/p", dir})
+	run, _ := scan.pkgs["example.com/p"].Scope().Lookup("run").(*types.Func)
+	got := scan.closure(scan.reads[run], scan.refs[run], nil)
+	for _, want := range []string{"via-const", "via-alias"} {
+		if !got[want] {
+			t.Errorf("scan missed %q: %v", want, got)
+		}
+	}
+	for _, unwanted := range []string{"deleted", "shadowed"} {
+		if got[unwanted] {
+			t.Errorf("scan counted %q as a read: %v", unwanted, got)
 		}
 	}
 }
