@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -82,7 +84,7 @@ func TestEventsDeleteAndRevertDryRunNeverWrite(t *testing.T) {
 func withMockCommandClient(t *testing.T, client *icu.Client) {
 	t.Helper()
 	previous := newCommandClient
-	newCommandClient = func(string, string) *icu.Client { return client }
+	newCommandClient = func(string, string, string) *icu.Client { return client }
 	t.Cleanup(func() { newCommandClient = previous })
 }
 
@@ -385,7 +387,7 @@ func guardEnv(t *testing.T) {
 // skipLiveRun: commands that reach services other than intervals.icu
 // (Zepp, weather/estimate-power) are classified and flag-checked but never run.
 func skipLiveRun(resource, action string) bool {
-	return resource == "zepp" || strings.HasPrefix(action, "estimate-power")
+	return resource == "zepp" || action == "estimate-power" || action == "estimate-power-backtest"
 }
 
 //nolint:paralleltest // replaces newCommandClient and sets env.
@@ -467,7 +469,7 @@ func TestEveryCommandRejectsUnsupportedFlagsWithoutWrites(t *testing.T) {
 // --id 1 --dry-run has something to preview.
 func seedRevertBackup(t *testing.T) {
 	t.Helper()
-	client := newCommandClient("k", "i1")
+	client := newCommandClient("k", "i1", "")
 	if _, err := backupEvent(client, 1, eventBackupReasonDelete); err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +501,15 @@ func TestCommandsRunAgainstMock(t *testing.T) {
 			write := writeCommands()[key]
 			mock.phase(key, write)
 			var stdout, stderr bytes.Buffer
-			_ = run(commandArgs(resource, action, "1"), &stdout, &stderr)
+			extra := []string{"1"}
+			if key == "activity estimate-power-accept" {
+				path := filepath.Join(t.TempDir(), "estimate.json")
+				if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				extra = []string{"--file", path}
+			}
+			_ = run(commandArgs(resource, action, extra...), &stdout, &stderr)
 			_, writes := mock.counts(key)
 			if !write && writes != 0 {
 				t.Errorf("read-only %s sent %d write request(s)", key, writes)

@@ -1,0 +1,5258 @@
+[
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "3x12min Sweet Spot intervals @ 90–92% FTP, 4 min recovery between.  \nZ2 filler before and after. Maintain steady cadence 85–90 rpm.\n\nWarmup\n- 10m 65% 85rpm\n\n3x\n  - 15m 91% 85rpm\n  - 5m 60% 80rpm\n\nCooldown\n- 12m 60% 80rpm",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 81.15027,
+    "icu_training_load": 90,
+    "id": 2,
+    "indoor": null,
+    "joules": 1120620,
+    "joules_above_ftp": 0,
+    "moving_time": 4920,
+    "name": "3x15min Sweet Spot intervals @ 90–92%",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-15T00:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 228,
+      "description": "3x12min Sweet Spot intervals @ 90–92% FTP, 4 min recovery between.  \nZ2 filler before and after. Maintain steady cadence 85–90 rpm.",
+      "distance": 0,
+      "duration": 4920,
+      "locales": [],
+      "normalized_power": 239,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 85
+          },
+          "duration": 600,
+          "power": {
+            "units": "%ftp",
+            "value": 65
+          },
+          "warmup": true
+        },
+        {
+          "distance": 0,
+          "duration": 3600,
+          "reps": 3,
+          "steps": [
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 85
+              },
+              "duration": 900,
+              "power": {
+                "units": "%ftp",
+                "value": 91
+              }
+            },
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 80
+              },
+              "duration": 300,
+              "power": {
+                "units": "%ftp",
+                "value": 60
+              }
+            }
+          ],
+          "text": "3x"
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "cooldown": true,
+          "duration": 720,
+          "power": {
+            "units": "%ftp",
+            "value": 60
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 100.38059355569155,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 100.38059355569155
+      },
+      "variability_index": 1.0482456140350878,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 2220,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 2700,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 2700,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "Easy recovery ride. Keep cadence smooth and HR below 130 bpm.\n- 5m 55% 90rpm\n- 50m 60% 90rpm\n- 5m 55% 90rpm\n",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 59.160797,
+    "icu_training_load": 35,
+    "id": 7,
+    "indoor": null,
+    "joules": 624600,
+    "joules_above_ftp": 0,
+    "moving_time": 3600,
+    "name": "Monday Recovery 1h",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-15T00:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 174,
+      "description": "Easy recovery ride. Keep cadence smooth and HR below 130 bpm.",
+      "distance": 0,
+      "duration": 3600,
+      "locales": [],
+      "normalized_power": 174,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 90
+          },
+          "duration": 300,
+          "power": {
+            "units": "%ftp",
+            "value": 55
+          }
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 90
+          },
+          "duration": 3000,
+          "power": {
+            "units": "%ftp",
+            "value": 60
+          }
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 90
+          },
+          "duration": 300,
+          "power": {
+            "units": "%ftp",
+            "value": 55
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 52.836761168475576,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 52.836761168475576
+      },
+      "variability_index": 1,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 600,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3000,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "Easy recovery spin @55-60% FTP, keep cadence >90 rpm.\n\n- 5m 55% 90rpm\n\n6x\n  - 5m 58% 90rpm\n  - 1m 60% 95rpm\n\n- 5m 55% 90rpm",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 57.104023,
+    "icu_training_load": 25,
+    "id": 8,
+    "indoor": null,
+    "joules": 465960,
+    "joules_above_ftp": 0,
+    "moving_time": 2760,
+    "name": "Recovery 45m",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-15T00:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 169,
+      "description": "Easy recovery spin @55-60% FTP, keep cadence >90 rpm.",
+      "distance": 0,
+      "duration": 2760,
+      "locales": [],
+      "normalized_power": 169,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 90
+          },
+          "duration": 300,
+          "power": {
+            "units": "%ftp",
+            "value": 55
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 2160,
+          "reps": 6,
+          "steps": [
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 90
+              },
+              "duration": 300,
+              "power": {
+                "units": "%ftp",
+                "value": 58
+              }
+            },
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 95
+              },
+              "duration": 60,
+              "power": {
+                "units": "%ftp",
+                "value": 60
+              }
+            }
+          ],
+          "text": "6x"
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 90
+          },
+          "duration": 300,
+          "power": {
+            "units": "%ftp",
+            "value": 55
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 39.25511612640414,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 39.25511612640414
+      },
+      "variability_index": 1,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 600,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 2160,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "- 15m Ramp 139-181w\n- 35m 181-195w steady\n- 20m 195-206w steady\n- 10m 167-181w easy\n- 10m 139-153w recovery",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 64.29101,
+    "icu_training_load": 62,
+    "id": 12,
+    "indoor": null,
+    "joules": 971400,
+    "joules_above_ftp": 0,
+    "moving_time": 5400,
+    "name": "Ride Endurance Check 90",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-04-20T21:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 180,
+      "distance": 0,
+      "duration": 5400,
+      "locales": [],
+      "normalized_power": 183,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 181,
+            "start": 139,
+            "units": "w"
+          },
+          "ramp": true
+        },
+        {
+          "duration": 2100,
+          "power": {
+            "end": 195,
+            "start": 181,
+            "units": "w"
+          }
+        },
+        {
+          "duration": 1200,
+          "power": {
+            "end": 206,
+            "start": 195,
+            "units": "w"
+          }
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 181,
+            "start": 167,
+            "units": "w"
+          }
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 153,
+            "start": 139,
+            "units": "w"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 85.82233876834616,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 85.82233876834616
+      },
+      "variability_index": 1.0166666666666666,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 964,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 4436,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "- 20m Ramp 139-181w\n- 110m 181-195w steady\n- 15m 195-206w steady\n- 5m 167-181w recovery\n- 15m 195-206w steady\n- 15m 139-153w recovery",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 66.58328,
+    "icu_training_load": 133,
+    "id": 11,
+    "indoor": null,
+    "joules": 1977300,
+    "joules_above_ftp": 0,
+    "moving_time": 10800,
+    "name": "Ride Long Endurance 180",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-04-20T21:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 183,
+      "distance": 0,
+      "duration": 10800,
+      "locales": [],
+      "normalized_power": 185,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 1200,
+          "power": {
+            "end": 181,
+            "start": 139,
+            "units": "w"
+          },
+          "ramp": true
+        },
+        {
+          "duration": 6600,
+          "power": {
+            "end": 195,
+            "start": 181,
+            "units": "w"
+          }
+        },
+        {
+          "duration": 900,
+          "power": {
+            "end": 206,
+            "start": 195,
+            "units": "w"
+          }
+        },
+        {
+          "duration": 300,
+          "power": {
+            "end": 181,
+            "start": 167,
+            "units": "w"
+          }
+        },
+        {
+          "duration": 900,
+          "power": {
+            "end": 206,
+            "start": 195,
+            "units": "w"
+          }
+        },
+        {
+          "duration": 900,
+          "power": {
+            "end": 153,
+            "start": 139,
+            "units": "w"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 175.11016636403642,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 175.11016636403642
+      },
+      "variability_index": 1.010928961748634,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 1386,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 9414,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "2x20min Tempo intervals at 80% FTP, with 5min recovery between. FTP 283W.\n- 8m 60-70% 80rpm\n- 20m 86% 85rpm\n- 5m 60% 80rpm\n- 20m 86% 85rpm\n- 35m 60-70% 80rpm\n",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 76.127884,
+    "icu_training_load": 85,
+    "id": 4,
+    "indoor": null,
+    "joules": 1149090,
+    "joules_above_ftp": 0,
+    "moving_time": 5280,
+    "name": "Saturday Tempo 2x20",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-15T00:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 218,
+      "description": "2x20min Tempo intervals at 80% FTP, with 5min recovery between. FTP 283W.",
+      "distance": 0,
+      "duration": 5280,
+      "locales": [],
+      "normalized_power": 224,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "duration": 480,
+          "power": {
+            "end": 70,
+            "start": 60,
+            "units": "%ftp"
+          }
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 85
+          },
+          "duration": 1200,
+          "power": {
+            "units": "%ftp",
+            "value": 86
+          }
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "duration": 300,
+          "power": {
+            "units": "%ftp",
+            "value": 60
+          }
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 85
+          },
+          "duration": 1200,
+          "power": {
+            "units": "%ftp",
+            "value": 86
+          }
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "duration": 2100,
+          "power": {
+            "end": 70,
+            "start": 60,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 101.57056070231975,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 101.57056070231975
+      },
+      "variability_index": 1.0275229357798166,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 2880,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 2400,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 2400,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "Muscular endurance session. Controlled effort, RPE 7/10.\n\n-10m 60-70%\n\n3x\n- 10m 88-90%\n- 5m 60-70%\n\n-5m 55-65%\n",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 79.372536,
+    "icu_training_load": 63,
+    "id": 9,
+    "indoor": null,
+    "joules": 808350,
+    "joules_above_ftp": 0,
+    "moving_time": 3600,
+    "name": "Sweet Spot 3×10 @88–90% FTP",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-24T04:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 225,
+      "description": "Muscular endurance session. Controlled effort, RPE 7/10.",
+      "distance": 0,
+      "duration": 3600,
+      "locales": [],
+      "normalized_power": 233,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 600,
+          "power": {
+            "end": 70,
+            "start": 60,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 2700,
+          "reps": 3,
+          "steps": [
+            {
+              "duration": 600,
+              "power": {
+                "end": 90,
+                "start": 88,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 300,
+              "power": {
+                "end": 70,
+                "start": 60,
+                "units": "%ftp"
+              }
+            }
+          ],
+          "text": "3x"
+        },
+        {
+          "duration": 300,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 72.01482283865435,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 72.01482283865435
+      },
+      "variability_index": 1.0355555555555556,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 1800,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 1800,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 1800,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "3x12min Sweet Spot intervals @90-92% FTP, 5 min recovery between. Z2 filler around.\n\n- 8m 65% 85rpm\n\n3x\n  - 12m 92% 85rpm\n  - 5m 60% 80rpm\n\n- 16m 61% 80rpm",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 80.49844,
+    "icu_training_load": 81,
+    "id": 6,
+    "indoor": null,
+    "joules": 1005120,
+    "joules_above_ftp": 0,
+    "moving_time": 4500,
+    "name": "Sweet Spot 3x12 @ 90–92% FTP",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-15T00:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 223,
+      "description": "3x12min Sweet Spot intervals @90-92% FTP, 5 min recovery between. Z2 filler around.",
+      "distance": 0,
+      "duration": 4500,
+      "locales": [],
+      "normalized_power": 236,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 85
+          },
+          "duration": 480,
+          "power": {
+            "units": "%ftp",
+            "value": 65
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 3060,
+          "reps": 3,
+          "steps": [
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 85
+              },
+              "duration": 720,
+              "power": {
+                "units": "%ftp",
+                "value": 92
+              }
+            },
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 80
+              },
+              "duration": 300,
+              "power": {
+                "units": "%ftp",
+                "value": 60
+              }
+            }
+          ],
+          "text": "3x"
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "duration": 960,
+          "power": {
+            "units": "%ftp",
+            "value": 61
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 89.75018238098576,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 89.75018238098576
+      },
+      "variability_index": 1.0582959641255605,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 2340,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 2160,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 2160,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "  2x20min Tempo with 40s surges @110% every 4min.  \n  Focus on smooth power, breathing control, and muscular tension management.  \n  FTP 294W → Tempo target 270W, surges 320–325W.\n\n  Warmup\n  - 10m 65-70% 85rpm\n\n4x\n  - 3m30s 92% 85rpm\n  - 40s 110% 95rpm\n\n  - 15m 60-66% 80rpm\n\n4x\n  - 3m30s 92% 85rpm\n  - 40s 110% 95rpm\n\n  Cooldown\n  - 25m 66% 80rpm",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 81.38796,
+    "icu_training_load": 92,
+    "id": 1,
+    "indoor": null,
+    "joules": 1133260,
+    "joules_above_ftp": 9280,
+    "moving_time": 5000,
+    "name": "Tempo / Over-Unders",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-15T00:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 227,
+      "description": "  2x20min Tempo with 40s surges @110% every 4min.  \n  Focus on smooth power, breathing control, and muscular tension management.  \n  FTP 294W → Tempo target 270W, surges 320–325W.",
+      "distance": 0,
+      "duration": 5000,
+      "locales": [],
+      "normalized_power": 239,
+      "options": {},
+      "polarization_index": 1.06,
+      "steps": [
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 85
+          },
+          "duration": 600,
+          "power": {
+            "end": 70,
+            "start": 65,
+            "units": "%ftp"
+          },
+          "warmup": true
+        },
+        {
+          "distance": 0,
+          "duration": 1000,
+          "reps": 4,
+          "steps": [
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 85
+              },
+              "duration": 210,
+              "power": {
+                "units": "%ftp",
+                "value": 92
+              }
+            },
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 95
+              },
+              "duration": 40,
+              "power": {
+                "units": "%ftp",
+                "value": 110
+              }
+            }
+          ],
+          "text": "4x"
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "duration": 900,
+          "power": {
+            "end": 66,
+            "start": 60,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 1000,
+          "reps": 4,
+          "steps": [
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 85
+              },
+              "duration": 210,
+              "power": {
+                "units": "%ftp",
+                "value": 92
+              }
+            },
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 95
+              },
+              "duration": 40,
+              "power": {
+                "units": "%ftp",
+                "value": 110
+              }
+            }
+          ],
+          "text": "4x"
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "duration": 1500,
+          "power": {
+            "units": "%ftp",
+            "value": 66
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 101.492382491115,
+        "ss_p_max": 0.03628023942918483,
+        "ss_w_prime": 0.8832361736898098,
+        "strain_score": 102.411898904234
+      },
+      "variability_index": 1.052863436123348,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3000,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 1680,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 320,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 1680,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": "blue",
+    "day": null,
+    "days": null,
+    "description": "First VO2max session of the block. Target HR >90% max on last reps.\n  FTP 294W, target 335–340W.\n\nWarmup:\n- 15m ramp 60-75%\n\nMain:\n4x\n- 4m 115% 90rpm\n- 3m 60% 85rpm\n\nCooldown\n- 30m 60% 85rpm",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 83.5841,
+    "icu_training_load": 85,
+    "id": 5,
+    "indoor": null,
+    "joules": 946200,
+    "joules_above_ftp": 42240,
+    "moving_time": 4380,
+    "name": "VO2max 4x4 @115% FTP",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-15T00:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 216,
+      "description": "First VO2max session of the block. Target HR >90% max on last reps.\n  FTP 294W, target 335–340W.",
+      "distance": 0,
+      "duration": 4380,
+      "locales": [],
+      "normalized_power": 246,
+      "options": {},
+      "polarization_index": 3.21,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 75,
+            "start": 60,
+            "units": "%ftp"
+          },
+          "ramp": true,
+          "warmup": true
+        },
+        {
+          "distance": 0,
+          "duration": 1680,
+          "reps": 4,
+          "steps": [
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 90
+              },
+              "duration": 240,
+              "power": {
+                "units": "%ftp",
+                "value": 115
+              }
+            },
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 85
+              },
+              "duration": 180,
+              "power": {
+                "units": "%ftp",
+                "value": 60
+              }
+            }
+          ],
+          "text": "Main:\n4x"
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 85
+          },
+          "cooldown": true,
+          "duration": 1800,
+          "power": {
+            "units": "%ftp",
+            "value": 60
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 99.71658483663191,
+        "ss_p_max": 0.3704283628696945,
+        "ss_w_prime": 5.8174090623399834,
+        "strain_score": 105.90442226184159
+      },
+      "variability_index": 1.1388888888888888,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3420,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 960,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "  VO2max progression session.  \n  Focus on full oxygen uptake and cadence control 90 rpm.  \n  FTP 294W → target 322–338W.  \n  Target HR > 90% max on last two reps.\n\nWarmup\n  - 15m 60-75% 80rpm\n\n4x\n  - 5m 110-115% 88rpm\n  - 4m 60% 80rpm\n\nCooldown\n  - 25m 60% 80rpm",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 85.22416,
+    "icu_training_load": 92,
+    "id": 3,
+    "indoor": null,
+    "joules": 1007760,
+    "joules_above_ftp": 43800,
+    "moving_time": 4560,
+    "name": "VO2max 4x5 @115% FTP",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-15T00:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 221,
+      "description": "  VO2max progression session.  \n  Focus on full oxygen uptake and cadence control 90 rpm.  \n  FTP 294W → target 322–338W.  \n  Target HR > 90% max on last two reps.",
+      "distance": 0,
+      "duration": 4560,
+      "locales": [],
+      "normalized_power": 250,
+      "options": {},
+      "polarization_index": 3.27,
+      "steps": [
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "duration": 900,
+          "power": {
+            "end": 75,
+            "start": 60,
+            "units": "%ftp"
+          },
+          "warmup": true
+        },
+        {
+          "distance": 0,
+          "duration": 2160,
+          "reps": 4,
+          "steps": [
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 88
+              },
+              "duration": 300,
+              "power": {
+                "end": 115,
+                "start": 110,
+                "units": "%ftp"
+              }
+            },
+            {
+              "cadence": {
+                "units": "rpm",
+                "value": 80
+              },
+              "duration": 240,
+              "power": {
+                "units": "%ftp",
+                "value": 60
+              }
+            }
+          ],
+          "text": "4x"
+        },
+        {
+          "cadence": {
+            "units": "rpm",
+            "value": 80
+          },
+          "cooldown": true,
+          "duration": 1500,
+          "power": {
+            "units": "%ftp",
+            "value": 60
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 105.0057056941751,
+        "ss_p_max": 0.2955948186082654,
+        "ss_w_prime": 5.656793994462289,
+        "strain_score": 110.95809450724566
+      },
+      "variability_index": 1.1312217194570136,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3360,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 1200,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": null,
+    "days": null,
+    "description": "Perform only if HRV ≥ 45 ms and RHR ≤ 50 bpm. Otherwise, substitute a 60 TSS Z2 ride.\n\n-10m 60-70%\n\n5x\n- 3m 115%\n- 3m 60-70%\n\n-10m 55-65%\n",
+    "distance": 0,
+    "folder_id": 700001,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 88.994385,
+    "icu_training_load": 66,
+    "id": 10,
+    "indoor": false,
+    "joules": 695550,
+    "joules_above_ftp": 39600,
+    "moving_time": 3000,
+    "name": "VO₂ Tune-up 5×3 @115% FTP",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": null,
+    "target": null,
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2025-12-24T04:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 232,
+      "description": "Perform only if HRV ≥ 45 ms and RHR ≤ 50 bpm. Otherwise, substitute a 60 TSS Z2 ride.",
+      "distance": 0,
+      "duration": 3000,
+      "locales": [],
+      "normalized_power": 261,
+      "options": {},
+      "polarization_index": 3.31,
+      "steps": [
+        {
+          "duration": 600,
+          "power": {
+            "end": 70,
+            "start": 60,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 1800,
+          "reps": 5,
+          "steps": [
+            {
+              "duration": 180,
+              "power": {
+                "units": "%ftp",
+                "value": 115
+              }
+            },
+            {
+              "duration": 180,
+              "power": {
+                "end": 70,
+                "start": 60,
+                "units": "%ftp"
+              }
+            }
+          ],
+          "text": "5x"
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 74.0453995653126,
+        "ss_p_max": 0.3157697898858365,
+        "ss_w_prime": 4.9590210184343855,
+        "strain_score": 79.32019037363281
+      },
+      "variability_index": 1.125,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 161,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 220,
+          "minWatts": 162,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 2100,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 264,
+          "minWatts": 221,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 308,
+          "minWatts": 265,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 352,
+          "minWatts": 309,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 900,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 441,
+          "minWatts": 353,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 442,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 285,
+          "min": 84,
+          "minWatts": 246,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 5,
+    "days": null,
+    "description": "Durability-first long ride. Fuel from the first 30m. On cold days use power and breathing first; only cut power if HR keeps climbing out of proportion.\n\n- 20m 55-70%\n- 130m 68-74%\n- 20m 75-78%\n- 30m 55-65%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 69.065186,
+    "icu_training_load": 159,
+    "id": 15,
+    "indoor": null,
+    "joules": 2352600,
+    "joules_above_ftp": 0,
+    "moving_time": 12000,
+    "name": "W1 Sat 2026-05-09 ALT 3h20 Z2 Durable",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 196,
+      "description": "Durability-first long ride. Fuel from the first 30m. On cold days use power and breathing first; only cut power if HR keeps climbing out of proportion.",
+      "distance": 0,
+      "duration": 12000,
+      "locales": [],
+      "normalized_power": 197,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 1200,
+          "power": {
+            "end": 70,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 7800,
+          "power": {
+            "end": 74,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 1200,
+          "power": {
+            "end": 78,
+            "start": 75,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 1800,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 210.7536041556457,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 210.7536041556457
+      },
+      "variability_index": 1.0051020408163265,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 10800,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 1200,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 6,
+    "days": null,
+    "description": "Keep this aerobic. Low to mid Z2, no sneaky tempo. If Saturday left residue, ride easier not harder.\n\n- 10m 55-65%\n- 60m 68-73%\n- 10m 60-65%\n- 10m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 67.33003,
+    "icu_training_load": 68,
+    "id": 16,
+    "indoor": null,
+    "joules": 1029000,
+    "joules_above_ftp": 0,
+    "moving_time": 5400,
+    "name": "W1 Sun 2026-05-10 ALT 90m Aerobic Float",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 191,
+      "description": "Keep this aerobic. Low to mid Z2, no sneaky tempo. If Saturday left residue, ride easier not harder.",
+      "distance": 0,
+      "duration": 5400,
+      "locales": [],
+      "normalized_power": 192,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 600,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 3600,
+          "power": {
+            "end": 73,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 65,
+            "start": 60,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 91.72501208737891,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 91.72501208737891
+      },
+      "variability_index": 1.0052356020942408,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 5400,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 3,
+    "days": null,
+    "description": "Steady pressure without turning it into a threshold chase. If drift rises early on a cold or stress-heavy day, cap the final block.\n\n- 15m 55-72%\n\n3x\n  - 15m 84-88%\n  - 5m 60-65%\n\n- 10m 68-72%\n- 15m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 75.89466,
+    "icu_training_load": 96,
+    "id": 14,
+    "indoor": null,
+    "joules": 1249350,
+    "joules_above_ftp": 0,
+    "moving_time": 6000,
+    "name": "W1 Thu 2026-05-07 ALT 3x15 Tempo",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 208,
+      "description": "Steady pressure without turning it into a threshold chase. If drift rises early on a cold or stress-heavy day, cap the final block.",
+      "distance": 0,
+      "duration": 6000,
+      "locales": [],
+      "normalized_power": 216,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 72,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 3600,
+          "reps": 3,
+          "steps": [
+            {
+              "duration": 900,
+              "power": {
+                "end": 88,
+                "start": 84,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 300,
+              "power": {
+                "end": 65,
+                "start": 60,
+                "units": "%ftp"
+              }
+            }
+          ],
+          "text": "3x"
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 72,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 900,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 113.76353619567938,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 113.76353619567938
+      },
+      "variability_index": 1.0384615384615385,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3300,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 2700,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 2700,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 1,
+    "days": null,
+    "description": "3x4m VO2 re-entry. Use power and RPE first; on cold/stress days do not overreact to a small HR rise.\n\n- 15m 55-70%\n\n3x\n  - 4m 112-115%\n  - 4m 60%\n\n- 15m 68-72%\n- 16m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 79.64206,
+    "icu_training_load": 74,
+    "id": 13,
+    "indoor": null,
+    "joules": 851490,
+    "joules_above_ftp": 27360,
+    "moving_time": 4200,
+    "name": "W1 Tue 2026-05-05 ALT 3x4 VO2Max",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 203,
+      "description": "3x4m VO2 re-entry. Use power and RPE first; on cold/stress days do not overreact to a small HR rise.",
+      "distance": 0,
+      "duration": 4200,
+      "locales": [],
+      "normalized_power": 227,
+      "options": {},
+      "polarization_index": 3.13,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 70,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 1440,
+          "reps": 3,
+          "steps": [
+            {
+              "duration": 240,
+              "power": {
+                "end": 115,
+                "start": 112,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 240,
+              "power": {
+                "units": "%ftp",
+                "value": 60
+              }
+            }
+          ],
+          "text": "3x"
+        },
+        {
+          "duration": 900,
+          "power": {
+            "end": 72,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 960,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 83.37202605949204,
+        "ss_p_max": 0.18614962029310292,
+        "ss_w_prime": 3.304155760202576,
+        "strain_score": 86.86233143998773
+      },
+      "variability_index": 1.1182266009852218,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3480,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 720,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 12,
+    "days": null,
+    "description": "Long build endurance. First half patient, second half slightly firmer but still aerobic. Fuel early and regularly.\n\n- 20m 55-70%\n- 145m 68-74%\n- 25m 75-78%\n- 25m 55-65%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 69.88362,
+    "icu_training_load": 175,
+    "id": 19,
+    "indoor": null,
+    "joules": 2548050,
+    "joules_above_ftp": 0,
+    "moving_time": 12900,
+    "name": "W2 Sat 2026-05-16 ALT 3h35 Z2 Durable",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 198,
+      "description": "Long build endurance. First half patient, second half slightly firmer but still aerobic. Fuel early and regularly.",
+      "distance": 0,
+      "duration": 12900,
+      "locales": [],
+      "normalized_power": 199,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 1200,
+          "power": {
+            "end": 70,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 8700,
+          "power": {
+            "end": 74,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 1500,
+          "power": {
+            "end": 78,
+            "start": 75,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 1500,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 228.5482590732175,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 228.5482590732175
+      },
+      "variability_index": 1.005050505050505,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 11400,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 1500,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 13,
+    "days": null,
+    "description": "Aerobic extension. Smooth cadence, low strain, stay under the point where HR drift starts to run the ride.\n\n- 10m 55-65%\n- 75m 68-74%\n- 10m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 68.82472,
+    "icu_training_load": 75,
+    "id": 20,
+    "indoor": null,
+    "joules": 1107150,
+    "joules_above_ftp": 0,
+    "moving_time": 5700,
+    "name": "W2 Sun 2026-05-17 ALT 95m Aerobic Endurance",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 194,
+      "description": "Aerobic extension. Smooth cadence, low strain, stay under the point where HR drift starts to run the ride.",
+      "distance": 0,
+      "duration": 5700,
+      "locales": [],
+      "normalized_power": 196,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 600,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 4500,
+          "power": {
+            "end": 74,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 99.01797730406331,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 99.01797730406331
+      },
+      "variability_index": 1.0103092783505154,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 5700,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 10,
+    "days": null,
+    "description": "Muscular endurance day. Sit on the work, do not surge it. If decoupling rises early despite fueling, keep it sweet spot and skip the top end.\n\n- 15m 55-72%\n\n2x\n  - 20m 88-92%\n  - 6m 60-65%\n\n- 20m 68-73%\n- 18m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 77.08993,
+    "icu_training_load": 104,
+    "id": 18,
+    "indoor": null,
+    "joules": 1322190,
+    "joules_above_ftp": 0,
+    "moving_time": 6300,
+    "name": "W2 Thu 2026-05-14 ALT 2x20 Sweet Spot",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 210,
+      "description": "Muscular endurance day. Sit on the work, do not surge it. If decoupling rises early despite fueling, keep it sweet spot and skip the top end.",
+      "distance": 0,
+      "duration": 6300,
+      "locales": [],
+      "normalized_power": 220,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 72,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 3120,
+          "reps": 2,
+          "steps": [
+            {
+              "duration": 1200,
+              "power": {
+                "end": 92,
+                "start": 88,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 360,
+              "power": {
+                "end": 65,
+                "start": 60,
+                "units": "%ftp"
+              }
+            }
+          ],
+          "text": "2x"
+        },
+        {
+          "duration": 1200,
+          "power": {
+            "end": 73,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 1080,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 120.7650226921157,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 120.7650226921157
+      },
+      "variability_index": 1.0476190476190477,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3900,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 2400,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 2400,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 8,
+    "days": null,
+    "description": "Build week VO2. Four repeatable reps, no hero first rep. If HRV is suppressed or stress is high, replace with 90m Z2.\n\n- 15m 55-72%\n\n4x\n  - 4m 113-116%\n  - 4m 60%\n\n- 12m 68-72%\n- 16m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 82.94576,
+    "icu_training_load": 86,
+    "id": 17,
+    "indoor": null,
+    "joules": 939810,
+    "joules_above_ftp": 39360,
+    "moving_time": 4500,
+    "name": "W2 Tue 2026-05-12 ALT 4x4 VO2Max",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 209,
+      "description": "Build week VO2. Four repeatable reps, no hero first rep. If HRV is suppressed or stress is high, replace with 90m Z2.",
+      "distance": 0,
+      "duration": 4500,
+      "locales": [],
+      "normalized_power": 237,
+      "options": {},
+      "polarization_index": 3.2,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 72,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 1920,
+          "reps": 4,
+          "steps": [
+            {
+              "duration": 240,
+              "power": {
+                "end": 116,
+                "start": 113,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 240,
+              "power": {
+                "units": "%ftp",
+                "value": 60
+              }
+            }
+          ],
+          "text": "4x"
+        },
+        {
+          "duration": 720,
+          "power": {
+            "end": 72,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 960,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 96.660939818611,
+        "ss_p_max": 0.3071734877710903,
+        "ss_w_prime": 5.030902366787481,
+        "strain_score": 101.99901567316957
+      },
+      "variability_index": 1.1339712918660287,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3540,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 960,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 19,
+    "days": null,
+    "description": "Longest aerobic day of the block. Fuel aggressively, stay relaxed, and only firm the last hour if the drift is under control.\n\n- 20m 55-70%\n- 160m 68-74%\n- 25m 75-78%\n- 25m 55-65%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 69.84455,
+    "icu_training_load": 187,
+    "id": 23,
+    "indoor": null,
+    "joules": 2729400,
+    "joules_above_ftp": 0,
+    "moving_time": 13800,
+    "name": "W3 Sat 2026-05-23 ALT 3h50 Z2 Durable+",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 198,
+      "description": "Longest aerobic day of the block. Fuel aggressively, stay relaxed, and only firm the last hour if the drift is under control.",
+      "distance": 0,
+      "duration": 13800,
+      "locales": [],
+      "normalized_power": 199,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 1200,
+          "power": {
+            "end": 70,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 9600,
+          "power": {
+            "end": 74,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 1500,
+          "power": {
+            "end": 78,
+            "start": 75,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 1500,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 244.8583885829455,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 244.8583885829455
+      },
+      "variability_index": 1.005050505050505,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 12300,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 1500,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 20,
+    "days": null,
+    "description": "Aerobic carryover ride. Mid Z2 feel, never heavy. If Saturday hit hard, make this 75-90m easy aerobic instead.\n\n- 10m 55-65%\n- 90m 68-74%\n- 10m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 68.88726,
+    "icu_training_load": 87,
+    "id": 24,
+    "indoor": null,
+    "joules": 1288500,
+    "joules_above_ftp": 0,
+    "moving_time": 6600,
+    "name": "W3 Sun 2026-05-24 ALT 110m Aerobic Endurance",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 195,
+      "description": "Aerobic carryover ride. Mid Z2 feel, never heavy. If Saturday hit hard, make this 75-90m easy aerobic instead.",
+      "distance": 0,
+      "duration": 6600,
+      "locales": [],
+      "normalized_power": 196,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 600,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 5400,
+          "power": {
+            "end": 74,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 115.3281068137736,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 115.3281068137736
+      },
+      "variability_index": 1.005128205128205,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 6600,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 17,
+    "days": null,
+    "description": "Heaviest steady day of the block. Stay seated and smooth; if decoupling or stress is too high, keep it closer to 90-92% than threshold.\n\n- 15m 55-72%\n\n3x\n  - 18m 90-94%\n  - 6m 60-65%\n\n- 10m 68-72%\n- 10m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 81.34386,
+    "icu_training_load": 118,
+    "id": 22,
+    "indoor": null,
+    "joules": 1419450,
+    "joules_above_ftp": 0,
+    "moving_time": 6420,
+    "name": "W3 Thu 2026-05-21 ALT 3x18 Sweet Spot",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 221,
+      "description": "Heaviest steady day of the block. Stay seated and smooth; if decoupling or stress is too high, keep it closer to 90-92% than threshold.",
+      "distance": 0,
+      "duration": 6420,
+      "locales": [],
+      "normalized_power": 232,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 72,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 4320,
+          "reps": 3,
+          "steps": [
+            {
+              "duration": 1080,
+              "power": {
+                "end": 94,
+                "start": 90,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 360,
+              "power": {
+                "end": 65,
+                "start": 60,
+                "units": "%ftp"
+              }
+            }
+          ],
+          "text": "3x"
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 72,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 131.16880856234613,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 131.16880856234613
+      },
+      "variability_index": 1.0497737556561086,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3180,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 3240,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 3240,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 15,
+    "days": null,
+    "description": "Peak build VO2. The goal is repeatable oxygen uptake, not maximal collapse. If markers are yellow, reduce to 3x5 or replace with 90m Z2.\n\n- 15m 55-72%\n\n4x\n  - 5m 112-115%\n  - 4m 60%\n\n- 10m 68-72%\n- 12m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 86.483826,
+    "icu_training_load": 91,
+    "id": 21,
+    "indoor": false,
+    "joules": 951330,
+    "joules_above_ftp": 45600,
+    "moving_time": 4380,
+    "name": "W3 Tue 2026-05-19 ALT 4x5 VO2Max",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 217,
+      "description": "Peak build VO2. The goal is repeatable oxygen uptake, not maximal collapse. If markers are yellow, reduce to 3x5 or replace with 90m Z2.",
+      "distance": 0,
+      "duration": 4380,
+      "locales": [],
+      "normalized_power": 246,
+      "options": {},
+      "polarization_index": 3.28,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 72,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 2160,
+          "reps": 4,
+          "steps": [
+            {
+              "duration": 300,
+              "power": {
+                "end": 115,
+                "start": 112,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 240,
+              "power": {
+                "units": "%ftp",
+                "value": 60
+              }
+            }
+          ],
+          "text": "4x"
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 72,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 720,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 105.68534293931846,
+        "ss_p_max": 0.356890961720672,
+        "ss_w_prime": 6.334814570541929,
+        "strain_score": 112.37704847158106
+      },
+      "variability_index": 1.1336405529953917,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3180,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 1200,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 26,
+    "days": null,
+    "description": "Shorter long ride. Keep it genuinely aerobic and arrive at Sunday fresher than usual.\n\n- 15m 55-70%\n- 100m 68-74%\n- 20m 74-77%\n- 15m 55-65%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 69.856995,
+    "icu_training_load": 122,
+    "id": 27,
+    "indoor": null,
+    "joules": 1779600,
+    "joules_above_ftp": 0,
+    "moving_time": 9000,
+    "name": "W4 Sat 2026-05-30 ALT 2h30 Z2 Reset",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 198,
+      "description": "Shorter long ride. Keep it genuinely aerobic and arrive at Sunday fresher than usual.",
+      "distance": 0,
+      "duration": 9000,
+      "locales": [],
+      "normalized_power": 199,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 900,
+          "power": {
+            "end": 70,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 6000,
+          "power": {
+            "end": 74,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 1200,
+          "power": {
+            "end": 77,
+            "start": 74,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 900,
+          "power": {
+            "end": 65,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 159.6374166220788,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 159.6374166220788
+      },
+      "variability_index": 1.005050505050505,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 7800,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 1200,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 27,
+    "days": null,
+    "description": "Very easy. If it feels like training, back off. This is to finish the block absorbable.\n\n- 10m 55-60%\n- 40m 58-62%\n- 10m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 59.160797,
+    "icu_training_load": 35,
+    "id": 28,
+    "indoor": null,
+    "joules": 605400,
+    "joules_above_ftp": 0,
+    "moving_time": 3600,
+    "name": "W4 Sun 2026-05-31 ALT 60m Recovery",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 168,
+      "description": "Very easy. If it feels like training, back off. This is to finish the block absorbable.",
+      "distance": 0,
+      "duration": 3600,
+      "locales": [],
+      "normalized_power": 168,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 600,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 2400,
+          "power": {
+            "end": 62,
+            "start": 58,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 600,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 52.8228489594366,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 52.8228489594366
+      },
+      "variability_index": 1,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3600,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 24,
+    "days": null,
+    "description": "Light steady work only. The point is rhythm, not fatigue. If legs are flat, keep it all aerobic.\n\n- 12m 55-70%\n\n2x\n  - 12m 84-88%\n  - 5m 60-65%\n\n- 14m 68-72%\n- 12m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 73.59801,
+    "icu_training_load": 65,
+    "id": 26,
+    "indoor": null,
+    "joules": 871560,
+    "joules_above_ftp": 0,
+    "moving_time": 4320,
+    "name": "W4 Thu 2026-05-28 ALT 2x12 Tempo Reset",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 202,
+      "description": "Light steady work only. The point is rhythm, not fatigue. If legs are flat, keep it all aerobic.",
+      "distance": 0,
+      "duration": 4320,
+      "locales": [],
+      "normalized_power": 209,
+      "options": {},
+      "polarization_index": 0,
+      "steps": [
+        {
+          "duration": 720,
+          "power": {
+            "end": 70,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 2040,
+          "reps": 2,
+          "steps": [
+            {
+              "duration": 720,
+              "power": {
+                "end": 88,
+                "start": 84,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 300,
+              "power": {
+                "end": 65,
+                "start": 60,
+                "units": "%ftp"
+              }
+            }
+          ],
+          "text": "2x"
+        },
+        {
+          "duration": 840,
+          "power": {
+            "end": 72,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 720,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 78.84927099582856,
+        "ss_p_max": 0,
+        "ss_w_prime": 0,
+        "strain_score": 78.84927099582856
+      },
+      "variability_index": 1.0346534653465347,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 2880,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 1440,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 0,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 1440,
+          "zone": 8
+        }
+      ]
+    }
+  },
+  {
+    "athlete_id": "i0",
+    "attachments": null,
+    "carbs_per_hour": null,
+    "color": null,
+    "day": 22,
+    "days": null,
+    "description": "Deload week tune-up. Only do this if HRV and readiness are normal. Otherwise ride 75-90m Z2 and protect recovery.\n\n- 12m 55-72%\n\n5x\n  - 3m 112-115%\n  - 3m 60-65%\n\n- 12m 68-72%\n- 12m 55-60%",
+    "distance": 0,
+    "folder_id": 827693,
+    "for_week": false,
+    "hide_from_athlete": false,
+    "icu_intensity": 83.666,
+    "icu_training_load": 77,
+    "id": 25,
+    "indoor": null,
+    "joules": 841860,
+    "joules_above_ftp": 34200,
+    "moving_time": 3960,
+    "name": "W4 Tue 2026-05-26 ALT 5x3 VO2 Tune-Up",
+    "plan_applied": null,
+    "sub_type": null,
+    "tags": [
+      "ALT_BUILD_2026_06",
+      "ALT_COMPARE"
+    ],
+    "target": "POWER",
+    "targets": [
+      "POWER"
+    ],
+    "time": null,
+    "type": "Ride",
+    "updated": "2026-05-03T17:00:00.000+00:00",
+    "workout_doc": {
+      "average_watts": 213,
+      "description": "Deload week tune-up. Only do this if HRV and readiness are normal. Otherwise ride 75-90m Z2 and protect recovery.",
+      "distance": 0,
+      "duration": 3960,
+      "locales": [],
+      "normalized_power": 238,
+      "options": {},
+      "polarization_index": 3.23,
+      "steps": [
+        {
+          "duration": 720,
+          "power": {
+            "end": 72,
+            "start": 55,
+            "units": "%ftp"
+          }
+        },
+        {
+          "distance": 0,
+          "duration": 1800,
+          "reps": 5,
+          "steps": [
+            {
+              "duration": 180,
+              "power": {
+                "end": 115,
+                "start": 112,
+                "units": "%ftp"
+              }
+            },
+            {
+              "duration": 180,
+              "power": {
+                "end": 65,
+                "start": 60,
+                "units": "%ftp"
+              }
+            }
+          ],
+          "text": "5x"
+        },
+        {
+          "duration": 720,
+          "power": {
+            "end": 72,
+            "start": 68,
+            "units": "%ftp"
+          }
+        },
+        {
+          "duration": 720,
+          "power": {
+            "end": 60,
+            "start": 55,
+            "units": "%ftp"
+          }
+        }
+      ],
+      "strain_score": {
+        "ss_cp": 85.11072244225396,
+        "ss_p_max": 0.23236053869876186,
+        "ss_w_prime": 4.124399561903021,
+        "strain_score": 89.46748254285575
+      },
+      "variability_index": 1.1173708920187793,
+      "zoneTimes": [
+        {
+          "color": "#009e80",
+          "id": "Z1",
+          "max": 55,
+          "maxWatts": 156,
+          "minWatts": 1,
+          "name": "Z1",
+          "percentRange": "0% - 55%",
+          "secs": 0,
+          "zone": 1
+        },
+        {
+          "color": "#009e00",
+          "id": "Z2",
+          "max": 75,
+          "maxWatts": 213,
+          "minWatts": 157,
+          "name": "Z2",
+          "percentRange": "56% - 75%",
+          "secs": 3060,
+          "zone": 2
+        },
+        {
+          "color": "#ffcb0e",
+          "id": "Z3",
+          "max": 90,
+          "maxWatts": 256,
+          "minWatts": 214,
+          "name": "Z3",
+          "percentRange": "76% - 90%",
+          "secs": 0,
+          "zone": 3
+        },
+        {
+          "color": "#ff7f0e",
+          "id": "Z4",
+          "max": 105,
+          "maxWatts": 299,
+          "minWatts": 257,
+          "name": "Z4",
+          "percentRange": "91% - 105%",
+          "secs": 0,
+          "zone": 4
+        },
+        {
+          "color": "#dd0447",
+          "id": "Z5",
+          "max": 120,
+          "maxWatts": 342,
+          "minWatts": 300,
+          "name": "Z5",
+          "percentRange": "106% - 120%",
+          "secs": 900,
+          "zone": 5
+        },
+        {
+          "color": "#6633cc",
+          "id": "Z6",
+          "max": 150,
+          "maxWatts": 427,
+          "minWatts": 343,
+          "name": "Z6",
+          "percentRange": "121% - 150%",
+          "secs": 0,
+          "zone": 6
+        },
+        {
+          "color": "#504861",
+          "id": "Z7",
+          "max": 999,
+          "maxWatts": 9999,
+          "minWatts": 428,
+          "name": "Z7",
+          "percentRange": "151% +",
+          "secs": 0,
+          "zone": 7
+        },
+        {
+          "color": "#ffa00e",
+          "gap": true,
+          "id": "SS",
+          "max": 97,
+          "maxWatts": 276,
+          "min": 84,
+          "minWatts": 239,
+          "name": "Sweet Spot",
+          "percentRange": "84% - 97%",
+          "secs": 0,
+          "zone": 8
+        }
+      ]
+    }
+  }
+]

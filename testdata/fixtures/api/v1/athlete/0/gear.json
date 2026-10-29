@@ -1,0 +1,53 @@
+[
+  {
+    "activities": 241,
+    "activity_filters": null,
+    "athlete_id": "i0",
+    "component": false,
+    "component_ids": null,
+    "distance": 30096336,
+    "id": "b90001",
+    "name": "Gear b90001",
+    "notes": null,
+    "purchased": null,
+    "reminders": [],
+    "retired": null,
+    "time": 1344616,
+    "type": "Bike",
+    "use_elapsed_time": false
+  },
+  {
+    "activities": 0,
+    "activity_filters": null,
+    "athlete_id": "i0",
+    "component": false,
+    "component_ids": null,
+    "distance": 5880803,
+    "id": "b90002",
+    "name": "Gear b90002",
+    "notes": null,
+    "purchased": null,
+    "reminders": [],
+    "retired": null,
+    "time": 0,
+    "type": "Bike",
+    "use_elapsed_time": false
+  },
+  {
+    "activities": 1,
+    "activity_filters": null,
+    "athlete_id": "i0",
+    "component": false,
+    "component_ids": null,
+    "distance": 308768.6,
+    "id": "g90003",
+    "name": "Gear g90003",
+    "notes": null,
+    "purchased": null,
+    "reminders": [],
+    "retired": null,
+    "time": 6104,
+    "type": "Shoes",
+    "use_elapsed_time": false
+  }
+]

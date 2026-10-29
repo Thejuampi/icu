@@ -1,0 +1,11 @@
+{
+  "criticalPower": 244,
+  "ftp": 249,
+  "inputPointIndexes": [
+    97,
+    112
+  ],
+  "pMax": 1062,
+  "type": "FFT_CURVES",
+  "wPrime": 15660
+}
