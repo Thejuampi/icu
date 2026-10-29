@@ -331,7 +331,7 @@ func TestRunErrors(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "a.json", `{}`)
 
-	if code := run(ctx, []string{"-fixtures", dir, "-host", "256.0.0.1"}, io.Discard, io.Discard); code != 1 {
+	if code := run(ctx, []string{"-fixtures", dir, "-host", "256.0.0.1", "-allow-non-loopback"}, io.Discard, io.Discard); code != 1 {
 		t.Fatalf("bad host = %d", code)
 	}
 }
@@ -383,4 +383,28 @@ func (b *syncBuffer) String() string {
 	defer b.mu.Unlock()
 
 	return b.buf.String()
+}
+
+func TestParseOptionsLoopbackOnly(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		args []string
+		ok   bool
+	}{
+		{[]string{}, true},
+		{[]string{"-host", "localhost"}, true},
+		{[]string{"-host", "::1"}, true},
+		{[]string{"-host", "127.0.0.2"}, true},
+		{[]string{"-host", "0.0.0.0"}, false},
+		{[]string{"-host", "192.0.2.10"}, false},
+		{[]string{"-host", "192.0.2.10", "-allow-non-loopback"}, true},
+		{[]string{"-host", "0.0.0.0", "-redirect-sink"}, false},
+		{[]string{"-host", "0.0.0.0", "-redirect-sink", "-allow-non-loopback"}, false},
+	}
+	for _, tc := range cases {
+		_, err := parseOptions(tc.args, io.Discard)
+		if (err == nil) != tc.ok {
+			t.Errorf("parseOptions(%v) err=%v, want ok=%v", tc.args, err, tc.ok)
+		}
+	}
 }
