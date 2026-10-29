@@ -427,6 +427,10 @@ func zeppDefaultDateRange() (string, string) { //nolint:gocritic // unnamed resu
 }
 
 func runZeppWithClient(fn func(ctx context.Context, client *icu.ZeppClient) error) error {
+	return runZeppWithClientOptions(zeppClientOptionsForRun(), fn)
+}
+
+func runZeppWithClientOptions(options []icu.ZeppClientOption, fn func(ctx context.Context, client *icu.ZeppClient) error) error {
 	loginToken := icu.ResolveZeppLoginToken(nil)
 	appToken := icu.ResolveZeppAppToken(nil)
 	userID := icu.ResolveZeppUserID(nil)
@@ -443,7 +447,7 @@ func runZeppWithClient(fn func(ctx context.Context, client *icu.ZeppClient) erro
 		CountryCode: countryCode,
 	}
 
-	client := icu.NewZeppClientFromAuth(auth, zeppClientOptionsForRun()...)
+	client := icu.NewZeppClientFromAuth(auth, options...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) //nolint:mnd // reasonable timeout for Zepp API
 	defer cancel()

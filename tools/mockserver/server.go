@@ -108,6 +108,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleReset(w)
 	case r.URL.Path == "/_mock/health":
 		writeJSON(w, http.StatusOK, []byte(`{"ok":true}`))
+	case isZeppPath(r.URL.Path) && r.Method == http.MethodGet:
+		s.handleZepp(w, r)
 	case r.Method == http.MethodGet || r.Method == http.MethodHead:
 		s.handleGet(w, r)
 	case r.Method == http.MethodPut || r.Method == http.MethodPost || r.Method == http.MethodDelete || r.Method == http.MethodPatch:
@@ -221,6 +223,9 @@ func (s *server) record(entry Write, key string, raw []byte) []byte {
 		if strings.HasSuffix(entry.Path, "/streams") {
 			return streamsUpdateResponse(raw)
 		}
+		if strings.HasSuffix(key, "/wellness-bulk") {
+			return s.applyWellnessBulk(key, raw)
+		}
 		current := s.overlay[key]
 		if current == nil {
 			current = s.fixtures[key]
@@ -323,7 +328,7 @@ func inRange(day, oldest, newest string) bool {
 func writeJSON(w http.ResponseWriter, status int, body []byte) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_, _ = w.Write(body)
+	_, _ = w.Write(body) //nolint:gosec // G705: JSON API mock served as application/json, never rendered as HTML
 }
 
 func writeError(w http.ResponseWriter, status int, msg string) {

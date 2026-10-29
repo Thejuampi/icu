@@ -294,7 +294,7 @@ func writeCommands() map[string]bool {
 		"folders create", "folders delete", "folders update", "ftp update",
 		"gear create", "gear delete", "gear update", "plan accept", "plan preview", "profile set",
 		"rebalance accept", "rebalance approve", "sports delete", "sports update", "weather config",
-		"wellness bulk", "wellness update", "wellness upload",
+		"wellness bulk", "wellness sync", "wellness update", "wellness upload",
 		"workouts create", "workouts delete", "workouts update",
 		"zepp login", "zepp logout", "zepp token",
 	}
