@@ -529,3 +529,18 @@ func TestPartialSleepSuggestionsQueryStripped(t *testing.T) {
 		t.Fatalf("real API must not be added: %s", realAPI[0].Suggest)
 	}
 }
+
+func TestPartialSleepSuggestionsNoneWhenURLUnparsable(t *testing.T) {
+	t.Parallel()
+	changes := []icu.WellnessSyncChange{{Date: "2026-08-11", Field: icu.SyncFieldSleepSecs, Intervals: 100, Zepp: 20000, Action: "keep", Note: icu.SyncNotePartialSleep}}
+	if len(partialSleepSuggestions(changes, suggestionContext{})) != 1 {
+		t.Fatal("control: want one suggestion")
+	}
+	bad, _ := redactURL("http://[::1")
+	if bad != "" {
+		t.Fatalf("redactURL of unparsable = %q", bad)
+	}
+	if got := partialSleepSuggestions(changes, suggestionContext{unparsableURL: true}); len(got) != 0 {
+		t.Fatalf("unparsable --base-url must yield no suggestion, got %+v", got)
+	}
+}

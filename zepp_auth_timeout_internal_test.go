@@ -55,7 +55,11 @@ func TestZeppLoginStepTimesOut(t *testing.T) { //nolint:paralleltest // override
 	shortZeppAuthTimeout(t)
 	srv := hangingServer(t)
 	start := time.Now()
-	_, err := performLoginWithURL(srv.URL, "synthetic-access", "US")
+	err := withDeadline(t, func() error {
+		_, err := performLoginWithURL(srv.URL, "synthetic-access", "US")
+
+		return err
+	})
 	if err == nil || !isTimeout(err) {
 		t.Fatalf("err = %v, want a timeout", err)
 	}
@@ -68,11 +72,31 @@ func TestZeppTokensStepTimesOut(t *testing.T) { //nolint:paralleltest // overrid
 	shortZeppAuthTimeout(t)
 	srv := hangingServer(t)
 	start := time.Now()
-	_, _, err := getAccessTokenWithURL(srv.URL, "user@example.com", "synthetic-password")
+	err := withDeadline(t, func() error {
+		_, _, err := getAccessTokenWithURL(srv.URL, "user@example.com", "synthetic-password")
+
+		return err
+	})
 	if err == nil || !isTimeout(err) {
 		t.Fatalf("err = %v, want a timeout", err)
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("tokens step took %v", elapsed)
+	}
+}
+
+// withDeadline runs fn and fails the test (instead of hanging until the go
+// test timeout) if fn has not returned within 10s.
+func withDeadline(t *testing.T, fn func() error) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- fn() }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatal("call did not return within 10s: the auth timeout is not applied")
+
+		return nil
 	}
 }

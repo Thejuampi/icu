@@ -84,7 +84,9 @@ type partialSleepSuggestion struct {
 // Zepp tokens. No suggestions when the run already used --overwrite.
 func partialSleepSuggestions(changes []icu.WellnessSyncChange, ctx suggestionContext) []partialSleepSuggestion {
 	out := []partialSleepSuggestion{}
-	if ctx.overwrite {
+	// A --base-url/--zepp-base-url that does not parse cannot be repeated
+	// safely: dropping it would point the suggestion at the real API.
+	if ctx.overwrite || ctx.unparsableURL {
 		return out
 	}
 	for _, date := range icu.PartialSleepDates(changes) {
@@ -123,7 +125,8 @@ func partialSleepSuggestions(changes []icu.WellnessSyncChange, ctx suggestionCon
 
 // redactURL drops userinfo, query and fragment from raw so a suggested
 // command never repeats credentials; stripped reports whether anything was
-// removed. A value that does not parse is dropped entirely.
+// removed. A value that does not parse is dropped entirely (the caller then
+// emits no suggestion). Credentials in the URL path are NOT redacted.
 func redactURL(raw string) (string, bool) {
 	if raw == "" {
 		return "", false
@@ -139,8 +142,8 @@ func redactURL(raw string) (string, bool) {
 }
 
 type suggestionContext struct {
-	overwrite, lock, allowInsecure            bool
-	timezone, athleteID, baseURL, zeppBaseURL string
+	overwrite, lock, allowInsecure, unparsableURL bool
+	timezone, athleteID, baseURL, zeppBaseURL     string
 }
 
 // shellQuote single-quotes arg when it has characters a POSIX shell would
@@ -196,6 +199,7 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 	out.PartialSleep = partialSleepSuggestions(plan.Changes, suggestionContext{
 		overwrite: out.Overwrite, lock: out.Lock, allowInsecure: BoolFlag(flags, zeppAllowInsecureHostFlag),
 		timezone: out.Timezone, athleteID: icu.StringFlag(flags, "athlete-id", ""), baseURL: suggestBase, zeppBaseURL: suggestZepp,
+		unparsableURL: (client.BaseURL() != "" && suggestBase == "") || (zeppBase != "" && suggestZepp == ""),
 	})
 	if len(out.PartialSleep) > 0 && (baseStripped || zeppStripped) {
 		out.Warnings = append(out.Warnings, "credentials, query or fragment removed from --base-url/--zepp-base-url in the suggested command; add them back if needed")
