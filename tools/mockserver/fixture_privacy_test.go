@@ -16,8 +16,11 @@ import (
 // fraction, quoted or not (Strava and other external ids).
 var longID = regexp.MustCompile(`(^|[^.0-9A-Za-z_-]|[^.0-9A-Za-z_]-)(-?[0-9]{10,})([^0-9A-Za-z_-]|$)`)
 
+// TestCommittedFixturesHaveNoExternalIDsOrRealWeight scans every committed
+// JSON under testdata: the mock fixtures, the analysis corpus
+// (wave2_live_corpus.json) and its goldens.
 func TestCommittedFixturesHaveNoExternalIDsOrRealWeight(t *testing.T) {
-	root, err := os.OpenRoot(filepath.Join("..", "..", "testdata", "fixtures"))
+	root, err := os.OpenRoot(filepath.Join("..", "..", "testdata"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,6 +167,10 @@ func walkPrivacy(t reporter, path, parent string, value any) {
 				checkIDValue(t, path, key, inner)
 			}
 
+			if text, ok := inner.(string); ok && athleteIDShape.MatchString(text) {
+				t.Errorf("%s: %s = %q looks like a real athlete id", path, key, text)
+			}
+
 			if parent == "activities" && key != "" {
 				if activity, ok := inner.(map[string]any); ok {
 					if name, ok := activity["name"].(string); ok && !curveName.MatchString(name) {
@@ -178,6 +185,8 @@ func walkPrivacy(t reporter, path, parent string, value any) {
 
 			walkPrivacy(t, path, key, inner)
 		}
+
+		checkActivityText(t, path, typed)
 	case []any:
 		for _, inner := range typed {
 			walkPrivacy(t, path, parent, inner)
@@ -196,6 +205,10 @@ func checkIDValue(t reporter, path, key string, value any) {
 	case string:
 		if isLongNumericID(typed) {
 			t.Errorf("%s: %s = %q is a 9+ digit id", path, key, typed)
+		}
+
+		if isRealPrefixedID(typed) {
+			t.Errorf("%s: %s = %q is a real activity/gear id", path, key, typed)
 		}
 	case []any:
 		for _, inner := range typed {
@@ -299,4 +312,29 @@ func scanPrivacy(t reporter, value any) {
 	t.Helper()
 	walkWeights(t, "case", value)
 	walkPrivacy(t, "case", "", value)
+}
+
+// athleteIDShape matches real intervals.icu athlete ids ("i" + 5-7 digits);
+// the anonymized athlete is "i0" and synthetic activity ids have 9 digits.
+var athleteIDShape = regexp.MustCompile(`^i\d{5,7}$`)
+
+// checkActivityText flags free text on activity records: names must be
+// "Activity i<digits>", device and power meter names the placeholder, and
+// descriptions and OAuth clients empty.
+func checkActivityText(t reporter, path string, obj map[string]any) {
+	t.Helper()
+
+	if !isActivityObject(obj) {
+		return
+	}
+
+	if name, ok := obj["name"].(string); ok && !curveName.MatchString(name) {
+		t.Errorf("%s: activity %v name %q", path, obj["id"], name)
+	}
+
+	for key, want := range activityText() {
+		if value, ok := obj[key]; ok && value != nil && value != want {
+			t.Errorf("%s: activity %v %s = %v, want %v", path, obj["id"], key, value, want)
+		}
+	}
 }

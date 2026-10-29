@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,9 @@ func TestDateShiftJittersActivitiesConsistently(t *testing.T) {
 
 	shift := dateShift{days: -21, salt: 42}
 	body := `{"a":{"id":"i900000001","distance":40000.5,"icu_distance":40000.5,"moving_time":3600,` +
-		`"elapsed_time":3700,"start_date_local":"2026-10-01T08:00:00"},"b":{"id":"i900000001","moving_time":3600},` +
+		`"elapsed_time":3700,"average_speed":11.111,"icu_hr_zone_times":[1800,1800],` +
+		`"icu_zone_times":[{"id":"Z1","secs":3600}],"start_date_local":"2026-10-01T08:00:00"},` +
+		`"b":{"id":"i900000001","moving_time":3600},` +
 		`"icu_date_of_birth":"1990-01-01","2026-10-01":{"id":5,"distance":10}}`
 
 	var raw struct {
@@ -64,25 +67,31 @@ func TestDateShiftJittersActivitiesConsistently(t *testing.T) {
 		t.Errorf("start = %v", raw.A["start_date_local"])
 	}
 
-	nums := map[string]float64{}
+	num := func(key string) float64 {
+		value, _ := raw.A[key].(float64)
 
-	for _, key := range jitteredKeys() {
-		if value, ok := raw.A[key].(float64); ok {
-			nums[key] = value
+		return value
+	}
+
+	fd, fm := shift.factor("i900000001", channelDistance), shift.factor("i900000001", channelMoving)
+	if fd == fm {
+		t.Fatalf("distance and moving factors must differ: %v", fd)
+	}
+
+	for key, want := range map[string]float64{
+		"distance": 40000.5 * fd, "icu_distance": 40000.5 * fd, "moving_time": 3600 * fm,
+		"elapsed_time": 3700 * fm, "average_speed": 11.111 * fd / fm,
+	} {
+		if got := num(key); got < want-1 || got > want+1 {
+			t.Errorf("%s = %v, want ~%v", key, got, want)
 		}
 	}
 
-	distance, moving := nums["distance"], nums["moving_time"]
-
-	if ratio := distance / 40000.5; ratio < 0.96 || ratio > 1.04 || (ratio > 0.99 && ratio < 1.01) {
-		t.Errorf("distance ratio %v outside 1-4%%", ratio)
+	if num("moving_time") > num("elapsed_time") {
+		t.Errorf("elapsed < moving: %v", raw.A)
 	}
 
-	if nums["icu_distance"] != distance || moving > nums["elapsed_time"] {
-		t.Errorf("inconsistent jitter: %v", raw.A)
-	}
-
-	if raw.B["moving_time"] != moving {
+	if raw.B["moving_time"] != raw.A["moving_time"] {
 		t.Errorf("same activity jittered differently across documents")
 	}
 
@@ -92,6 +101,66 @@ func TestDateShiftJittersActivitiesConsistently(t *testing.T) {
 
 	if got := string(shift.shiftJSON([]byte("not json"))); got != "not json" {
 		t.Errorf("invalid json = %q", got)
+	}
+}
+
+func TestJitterFactorsAreAtLeastOnePercent(t *testing.T) {
+	t.Parallel()
+
+	for salt := range uint32(200) {
+		shift := dateShift{salt: salt * 7919}
+		for _, id := range []string{"i900000001", "i900000002", "i900000003", "i617302033"} {
+			for _, channel := range []string{channelDistance, channelMoving} {
+				f := shift.factor(id, channel)
+				if d := math.Abs(f - 1); d < 0.01-1e-12 || d > 0.04+1e-12 {
+					t.Fatalf("factor(%s,%s) = %v, |f-1| outside [0.01,0.04]", id, channel, f)
+				}
+			}
+		}
+	}
+}
+
+func TestShiftStreamsScalesWithActivityAndDropsAltitude(t *testing.T) {
+	t.Parallel()
+
+	shift := dateShift{salt: 3}
+	body := `[{"type":"time","data":[0,1,2]},{"type":"distance","data":[null,10,20.5]},` +
+		`{"type":"velocity_smooth","data":[null,5]},{"type":"altitude","data":[12]},{"type":"temp","data":[20]},` +
+		`{"type":"watts","data":[100]},"odd"]`
+
+	var streams []struct {
+		Type string    `json:"type"`
+		Data []float64 `json:"data"`
+	}
+
+	out := shift.shiftFile("api/v1/activity/i900000001/streams.json", []byte(body))
+	if err := json.Unmarshal([]byte(strings.Replace(string(out), `,"odd"`, "", 1)), &streams); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+
+	fd, fm := shift.factor("i900000001", channelDistance), shift.factor("i900000001", channelMoving)
+	got := map[string][]float64{}
+
+	for _, stream := range streams {
+		got[stream.Type] = stream.Data
+	}
+
+	if _, ok := got["altitude"]; ok || got["temp"] != nil {
+		t.Errorf("altitude/temp kept: %s", out)
+	}
+
+	near := func(a, b float64) bool { return math.Abs(a-b) < 0.002 }
+	if !near(got["time"][2], 2*fm) || !near(got["distance"][2], 20.5*fd) ||
+		!near(got["velocity_smooth"][1], 5*fd/fm) || got["watts"][0] != 100 {
+		t.Errorf("streams not scaled with the activity: %s", out)
+	}
+
+	if !strings.Contains(string(out), `"odd"`) {
+		t.Errorf("non-object stream entry dropped: %s", out)
+	}
+
+	if _, ok := streamsActivity("api/v1/activity/i900000001.json"); ok {
+		t.Error("detail file matched as streams")
 	}
 }
 

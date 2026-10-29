@@ -40,6 +40,10 @@ type options struct {
 	record   bool
 	upstream string
 	anonDir  string
+	// shiftDays/shiftSalt pin the -anonymize date shift, so a second fixture
+	// set (the analysis corpus) can share the first one's offset.
+	shiftDays int
+	shiftSalt uint
 }
 
 func main() {
@@ -60,6 +64,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	fs.StringVar(&opts.upstream, "upstream", "", "upstream API for -record (required with -record; no default)")
 
 	fs.StringVar(&opts.anonDir, "anonymize", "", "re-anonymize every fixture in this directory and exit")
+	fs.IntVar(&opts.shiftDays, "shift-days", 0, "with -anonymize: date shift in days (0 = random whole weeks back)")
+	fs.UintVar(&opts.shiftSalt, "shift-salt", 0, "with -anonymize: jitter salt (0 = random)")
 
 	if err := fs.Parse(args); err != nil {
 		return opts, fmt.Errorf("parse flags: %w", err)
@@ -85,7 +91,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	if opts.anonDir != "" {
-		if anonErr := anonymizeDir(opts.anonDir); anonErr != nil {
+		if anonErr := anonymizeDirWith(opts.anonDir, opts.dateShift()); anonErr != nil {
 			fmt.Fprintf(stderr, "icu-mock: %v\n", anonErr)
 
 			return 1
@@ -149,4 +155,18 @@ func serve(ctx context.Context, listener net.Listener, handler http.Handler, std
 	}
 
 	return 0
+}
+
+// dateShift is the -anonymize shift: random unless pinned by flags.
+func (opts options) dateShift() dateShift {
+	shift := randomDateShift()
+	if opts.shiftDays != 0 {
+		shift.days = opts.shiftDays
+	}
+
+	if opts.shiftSalt != 0 {
+		shift.salt = uint32(opts.shiftSalt) //nolint:gosec // salt only needs 32 bits
+	}
+
+	return shift
 }

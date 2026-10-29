@@ -194,10 +194,11 @@ func prettyJSON(body []byte) []byte {
 
 // Placeholder values written over private data.
 const (
-	anonName  = "Mock Athlete"
-	anonEmail = "athlete@example.invalid"
-	anonText  = "redacted"
-	anonDOB   = "1990-01-01"
+	anonName   = "Mock Athlete"
+	anonEmail  = "athlete@example.invalid"
+	anonText   = "redacted"
+	anonDOB    = "1990-01-01"
+	anonDevice = "Mock Device"
 )
 
 // redactedKeys are always replaced, wherever they appear.
@@ -302,9 +303,7 @@ func anonymize(value any) any {
 			}
 
 			if gear && key == "name" {
-				typed[key] = "Gear " + fmt.Sprint(typed["id"])
-
-				continue
+				continue // set below, after the id is remapped
 			}
 
 			if person && key == "name" {
@@ -330,6 +329,11 @@ func anonymize(value any) any {
 			typed[key] = anonymize(inner)
 		}
 
+		if _, ok := typed["name"]; ok && gear {
+			typed["name"] = "Gear " + fmt.Sprint(typed["id"])
+		}
+
+		scrubActivityText(typed)
 		rescalePerKg(typed)
 
 		if curves, ok := typed["activities"].(map[string]any); ok {
@@ -398,8 +402,78 @@ func fuzzWeight(value any) (any, bool) {
 }
 
 // syntheticID matches the fake 9-digit ids this repo uses on purpose
-// (events 800000xxx, remapped ids 700000xxx).
-var syntheticID = regexp.MustCompile(`^[78]000\d{5}$`)
+// (events 800000xxx, remapped ids 7xxxxxxxx).
+var syntheticID = regexp.MustCompile(`^(7\d{8}|8000\d{5})$`)
+
+// prefixedID matches intervals.icu activity ("i123"), bike and shoe ids.
+var prefixedID = regexp.MustCompile(`^([bgi])(\d{6,})$`)
+
+// syntheticPrefixedID matches the fake prefixed ids: fixture activities
+// i9000xxxxx, remapped curve ids i8xxxxxxxx and corpus ids i6xxxxxxxx,
+// fixture gear b9xxxx/g9xxxx and remapped gear b6xxxxxxx/g6xxxxxxx.
+var syntheticPrefixedID = regexp.MustCompile(`^(i[689]\d{8}|[bg]9\d{4}|[bg]6\d{7})$`)
+
+// isRealPrefixedID reports a real (not synthetic) activity or gear id.
+func isRealPrefixedID(value string) bool {
+	return prefixedID.MatchString(value) && !syntheticPrefixedID.MatchString(value)
+}
+
+// remapPrefixedID maps a real activity or gear id to a stable synthetic one
+// with the same prefix ("i173884602" -> "i6xxxxxxxx").
+func remapPrefixedID(id string) string {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(id))
+
+	if id[0] == 'i' {
+		return fmt.Sprintf("i6%08d", hash.Sum32()%100_000_000)
+	}
+
+	return fmt.Sprintf("%c6%07d", id[0], hash.Sum32()%10_000_000)
+}
+
+// activityText lists free-text activity fields and their replacement; the
+// name is handled separately ("Activity <id>").
+func activityText() map[string]any {
+	return map[string]any{
+		"description":         nil,
+		"device_name":         anonDevice,
+		"power_meter":         anonDevice,
+		"oauth_client_id":     nil,
+		"oauth_client_name":   nil,
+		"skyline_chart_bytes": nil,
+	}
+}
+
+// isActivityObject matches an activity record (list item, detail or curve
+// entry): an "i<digits>" id plus a start date.
+func isActivityObject(obj map[string]any) bool {
+	id, ok := obj["id"].(string)
+	if !ok || !activityID.MatchString(id) {
+		return false
+	}
+
+	_, dated := obj["start_date_local"]
+
+	return dated
+}
+
+// scrubActivityText replaces names, descriptions, device and OAuth client
+// names of activities. Idempotent.
+func scrubActivityText(obj map[string]any) {
+	if !isActivityObject(obj) {
+		return
+	}
+
+	if _, ok := obj["name"]; ok {
+		obj["name"] = "Activity " + fmt.Sprint(obj["id"])
+	}
+
+	for key, replacement := range activityText() {
+		if value, ok := obj[key]; ok && value != nil {
+			obj[key] = replacement
+		}
+	}
+}
 
 // longNumericID matches an all-digit id of 9+ digits, optionally negative.
 var longNumericID = regexp.MustCompile(`^-?\d{9,}$`)
@@ -428,6 +502,10 @@ func remapIDValue(value any) any {
 			return remapNumericID(typed)
 		}
 
+		if isRealPrefixedID(typed) {
+			return remapPrefixedID(typed)
+		}
+
 		return anonymize(typed)
 	case []any:
 		for i, inner := range typed {
@@ -446,7 +524,7 @@ func remapNumericID(id string) string {
 	hash := fnv.New32a()
 	_, _ = hash.Write([]byte(id))
 
-	return fmt.Sprintf("7000%05d", hash.Sum32()%100_000)
+	return fmt.Sprintf("7%08d", hash.Sum32()%100_000_000)
 }
 
 // anonWeight is the single fuzzed body weight written over every weight
@@ -457,11 +535,12 @@ const anonWeight = json.Number("72.8")
 const wkgPrecision = 1e6
 
 // isWeightKey matches any key naming a body weight; keys about watts
-// ("icu_weighted_avg_watts") are power, not weight.
+// ("icu_weighted_avg_watts") and weighted averages ("weightedAvgPower") are
+// power, not weight.
 func isWeightKey(key string) bool {
 	lower := strings.ToLower(key)
 
-	return strings.Contains(lower, "weight") && !strings.Contains(lower, "watts")
+	return strings.Contains(lower, "weight") && !strings.Contains(lower, "watts") && !strings.Contains(lower, "weighted")
 }
 
 // isExternalID matches all-digit ids of 10+ digits (Strava activity ids).
@@ -510,14 +589,10 @@ func anonymizeCurveActivities(curves map[string]any) map[string]any {
 	return out
 }
 
-// anonymizeDir rewrites every fixture under dir through the anonymizer.
+// anonymizeDirWith rewrites every fixture under dir through the anonymizer.
 // Anonymization is idempotent, so it is safe to re-run after rule changes.
-// The first run also applies one random date shift to the whole directory
-// and drops shiftMarker, so later runs never shift (or jitter) again.
-func anonymizeDir(dir string) error {
-	return anonymizeDirWith(dir, randomDateShift())
-}
-
+// The first run also applies the date shift to the whole directory and drops
+// shiftMarker, so later runs never shift (or jitter) again.
 func anonymizeDirWith(dir string, shift dateShift) error {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
@@ -539,7 +614,7 @@ func anonymizeDirWith(dir string, shift dateShift) error {
 
 		body = anonymizeJSON(body)
 		if doShift {
-			body = shift.shiftJSON(body)
+			body = shift.shiftFile(name, body)
 		}
 
 		if err := root.WriteFile(name, prettyJSON(body), 0o600); err != nil {
@@ -550,6 +625,10 @@ func anonymizeDirWith(dir string, shift dateShift) error {
 	})
 	if walkErr != nil {
 		return fmt.Errorf("anonymize %s: %w", dir, walkErr)
+	}
+
+	if err := recomputeSummaries(root); err != nil {
+		return fmt.Errorf("athlete summary: %w", err)
 	}
 
 	if doShift {

@@ -10,7 +10,7 @@
   "average_heartrate": 136,
   "average_impact_loading_rate": null,
   "average_leg_spring_stiffness": null,
-  "average_speed": 6.767,
+  "average_speed": 6.749,
   "average_stance_time": null,
   "average_stance_time_balance": null,
   "average_stance_time_percent": null,
@@ -36,10 +36,10 @@
   "custom_zones": null,
   "decoupling": 4.759415,
   "description": null,
-  "device_name": "WAHOO_FITNESS ELEMNT BOLT",
+  "device_name": "Mock Device",
   "device_watts": true,
-  "distance": 39133.67,
-  "elapsed_time": 6026,
+  "distance": 39406.334,
+  "elapsed_time": 6084,
   "external_id": null,
   "feel": null,
   "file_sport_index": 0,
@@ -69,12 +69,12 @@
   "icu_color": null,
   "icu_cooldown_time": 1103,
   "icu_ctl": 25.885786,
-  "icu_distance": 39133.67,
+  "icu_distance": 39406.334,
   "icu_efficiency_factor": 1.1764706,
   "icu_ftp": 266,
   "icu_hr_zone_times": [
-    4462,
-    1179,
+    4591,
+    1213,
     0,
     0,
     0,
@@ -120,7 +120,7 @@
     150,
     999
   ],
-  "icu_recording_time": 5788,
+  "icu_recording_time": 5955,
   "icu_resting_hr": 53,
   "icu_rolling_cp": null,
   "icu_rolling_ftp": 268,
@@ -142,19 +142,19 @@
   "icu_zone_times": [
     {
       "id": "Z1",
-      "secs": 2163
+      "secs": 2225
     },
     {
       "id": "Z2",
-      "secs": 2740
+      "secs": 2819
     },
     {
       "id": "Z3",
-      "secs": 671
+      "secs": 690
     },
     {
       "id": "Z4",
-      "secs": 35
+      "secs": 36
     },
     {
       "id": "Z5",
@@ -162,7 +162,7 @@
     },
     {
       "id": "Z6",
-      "secs": 18
+      "secs": 19
     },
     {
       "id": "Z7",
@@ -170,7 +170,7 @@
     },
     {
       "id": "SS",
-      "secs": 67
+      "secs": 69
     }
   ],
   "id": "i900000001",
@@ -187,20 +187,20 @@
   "max_heartrate": 157,
   "max_rain": null,
   "max_snow": null,
-  "max_speed": 13.639,
+  "max_speed": 13.603,
   "max_temp": 21,
   "max_weather_temp": null,
   "min_altitude": 49.8,
   "min_feels_like": null,
   "min_temp": 15,
   "min_weather_temp": null,
-  "moving_time": 5745,
-  "name": "90min endurance Z2",
+  "moving_time": 5800,
+  "name": "Activity i900000001",
   "oauth_client_id": null,
   "oauth_client_name": null,
   "p30s_exponent": 3,
   "p_max": null,
-  "pace": 6.811633,
+  "pace": 6.794,
   "pace_load": null,
   "pace_load_type": null,
   "pace_zone_times": null,
@@ -222,7 +222,7 @@
   "recording_stops": null,
   "route_id": null,
   "session_rpe": null,
-  "skyline_chart_bytes": "CAcSAqssGgEzIgEBKAE=",
+  "skyline_chart_bytes": null,
   "source": "WAHOO",
   "ss_cp": 74.10136,
   "ss_p_max": 0.069677405,

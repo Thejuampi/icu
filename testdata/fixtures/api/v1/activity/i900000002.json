@@ -10,7 +10,7 @@
   "average_heartrate": 135,
   "average_impact_loading_rate": null,
   "average_leg_spring_stiffness": null,
-  "average_speed": 6.372,
+  "average_speed": 6.022,
   "average_stance_time": null,
   "average_stance_time_balance": null,
   "average_stance_time_percent": null,
@@ -36,10 +36,10 @@
   "custom_zones": null,
   "decoupling": 8.256084,
   "description": null,
-  "device_name": "WAHOO_FITNESS ELEMNT BOLT",
+  "device_name": "Mock Device",
   "device_watts": true,
-  "distance": 40095.82,
-  "elapsed_time": 6606,
+  "distance": 38054.28,
+  "elapsed_time": 6634,
   "external_id": null,
   "feel": null,
   "file_sport_index": 0,
@@ -69,12 +69,12 @@
   "icu_color": null,
   "icu_cooldown_time": 600,
   "icu_ctl": 29.963026,
-  "icu_distance": 40095.82,
+  "icu_distance": 38054.28,
   "icu_efficiency_factor": 1.3111111,
   "icu_ftp": 266,
   "icu_hr_zone_times": [
-    5159,
-    928,
+    5342,
+    961,
     0,
     0,
     0,
@@ -120,7 +120,7 @@
     150,
     999
   ],
-  "icu_recording_time": 6185,
+  "icu_recording_time": 6404,
   "icu_resting_hr": 55,
   "icu_rolling_cp": null,
   "icu_rolling_ftp": 266,
@@ -142,27 +142,27 @@
   "icu_zone_times": [
     {
       "id": "Z1",
-      "secs": 2105
+      "secs": 2180
     },
     {
       "id": "Z2",
-      "secs": 1897
+      "secs": 1964
     },
     {
       "id": "Z3",
-      "secs": 1782
+      "secs": 1845
     },
     {
       "id": "Z4",
-      "secs": 215
+      "secs": 223
     },
     {
       "id": "Z5",
-      "secs": 48
+      "secs": 50
     },
     {
       "id": "Z6",
-      "secs": 27
+      "secs": 28
     },
     {
       "id": "Z7",
@@ -170,7 +170,7 @@
     },
     {
       "id": "SS",
-      "secs": 645
+      "secs": 668
     }
   ],
   "id": "i900000002",
@@ -187,20 +187,20 @@
   "max_heartrate": 156,
   "max_rain": null,
   "max_snow": null,
-  "max_speed": 31.264,
+  "max_speed": 29.549,
   "max_temp": 18,
   "max_weather_temp": null,
   "min_altitude": 7,
   "min_feels_like": null,
   "min_temp": 8,
   "min_weather_temp": null,
-  "moving_time": 6275,
-  "name": "Z2 Cadence Ladder 90m",
+  "moving_time": 6301,
+  "name": "Activity i900000002",
   "oauth_client_id": null,
   "oauth_client_name": null,
   "p30s_exponent": 3,
   "p_max": null,
-  "pace": 6.389492,
+  "pace": 6.039,
   "pace_load": null,
   "pace_load_type": null,
   "pace_zone_times": null,
@@ -222,7 +222,7 @@
   "recording_stops": null,
   "route_id": null,
   "session_rpe": null,
-  "skyline_chart_bytes": "CAcSAtcvGgE4IgECKAE=",
+  "skyline_chart_bytes": null,
   "source": "WAHOO",
   "ss_cp": 89.13926,
   "ss_p_max": 0.2276672,

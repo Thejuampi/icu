@@ -31,6 +31,7 @@ const (
 	minJitterBasisPoints = 100
 	basisPoints          = 10_000
 	signBit              = 1 << 31
+	realPrecision        = 1000
 )
 
 // dateInText matches a calendar day anywhere inside a string, including
@@ -40,11 +41,21 @@ var dateInText = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
 // activityID matches intervals.icu activity ids ("i900000001").
 var activityID = regexp.MustCompile(`^i\d+$`)
 
-// jitteredKeys are scaled by one per-activity factor, so speed and the
-// elapsed >= moving invariant are preserved.
-func jitteredKeys() []string {
-	return []string{"distance", "icu_distance", "moving_time", "elapsed_time"}
+// Jitter channels: distance and moving time get independent factors;
+// elapsed time follows moving time (so elapsed >= moving still holds) and
+// speeds follow distance/moving.
+const (
+	channelDistance = "distance"
+	channelMoving   = "moving"
+)
+
+func distanceKeys() []string { return []string{"distance", "icu_distance"} }
+
+func movingKeys() []string {
+	return []string{"moving_time", "elapsed_time", "icu_recording_time", "time"}
 }
+
+func speedKeys() []string { return []string{"average_speed", "max_speed", "pace", "gap"} }
 
 // dateShift moves every date in a fixture set by one shared offset and
 // jitters per-activity distance and moving time. Unlike anonymize it is not
@@ -98,10 +109,11 @@ func (s dateShift) text(value string) string {
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
-// factor returns a deterministic per-activity jitter of 1-4% either way.
-func (s dateShift) factor(id string) float64 {
+// factor returns a deterministic per-activity, per-channel jitter of 1-4%
+// either way; |factor-1| is never below 0.01.
+func (s dateShift) factor(id, channel string) float64 {
 	hash := fnv.New32a()
-	_, _ = fmt.Fprintf(hash, "%d:%s", s.salt, id)
+	_, _ = fmt.Fprintf(hash, "%d:%s:%s", s.salt, id, channel)
 	sum := hash.Sum32()
 
 	bp := minJitterBasisPoints + float64(sum%(maxJitterBasisPoints-minJitterBasisPoints+1))
@@ -146,35 +158,150 @@ func (s dateShift) apply(value any) any {
 }
 
 func (s dateShift) jitter(obj map[string]any, id string) {
-	factor := s.factor(id)
+	distance, moving := s.factor(id, channelDistance), s.factor(id, channelMoving)
 
-	for _, key := range jitteredKeys() {
-		number, ok := obj[key].(json.Number)
-		if !ok {
-			continue
-		}
+	scaleKeys(obj, distanceKeys(), distance)
+	scaleKeys(obj, movingKeys(), moving)
+	scaleKeys(obj, speedKeys(), distance/moving)
 
-		if whole, err := number.Int64(); err == nil {
-			obj[key] = json.Number(strconv.FormatInt(int64(math.Round(float64(whole)*factor)), 10))
+	// Time in zones follows moving time, so zone totals still add up.
+	scaleKeys(obj, []string{"icu_hr_zone_times", "pace_zone_times", "gap_zone_times"}, moving)
 
-			continue
-		}
-
-		if value, err := number.Float64(); err == nil {
-			obj[key] = json.Number(strconv.FormatFloat(math.Round(value*factor*100)/100, 'f', -1, 64))
+	if zones, ok := obj["icu_zone_times"].([]any); ok {
+		for _, raw := range zones {
+			if zone, ok := raw.(map[string]any); ok {
+				scaleKeys(zone, []string{"secs"}, moving)
+			}
 		}
 	}
 }
 
+func scaleKeys(obj map[string]any, keys []string, factor float64) {
+	for _, key := range keys {
+		if value, ok := obj[key]; ok {
+			obj[key] = scaleNumber(value, factor)
+		}
+	}
+}
+
+// scaleNumber scales a JSON number (or array of numbers, as in streams),
+// keeping integers integral and rounding reals to 3 decimals; nulls and
+// other values are kept.
+func scaleNumber(value any, factor float64) any {
+	switch typed := value.(type) {
+	case json.Number:
+		if whole, err := typed.Int64(); err == nil {
+			return json.Number(strconv.FormatInt(int64(math.Round(float64(whole)*factor)), 10))
+		}
+
+		if f, err := typed.Float64(); err == nil {
+			return json.Number(strconv.FormatFloat(math.Round(f*factor*realPrecision)/realPrecision, 'f', -1, 64))
+		}
+	case []any:
+		out := make([]any, len(typed))
+		for i, inner := range typed {
+			out[i] = scaleNumber(inner, factor)
+		}
+
+		return out
+	}
+
+	return value
+}
+
+// scaleReal is scaleNumber without integer rounding, for the time stream
+// (rounding 0,1,2,... would leave it unchanged or make duplicates).
+func scaleReal(value any, factor float64) any {
+	switch typed := value.(type) {
+	case json.Number:
+		if f, err := typed.Float64(); err == nil {
+			return json.Number(strconv.FormatFloat(math.Round(f*factor*realPrecision)/realPrecision, 'f', -1, 64))
+		}
+	case []any:
+		out := make([]any, len(typed))
+		for i, inner := range typed {
+			out[i] = scaleReal(inner, factor)
+		}
+
+		return out
+	}
+
+	return value
+}
+
+// droppedStreams carry location-revealing data (altitude profile, weather).
+func droppedStreams() map[string]bool { return map[string]bool{"altitude": true, "temp": true} }
+
+// shiftStreams scales the time, distance and velocity streams of activity id
+// by the same factors as the activity itself and drops altitude and temp.
+// The time stream is scaled as a real (it is elapsed time, not an index).
+func (s dateShift) shiftStreams(streams []any, id string) []any {
+	distance, moving := s.factor(id, channelDistance), s.factor(id, channelMoving)
+	out := make([]any, 0, len(streams))
+
+	for _, raw := range streams {
+		stream, ok := raw.(map[string]any)
+		if !ok {
+			out = append(out, raw)
+
+			continue
+		}
+
+		streamType, _ := stream["type"].(string)
+		if droppedStreams()[streamType] {
+			continue
+		}
+
+		switch streamType {
+		case "time":
+			stream["data"] = scaleReal(stream["data"], moving)
+		case "distance":
+			stream["data"] = scaleReal(stream["data"], distance)
+		case "velocity_smooth":
+			stream["data"] = scaleReal(stream["data"], distance/moving)
+		}
+
+		out = append(out, stream)
+	}
+
+	return out
+}
+
+// streamsActivity returns the activity id of an ".../activity/<id>/streams.json"
+// fixture path.
+func streamsActivity(name string) (string, bool) {
+	match := streamsPath.FindStringSubmatch(name)
+	if match == nil {
+		return "", false
+	}
+
+	return match[1], true
+}
+
+var streamsPath = regexp.MustCompile(`(?:^|/)activity/(i\d+)/streams\.json$`)
+
 // shiftJSON applies the shift to one JSON document; invalid JSON is returned
 // unchanged.
 func (s dateShift) shiftJSON(body []byte) []byte {
+	return s.shiftFile("", body)
+}
+
+// shiftFile is shiftJSON for a fixture at name, so streams files can be
+// matched to their activity.
+func (s dateShift) shiftFile(name string, body []byte) []byte {
 	var value any
 	if decodeJSON(body, &value) != nil {
 		return body
 	}
 
-	out, err := json.Marshal(s.apply(value))
+	shifted := s.apply(value)
+	if id, ok := streamsActivity(name); ok {
+		if streams, ok := shifted.([]any); ok {
+			shifted = s.shiftStreams(streams, s.text(id))
+		}
+	}
+
+	out, err := json.Marshal(shifted)
 	if err != nil {
 		return body
 	}
