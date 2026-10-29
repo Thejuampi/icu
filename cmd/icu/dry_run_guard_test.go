@@ -492,6 +492,7 @@ func TestCommandsRunAgainstMock(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	totalWrites := 0
+	sawAccept := false
 	for _, resource := range registry.Resources() {
 		for _, action := range registry.Actions(resource) {
 			key := resource + " " + action
@@ -511,6 +512,9 @@ func TestCommandsRunAgainstMock(t *testing.T) {
 			}
 			_ = run(commandArgs(resource, action, extra...), &stdout, &stderr)
 			_, writes := mock.counts(key)
+			if key == "activity estimate-power-accept" {
+				sawAccept = true
+			}
 			if key == "activity estimate-power-accept" && writes < 1 {
 				t.Errorf("estimate-power-accept with filledWatts sent %d write(s), want >= 1", writes)
 			}
@@ -519,6 +523,9 @@ func TestCommandsRunAgainstMock(t *testing.T) {
 			}
 			totalWrites += writes
 		}
+	}
+	if !sawAccept {
+		t.Fatal("activity estimate-power-accept was never run against the mock")
 	}
 	if totalWrites == 0 {
 		t.Fatal("no write command reached the mock; the plain-run pass is not exercising writes")
@@ -562,17 +569,28 @@ func TestWellnessWriteDryRunRejectedWithoutWrites(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // replaces newCommandClient and sets env.
 func TestWarnRealAPIFiresForDefaultBaseURL(t *testing.T) {
+	guardEnv(t)
 	t.Setenv(icu.BaseURLEnv, "")
-	var stderr bytes.Buffer
-	warnRealAPI(&stderr, icu.ResolveBaseURL(map[string]string{}))
-	if !strings.Contains(stderr.String(), "Warning: using the real intervals.icu API") {
-		t.Fatalf("no warning for default base URL: %q", stderr.String())
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"i1","name":"Mock"}`))
+	}))
+	t.Cleanup(server.Close)
+	// The seam points at the loopback server; the resolved base URL stays the default real host.
+	withMockCommandClient(t, icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL)))
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"icu", "athlete", "show"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
-	stderr.Reset()
-	warnRealAPI(&stderr, icu.ResolveBaseURL(map[string]string{"base-url": "http://127.0.0.1:1"}))
-	if stderr.Len() != 0 {
-		t.Fatalf("unexpected warning for loopback: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "Warning: using the real intervals.icu API") {
+		t.Fatalf("no real-API warning without --base-url: %q", stderr.String())
+	}
+	if requests == 0 {
+		t.Fatal("athlete show did not reach the loopback mock")
 	}
 }
 

@@ -205,7 +205,9 @@ func (s *server) handleWrite(w http.ResponseWriter, r *http.Request) {
 
 // record stores the write and returns the response body: DELETE answers {},
 // PUT/PATCH merge the JSON object body over the current resource (and keep
-// it in memory so a later GET sees it), POST echoes the body.
+// it in memory so a later GET sees it), POST echoes the body. Exception:
+// PUT/PATCH on */streams answers {"updated":[types...]} like intervals.icu
+// and is not kept in memory, so a later GET still returns the fixture.
 func (s *server) record(entry Write, key string, raw []byte) []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
