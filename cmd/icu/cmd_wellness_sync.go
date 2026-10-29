@@ -87,8 +87,10 @@ func partialSleepSuggestions(changes []icu.WellnessSyncChange, ctx suggestionCon
 		return out
 	}
 	for _, date := range icu.PartialSleepDates(changes) {
-		args := []string{"icu", "wellness", "sync", "--oldest", date, "--newest", date,
-			"--overwrite", "--fields", icu.SyncFieldSleepSecs + "," + icu.SyncFieldSleepScore}
+		args := []string{
+			"icu", "wellness", "sync", "--oldest", date, "--newest", date,
+			"--overwrite", "--fields", icu.SyncFieldSleepSecs + "," + icu.SyncFieldSleepScore,
+		}
 		if ctx.timezone != "" {
 			args = append(args, "--timezone", ctx.timezone)
 		}
