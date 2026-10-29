@@ -32,7 +32,7 @@ type ZeppAuthResult struct {
 
 // zeppAuthTimeout bounds each Zepp login request (tokens and login steps);
 // a var only so tests can shorten it.
-var zeppAuthTimeout = defaultZeppClientTimeout
+var zeppAuthTimeout = defaultZeppClientTimeout //nolint:gochecknoglobals // test-overridable timeout
 
 func ZeppLogin(email, password string) (*ZeppAuthResult, error) {
 	return ZeppLoginWithURLs(zeppTokensURL, zeppLoginURL, email, password)

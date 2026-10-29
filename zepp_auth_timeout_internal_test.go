@@ -1,10 +1,12 @@
 package icu
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,7 +36,13 @@ func shortZeppAuthTimeout(t *testing.T) {
 func isTimeout(err error) bool {
 	var netErr net.Error
 
-	return errors.As(err, &netErr) && netErr.Timeout()
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	// Under the package's test transport the deadline surfaces as text.
+	return errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "deadline exceeded") ||
+		strings.Contains(err.Error(), "Client.Timeout")
 }
 
 func TestZeppAuthTimeoutDefaultIs30s(t *testing.T) { //nolint:paralleltest // reads a test-overridable var
