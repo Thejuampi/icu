@@ -65,7 +65,7 @@ func undocumentedUsageFlags(key string) string {
 			"[--activity-fields CSV] [--limit N] [--timezone TZ] " + decouplingUsageFlags,
 		"curves hr":          "[--curves CURVES]",
 		"curves pace":        "[--curves CURVES]",
-		"curves power":       "[--newest DATE] [--filters FILTERS]",
+		"curves power":       "[--newest DATE]",
 		"events list":        "[--limit N] [--calendar-id ID]",
 		"workouts calculate": "[--description DESC]",
 	}[key]
