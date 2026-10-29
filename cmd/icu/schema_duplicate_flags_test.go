@@ -31,12 +31,19 @@ func TestSchemaListsEachFlagOnce(t *testing.T) {
 	t.Parallel()
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
+	checked := 0
 	for resource, actions := range registry.commands {
 		for action, command := range actions {
+			if command.Schema != nil {
+				checked++
+			}
 			if dups := schemaDuplicateFlags(command.Schema); len(dups) > 0 {
 				t.Errorf("%s %s schema lists %v more than once", resource, action, dups)
 			}
 		}
+	}
+	if checked == 0 {
+		t.Fatal("no command has a Schema: the duplicate check would pass vacuously")
 	}
 	if dups := schemaDuplicateFlags(&CommandSchema{Flags: []CommandFlag{{Name: "a"}, {Name: "b"}, {Name: "a"}}}); len(dups) != 1 || dups[0] != "a" {
 		t.Fatalf("detector missed a duplicate: %v", dups)

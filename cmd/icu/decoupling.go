@@ -403,6 +403,9 @@ func activityDecouplingCommand() *Command {
 				"apiDecoupling":     apiDecouplingValue(&activity),
 				"streamsDecoupling": nil,
 			}
+			// Captured before AttachStreamDecoupling, which overwrites
+			// activity.Decoupling with the stream value in streams mode.
+			apiValue := apiDecouplingValue(&activity)
 			result, err := computeActivityDecoupling(client, &activity, options, history.context(&activity))
 			if err != nil {
 				activity.MarkAPIDecoupling(err.Error())
@@ -415,7 +418,7 @@ func activityDecouplingCommand() *Command {
 				out["streamsRawDecoupling"] = result.RawValue
 				out["validity"] = result.Validity
 				out["failedCriteria"] = failedCriteriaDetail(&result)
-				out["summary"] = decouplingSummary(&activity, &result)
+				out["summary"] = decouplingSummary(&activity, apiValue, &result)
 				out["streamDetail"] = result
 			}
 			out["decoupling"] = sessionValue(&activity)
@@ -431,11 +434,13 @@ func activityDecouplingCommand() *Command {
 }
 
 // decouplingSummary is the compact, human-checkable view of one result.
-func decouplingSummary(activity *icu.Activity, result *icu.StreamDecoupling) map[string]any {
+// apiValue is intervals.icu's decoupling, read before the stream result was
+// attached (attaching may replace activity.Decoupling).
+func decouplingSummary(activity *icu.Activity, apiValue *float64, result *icu.StreamDecoupling) map[string]any {
 	return map[string]any{
 		"status":               result.Status,
 		"reason":               result.Reason,
-		"apiDecoupling":        apiDecouplingValue(activity),
+		"apiDecoupling":        apiValue,
 		"streamsDecoupling":    activity.DecouplingStreams,
 		"trim":                 result.Trim,
 		"hrLag":                map[string]any{"seconds": result.HRLagSeconds, "method": result.HRLagMethod, "r": result.HRLagCorrelation},

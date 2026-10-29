@@ -1,8 +1,8 @@
 package icu
 
 import (
+	"fmt"
 	"math"
-	"strconv"
 )
 
 // Coaching criteria for stream decoupling (B15), as specified by the client
@@ -45,6 +45,18 @@ const (
 	// npWindowSeconds is the standard 30 s rolling window of normalized power.
 	npWindowSeconds = 30
 )
+
+// Criterion threshold labels, built from the Coach* constants so a label
+// can never disagree with the threshold it describes.
+func labelDuration() string { return fmt.Sprintf(">= %d min", CoachMinAnalyzedMinutes) }
+
+func labelVI() string {
+	return fmt.Sprintf("<= %.2f (<= %.2f ok)", CoachVILowConfidence, CoachVIOK)
+}
+
+func labelCoasting() string  { return fmt.Sprintf("< %.2f", CoachMaxCoastingShare) }
+func labelZ1Z2() string      { return fmt.Sprintf(">= %.2f", CoachMinZ1Z2Share) }
+func labelMaxMinute() string { return fmt.Sprintf("<= %g %% FTP", CoachMaxMinutePctFTP) }
 
 // Validity, interpretation and criterion names.
 const (
@@ -126,7 +138,7 @@ func (ride *decouplingRide) evaluateCoachCriteria(start, end int, context Decoup
 	analyzedMinutes := float64(end-start) * ride.step / secondsPerMinuteF
 	criteria := []DecouplingCriterion{{
 		Name: CriterionDuration, Value: round2(analyzedMinutes),
-		Threshold: ">= " + strconv.Itoa(CoachMinAnalyzedMinutes) + " min", Pass: analyzedMinutes >= CoachMinAnalyzedMinutes,
+		Threshold: labelDuration(), Pass: analyzedMinutes >= CoachMinAnalyzedMinutes,
 	}}
 	if !ride.power {
 		return append(criteria, DecouplingCriterion{Name: CriterionPowerStream, Threshold: "power stream required"}), 0
@@ -148,9 +160,9 @@ func (ride *decouplingRide) evaluateCoachCriteria(start, end int, context Decoup
 		vi = normalizedPower(values, maxInt(1, int(math.Round(npWindowSeconds/ride.step)))) / mean
 	}
 	criteria = append(criteria,
-		DecouplingCriterion{Name: CriterionVI, Value: round4(vi), Threshold: "<= 1.10 (<= 1.05 ok)", Pass: CoachVIValidity(vi) != DecouplingNotValid},
+		DecouplingCriterion{Name: CriterionVI, Value: round4(vi), Threshold: labelVI(), Pass: CoachVIValidity(vi) != DecouplingNotValid},
 		DecouplingCriterion{
-			Name: CriterionCoasting, Value: round4(coasting / n), Threshold: "< 0.10",
+			Name: CriterionCoasting, Value: round4(coasting / n), Threshold: labelCoasting(),
 			Pass: coasting/n < CoachMaxCoastingShare,
 		})
 	if context.FTP <= 0 || len(context.PowerZones) < 2 {
@@ -174,9 +186,9 @@ func (ride *decouplingRide) evaluateCoachCriteria(start, end int, context Decoup
 	}
 
 	return append(criteria,
-		DecouplingCriterion{Name: CriterionZ1Z2, Value: round4(inZ1Z2 / n), Threshold: ">= 0.85", Pass: inZ1Z2/n >= CoachMinZ1Z2Share},
+		DecouplingCriterion{Name: CriterionZ1Z2, Value: round4(inZ1Z2 / n), Threshold: labelZ1Z2(), Pass: inZ1Z2/n >= CoachMinZ1Z2Share},
 		DecouplingCriterion{
-			Name: CriterionMaxMinute, Value: round2(maxMinute), Threshold: "<= 105 % FTP",
+			Name: CriterionMaxMinute, Value: round2(maxMinute), Threshold: labelMaxMinute(),
 			Pass: maxMinute <= CoachMaxMinutePctFTP,
 		}), vi
 }
