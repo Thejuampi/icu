@@ -24,15 +24,19 @@ func TestRedactZeppJSONRemovesIdentifiersAtAnyDepth(t *testing.T) {
 	}
 	s := string(out)
 
-	for _, secret := range []string{"SYN-USER-1", "SYN-USER-2", "SYN-DEV-1", "SYN-SN-1", "SYN-TOK-1", "SYN-TOK-2",
-		"SYN-TOK-3", "SYN-TOK-4", "SYN-EV-1", "syn@example.com", "SYN-MAC"} {
+	for _, secret := range []string{
+		"SYN-USER-1", "SYN-USER-2", "SYN-DEV-1", "SYN-SN-1", "SYN-TOK-1", "SYN-TOK-2",
+		"SYN-TOK-3", "SYN-TOK-4", "SYN-EV-1", "syn@example.com", "SYN-MAC",
+	} {
 		if strings.Contains(s, secret) {
 			t.Fatalf("%s leaked: %s", secret, s)
 		}
 	}
 	// Payload values, key order and number formatting are untouched.
-	for _, keep := range []string{`"wakeHRV":38`, `"hrv":41`, `\"x\":1.50`, `"valid":true`, `"next":-1`,
-		`"timestamp":1761710400000`, `"subType":"insight_data"`} {
+	for _, keep := range []string{
+		`"wakeHRV":38`, `"hrv":41`, `\"x\":1.50`, `"valid":true`, `"next":-1`,
+		`"timestamp":1761710400000`, `"subType":"insight_data"`,
+	} {
 		if !strings.Contains(s, keep) {
 			t.Fatalf("missing %s in %s", keep, s)
 		}
@@ -48,8 +52,10 @@ func TestRedactZeppJSONRemovesIdentifiersAtAnyDepth(t *testing.T) {
 func TestIsZeppSecretKeyCaseInsensitive(t *testing.T) {
 	t.Parallel()
 
-	for _, k := range []string{"userId", "USERID", "user_id", "deviceId", "device-id", "sn", "SN", "token", "appToken",
-		"APPTOKEN", "login_token", "Authorization", "id", "Id", "eventId", "serialNumber"} {
+	for _, k := range []string{
+		"userId", "USERID", "user_id", "deviceId", "device-id", "sn", "SN", "token", "appToken",
+		"APPTOKEN", "login_token", "Authorization", "id", "Id", "eventId", "serialNumber",
+	} {
 		if !icu.IsZeppSecretKey(k) {
 			t.Errorf("%q should be redacted", k)
 		}
