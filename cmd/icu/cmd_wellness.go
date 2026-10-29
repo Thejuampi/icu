@@ -24,7 +24,7 @@ func registerWellnessCommands(registry *CommandRegistry) {
 		"wellness", "update",
 		updateByIDCommand[icu.WellnessWrite, icu.Wellness](
 			"wellness",
-			"wellness update <date> --weight 81 --resting-hr 50 --hrv 72.5 [--sleep-secs 28800] [--locked]",
+			"wellness update <date> --weight 81 --resting-hr 50 --hrv 72.5 [--sleep-secs 28800] [--sleep-score N] [--locked]",
 			"Update wellness record for a date.",
 			"date (YYYY-MM-DD)",
 			nil,

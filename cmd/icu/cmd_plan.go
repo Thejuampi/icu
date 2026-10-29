@@ -116,6 +116,7 @@ func planShowSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "file", ValueName: "PATH", Description: "Output proposal JSON path."},
+			activityFetchLimitFlag(),
 			{Name: "intent-file", ValueName: "PATH", Description: "Intent JSON path."},
 			{Name: "allow-today", ValueName: "BOOL", Description: "Allow mutating today's planned sessions.", Kind: commandFlagBoolean},
 			{Name: "allow-past", ValueName: "BOOL", Description: "Allow mutating past planned sessions.", Kind: commandFlagBoolean},
@@ -137,6 +138,7 @@ func planPreviewSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
+			activityFetchLimitFlag(),
 			{Name: "no-live-check", ValueName: "BOOL", Description: "Skip live source-hash, baseline drift and load projection.", Kind: commandFlagBoolean},
 			{Name: "max-ramp", ValueName: "CTL/WEEK", Description: "Projected CTL ramp cap; overrides profile maxRampPerWeek."},
 			{Name: "now-date", ValueName: "DATE", Description: "Projection 'today' (YYYY-MM-DD); default is today in the athlete timezone."},
@@ -151,6 +153,7 @@ func planAcceptSchema() *CommandSchema {
 		RejectPositionals: true,
 		Flags: append([]CommandFlag{
 			{Name: "file", ValueName: "PATH", Description: proposalFileDescription},
+			activityFetchLimitFlag(),
 		}, commonAuthFlags()...),
 	}
 }

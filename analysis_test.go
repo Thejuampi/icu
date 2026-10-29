@@ -601,3 +601,28 @@ func TestApplyWellnessFitness(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyzeCyclingAverageDecouplingBySource(t *testing.T) {
+	t.Parallel()
+	activities := []icu.Activity{
+		{ID: "a", Type: "Ride", Decoupling: 4, DecouplingSource: icu.DecouplingSourceAPI, DecouplingAPI: new(4.0), DecouplingStreamsStatus: icu.DecouplingStatusNotMeasurable},
+		{ID: "b", Type: "Ride", Decoupling: 1, DecouplingSource: icu.DecouplingSourceStreams, DecouplingAPI: new(5.0), DecouplingStreams: new(1.0), DecouplingStreamsStatus: icu.DecouplingStatusMeasured},
+		{ID: "c", Type: "Ride", Decoupling: 3},
+	}
+	durability := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{}).Durability
+	if durability.AverageDecoupling != 2.67 || durability.AverageDecouplingAPI == nil || *durability.AverageDecouplingAPI != 4 ||
+		durability.AverageDecouplingStreams == nil || *durability.AverageDecouplingStreams != 1 {
+		t.Fatalf("durability = %+v", durability)
+	}
+	// Downstream signals use the API average, not the mixed consumed one.
+	analysis := icu.AnalyzeCyclingActivities(activities, icu.AnalysisOptions{})
+	if analysis.Performance.Durability.MeanDecoupling != 4 || analysis.Durability.APIAverageDecoupling() != 4 {
+		t.Fatalf("mean decoupling = %v, want the API average 4", analysis.Performance.Durability.MeanDecoupling)
+	}
+	if plain := (icu.CyclingDurability{AverageDecoupling: 2.5}); plain.APIAverageDecoupling() != 2.5 {
+		t.Fatal("api mode falls back to averageDecoupling")
+	}
+	if apiOnly := icu.AnalyzeCyclingActivities(activities[2:], icu.AnalysisOptions{}).Durability; apiOnly.AverageDecouplingStreams != nil || apiOnly.AverageDecouplingAPI != nil {
+		t.Fatalf("api only: %+v", apiOnly)
+	}
+}

@@ -53,7 +53,7 @@ func registerActivitiesCommands(registry *CommandRegistry) {
 		"activities", "manual",
 		createCommand[icu.ActivityManualWrite, icu.Activity](
 			"activities",
-			"activities manual --type Ride --name NAME --moving-time SECS [--distance M] [--training-load N]",
+			"activities manual --type Ride --name NAME --moving-time SECS [--distance M] [--training-load N] [--start-date DATE]",
 			"Create a manual activity.",
 			nil,
 			func(flags map[string]string) icu.ActivityManualWrite {

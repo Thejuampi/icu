@@ -5,6 +5,9 @@ ifeq ($(OS),Windows_NT)
 	BIN := bin/icu.exe
 endif
 
+mock:
+	go build -o icu-mock ./tools/mockserver
+
 build:
 	go build -o $(BIN) ./cmd/icu/
 

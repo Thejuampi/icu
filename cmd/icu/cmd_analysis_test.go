@@ -272,14 +272,14 @@ func TestAnalysisCyclingCommandReportsFieldsGuaranteedDespiteOverride(t *testing
 	}
 }
 
-func TestTrainingPlanDateRangesDefaultToTwelveWeekHistoryAndNextISOBlock(t *testing.T) {
+func TestTrainingPlanDateRangesDefaultToTwelveWeekHistoryAndNextDay(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.May, 30, 12, 0, 0, 0, time.UTC)
 	got, explicit, err := trainingPlanDateRanges(map[string]string{}, now)
 	want := trainingPlanRanges{
 		History: analysisRange{Oldest: "2026-03-08", Newest: "2026-05-30"},
-		Plan:    analysisRange{Oldest: "2026-06-01", Newest: "2026-06-28"},
+		Plan:    analysisRange{Oldest: "2026-05-31", Newest: "2026-06-27"},
 	}
 
 	if err != nil || got != want || explicit {
@@ -342,7 +342,7 @@ func TestTrainingPlanDateRangesHandleSundayBoundaries(t *testing.T) {
 
 	defaults, defaultExplicit, err := trainingPlanDateRanges(map[string]string{}, now)
 	if err != nil || defaultExplicit || defaults.Plan.Oldest != planMonday {
-		t.Fatalf("default trainingPlanDateRanges = %+v explicit %v error %v, want next Monday", defaults, defaultExplicit, err)
+		t.Fatalf("default trainingPlanDateRanges = %+v explicit %v error %v, want the next day (a Monday here)", defaults, defaultExplicit, err)
 	}
 }
 
@@ -886,7 +886,7 @@ func TestReadCoachingContextInputsReportsEachUpstreamFailure(t *testing.T) {
 			_, err := readCoachingContextInputs(client, flags, trainingPlanRanges{
 				History: analysisRange{Oldest: "2026-04-06", Newest: "2026-06-28"},
 				Plan:    analysisRange{Oldest: "2026-06-29", Newest: "2026-07-26"},
-			}, true)
+			}, analysisTimezoneFrom("", ""))
 			if err == nil {
 				t.Fatal("readCoachingContextInputs error = nil, want upstream error")
 			}
@@ -914,7 +914,7 @@ func TestReadCoachingContextInputsAllowsMissingSportSettings(t *testing.T) {
 	inputs, err := readCoachingContextInputs(client, map[string]string{}, trainingPlanRanges{
 		History: analysisRange{Oldest: "2026-04-06", Newest: "2026-06-28"},
 		Plan:    analysisRange{Oldest: "2026-06-29", Newest: "2026-07-26"},
-	}, true)
+	}, analysisTimezoneFrom("", ""))
 	if err != nil || inputs.SportSettings != nil {
 		t.Fatalf("readCoachingContextInputs = sportSettings %+v error %v, want absent settings and no error", inputs.SportSettings, err)
 	}
@@ -1654,34 +1654,34 @@ func TestWriteMicrocycleHuman(t *testing.T) {
 	}
 }
 
-func TestMicrocycleLocationPrecedence(t *testing.T) {
+// resolveMicrocycleLocation shares the analysis resolver: flag, athlete,
+// then UTC (default_utc), never the system zone; an invalid flag errors.
+func TestResolveMicrocycleLocationPrecedence(t *testing.T) {
 	t.Parallel()
-
-	system := time.FixedZone("SYS", 0)
-	cases := []struct {
-		name, flag, athlete, wantZone, wantSource string
+	for name, test := range map[string]struct {
+		athlete, flag, wantZone, wantSource string
 	}{
-		{"flag wins over athlete", "UTC", "America/New_York", "UTC", "flag"},
-		{"athlete when no flag", "", "America/New_York", "America/New_York", "athlete"},
-		{"system when athlete empty", "", "", "SYS", "system"},
-		{"system when athlete invalid", "", "Not/AZone", "SYS", "system"},
+		"flag wins over athlete":   {"America/New_York", "Europe/Madrid", "Europe/Madrid", "flag"},
+		"athlete when no flag":     {"America/New_York", "", "America/New_York", "athlete"},
+		"utc when athlete empty":   {"", "", "UTC", icu.DefaultAnalysisTimezoneSource},
+		"utc when athlete invalid": {"Not/AZone", "", "UTC", icu.DefaultAnalysisTimezoneSource},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(response).Encode(map[string]any{"id": "0", "timezone": test.athlete})
+		}))
+		client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+		flags := map[string]string{}
+		if test.flag != "" {
+			flags["timezone"] = test.flag
+		}
+		location, source, err := resolveMicrocycleLocation(client, flags)
+		server.Close()
+		if err != nil || location.String() != test.wantZone || source != test.wantSource {
+			t.Fatalf("%s: %v %s %v, want %s %s", name, location, source, err, test.wantZone, test.wantSource)
+		}
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			location, source, err := microcycleLocation(tc.flag, tc.athlete, system)
-			if err != nil || location.String() != tc.wantZone || source != tc.wantSource {
-				t.Fatalf("got %v %s %v, want %s %s", location, source, err, tc.wantZone, tc.wantSource)
-			}
-		})
-	}
-}
-
-func TestMicrocycleLocationRejectsInvalidFlag(t *testing.T) {
-	t.Parallel()
-
-	if _, _, err := microcycleLocation("Invalid/Zone", "", time.UTC); err == nil {
-		t.Fatal("error = nil, want invalid --timezone error")
+	if _, _, err := resolveMicrocycleLocation(nil, map[string]string{"timezone": "Invalid/Zone"}); err == nil {
+		t.Fatal("invalid --timezone accepted")
 	}
 }
 

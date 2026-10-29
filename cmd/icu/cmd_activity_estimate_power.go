@@ -37,7 +37,7 @@ func estimatePowerShowCommand() *Command {
 		Name: "estimate-power",
 		Usage: "activity <id> estimate-power [--rider-mass-kg N] [--bike-mass-kg N] [--cda N] [--crr N] " +
 			"[--drivetrain-eff N] [--air-density N] [--calibrate-from-measured] [--min-gap-seconds N] " +
-			"[--include-streams] [--file PATH] [--types CSV] [--no-weather] " +
+			"[--include-streams] [--file PATH] [--types CSV] [--no-weather] [--ftp N] " +
 			"[--refill-from-index N | --refill-after-pm-death | --refill-after-cadence-death]",
 		Description: "Dry-run multi-source power estimation for missing power gaps (null watts or PM-death zeros). " +
 			"Outdoor aero uses real weather (activity fields, then free Open-Meteo archive/forecast fallbacks) " +
@@ -88,7 +88,7 @@ func estimatePowerBacktestCommand() *Command {
 		Name: "estimate-power-backtest",
 		Usage: "activity <id> estimate-power-backtest --bike-mass-kg N [--rider-mass-kg N] [--crr N] " +
 			"[--drivetrain-eff N] [--calibrate-from-measured] [--mode mask_second_half|mask_after_fraction] " +
-			"[--mask-fraction 0.5] [--types CSV] [--no-weather]",
+			"[--mask-fraction 0.5] [--types CSV] [--no-weather] [--ftp N]",
 		Description: "Replay-style validation: mask measured power (PM-death simulation), re-estimate from GPS+mass+weather, " +
 			"and score pearsonR/RMSE/bias 1:1 against held-out measured watts. Read-only.",
 		Run: runEstimatePowerBacktestCommand,

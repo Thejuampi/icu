@@ -96,7 +96,7 @@ func runFTPUpdate(_ []string, flags map[string]string, client *icu.Client, stdou
 	}
 	if BoolFlag(flags, "dry-run") {
 		result.DryRun = true
-		result.Message = "dry-run: nothing written"
+		result.Message = dryRunNothingWritten
 
 		return writeJSON(stdout, result)
 	}

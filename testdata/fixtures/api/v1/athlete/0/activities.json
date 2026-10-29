@@ -1,0 +1,503 @@
+[
+  {
+    "icu_variability_index": 1.4,
+    "id": "i900000003",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.3157895,
+    "id": "i900000183",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.2635659,
+    "id": "i900000182",
+    "paired_event_id": 800000140,
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.1940298,
+    "id": "i900000001",
+    "paired_event_id": 800000002,
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.2631578,
+    "id": "i900000181",
+    "paired_event_id": 800000139,
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.1678321,
+    "id": "i900000180",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.2874252,
+    "id": "i900000179",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.1695906,
+    "id": "i900000178",
+    "type": "VirtualRide"
+  },
+  {
+    "icu_variability_index": 1.1363636,
+    "id": "i900000177",
+    "paired_event_id": 800000128,
+    "type": "VirtualRide"
+  },
+  {
+    "icu_variability_index": 1.0965909,
+    "id": "i900000176",
+    "paired_event_id": 800000127,
+    "type": "VirtualRide"
+  },
+  {
+    "icu_variability_index": 1.3710692,
+    "id": "i900000175",
+    "type": "VirtualRide"
+  },
+  {
+    "icu_variability_index": 1.1195652,
+    "id": "i900000174",
+    "paired_event_id": 800000125,
+    "type": "VirtualRide"
+  },
+  {
+    "icu_variability_index": 1.1504854,
+    "id": "i900000173",
+    "type": "VirtualRide"
+  },
+  {
+    "icu_variability_index": 1.0680628,
+    "id": "i900000172",
+    "type": "VirtualRide"
+  },
+  {
+    "icu_variability_index": 1.0689656,
+    "id": "i900000171",
+    "type": "VirtualRide"
+  },
+  {
+    "icu_variability_index": 1.2785715,
+    "id": "i900000170",
+    "type": "VirtualRide"
+  },
+  {
+    "id": "i900000169",
+    "type": "WeightTraining"
+  },
+  {
+    "icu_variability_index": 1.518797,
+    "id": "i900000168",
+    "type": "VirtualRide"
+  },
+  {
+    "id": "i900000167",
+    "type": "WeightTraining"
+  },
+  {
+    "id": "i900000166",
+    "type": "VirtualRun"
+  },
+  {
+    "id": "i900000165",
+    "type": "WeightTraining"
+  },
+  {
+    "id": "i900000164",
+    "type": "VirtualRun"
+  },
+  {
+    "id": "i900000163",
+    "type": "WeightTraining"
+  },
+  {
+    "id": "i900000162",
+    "type": "VirtualRun"
+  },
+  {
+    "id": "i900000160",
+    "type": "Workout"
+  },
+  {
+    "id": "i900000161",
+    "type": "VirtualRun"
+  },
+  {
+    "icu_variability_index": 1.3522012,
+    "id": "i900000159",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.2370371,
+    "id": "i900000158",
+    "type": "Ride"
+  },
+  {
+    "id": "i900000154",
+    "type": "VirtualRun"
+  },
+  {
+    "id": "i900000157",
+    "type": "Walk"
+  },
+  {
+    "id": "i900000156",
+    "paired_event_id": 800000108,
+    "type": "Walk"
+  },
+  {
+    "id": "i900000155",
+    "type": "Walk"
+  },
+  {
+    "icu_variability_index": 1.2352941,
+    "id": "i900000153",
+    "paired_event_id": 800000093,
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.2333333,
+    "id": "i900000152",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.4198895,
+    "id": "i900000151",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.3014706,
+    "id": "i900000150",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.3664596,
+    "id": "i900000149",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.5223881,
+    "id": "i900000148",
+    "paired_event_id": 800000078,
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.2040817,
+    "id": "i900000002",
+    "paired_event_id": 800000001,
+    "type": "Ride"
+  },
+  {
+    "id": "i900000189",
+    "paired_event_id": 800000147,
+    "type": "WeightTraining"
+  },
+  {
+    "icu_variability_index": 1.1946309,
+    "id": "i900000188",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.2251656,
+    "id": "i900000187",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.4121622,
+    "id": "i900000186",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.6,
+    "id": "i900000185",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.2720588,
+    "id": "i900000184",
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.278481,
+    "id": "i900000147",
+    "paired_event_id": 800000077,
+    "type": "Ride"
+  },
+  {
+    "icu_variability_index": 1.3372093,
+    "id": "i900000146",
+    "type": "Ride"
+  },
+  {
+    "id": "i900000145",
+    "type": "VirtualRun"
+  },
+  {
+    "analysis_issues": null,
+    "analyzed": "2026-09-29T23:00:00.000+00:00",
+    "athlete_max_hr": 198,
+    "attachments": null,
+    "average_altitude": 39.604137,
+    "average_cadence": 62.632034,
+    "average_clouds": null,
+    "average_feels_like": null,
+    "average_heartrate": 135,
+    "average_impact_loading_rate": null,
+    "average_leg_spring_stiffness": null,
+    "average_speed": 6.022,
+    "average_stance_time": null,
+    "average_stance_time_balance": null,
+    "average_stance_time_percent": null,
+    "average_step_length": 4547.7896,
+    "average_stride": 3.0604908,
+    "average_temp": 10.294918,
+    "average_vertical_oscillation": null,
+    "average_vertical_ratio": null,
+    "average_vertical_speed": null,
+    "average_weather_temp": null,
+    "average_wind_gust": null,
+    "average_wind_speed": null,
+    "avg_lr_balance": 48.55154,
+    "calories": 873,
+    "carbs_ingested": null,
+    "carbs_used": 255,
+    "coach_tick": null,
+    "coasting_time": 1194,
+    "commute": false,
+    "compliance": 127.118645,
+    "crank_length": null,
+    "created": "2026-09-29T23:00:00.000+00:00",
+    "custom_zones": null,
+    "decoupling": 8.256084,
+    "description": null,
+    "device_name": "Mock Device",
+    "device_watts": true,
+    "distance": 38054.28,
+    "elapsed_time": 6634,
+    "external_id": null,
+    "feel": null,
+    "file_sport_index": 0,
+    "file_type": "fit",
+    "gap": null,
+    "gap_model": "NONE",
+    "gap_zone_times": null,
+    "gear": {
+      "distance": null,
+      "id": "b90001",
+      "name": "Gear b90001",
+      "primary": null
+    },
+    "group": "mkb997ee",
+    "has_heartrate": true,
+    "has_segments": true,
+    "has_weather": false,
+    "headwind_percent": null,
+    "hr_load": 63,
+    "hr_load_type": "HRSS",
+    "icu_achievements": null,
+    "icu_athlete_id": "i0",
+    "icu_atl": 44.971443,
+    "icu_average_watts": 147,
+    "icu_cadence_z2": 54,
+    "icu_chat_id": null,
+    "icu_color": null,
+    "icu_cooldown_time": 600,
+    "icu_ctl": 29.963026,
+    "icu_distance": 38054.28,
+    "icu_efficiency_factor": 1.3111111,
+    "icu_ftp": 266,
+    "icu_hr_zone_times": [
+      5342,
+      961,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "icu_hr_zones": [
+      143,
+      158,
+      166,
+      177,
+      182,
+      187,
+      198
+    ],
+    "icu_hrr": null,
+    "icu_ignore_hr": false,
+    "icu_ignore_power": false,
+    "icu_ignore_time": false,
+    "icu_intensity": 66.54135,
+    "icu_intervals_edited": null,
+    "icu_joules": 911450,
+    "icu_joules_above_ftp": 9184,
+    "icu_lap_count": 3,
+    "icu_max_wbal_depletion": 3018,
+    "icu_median_time_delta": 1,
+    "icu_pm_cp": 183,
+    "icu_pm_ftp": 186,
+    "icu_pm_ftp_secs": 420,
+    "icu_pm_ftp_watts": 214,
+    "icu_pm_p_max": 622,
+    "icu_pm_w_prime": 13795,
+    "icu_power_hr": 1.0888889,
+    "icu_power_hr_z2": 1.4685913,
+    "icu_power_hr_z2_mins": 2,
+    "icu_power_spike_threshold": null,
+    "icu_power_zones": [
+      55,
+      75,
+      90,
+      105,
+      120,
+      150,
+      999
+    ],
+    "icu_recording_time": 6404,
+    "icu_resting_hr": 55,
+    "icu_rolling_cp": null,
+    "icu_rolling_ftp": 266,
+    "icu_rolling_ftp_delta": 0,
+    "icu_rolling_p_max": 1201.7665,
+    "icu_rolling_w_prime": 22558.06,
+    "icu_rpe": null,
+    "icu_sweet_spot_max": 97,
+    "icu_sweet_spot_min": 84,
+    "icu_sync_date": "2026-09-29T23:00:00.000+00:00",
+    "icu_sync_error": null,
+    "icu_training_load": 75,
+    "icu_training_load_data": 100,
+    "icu_variability_index": 1.2040817,
+    "icu_w_prime": null,
+    "icu_warmup_time": 1200,
+    "icu_weight": 72.8,
+    "icu_weighted_avg_watts": 177,
+    "icu_zone_times": [
+      {
+        "id": "Z1",
+        "secs": 2180
+      },
+      {
+        "id": "Z2",
+        "secs": 1964
+      },
+      {
+        "id": "Z3",
+        "secs": 1845
+      },
+      {
+        "id": "Z4",
+        "secs": 223
+      },
+      {
+        "id": "Z5",
+        "secs": 50
+      },
+      {
+        "id": "Z6",
+        "secs": 28
+      },
+      {
+        "id": "Z7",
+        "secs": 12
+      },
+      {
+        "id": "SS",
+        "secs": 668
+      }
+    ],
+    "id": "i900000002",
+    "ignore_pace": false,
+    "ignore_parts": null,
+    "ignore_velocity": false,
+    "interval_summary": null,
+    "kg_lifted": null,
+    "lengths": null,
+    "lock_intervals": null,
+    "lthr": 178,
+    "max_altitude": 63.2,
+    "max_feels_like": null,
+    "max_heartrate": 156,
+    "max_rain": null,
+    "max_snow": null,
+    "max_speed": 29.549,
+    "max_temp": 18,
+    "max_weather_temp": null,
+    "min_altitude": 7,
+    "min_feels_like": null,
+    "min_temp": 8,
+    "min_weather_temp": null,
+    "moving_time": 6301,
+    "name": "Activity i900000002",
+    "oauth_client_id": null,
+    "oauth_client_name": null,
+    "p30s_exponent": 3,
+    "p_max": null,
+    "pace": 6.039,
+    "pace_load": null,
+    "pace_load_type": null,
+    "pace_zone_times": null,
+    "pace_zones": null,
+    "paired_event_id": 800000001,
+    "perceived_exertion": null,
+    "polarization_index": 0.46,
+    "pool_length": null,
+    "power_field": "power",
+    "power_field_names": [
+      "power"
+    ],
+    "power_load": 75,
+    "power_meter": null,
+    "power_meter_battery": null,
+    "power_meter_serial": null,
+    "prevailing_wind_deg": null,
+    "race": false,
+    "recording_stops": null,
+    "route_id": null,
+    "session_rpe": null,
+    "skyline_chart_bytes": null,
+    "source": "WAHOO",
+    "ss_cp": 89.13926,
+    "ss_p_max": 0.2276672,
+    "ss_w_prime": 0.9036062,
+    "start_date": "2026-09-29T21:00:00Z",
+    "start_date_local": "2026-09-29T17:00:00",
+    "strain_score": 90.27053,
+    "strava_id": null,
+    "stream_types": [
+      "time",
+      "watts",
+      "cadence",
+      "heartrate",
+      "distance",
+      "altitude",
+      "latlng",
+      "velocity_smooth",
+      "temp",
+      "left_right_balance",
+      "left_pedal_smoothness",
+      "right_pedal_smoothness",
+      "torque"
+    ],
+    "sub_type": null,
+    "submax_fatigue_test": null,
+    "tags": null,
+    "tailwind_percent": null,
+    "threshold_pace": null,
+    "timezone": null,
+    "tiz_order": "POWER_HR_PACE",
+    "total_elevation_gain": 321,
+    "total_elevation_loss": 336,
+    "trainer": null,
+    "trimp": 106.31672,
+    "type": "Ride",
+    "use_elevation_correction": false,
+    "use_gap_zone_times": null,
+    "workout_shift_secs": null
+  }
+]

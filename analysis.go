@@ -262,8 +262,14 @@ type CyclingIntensity struct {
 }
 
 type CyclingDurability struct {
-	AverageDecoupling        float64 `json:"averageDecoupling"`
-	HighDecouplingActivities int     `json:"highDecouplingActivities"`
+	AverageDecoupling float64 `json:"averageDecoupling"`
+	// AverageDecouplingAPI / AverageDecouplingStreams average each source
+	// separately (B15): the API value of every ride that has one, and the
+	// stream value of every measured ride. Emitted only when streams
+	// enrichment ran (--decoupling-source streams); nil otherwise.
+	AverageDecouplingAPI     *float64 `json:"averageDecouplingApi,omitempty"`
+	AverageDecouplingStreams *float64 `json:"averageDecouplingStreams,omitempty"`
+	HighDecouplingActivities int      `json:"highDecouplingActivities"`
 	// DecouplingSources counts contributing activities by decoupling source
 	// (B15): "api" or "streams" (omitted when not enriched).
 	DecouplingSources       map[string]int `json:"decouplingSources,omitempty"`
@@ -404,6 +410,9 @@ type cyclingAnalysisAccumulator struct {
 	powerMovingTimeSecs            int
 	intensity                      numericAccumulator
 	decoupling                     numericAccumulator
+	decouplingAPI                  numericAccumulator
+	decouplingStreams              numericAccumulator
+	decouplingEnriched             bool
 	efficiency                     numericAccumulator
 	variability                    numericAccumulator
 	wbalDepletion                  numericAccumulator
@@ -674,6 +683,17 @@ func (accumulator *cyclingAnalysisAccumulator) addDurability(activity *Activity)
 		accumulator.decoupling.add(activity.Decoupling)
 		accumulator.updateMaxDecoupling(activity.Decoupling)
 		accumulator.addHighDecoupling(activity.Decoupling)
+	}
+	if activity.DecouplingStreamsStatus != "" {
+		accumulator.decouplingEnriched = true
+	}
+	if activity.DecouplingAPI != nil {
+		accumulator.decouplingAPI.add(*activity.DecouplingAPI)
+	} else if activity.HasDecoupling() && activity.DecouplingSource != DecouplingSourceStreams {
+		accumulator.decouplingAPI.add(activity.Decoupling)
+	}
+	if activity.DecouplingStreams != nil {
+		accumulator.decouplingStreams.add(*activity.DecouplingStreams)
 	}
 
 	if activity.EfficiencyFactor != 0 {
@@ -1049,6 +1069,14 @@ func (accumulator *cyclingAnalysisAccumulator) finishIntensity() {
 
 func (accumulator *cyclingAnalysisAccumulator) finishDurability() {
 	accumulator.analysis.Durability.AverageDecoupling = round2(accumulator.decoupling.average())
+	// Only with stream enrichment: in API mode averageDecoupling already is
+	// the API average, and the default output shape is unchanged.
+	if accumulator.decouplingEnriched && accumulator.decouplingAPI.count > 0 {
+		accumulator.analysis.Durability.AverageDecouplingAPI = new(round2(accumulator.decouplingAPI.average()))
+	}
+	if accumulator.decouplingStreams.count > 0 {
+		accumulator.analysis.Durability.AverageDecouplingStreams = new(round2(accumulator.decouplingStreams.average()))
+	}
 	accumulator.analysis.Durability.AverageEfficiencyFactor = round2(accumulator.efficiency.average())
 	accumulator.analysis.Durability.AverageVariabilityIndex = round2(accumulator.variability.average())
 }
@@ -1105,7 +1133,7 @@ func (accumulator *cyclingAnalysisAccumulator) repeatabilitySignal() CyclingRepe
 func (accumulator *cyclingAnalysisAccumulator) durabilitySignal() CyclingDurabilitySignal {
 	return CyclingDurabilitySignal{
 		State:                 durabilityState(accumulator.maxDecoupling),
-		MeanDecoupling:        accumulator.analysis.Durability.AverageDecoupling,
+		MeanDecoupling:        accumulator.analysis.Durability.APIAverageDecoupling(),
 		MaxDecoupling:         round2(accumulator.maxDecoupling),
 		HighDriftSessions:     accumulator.analysis.Durability.HighDecouplingActivities,
 		LongEnduranceSessions: accumulator.longEndurance,
@@ -1273,15 +1301,50 @@ func acuteChronicWorkRatio(acuteLoad, chronicLoad int) float64 {
 }
 
 func activityDate(activity *Activity) string {
+	return ActivityLocalDate(activity, nil)
+}
+
+// ActivityLocalDate is the activity's calendar day: start_date_local when
+// present, else start_date (UTC) converted to location (UTC when nil), so an
+// activity at 23:30 in America/New_York stays on its local day.
+func ActivityLocalDate(activity *Activity, location *time.Location) string {
 	if len(activity.StartDateLocal) >= len(analysisDateLayout) {
 		return activity.StartDateLocal[:len(analysisDateLayout)]
 	}
-
+	if local, ok := activityLocalStart(activity, location); ok {
+		return local.Format(analysisDateLayout)
+	}
 	if len(activity.StartDate) >= len(analysisDateLayout) {
 		return activity.StartDate[:len(analysisDateLayout)]
 	}
 
 	return ""
+}
+
+func activityLocalStart(activity *Activity, location *time.Location) (time.Time, bool) {
+	if location == nil {
+		location = time.UTC
+	}
+	start, err := time.Parse(time.RFC3339, activity.StartDate)
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	return start.In(location), true
+}
+
+// LocalizeActivityDates fills a missing start_date_local from start_date in
+// location (the analysis timezone), so every date-keyed analysis uses the
+// athlete's local day instead of the UTC one.
+func LocalizeActivityDates(activities []Activity, location *time.Location) {
+	for index := range activities {
+		if activities[index].StartDateLocal != "" {
+			continue
+		}
+		if local, ok := activityLocalStart(&activities[index], location); ok {
+			activities[index].StartDateLocal = local.Format("2006-01-02T15:04:05")
+		}
+	}
 }
 
 func cyclingSessionFromActivity(activity *Activity) CyclingSession {
@@ -1511,4 +1574,16 @@ func sessionDecoupling(activity *Activity) *float64 {
 	value := activity.Decoupling
 
 	return &value
+}
+
+// APIAverageDecoupling is the intervals.icu-API average decoupling: the
+// separate API average in streams mode, otherwise AverageDecoupling (which is
+// the API average when not enriched). Downstream signals use it so a mixed
+// API/streams average never drives state.
+func (durability CyclingDurability) APIAverageDecoupling() float64 {
+	if durability.AverageDecouplingAPI != nil {
+		return *durability.AverageDecouplingAPI
+	}
+
+	return durability.AverageDecoupling
 }

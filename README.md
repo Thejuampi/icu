@@ -79,6 +79,17 @@ Athlete ID resolution order:
 3. `~/.icu/config.json`
 4. default `"0"` for the authenticated athlete
 
+API base URL resolution order:
+
+1. `--base-url URL`
+2. `ICU_BASE_URL`
+3. default `https://intervals.icu` (the real API; a warning is printed on stderr whenever this is used)
+
+`--base-url` may appear before the resource (`icu --base-url URL athlete show`) or among the command flags. It only redirects intervals.icu calls and HTTP redirects to a different scheme or host are refused. Two outside services ignore it:
+
+- **Open-Meteo** (weather for `activity estimate-power`): pass `--no-weather` when testing against the mock.
+- **Zepp** (`zepp ...`): not served by the mock. `zepp login`/`zepp token` take `--zepp-base-url URL` (wins over `ZEPP_TOKENS_URL`/`ZEPP_LOGIN_URL`); other `zepp` commands use the `ZEPP_*` settings. The global `--base-url` is never passed to Zepp.
+
 `icu config show` prints the config file path and shows only a 12-character SHA256 fingerprint for the stored API key (never partial or raw characters).
 `icu config diagnose` prints source resolution details and a non-reversible fingerprint, not the raw secret.
 
@@ -267,10 +278,11 @@ intervals.icu's `decoupling` field remains the default value consumed by `analys
   4. 60-moving-second buckets from the trim start. `missing_hr` when lagged HR covers under half the minute. `coasting` (power basis) when watts = 0 for more than half of the minute's moving samples (the coasting share is a strict majority rule; a minute with ≤ 50 % coasting is kept).
   5. Tukey fences `Q1 − k·IQR … Q3 + k·IQR` on the per-minute ratio of the remaining minutes (`--decoupling-iqr-k`, default 1.5, 0 disables): `ratio_outlier`.
   6. Kept minutes are split at the range midpoint: `decoupling = (1 − (P2/HR2)/(P1/HR1)) × 100`. Each half needs at least 4 kept minutes.
-  7. Workout gate: when the paired workout's main set (inside the trim) spans more than one power zone (from the doc's `zoneTimes`, or `power_zone` units) it is `intervals`; when a repeat block varies cadence targets it is `ladder`. Both are `not_measurable`.
+  7. Workout gate: when the paired workout's main set (inside the trim) spans more than one power zone (the doc's `zoneTimes`; without them the athlete's Ride power zones from sport settings; `power_zone` units directly; watt targets converted to % FTP with the doc's or the athlete's FTP) it is `intervals`; when main-set steps (in a repeat block or written as flat steps) use more than one cadence target it is `ladder`. A main set with pace targets (runs), or watt targets with no FTP, is `unverified`. All three are `not_measurable`.
   8. Steadiness gate: the VI cutoff is `Q3 + 1.5·IQR` of the VIs of rides paired with *steady* workouts in the last 84 days (also in analysis), needing at least 4 such rides. A ride above it is `not_measurable`. With no cutoff, a ride is measurable only if its paired workout is steady; otherwise `not_measurable` (steadiness unverified). The in-window CV of per-minute output (`powerCv`) is reported but not gated, since no data-derived cutoff exists for it yet.
+  **Unpaired rides are not measured** unless at least 4 rides paired with steady workouts in the last 84 days give a VI cutoff. For an athlete who rarely pairs steady workouts this means the stream method almost never measures anything today (for the reference athlete: 1 steady-paired ride in 84 days, so only that ride is measured).
   A result that is not `measured` never exposes a stream value (`decouplingStreams`/`streamsDecoupling` are null) and is never consumed.
-- **Labels**: each session has `decoupling` (the consumed value; a real 0 is kept), `decouplingSource` (`api` or `streams`), `decouplingApi`, `decouplingStreams` and `decouplingStreamsStatus` (`measured`, `not_measurable` or `unavailable`, with the reason in `decouplingNote`). `durability.decouplingSources`, `history.decouplingSources` and microcycle `fatigueDurability.decouplingSources` count the sources.
+- **Labels**: each session has `decoupling` (the consumed value; a real 0 is kept), `decouplingSource` (`api` or `streams`), `decouplingApi`, `decouplingStreams` and `decouplingStreamsStatus` (`measured`, `not_measurable` or `unavailable`, with the reason in `decouplingNote`). `durability.averageDecouplingApi` and `durability.averageDecouplingStreams` average each source separately when streams mode is on (API value of every ride that has one; stream value of every measured ride) next to the consumed `averageDecoupling`. `durability.decouplingSources`, `history.decouplingSources` and microcycle `fatigueDurability.decouplingSources` count the sources.
 - **API volume**: streams mode adds one streams GET per cycling/running activity with HR (4 in parallel) and one events GET for the paired workouts. Results are cached under `~/.icu/cache/decoupling/` (or `$ICU_CONFIG_DIR/cache/decoupling/`), keyed by algorithm version, options, plan trim, moving time and the activity's `analyzed` timestamp, so an edit or reprocess invalidates the entry. Results that are not measured expire after 24 h. Fetch errors are never cached.
 - `icu activity <id> decoupling` shows both values and the full breakdown for one activity: trim and its source, HR lag, stop speed, kept/excluded minutes by reason, fences, half means and the VI cutoff, plus a `summary` (status, reason, API vs streams value, trim, lag and r, minutes kept/in range, exclusions by reason, workout kind, VI vs cutoff, powerCv, stopRule).
 
@@ -290,6 +302,27 @@ go tool cover -func coverage.out
 ```
 
 `AGENTS.md` requires documentation updates for every public feature change.
+
+### Testing against the mock
+
+Release candidates and manual tests run only against a local mock of the intervals.icu API, never against a real account. The mock serves anonymized fixtures from `testdata/fixtures` (athlete, profile, sport settings, wellness, events, activities, curves, and streams for `i900000001`, `i900000002`, `i900000003`; ids, gear, event ids, height, weight and timezone are remapped/fuzzed and do not match any real account). It accepts writes (PUT/POST/DELETE/PATCH) in memory only and logs them.
+
+```bash
+scripts/rc-mock.sh            # builds and starts the mock on 127.0.0.1, prints PORT, BASE_URL, PID, LOG
+scripts/rc-mock.sh 8765       # fixed port
+# or in the foreground:
+go run ./tools/mockserver -port 8765        # make mock  -> ./icu-mock binary
+
+export INTERVALS_ICU_API_KEY=mock INTERVALS_ICU_ATHLETE_ID=0
+icu athlete show --base-url http://127.0.0.1:8765
+icu activity i900000002 decoupling --base-url http://127.0.0.1:8765
+icu analysis coaching --base-url http://127.0.0.1:8765
+icu events get 800000001 --base-url http://127.0.0.1:8765
+curl -s http://127.0.0.1:8765/_mock/writes          # {"count":N,"writes":[...]}: what the CLI tried to write
+curl -s -X POST http://127.0.0.1:8765/_mock/reset   # clear the write log and in-memory changes
+```
+
+Any athlete id maps onto the `0` fixtures; list endpoints honour `oldest`/`newest`. A missing fixture returns 404 and is logged. `-record -upstream URL` (the upstream is required; there is no default) is the one-time, GET-only fixture capture mode (non-GET requests are refused locally); `-anonymize DIR` re-applies the anonymizer (DOB, Strava/device ids, email, city/state/country, names, gear nicknames, tokens/API keys, GPS) to captured fixtures.
 
 ## License
 

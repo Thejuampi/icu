@@ -67,11 +67,12 @@ func replayWorst(t *testing.T, rows []replayRow, fitness, fatigue map[string]flo
 	return worstCTL, worstATL, worstDate
 }
 
-// TestProjectLoadReplaysRealWellness replays 2026-07-31..10-26 of real data,
+// TestProjectLoadReplaysWellness replays 2026-07-03..09-28 of anonymized data
+// (testdata/wellness_replay.json, dates shifted with the fixtures),
 // including the days where the athlete overrode icu_training_load by hand
-// (e.g. 09-07 run: 15 = hr_load, pace_load 8) and the strength days that
-// intervals.icu counts toward ATL only (08-18, 08-30, 09-06, 09-07, 09-11).
-func TestProjectLoadReplaysRealWellness(t *testing.T) {
+// (e.g. 08-10 run: 15 = hr_load, pace_load 8) and the strength days that
+// intervals.icu counts toward ATL only (07-21, 08-02, 08-09, 08-10, 08-14).
+func TestProjectLoadReplaysWellness(t *testing.T) {
 	t.Parallel()
 	rows := loadReplayRows(t)
 	wellness := make([]icu.Wellness, 0, len(rows))
@@ -114,9 +115,9 @@ func TestProjectLoadReplaysRealWellness(t *testing.T) {
 		t.Fatalf("excluded = %v, conflicts %v", excluded, conflicts)
 	}
 	// Trimming the window start never turns a CTL type into ATL-only (the
-	// old whole-day heuristic flagged VirtualRun from 08-14/08-19 and
-	// learned nothing from 09-12).
-	for _, from := range []string{"2026-08-14", "2026-08-19", "2026-09-01", "2026-09-12"} {
+	// old whole-day heuristic flagged VirtualRun from 07-17/07-22 and
+	// learned nothing from 08-15).
+	for _, from := range []string{"2026-07-17", "2026-07-22", "2026-08-04", "2026-08-15"} {
 		var trimmedW []icu.Wellness
 		var trimmedA []icu.Activity
 		for _, row := range wellness {
@@ -151,8 +152,8 @@ func TestProjectLoadReplaysRealWellness(t *testing.T) {
 		t.Fatalf("activity loads: worst CTL %.3f (%s) ATL %.3f", ctlErr, date, atlErr)
 	}
 
-	// 3. Feeding every load into CTL (the old model) misses from 08-18 on.
-	if ctlErr, _, date := replayWorst(t, rows, nil, activityLoads); ctlErr < 0.1 || date < "2026-08-18" {
+	// 3. Feeding every load into CTL (the old model) misses from 07-21 on.
+	if ctlErr, _, date := replayWorst(t, rows, nil, activityLoads); ctlErr < 0.1 || date < "2026-07-21" {
 		t.Fatalf("single-load CTL error %.3f (%s): fixture no longer discriminates", ctlErr, date)
 	}
 

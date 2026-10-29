@@ -21,7 +21,7 @@ func registerCustomCommands(registry *CommandRegistry) {
 
 	registry.Register("custom", "update", updateByIDCommand[icu.CustomItemWrite, icu.CustomItem](
 		"custom-item",
-		"custom update <id> --name NAME",
+		"custom update <id> [--name NAME] [--type TYPE]",
 		"Update a custom item.",
 		"item id",
 		nil,

@@ -25,7 +25,7 @@ type fakeSportServer struct {
 
 func snakeSportSettings() map[string]any {
 	return map[string]any{
-		"id": 1858902, "athlete_id": "i1", "types": []string{"Ride"},
+		"id": 900001, "athlete_id": "i1", "types": []string{"Ride"},
 		"ftp": 266, "indoor_ftp": 250, "lthr": 178, "max_hr": 198,
 		"hr_zones":         []int{121, 148, 166, 177, 182, 187, 198},
 		"hr_zone_names":    []string{"Z1", "Z2", "Z3", "Z4", "Z5a", "Z5b", "Z5c"},
@@ -52,7 +52,7 @@ func newFakeSportServer(t *testing.T, mutate func(map[string]any)) (*fakeSportSe
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		if !strings.HasSuffix(r.URL.Path, "/sport-settings/1858902") && !strings.HasSuffix(r.URL.Path, "/sport-settings/Ride") {
+		if !strings.HasSuffix(r.URL.Path, "/sport-settings/900001") && !strings.HasSuffix(r.URL.Path, "/sport-settings/Ride") {
 			http.NotFound(w, r)
 
 			return
@@ -103,7 +103,7 @@ func putKeys(body map[string]json.RawMessage) []string {
 func runSportsUpdateJSON(t *testing.T, client *icu.Client, flags map[string]string) (sportsUpdateResult, error) {
 	t.Helper()
 	out, err := captureStdout(t, func(stdout io.Writer) error {
-		return runSportsUpdate([]string{"1858902"}, flags, client, stdout, io.Discard)
+		return runSportsUpdate([]string{"900001"}, flags, client, stdout, io.Discard)
 	})
 	var res sportsUpdateResult
 	if strings.TrimSpace(out) != "" {
