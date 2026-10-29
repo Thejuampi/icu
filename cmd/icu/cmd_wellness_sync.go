@@ -296,7 +296,10 @@ func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, old
 			case errSleep != nil && errSamples != nil:
 				warnings = append(warnings, fmt.Sprintf("zepp hrv failed: %v; %v", errSleep, errSamples))
 			case errSleep != nil:
-				warnings = append(warnings, fmt.Sprintf("zepp hrv: readiness sleepHRV failed (%v); HRV falls back to the HRVRMSSD sample mean, an approximation", errSleep))
+				// Do not write the samples-mean approximation: fill-only would
+				// never replace it with readiness sleepHRV on a later run.
+				warnings = append(warnings, fmt.Sprintf("zepp hrv: readiness sleepHRV failed (%v); HRV skipped for every day (no sample-mean fallback), rerun later", errSleep))
+				samples = nil
 			case errSamples != nil:
 				warnings = append(warnings, fmt.Sprintf("zepp hrv: HRVRMSSD samples failed (%v); days without readiness sleepHRV get no HRV", errSamples))
 			}

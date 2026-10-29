@@ -25,7 +25,8 @@ type syncFake struct {
 	hits       int
 	bandStatus int
 	hrvStatus  int
-	failEvent  string // eventType answered with 503
+	failEvent  string            // eventType answered with 503
+	eventBody  map[string]string // body per eventType (overrides hrvBody)
 	bulkStatus int
 	existing   string
 	hrvBody    string
@@ -59,6 +60,11 @@ func (f *syncFake) serve(t *testing.T) *httptest.Server {
 				return
 			}
 			f.hrvQueries = append(f.hrvQueries, r.URL.RawQuery)
+			if body, ok := f.eventBody[r.URL.Query().Get("eventType")]; ok {
+				_, _ = io.WriteString(w, body)
+
+				return
+			}
 			if f.hrvBody != "" {
 				_, _ = io.WriteString(w, f.hrvBody)
 
@@ -562,5 +568,53 @@ func TestWellnessSyncWarnsWhenOneHRVSourceFails(t *testing.T) {
 		if code == 0 || !strings.Contains(errOut, want) || strings.Contains(errOut, "zepp hrv failed:") {
 			t.Fatalf("%s: code=%d stderr=%s", event, code, errOut)
 		}
+	}
+}
+
+// realOrderHRV returns readiness and HRVRMSSD bodies for 2026-08-11 (New
+// York) in the real shape with distinct values: sleepHRV 61, samples mean 44.
+func realOrderHRV() map[string]string {
+	night := time.Date(2026, 8, 11, 3, 30, 0, 0, time.UTC).UnixMilli() // 23:30 NY on the 10th
+	midnight := time.Date(2026, 8, 11, 4, 0, 0, 0, time.UTC).UnixMilli()
+
+	return map[string]string{
+		"readiness": `{"items":[{"timestamp":` + itoa64(midnight+7*3600000) + `,"value":{"timestamp":` + itoa64(midnight) + `,"sleepHRV":61,"hrvInsight":255}}]}`,
+		"HRVRMSSD":  `{"items":[{"timestamp":` + itoa64(night) + `,"value":{"startTime":` + itoa64(night) + `,"samples":[{"hrv":43,"s":0},{"hrv":0,"s":60000},{"hrv":45,"s":120000},{"hrv":255,"s":180000}]}}]}`,
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncApplyWritesReadinessSleepHRV(t *testing.T) {
+	fake := &syncFake{existing: syncExisting, eventBody: realOrderHRV()}
+	code, _, errOut := runSync(t, fake.serve(t), "--fields", "hrv", "--apply")
+	if code != 0 || len(fake.puts) != 1 || !strings.Contains(fake.puts[0], `"hrv":61`) || strings.Contains(fake.puts[0], `"hrv":44`) {
+		t.Fatalf("code=%d puts=%v stderr=%s", code, fake.puts, errOut)
+	}
+	// Samples only (no readiness item): the mean is the fallback.
+	bodies := realOrderHRV()
+	bodies["readiness"] = `{"items":[]}`
+	fake = &syncFake{existing: syncExisting, eventBody: bodies}
+	if code, _, errOut = runSync(t, fake.serve(t), "--fields", "hrv", "--apply"); code != 0 || len(fake.puts) != 1 || !strings.Contains(fake.puts[0], `"hrv":44`) {
+		t.Fatalf("fallback code=%d puts=%v stderr=%s", code, fake.puts, errOut)
+	}
+}
+
+// A failed readiness source must not write the samples-mean approximation:
+// fill-only would keep it forever instead of the later readiness value.
+//
+//nolint:paralleltest // sets env
+func TestWellnessSyncReadinessFailureSkipsHRVWrites(t *testing.T) {
+	for _, extra := range [][]string{{"--apply"}, {"--apply", "--overwrite"}} {
+		fake := &syncFake{existing: syncExisting, eventBody: realOrderHRV(), failEvent: "readiness"}
+		code, _, errOut := runSync(t, fake.serve(t), append([]string{"--fields", "hrv"}, extra...)...)
+		if code == 0 || len(fake.puts) != 0 || !strings.Contains(errOut, "HRV skipped") {
+			t.Fatalf("%v: code=%d puts=%v stderr=%s", extra, code, fake.puts, errOut)
+		}
+	}
+	// Other fields still sync; only HRV is skipped.
+	fake := &syncFake{existing: syncExisting, eventBody: realOrderHRV(), failEvent: "readiness"}
+	code, _, errOut := runSync(t, fake.serve(t), "--apply")
+	if code == 0 || len(fake.puts) != 1 || strings.Contains(fake.puts[0], `"hrv"`) {
+		t.Fatalf("all fields: code=%d puts=%v stderr=%s", code, fake.puts, errOut)
 	}
 }

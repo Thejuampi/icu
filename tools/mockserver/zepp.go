@@ -224,6 +224,8 @@ func (s *server) applyWellnessBulk(bulkKey string, raw []byte) []byte {
 const (
 	mockSampleStepMs = 60000 // one sample per minute, offsets in ms
 	mockHRVNone      = 255   // Zepp's "no reading" sentinel
+	// mockSleepHRVOffset: readiness sleepHRV = samples mean + 17 ms.
+	mockSleepHRVOffset = 17
 )
 
 func mockHRVRMSSDItem(start int64, hrv float64) map[string]any {
@@ -247,12 +249,15 @@ func mockHRVRMSSDItem(start int64, hrv float64) map[string]any {
 //
 //nolint:mnd // synthetic scores
 func mockReadinessItem(start int64, hrv float64) map[string]any {
+	// sleepHRV differs from the samples mean (hrv) on purpose, so a test can
+	// tell which source a sync used.
+	sleepHRV := hrv + mockSleepHRVOffset
 	morning := start + 4*int64(time.Hour/time.Millisecond)
 
 	return map[string]any{
 		"timestamp": morning, "eventType": "readiness", "subType": "watch_score", "userId": "mock-user",
 		"value": map[string]any{
-			"sleepHRV": hrv, "hrvBaseline": 40, "hrvScore": 66, "sleepRHR": 52, "rhrBaseline": 50,
+			"sleepHRV": sleepHRV, "hrvBaseline": 40, "hrvScore": 66, "sleepRHR": 52, "rhrBaseline": 50,
 			"rdnsScore": 70, "afibScore": 255, "skinTempCalibrated": -10, "skinTempBaseLine": 2,
 			"skinTempScore": 80, "deviceId": "MOCKDEVICE0000", "status": 200,
 			"timestampUpdate": morning,
