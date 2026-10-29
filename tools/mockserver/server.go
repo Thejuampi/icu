@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -92,8 +94,8 @@ func loadFixtures(dir string) (map[string][]byte, error) {
 
 // fixtureKey normalizes a request path so any athlete id maps onto the "0"
 // (self) fixtures and a trailing ".json" suffix is optional.
-func fixtureKey(path string) string {
-	parts := strings.Split(strings.TrimRight(path, "/"), "/")
+func fixtureKey(reqPath string) string {
+	parts := strings.Split(strings.TrimRight(reqPath, "/"), "/")
 	for i := 0; i+1 < len(parts); i++ {
 		if parts[i] == "athlete" && i > 0 && parts[i-1] == "v1" {
 			parts[i+1] = "0"
@@ -201,9 +203,10 @@ func (s *server) handleWrite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(raw) > 0 {
-		if r.URL.Path == mockZeppTokensPath {
-			// Zepp login form (password, access code): never kept in the
-			// write log. Field names stay, values are redacted.
+		if isSecretForm(r) {
+			// Form bodies (Zepp password, access code, any other auth form)
+			// are never kept in the write log. Field names stay, values are
+			// redacted.
 			quoted, _ := json.Marshal(redactForm(raw)) //nolint:errchkjson // marshaling a string cannot fail
 			entry.Body = quoted
 		} else if json.Valid(raw) {
@@ -219,6 +222,20 @@ func (s *server) handleWrite(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(s.log, "icu-mock: recorded %s %s (not persisted)\n", r.Method, r.URL.Path)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// isSecretForm reports whether a write body must be redacted: every
+// application/x-www-form-urlencoded body, and anything sent to a Zepp auth
+// path. Paths are compared after path.Clean so variants such as
+// "/v2/registrations/tokens/" or "//v2/client/login" cannot bypass it.
+func isSecretForm(r *http.Request) bool {
+	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err == nil && mt == "application/x-www-form-urlencoded" {
+		return true
+	}
+	clean := path.Clean("/" + r.URL.Path)
+
+	return clean == mockZeppTokensPath || clean == mockZeppLoginPath ||
+		strings.HasSuffix(clean, mockZeppTokensPath) || strings.HasSuffix(clean, mockZeppLoginPath)
 }
 
 // redactForm returns a form body with every value replaced by redactedValue

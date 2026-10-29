@@ -185,7 +185,7 @@ func zeppHeartRateCommand() *Command {
 func zeppHRVCommand() *Command {
 	return zeppSwitchCommand(
 		"zepp hrv --metric sdnn|rmssd --oldest YYYY-MM-DD --newest YYYY-MM-DD",
-		"Nightly HRV values from /v2/users/me/events.",
+		"Nightly HRV from /v2/users/me/events: rmssd is the mean of the night's samples (an approximation; the app's nightly HRV is readiness sleepHRV, see zepp readiness and wellness sync); sdnn may be empty.",
 		"metric", "sdnn", "sdnn", "rmssd",
 		(*icu.ZeppClient).HRVSDNNDays,
 		(*icu.ZeppClient).HRVRMSSDDays,
