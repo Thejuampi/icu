@@ -518,11 +518,11 @@ func TestDenylistAndClockTimes(t *testing.T) {
 func TestIsEpochTimeLine(t *testing.T) {
 	t.Parallel()
 	for line, want := range map[string]bool{
-		`      "timestamp": 1894622400000,`: true,
-		`        "startTime": 1894597200000`: true,
-		`      "timestamp": 9994622400000,`: false,
-		`      "deviceId": 1894622400000,`:  false,
-		`      "timestamp": 18946224000,`:   false,
+		`      "timestamp": 1894622400000,`:                     true,
+		`        "startTime": 1894597200000`:                    true,
+		`      "timestamp": 9994622400000,`:                     false,
+		`      "deviceId": 1894622400000,`:                      false,
+		`      "timestamp": 18946224000,`:                       false,
 		`      "timestamp": 1894622400000, "id": 1234567890123`: false,
 	} {
 		if got := isEpochTimeLine(line); got != want {
