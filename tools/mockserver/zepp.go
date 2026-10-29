@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"hash/fnv"
 	"net/http"
 	"strconv"
@@ -15,7 +14,15 @@ import (
 // the two read endpoints the sync uses on one host:
 //
 //	GET /v1/data/band_data.json  (sleep + resting HR in summary.slp)
-//	GET /v2/users/me/events      (eventType=HRVRMSSD nightly HRV)
+//	GET /v2/users/me/events      (eventType=readiness&subType=watch_score:
+//	                              value.sleepHRV nightly HRV; eventType=HRVRMSSD:
+//	                              value.samples[{hrv,s}] per-minute rMSSD)
+//
+// The event shapes mirror the real ones documented by open-source clients
+// (anonymized: no real ids). A sample of 0 and the 255 sentinel are
+// included because Zepp uses them for failed reads. Days where
+// mockZeppNoReadiness is true have no readiness item, so the sync falls
+// back to the HRVRMSSD sample mean (which equals the same HRV value).
 //
 // The Apptoken header selects a scenario: mockZeppTokenExpired answers 401
 // on both, mockZeppTokenEventsDown answers 503 on events only, a missing
@@ -46,6 +53,7 @@ type MockZeppDay struct {
 	DeepMinutes  int
 	LightMinutes int
 	HRV          float64
+	NoReadiness  bool
 }
 
 // mockZeppDayValues derives deterministic synthetic values from the date.
@@ -61,7 +69,8 @@ func mockZeppDayValues(date string) MockZeppDay {
 		SleepScore:   62 + n%30,
 		DeepMinutes:  60 + n%50,
 		LightMinutes: 240 + n%90,
-		HRV:          float64(35+n%25) + 0.5,
+		HRV:          float64(35 + n%25),
+		NoReadiness:  n%7 == 0,
 	}
 }
 
@@ -122,7 +131,8 @@ func (s *server) zeppBand(w http.ResponseWriter, r *http.Request) {
 func (s *server) zeppEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	items := []map[string]any{}
-	if q.Get("eventType") == "HRVRMSSD" {
+	et, st := q.Get("eventType"), q.Get("subType")
+	if et == "HRVRMSSD" || (et == "readiness" && st == "watch_score") {
 		fromMS, errFrom := strconv.ParseInt(q.Get("from"), 10, 64)
 		toMS, errTo := strconv.ParseInt(q.Get("to"), 10, 64)
 		if errFrom != nil || errTo != nil {
@@ -134,14 +144,19 @@ func (s *server) zeppEvents(w http.ResponseWriter, r *http.Request) {
 		to := time.UnixMilli(toMS).UTC()
 		for _, day := range mockZeppDays(from, to) {
 			at, _ := time.Parse(time.DateOnly, day)
-			ts := at.Add(mockZeppHRVHourUTC*time.Hour + mockZeppHRVMinute*time.Minute).UnixMilli()
-			if ts < fromMS || ts > toMS {
+			v := mockZeppDayValues(day)
+			// Sleep window starts the previous UTC evening (03:30 UTC is
+			// the previous local evening in the Americas: exercises the
+			// evening-rolls-forward day mapping).
+			start := at.Add(mockZeppHRVHourUTC*time.Hour + mockZeppHRVMinute*time.Minute).UnixMilli()
+			if start < fromMS || start > toMS {
 				continue
 			}
-			items = append(items, map[string]any{
-				"timestamp": ts, "eventType": "HRVRMSSD", "subType": "real_data",
-				"value": fmt.Sprintf("%.1f", mockZeppDayValues(day).HRV),
-			})
+			if et == "HRVRMSSD" {
+				items = append(items, mockHRVRMSSDItem(start, v.HRV))
+			} else if !v.NoReadiness {
+				items = append(items, mockReadinessItem(start, v.HRV))
+			}
 		}
 	}
 
@@ -192,4 +207,42 @@ func (s *server) applyWellnessBulk(bulkKey string, raw []byte) []byte {
 	out, _ := json.Marshal(records) //nolint:errchkjson // decoded JSON
 
 	return out
+}
+
+// mockHRVRMSSDItem is one night of per-minute rMSSD in the real shape:
+// value is an object with startTime (ms) and samples [{hrv, s}] where s is
+// a millisecond offset. The 0 and 255 samples are failed reads; the valid
+// samples average to hrv.
+func mockHRVRMSSDItem(start int64, hrv float64) map[string]any {
+	return map[string]any{
+		"timestamp": start, "eventType": "HRVRMSSD", "subType": "real_data", "userId": "mock-user",
+		"value": map[string]any{
+			"startTime": start, "deviceId": "MOCKDEVICE0000", "deviceSource": 1,
+			"samples": []map[string]any{
+				{"hrv": hrv - 3, "s": 0},
+				{"hrv": 0, "s": 60000},
+				{"hrv": hrv, "s": 120000},
+				{"hrv": 255, "s": 180000},
+				{"hrv": hrv + 3, "s": 240000},
+			},
+		},
+	}
+}
+
+// mockReadinessItem is one readiness watch_score item in the real shape
+// (value object; sleepHRV is the nightly rMSSD; 255 means not measured).
+//
+//nolint:mnd // synthetic scores
+func mockReadinessItem(start int64, hrv float64) map[string]any {
+	morning := start + 4*int64(time.Hour/time.Millisecond)
+
+	return map[string]any{
+		"timestamp": morning, "eventType": "readiness", "subType": "watch_score", "userId": "mock-user",
+		"value": map[string]any{
+			"sleepHRV": hrv, "hrvBaseline": 40, "hrvScore": 66, "sleepRHR": 52, "rhrBaseline": 50,
+			"rdnsScore": 70, "afibScore": 255, "skinTempCalibrated": -10, "skinTempBaseLine": 2,
+			"skinTempScore": 80, "deviceId": "MOCKDEVICE0000", "status": 200,
+			"timestampUpdate": morning,
+		},
+	}
 }

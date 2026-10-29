@@ -417,18 +417,10 @@ type ZeppHRVEvent struct {
 	Date      string  `json:"date"`
 	Metric    string  `json:"metric"`
 	Value     float64 `json:"value"`
-}
-
-// DecodeHRV decodes a raw V2 events response into HRV events for the given metric.
-func DecodeHRV(raw []byte, metric string) ([]ZeppHRVEvent, error) {
-	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppHRVEvent {
-		return ZeppHRVEvent{
-			Timestamp: ev.Timestamp,
-			Date:      ev.Date,
-			Metric:    metric,
-			Value:     ev.Value,
-		}
-	})
+	// Samples is how many valid per-minute samples Value averages (0 for a
+	// scalar reading).
+	Samples int    `json:"samples,omitempty"`
+	Source  string `json:"source,omitempty"`
 }
 
 // ZeppReadinessEvent is one daily readiness score.

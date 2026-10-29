@@ -307,13 +307,15 @@ func TestWellnessSyncHRVWindowCoversDayBeforeOldest(t *testing.T) {
 	ts := time.Date(2026, 8, 9, 20, 0, 0, 0, ny).UnixMilli()
 	fake := &syncFake{existing: `[]`, hrvBody: `{"items":[{"timestamp":` + itoa64(ts) + `,"value":"61.5"}]}`}
 	code, out, errOut := runSync(t, fake.serve(t), "--fields", "hrv", "--oldest", "2026-08-10", "--newest", "2026-08-10", "--json")
-	if code != 0 || len(fake.hrvQueries) != 1 {
+	if code != 0 || len(fake.hrvQueries) != 2 {
 		t.Fatalf("code=%d queries=%v stderr=%s", code, fake.hrvQueries, errOut)
 	}
 	from := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC).UnixMilli()
 	to := time.Date(2026, 8, 11, 23, 59, 59, 999000000, time.UTC).UnixMilli()
-	if q := fake.hrvQueries[0]; !strings.Contains(q, "from="+itoa64(from)) || !strings.Contains(q, "to="+itoa64(to)) {
-		t.Fatalf("hrv window query %s, want from=%d to=%d", q, from, to)
+	for _, q := range fake.hrvQueries {
+		if !strings.Contains(q, "from="+itoa64(from)) || !strings.Contains(q, "to="+itoa64(to)) {
+			t.Fatalf("hrv window query %s, want from=%d to=%d", q, from, to)
+		}
 	}
 	var parsed wellnessSyncOutput
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil || len(parsed.Changes) != 1 ||

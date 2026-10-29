@@ -21,7 +21,7 @@ func wellnessSyncCommand() *Command {
 		Name: "",
 		Usage: "wellness sync [--oldest DATE] [--newest DATE] [--fields restingHR,hrv,sleepSecs,sleepScore] " +
 			"[--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--json]",
-		Description: "Copy resting HR, HRV (rMSSD) and sleep from Zepp into intervals.icu wellness. " +
+		Description: "Copy resting HR, HRV (rMSSD: readiness sleepHRV, else the nightly HRVRMSSD sample mean) and sleep from Zepp into intervals.icu wellness. " +
 			"Dry run by default: prints the diff and writes nothing; --apply sends one PUT wellness-bulk. " +
 			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day). " +
 			"Suspected partial sleep sync: when intervals.icu has sleepSecs below half of Zepp's (e.g. about 1.6 h against a full night), " +
@@ -256,14 +256,19 @@ func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, old
 		if wantsField(fields, icu.SyncFieldHRV) {
 			from, _ := time.Parse(time.DateOnly, oldest)
 			to, _ := time.Parse(time.DateOnly, newest)
-			got, err := zc.HRVRMSSDDays(ctx, from.AddDate(0, 0, -1).Format(time.DateOnly), to.AddDate(0, 0, 1).Format(time.DateOnly))
-			if errors.Is(err, icu.ErrZeppUnauthorized) {
-				return err
+			hrvFrom, hrvTo := from.AddDate(0, 0, -1).Format(time.DateOnly), to.AddDate(0, 0, 1).Format(time.DateOnly)
+			sleepHRV, errSleep := zc.SleepHRVDays(ctx, hrvFrom, hrvTo)
+			if errors.Is(errSleep, icu.ErrZeppUnauthorized) {
+				return errSleep
 			}
-			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("zepp hrv failed: %v", err))
+			samples, errSamples := zc.HRVRMSSDDays(ctx, hrvFrom, hrvTo)
+			if errors.Is(errSamples, icu.ErrZeppUnauthorized) {
+				return errSamples
 			}
-			hrv = got
+			if errSleep != nil && errSamples != nil {
+				warnings = append(warnings, fmt.Sprintf("zepp hrv failed: %v; %v", errSleep, errSamples))
+			}
+			hrv = append(sleepHRV, samples...)
 		}
 		days = icu.BuildZeppWellnessDays(band, hrv, loc, oldest, newest)
 
