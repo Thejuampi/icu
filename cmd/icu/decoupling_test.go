@@ -53,6 +53,15 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 		},
 		"zoneTimes": []any{map[string]any{"id": "Z1", "max": 55}, map[string]any{"id": "Z2", "max": 75}},
 	}
+	// No zoneTimes: 62/68/72 % FTP are three raw targets but one athlete
+	// zone (Z2 56-75 %), so it is steady only with the sport-settings zones.
+	sameZoneDoc := map[string]any{"steps": []any{
+		map[string]any{"duration": 600, "ramp": true, "power": map[string]any{"start": 50, "end": 65, "units": "%ftp"}},
+		map[string]any{"duration": 1200, "power": map[string]any{"value": 62, "units": "%ftp"}},
+		map[string]any{"duration": 1200, "power": map[string]any{"value": 68, "units": "%ftp"}},
+		map[string]any{"duration": 1200, "power": map[string]any{"value": 72, "units": "%ftp"}},
+		map[string]any{"duration": 600, "power": map[string]any{"value": 50, "units": "%ftp"}},
+	}}
 	fake.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet {
 			t.Errorf("non-GET request %s %s", request.Method, request.URL.Path)
@@ -71,12 +80,14 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 				minutes = 6
 			}
 			_ = json.NewEncoder(writer).Encode(synthStreamsJSON(minutes))
+		case strings.HasSuffix(path, "/sport-settings/Ride"):
+			_ = json.NewEncoder(writer).Encode(map[string]any{"ftp": 250, "powerZones": []int{55, 75, 90, 105, 120, 150, 999}})
 		case strings.Contains(path, "/events/"):
 			fake.eventCalls.Add(1)
 			_ = json.NewEncoder(writer).Encode(map[string]any{"id": 77, "workoutDoc": workoutDoc})
 		case strings.HasSuffix(path, "/events"):
 			fake.eventCalls.Add(1)
-			_ = json.NewEncoder(writer).Encode([]map[string]any{{"id": 77, "workoutDoc": workoutDoc}, {"id": 78}, {"id": 79, "workoutDoc": wavesDoc}})
+			_ = json.NewEncoder(writer).Encode([]map[string]any{{"id": 77, "workoutDoc": workoutDoc}, {"id": 78}, {"id": 79, "workoutDoc": wavesDoc}, {"id": 80, "workoutDoc": sameZoneDoc}})
 		case strings.HasSuffix(path, "/activities"):
 			fake.historyCalls.Add(1)
 			_ = json.NewEncoder(writer).Encode([]map[string]any{
@@ -85,12 +96,21 @@ func newDecouplingFake(t *testing.T) (*decouplingFake, *icu.Client) {
 				{"id": "h3", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.04},
 				{"id": "h4", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.06},
 				{"id": "h5", "type": "Ride", "pairedEventId": 77, "icuVariabilityIndex": 1.08},
+				// Interval-paired and unpaired rides must not enter the
+				// steady-only VI cutoff (it would rise well above 1.12).
+				{"id": "h6", "type": "Ride", "pairedEventId": 79, "icuVariabilityIndex": 1.6},
+				{"id": "h7", "type": "Ride", "pairedEventId": 79, "icuVariabilityIndex": 1.7},
+				{"id": "h8", "type": "Ride", "icuVariabilityIndex": 1.8},
+				{"id": "h9", "type": "Ride", "icuVariabilityIndex": 1.9},
 			})
 		case strings.Contains(path, "/activity/"):
 			id := path[strings.LastIndex(path, "/")+1:]
 			paired := 77
 			if strings.Contains(id, "waves") {
 				paired = 79
+			}
+			if strings.Contains(id, "samezone") {
+				paired = 80
 			}
 			_ = json.NewEncoder(writer).Encode(map[string]any{
 				"id": id, "name": "Z2", "type": "Ride", "decoupling": 8.26, "movingTime": 5400,
@@ -293,6 +313,13 @@ func TestActivityDecouplingCommand(t *testing.T) {
 	if gated["decoupling"] != 8.26 || gated["decouplingSource"] != icu.DecouplingSourceAPI ||
 		gated["streamsDecoupling"] != nil || gated["streamsStatus"] != icu.DecouplingStatusNotMeasurable {
 		t.Fatalf("gated output = %v", gated)
+	}
+
+	// Command-side zone fallback: the athlete's sport-settings zones classify
+	// a doc without zoneTimes (raw targets would read it as intervals).
+	sameZone := runDecouplingCommand(t, client, []string{"isamezone"}, map[string]string{})
+	if zoneSummary, _ := sameZone["summary"].(map[string]any); zoneSummary["workoutKind"] != icu.DecouplingWorkoutSteady {
+		t.Fatalf("same-zone summary = %v, want steady via athlete zones", sameZone["summary"])
 	}
 
 	streams := runDecouplingCommand(t, client, []string{"i9"}, map[string]string{decouplingSourceFlag: "streams"})

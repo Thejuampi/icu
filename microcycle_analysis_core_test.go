@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -474,4 +475,22 @@ func microcycleContainsString(values []string, want string) bool {
 	}
 
 	return false
+}
+
+// The CLI no longer falls back to the system zone: default_utc is flagged.
+func TestAnalyzeMicrocycleUTCFallbackIsFlagged(t *testing.T) {
+	t.Parallel()
+
+	got := icu.AnalyzeMicrocycle(nil, nil, nil, nil, &icu.MicrocycleOptions{
+		StartDate:      "2026-06-08",
+		EndDate:        "2026-06-14",
+		Timezone:       icu.DefaultAnalysisTimezone,
+		TimezoneSource: icu.DefaultAnalysisTimezoneSource,
+		Now:            time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC),
+		SportType:      "Ride",
+	})
+
+	if got.DataQuality.Timezone != "utc_fallback" || !slices.Contains(got.DataQuality.Warnings, "missing athlete timezone; using UTC") {
+		t.Fatalf("quality = %+v", got.DataQuality)
+	}
 }

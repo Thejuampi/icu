@@ -1613,7 +1613,7 @@ func addCurrentTrainingStateToHistory(
 	history.CurrentCTL = analysis.Load.LatestCTL
 	history.CurrentATL = analysis.Load.LatestATL
 	history.CurrentTSB = analysis.Load.LatestForm
-	history.CurrentDecoupling = analysis.Durability.AverageDecoupling
+	history.CurrentDecoupling = analysis.Durability.APIAverageDecoupling()
 	history.CurrentHotSessions = analysis.Environment.HotSessions
 	history.CurrentStateSource = analysis.State.Source
 	if history.CurrentCTL != 0 || history.CurrentATL != 0 {
