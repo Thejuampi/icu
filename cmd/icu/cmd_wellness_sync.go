@@ -72,7 +72,9 @@ type wellnessSyncOutput struct {
 	// HRVSamplesInfo lists days with HRVRMSSD samples but no readiness
 	// sleepHRV. Information only: their mean is never written.
 	HRVSamplesInfo []icu.ZeppWellnessDay `json:"hrvSamplesInfo"`
-	// Notes are non-failing messages (printed to stderr as "note: ...").
+	// Notes are run-level, non-failing messages (printed to stderr as
+	// "note: ..."); always [] in JSON when there are none. Not to be confused
+	// with the per-row Note of a change (e.g. suspected-partial-sync).
 	Notes []string `json:"notes"`
 }
 

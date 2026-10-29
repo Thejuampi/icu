@@ -646,3 +646,22 @@ func TestWellnessSyncReadinessFailureSkipsHRVWrites(t *testing.T) {
 		t.Fatalf("all fields: code=%d puts=%v stderr=%s", code, fake.puts, errOut)
 	}
 }
+
+// Top-level notes in --json: [] on success, one entry on an HRVRMSSD failure.
+//
+//nolint:paralleltest // sets env
+func TestWellnessSyncJSONNotes(t *testing.T) {
+	fake := &syncFake{existing: syncExisting}
+	code, out, _ := runSync(t, fake.serve(t), "--fields", "hrv", "--json")
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &raw); code != 0 || err != nil || string(raw["notes"]) != "[]" {
+		t.Fatalf("success: code=%d notes=%s err=%v", code, raw["notes"], err)
+	}
+	fake = &syncFake{existing: syncExisting, failEvent: "HRVRMSSD"}
+	code, out, _ = runSync(t, fake.serve(t), "--fields", "hrv", "--json")
+	var parsed wellnessSyncOutput
+	if err := json.Unmarshal([]byte(out), &parsed); code != 0 || err != nil || len(parsed.Notes) != 1 ||
+		!strings.Contains(parsed.Notes[0], "HRVRMSSD samples failed") {
+		t.Fatalf("failure: code=%d notes=%q err=%v", code, parsed.Notes, err)
+	}
+}
