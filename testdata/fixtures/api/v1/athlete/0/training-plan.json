@@ -34,7 +34,7 @@
     "rollout_weeks": null,
     "shareToken": null,
     "sharedWithCount": 0,
-    "start_date_local": "2026-06-01T00:00:00",
+    "start_date_local": "2026-05-04T00:00:00",
     "starting_atl": null,
     "starting_ctl": null,
     "type": "PLAN",
@@ -45,6 +45,6 @@
   },
   "training_plan_alias": null,
   "training_plan_id": 827693,
-  "training_plan_last_applied": "2026-05-31T18:06:30.644+00:00",
-  "training_plan_start_date": "2026-06-01"
+  "training_plan_last_applied": "2026-05-03T18:00:00.000+00:00",
+  "training_plan_start_date": "2026-05-04"
 }

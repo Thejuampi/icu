@@ -1,5 +1,5 @@
 {
-  "analyzed": "2026-10-27T23:36:01.266+00:00",
+  "analyzed": "2026-09-29T23:00:00.000+00:00",
   "icu_groups": null,
   "icu_intervals": [
     {
@@ -33,7 +33,7 @@
       "average_watts": 149,
       "average_watts_alt": 151,
       "average_watts_alt_acc": 151,
-      "average_watts_kg": 1.83,
+      "average_watts_kg": 2.046703,
       "average_weather_temp": null,
       "average_wind_gust": null,
       "average_wind_speed": null,
@@ -59,7 +59,7 @@
       "max_speed": 31.264,
       "max_torque": 451.54532,
       "max_watts": 622,
-      "max_watts_kg": 7.67,
+      "max_watts_kg": 8.543956,
       "min_altitude": 7,
       "min_cadence": 0,
       "min_heartrate": 96,

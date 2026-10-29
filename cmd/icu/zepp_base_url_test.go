@@ -151,3 +151,24 @@ func TestZeppAuthRefusesPlainHTTPRemoteBeforeAnyRequest(t *testing.T) {
 		t.Fatalf("code=%d stderr=%q", code, stderr.String())
 	}
 }
+
+func TestIsLoopbackHost(t *testing.T) {
+	t.Parallel()
+
+	for host, want := range map[string]bool{
+		"localhost":   true,
+		"127.0.0.1":   true,
+		"127.0.0.2":   true,
+		"::1":         true,
+		"10.0.0.5":    false,
+		"192.168.1.2": false,
+		"172.16.0.1":  false,
+		"0.0.0.0":     false,
+		"zepp.com":    false,
+		"":            false,
+	} {
+		if got := isLoopbackHost(host); got != want {
+			t.Errorf("isLoopbackHost(%q) = %v, want %v", host, got, want)
+		}
+	}
+}

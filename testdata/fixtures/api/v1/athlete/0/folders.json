@@ -37,7 +37,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-12T00:41:43.545+00:00",
+        "updated": "2025-12-15T00:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 228,
           "description": "3x12min Sweet Spot intervals @ 90–92% FTP, 4 min recovery between.  \nZ2 filler before and after. Maintain steady cadence 85–90 rpm.",
@@ -233,7 +233,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-12T00:43:46.331+00:00",
+        "updated": "2025-12-15T00:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 174,
           "description": "Easy recovery ride. Keep cadence smooth and HR below 130 bpm.",
@@ -408,7 +408,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-12T00:44:01.892+00:00",
+        "updated": "2025-12-15T00:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 169,
           "description": "Easy recovery spin @55-60% FTP, keep cadence >90 rpm.",
@@ -602,7 +602,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-18T21:53:38.766+00:00",
+        "updated": "2026-04-20T21:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 180,
           "distance": 0,
@@ -784,7 +784,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-18T21:43:15.738+00:00",
+        "updated": "2026-04-20T21:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 183,
           "distance": 0,
@@ -974,7 +974,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-12T00:42:10.434+00:00",
+        "updated": "2025-12-15T00:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 218,
           "description": "2x20min Tempo intervals at 80% FTP, with 5min recovery between. FTP 283W.",
@@ -1173,7 +1173,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-21T04:05:16.613+00:00",
+        "updated": "2025-12-24T04:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 225,
           "description": "Muscular endurance session. Controlled effort, RPE 7/10.",
@@ -1355,7 +1355,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-12T00:42:27.760+00:00",
+        "updated": "2025-12-15T00:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 223,
           "description": "3x12min Sweet Spot intervals @90-92% FTP, 5 min recovery between. Z2 filler around.",
@@ -1549,7 +1549,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-12T00:40:45.661+00:00",
+        "updated": "2025-12-15T00:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 227,
           "description": "  2x20min Tempo with 40s surges @110% every 4min.  \n  Focus on smooth power, breathing control, and muscular tension management.  \n  FTP 294W → Tempo target 270W, surges 320–325W.",
@@ -1787,7 +1787,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-12T00:42:19.036+00:00",
+        "updated": "2025-12-15T00:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 216,
           "description": "First VO2max session of the block. Target HR >90% max on last reps.\n  FTP 294W, target 335–340W.",
@@ -1981,7 +1981,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-12T00:42:00.962+00:00",
+        "updated": "2025-12-15T00:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 221,
           "description": "  VO2max progression session.  \n  Focus on full oxygen uptake and cadence control 90 rpm.  \n  FTP 294W → target 322–338W.  \n  Target HR > 90% max on last two reps.",
@@ -2179,7 +2179,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-01-21T04:05:30.340+00:00",
+        "updated": "2025-12-24T04:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 232,
           "description": "Perform only if HRV ≥ 45 ms and RHR ≤ 50 bpm. Otherwise, substitute a 60 TSS Z2 ride.",
@@ -2381,7 +2381,7 @@
         "joules": 2352600,
         "joules_above_ftp": 0,
         "moving_time": 12000,
-        "name": "W1 Sat 2026-06-06 ALT 3h20 Z2 Durable",
+        "name": "W1 Sat 2026-05-09 ALT 3h20 Z2 Durable",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -2394,7 +2394,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:08.882+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 196,
           "description": "Durability-first long ride. Fuel from the first 30m. On cold days use power and breathing first; only cut power if HR keeps climbing out of proportion.",
@@ -2558,7 +2558,7 @@
         "joules": 1029000,
         "joules_above_ftp": 0,
         "moving_time": 5400,
-        "name": "W1 Sun 2026-06-07 ALT 90m Aerobic Float",
+        "name": "W1 Sun 2026-05-10 ALT 90m Aerobic Float",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -2571,7 +2571,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:09.162+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 191,
           "description": "Keep this aerobic. Low to mid Z2, no sneaky tempo. If Saturday left residue, ride easier not harder.",
@@ -2735,7 +2735,7 @@
         "joules": 1249350,
         "joules_above_ftp": 0,
         "moving_time": 6000,
-        "name": "W1 Thu 2026-06-04 ALT 3x15 Tempo",
+        "name": "W1 Thu 2026-05-07 ALT 3x15 Tempo",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -2748,7 +2748,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:08.234+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 208,
           "description": "Steady pressure without turning it into a threshold chase. If drift rises early on a cold or stress-heavy day, cap the final block.",
@@ -2928,7 +2928,7 @@
         "joules": 851490,
         "joules_above_ftp": 27360,
         "moving_time": 4200,
-        "name": "W1 Tue 2026-06-02 ALT 3x4 VO2Max",
+        "name": "W1 Tue 2026-05-05 ALT 3x4 VO2Max",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -2941,7 +2941,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:07.741+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 203,
           "description": "3x4m VO2 re-entry. Use power and RPE first; on cold/stress days do not overreact to a small HR rise.",
@@ -3120,7 +3120,7 @@
         "joules": 2548050,
         "joules_above_ftp": 0,
         "moving_time": 12900,
-        "name": "W2 Sat 2026-06-13 ALT 3h35 Z2 Durable",
+        "name": "W2 Sat 2026-05-16 ALT 3h35 Z2 Durable",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -3133,7 +3133,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:10.360+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 198,
           "description": "Long build endurance. First half patient, second half slightly firmer but still aerobic. Fuel early and regularly.",
@@ -3297,7 +3297,7 @@
         "joules": 1107150,
         "joules_above_ftp": 0,
         "moving_time": 5700,
-        "name": "W2 Sun 2026-06-14 ALT 95m Aerobic Endurance",
+        "name": "W2 Sun 2026-05-17 ALT 95m Aerobic Endurance",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -3310,7 +3310,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:10.649+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 194,
           "description": "Aerobic extension. Smooth cadence, low strain, stay under the point where HR drift starts to run the ride.",
@@ -3466,7 +3466,7 @@
         "joules": 1322190,
         "joules_above_ftp": 0,
         "moving_time": 6300,
-        "name": "W2 Thu 2026-06-11 ALT 2x20 Sweet Spot",
+        "name": "W2 Thu 2026-05-14 ALT 2x20 Sweet Spot",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -3479,7 +3479,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:10.068+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 210,
           "description": "Muscular endurance day. Sit on the work, do not surge it. If decoupling rises early despite fueling, keep it sweet spot and skip the top end.",
@@ -3659,7 +3659,7 @@
         "joules": 939810,
         "joules_above_ftp": 39360,
         "moving_time": 4500,
-        "name": "W2 Tue 2026-06-09 ALT 4x4 VO2Max",
+        "name": "W2 Tue 2026-05-12 ALT 4x4 VO2Max",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -3672,7 +3672,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:09.799+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 209,
           "description": "Build week VO2. Four repeatable reps, no hero first rep. If HRV is suppressed or stress is high, replace with 90m Z2.",
@@ -3851,7 +3851,7 @@
         "joules": 2729400,
         "joules_above_ftp": 0,
         "moving_time": 13800,
-        "name": "W3 Sat 2026-06-20 ALT 3h50 Z2 Durable+",
+        "name": "W3 Sat 2026-05-23 ALT 3h50 Z2 Durable+",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -3864,7 +3864,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:11.498+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 198,
           "description": "Longest aerobic day of the block. Fuel aggressively, stay relaxed, and only firm the last hour if the drift is under control.",
@@ -4028,7 +4028,7 @@
         "joules": 1288500,
         "joules_above_ftp": 0,
         "moving_time": 6600,
-        "name": "W3 Sun 2026-06-21 ALT 110m Aerobic Endurance",
+        "name": "W3 Sun 2026-05-24 ALT 110m Aerobic Endurance",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -4041,7 +4041,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:11.771+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 195,
           "description": "Aerobic carryover ride. Mid Z2 feel, never heavy. If Saturday hit hard, make this 75-90m easy aerobic instead.",
@@ -4197,7 +4197,7 @@
         "joules": 1419450,
         "joules_above_ftp": 0,
         "moving_time": 6420,
-        "name": "W3 Thu 2026-06-18 ALT 3x18 Sweet Spot",
+        "name": "W3 Thu 2026-05-21 ALT 3x18 Sweet Spot",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -4210,7 +4210,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:11.217+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 221,
           "description": "Heaviest steady day of the block. Stay seated and smooth; if decoupling or stress is too high, keep it closer to 90-92% than threshold.",
@@ -4390,7 +4390,7 @@
         "joules": 951330,
         "joules_above_ftp": 45600,
         "moving_time": 4380,
-        "name": "W3 Tue 2026-06-16 ALT 4x5 VO2Max",
+        "name": "W3 Tue 2026-05-19 ALT 4x5 VO2Max",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -4403,7 +4403,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:10.914+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 217,
           "description": "Peak build VO2. The goal is repeatable oxygen uptake, not maximal collapse. If markers are yellow, reduce to 3x5 or replace with 90m Z2.",
@@ -4582,7 +4582,7 @@
         "joules": 1779600,
         "joules_above_ftp": 0,
         "moving_time": 9000,
-        "name": "W4 Sat 2026-06-27 ALT 2h30 Z2 Reset",
+        "name": "W4 Sat 2026-05-30 ALT 2h30 Z2 Reset",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -4595,7 +4595,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:12.638+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 198,
           "description": "Shorter long ride. Keep it genuinely aerobic and arrive at Sunday fresher than usual.",
@@ -4759,7 +4759,7 @@
         "joules": 605400,
         "joules_above_ftp": 0,
         "moving_time": 3600,
-        "name": "W4 Sun 2026-06-28 ALT 60m Recovery",
+        "name": "W4 Sun 2026-05-31 ALT 60m Recovery",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -4772,7 +4772,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:12.923+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 168,
           "description": "Very easy. If it feels like training, back off. This is to finish the block absorbable.",
@@ -4928,7 +4928,7 @@
         "joules": 871560,
         "joules_above_ftp": 0,
         "moving_time": 4320,
-        "name": "W4 Thu 2026-06-25 ALT 2x12 Tempo Reset",
+        "name": "W4 Thu 2026-05-28 ALT 2x12 Tempo Reset",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -4941,7 +4941,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:12.343+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 202,
           "description": "Light steady work only. The point is rhythm, not fatigue. If legs are flat, keep it all aerobic.",
@@ -5121,7 +5121,7 @@
         "joules": 841860,
         "joules_above_ftp": 34200,
         "moving_time": 3960,
-        "name": "W4 Tue 2026-06-23 ALT 5x3 VO2 Tune-Up",
+        "name": "W4 Tue 2026-05-26 ALT 5x3 VO2 Tune-Up",
         "plan_applied": null,
         "sub_type": null,
         "tags": [
@@ -5134,7 +5134,7 @@
         ],
         "time": null,
         "type": "Ride",
-        "updated": "2026-05-31T17:31:12.057+00:00",
+        "updated": "2026-05-03T17:00:00.000+00:00",
         "workout_doc": {
           "average_watts": 213,
           "description": "Deload week tune-up. Only do this if HRV and readiness are normal. Otherwise ride 75-90m Z2 and protect recovery.",
@@ -5308,7 +5308,7 @@
     "rollout_weeks": null,
     "shareToken": null,
     "sharedWithCount": 0,
-    "start_date_local": "2026-06-01T00:00:00",
+    "start_date_local": "2026-05-04T00:00:00",
     "starting_atl": null,
     "starting_ctl": null,
     "type": "PLAN",

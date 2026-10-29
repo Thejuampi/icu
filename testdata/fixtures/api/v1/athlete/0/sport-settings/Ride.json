@@ -14,7 +14,7 @@
   "calendar_tile_activity_panel_id": null,
   "cho_used_calc": "ROTHSCHILD_2024",
   "cooldown_time": 600,
-  "created": "2025-11-30T22:42:48.940+00:00",
+  "created": "2025-11-02T22:00:00.000+00:00",
   "custom_field_ids": [],
   "custom_field_values": {},
   "custom_zones_ids": [],
@@ -140,7 +140,7 @@
     "Cyclocross"
   ],
   "update_activity_name_from_workout": true,
-  "updated": "2026-10-28T00:17:00.137+00:00",
+  "updated": "2026-09-30T00:00:00.000+00:00",
   "use_distance_for_intervals": false,
   "use_gap_zone_times": false,
   "use_laps_for_power_intervals": false,

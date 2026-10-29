@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ type recorder struct {
 	dir      string
 	client   *http.Client
 	log      io.Writer
+	shift    dateShift
 }
 
 func newRecorder(upstream, dir string, log io.Writer) *recorder {
@@ -39,6 +41,7 @@ func newRecorder(upstream, dir string, log io.Writer) *recorder {
 		dir:      dir,
 		client:   &http.Client{Timeout: upstreamTimeout, CheckRedirect: sameOriginRedirect},
 		log:      log,
+		shift:    randomDateShift(),
 	}
 }
 
@@ -78,7 +81,9 @@ func (rec *recorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if resp.StatusCode == http.StatusOK && json.Valid(body) {
-		body = anonymizeJSON(body)
+		// One random shift per capture session; captures from different
+		// sessions are not date-consistent with each other.
+		body = rec.shift.shiftJSON(anonymizeJSON(body))
 		if saveErr := rec.save(fixtureKey(r.URL.Path), body); saveErr != nil {
 			fmt.Fprintf(rec.log, "icu-mock record: %v\n", saveErr)
 		}
@@ -116,6 +121,12 @@ func (rec *recorder) save(key string, body []byte) error {
 
 	if err := root.WriteFile(rel, prettyJSON(body), 0o600); err != nil {
 		return fmt.Errorf("write fixture: %w", err)
+	}
+
+	// Recorded bodies are already shifted, so a later -anonymize must not
+	// shift them again.
+	if err := root.WriteFile(shiftMarker, []byte(shiftMarkerText), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", shiftMarker, err)
 	}
 
 	return nil
@@ -303,17 +314,23 @@ func anonymize(value any) any {
 			}
 
 			if isWeightKey(key) {
-				if _, ok := inner.(json.Number); ok {
-					typed[key] = anonWeight
+				if replacement, ok := fuzzWeight(inner); ok {
+					typed[key] = replacement
 
 					continue
 				}
 			}
 
+			if isIDKey(key) {
+				typed[key] = remapIDValue(inner)
+
+				continue
+			}
+
 			typed[key] = anonymize(inner)
 		}
 
-		rescaleWattsPerKg(typed)
+		rescalePerKg(typed)
 
 		if curves, ok := typed["activities"].(map[string]any); ok {
 			typed["activities"] = anonymizeCurveActivities(curves)
@@ -337,10 +354,99 @@ func anonymize(value any) any {
 			return remapExternalID(typed)
 		}
 
-		return typed
+		return roundTimeOfDay(typed)
 	default:
 		return value
 	}
+}
+
+// clockTime matches the time of day of a full timestamp string.
+var clockTime = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}):(\d{2})(:\d{2}(\.\d+)?)?`)
+
+// roundTimeOfDay truncates a timestamp to the hour (keeping its layout and
+// zone suffix), so exact ride start times are not published. Idempotent.
+func roundTimeOfDay(value string) string {
+	match := clockTime.FindStringSubmatchIndex(value)
+	if match == nil {
+		return value
+	}
+
+	head := value[:match[3]]
+	rest := []byte(value[match[3]:match[1]])
+
+	for i, r := range rest {
+		if r >= '0' && r <= '9' {
+			rest[i] = '0'
+		}
+	}
+
+	return head + string(rest) + value[match[1]:]
+}
+
+// fuzzWeight replaces a numeric (or numeric-string) weight with anonWeight.
+func fuzzWeight(value any) (any, bool) {
+	switch typed := value.(type) {
+	case json.Number:
+		return anonWeight, true
+	case string:
+		if _, err := strconv.ParseFloat(typed, 64); err == nil {
+			return string(anonWeight), true
+		}
+	}
+
+	return nil, false
+}
+
+// syntheticID matches the fake 9-digit ids this repo uses on purpose
+// (events 800000xxx, remapped ids 700000xxx).
+var syntheticID = regexp.MustCompile(`^[78]000\d{5}$`)
+
+// longNumericID matches an all-digit id of 9+ digits, optionally negative.
+var longNumericID = regexp.MustCompile(`^-?\d{9,}$`)
+
+func isIDKey(key string) bool {
+	lower := strings.ToLower(key)
+
+	return lower == "id" || lower == "ids" || strings.HasSuffix(lower, "_id") || strings.HasSuffix(lower, "_ids") ||
+		strings.HasSuffix(key, "Id") || strings.HasSuffix(key, "Ids")
+}
+
+func isLongNumericID(value string) bool {
+	return longNumericID.MatchString(value) && !syntheticID.MatchString(value)
+}
+
+// remapIDValue remaps 9+ digit numeric ids held in id-like keys (numbers or
+// strings, also inside arrays) to stable synthetic 700000xxx ids.
+func remapIDValue(value any) any {
+	switch typed := value.(type) {
+	case json.Number:
+		if isLongNumericID(string(typed)) {
+			return json.Number(remapNumericID(string(typed)))
+		}
+	case string:
+		if isLongNumericID(typed) {
+			return remapNumericID(typed)
+		}
+
+		return anonymize(typed)
+	case []any:
+		for i, inner := range typed {
+			typed[i] = remapIDValue(inner)
+		}
+
+		return typed
+	default:
+		return anonymize(value)
+	}
+
+	return value
+}
+
+func remapNumericID(id string) string {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(id))
+
+	return fmt.Sprintf("7000%05d", hash.Sum32()%100_000)
 }
 
 // anonWeight is the single fuzzed body weight written over every weight
@@ -350,18 +456,12 @@ const anonWeight = json.Number("72.8")
 // wkgPrecision rounds rescaled watts_per_kg to 6 decimals, as the API does.
 const wkgPrecision = 1e6
 
-// curveDateShift moves the dates of curve activities that still carry an
-// external (Strava) id, so their real ride dates are not published. It is
-// applied together with the id remap, which keeps re-runs idempotent.
-const curveDateShift = -9 * 24 * time.Hour
-
+// isWeightKey matches any key naming a body weight; keys about watts
+// ("icu_weighted_avg_watts") are power, not weight.
 func isWeightKey(key string) bool {
-	switch strings.ToLower(key) {
-	case "weight", "icu_weight":
-		return true
-	}
+	lower := strings.ToLower(key)
 
-	return false
+	return strings.Contains(lower, "weight") && !strings.Contains(lower, "watts")
 }
 
 // isExternalID matches all-digit ids of 10+ digits (Strava activity ids).
@@ -389,12 +489,12 @@ func remapExternalID(id string) string {
 }
 
 // anonymizeCurveActivities rewrites the activity map embedded in power and
-// HR curve responses: keys and ids are remapped, names replaced and the
-// dates of not-yet-remapped entries shifted.
+// HR curve responses: keys and ids are remapped and names replaced. Dates
+// are moved by the shared date shift (see shift.go).
 func anonymizeCurveActivities(curves map[string]any) map[string]any {
 	out := make(map[string]any, len(curves))
 	for key, inner := range curves {
-		external := isExternalID(key)
+		external := isExternalID(key) || isLongNumericID(key)
 		if external {
 			key = remapExternalID(key)
 		}
@@ -402,12 +502,6 @@ func anonymizeCurveActivities(curves map[string]any) map[string]any {
 		if activity, ok := inner.(map[string]any); ok {
 			activity["id"] = key
 			activity["name"] = "Activity " + key
-
-			if date, ok := activity["start_date_local"].(string); ok && external {
-				if parsed, err := time.Parse("2006-01-02T15:04:05", date); err == nil {
-					activity["start_date_local"] = parsed.Add(curveDateShift).Format("2006-01-02T15:04:05")
-				}
-			}
 		}
 
 		out[key] = inner
@@ -418,12 +512,20 @@ func anonymizeCurveActivities(curves map[string]any) map[string]any {
 
 // anonymizeDir rewrites every fixture under dir through the anonymizer.
 // Anonymization is idempotent, so it is safe to re-run after rule changes.
+// The first run also applies one random date shift to the whole directory
+// and drops shiftMarker, so later runs never shift (or jitter) again.
 func anonymizeDir(dir string) error {
+	return anonymizeDirWith(dir, randomDateShift())
+}
+
+func anonymizeDirWith(dir string, shift dateShift) error {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return fmt.Errorf("open fixture dir: %w", err)
 	}
 	defer root.Close()
+
+	doShift := !dirShifted(root)
 
 	walkErr := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil || entry.IsDir() || !strings.HasSuffix(name, ".json") {
@@ -435,7 +537,12 @@ func anonymizeDir(dir string) error {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 
-		if err := root.WriteFile(name, prettyJSON(anonymizeJSON(body)), 0o600); err != nil {
+		body = anonymizeJSON(body)
+		if doShift {
+			body = shift.shiftJSON(body)
+		}
+
+		if err := root.WriteFile(name, prettyJSON(body), 0o600); err != nil {
 			return fmt.Errorf("write %s: %w", name, err)
 		}
 
@@ -443,6 +550,12 @@ func anonymizeDir(dir string) error {
 	})
 	if walkErr != nil {
 		return fmt.Errorf("anonymize %s: %w", dir, walkErr)
+	}
+
+	if doShift {
+		if err := root.WriteFile(shiftMarker, []byte(shiftMarkerText), 0o600); err != nil {
+			return fmt.Errorf("write %s: %w", shiftMarker, err)
+		}
 	}
 
 	return nil
@@ -472,38 +585,64 @@ func decodeJSON(body []byte, value any) error {
 	return nil
 }
 
-// rescaleWattsPerKg recomputes watts_per_kg from watts and the fuzzed weight,
-// so the real weight cannot be derived from the ratio.
-func rescaleWattsPerKg(obj map[string]any) {
-	watts, ok := obj["watts"].([]any)
-	if !ok {
-		return
+// perKgBase returns the absolute-power key a per-kg key is derived from:
+// watts_per_kg -> watts, average_watts_kg -> average_watts, eftpPerKg -> eftp.
+func perKgBase(key string) (string, bool) {
+	for _, suffix := range []string{"_per_kg", "PerKg", "_kg"} {
+		if base, ok := strings.CutSuffix(key, suffix); ok && base != "" && !isWeightKey(key) {
+			return base, true
+		}
 	}
 
-	if _, ok := obj["watts_per_kg"].([]any); !ok {
-		return
-	}
+	return "", false
+}
 
+// rescalePerKg recomputes every per-kg value from its absolute power and the
+// fuzzed weight, so the real weight cannot be derived from the ratio.
+func rescalePerKg(obj map[string]any) {
 	weight, _ := strconv.ParseFloat(string(anonWeight), 64)
-	perKg := make([]any, len(watts))
 
-	for i, raw := range watts {
-		number, ok := raw.(json.Number)
-		if !ok {
-			perKg[i] = raw
-
+	for key, perKg := range obj {
+		base, ok := perKgBase(key)
+		if !ok || perKg == nil {
 			continue
+		}
+
+		if power, ok := obj[base]; ok {
+			obj[key] = divideBy(power, perKg, weight)
+		}
+	}
+}
+
+// divideBy mirrors the shape of perKg (number or nested arrays), replacing
+// each number with power/weight; entries without a matching power are kept.
+func divideBy(power, perKg any, weight float64) any {
+	switch typed := perKg.(type) {
+	case json.Number:
+		number, ok := power.(json.Number)
+		if !ok {
+			return perKg
 		}
 
 		value, err := number.Float64()
 		if err != nil {
-			perKg[i] = raw
-
-			continue
+			return perKg
 		}
 
-		perKg[i] = json.Number(strconv.FormatFloat(math.Round(value/weight*wkgPrecision)/wkgPrecision, 'f', -1, 64))
-	}
+		return json.Number(strconv.FormatFloat(math.Round(value/weight*wkgPrecision)/wkgPrecision, 'f', -1, 64))
+	case []any:
+		powers, ok := power.([]any)
+		if !ok || len(powers) != len(typed) {
+			return perKg
+		}
 
-	obj["watts_per_kg"] = perKg
+		out := make([]any, len(typed))
+		for i := range typed {
+			out[i] = divideBy(powers[i], typed[i], weight)
+		}
+
+		return out
+	default:
+		return perKg
+	}
 }
