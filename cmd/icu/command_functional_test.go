@@ -528,8 +528,8 @@ func athleteAndAnalysisCommandCases() []commandCase {
 	return []commandCase{
 		commandFlow("athlete show", "athlete", "show", nil, nil,
 			http.MethodGet, "/api/v1/athlete/0", "Tester"),
-		commandFlow("athlete update", "athlete", "update", nil, flags("weight", "80", "height", "1.81", "name", "Tester"),
-			http.MethodPut, "/api/v1/athlete/0", "Tester"),
+		commandFlow("athlete update", "athlete", "update", nil, flags("weight", "80", "height", "1.81", "name", "Tester", "dry-run", "true"),
+			http.MethodGet, "/api/v1/athlete/0", "Tester"), // static fixture cannot echo writes; PUT covered in snake_writers_test.go
 		commandFlow("athlete profile", "athlete", "profile", nil, nil,
 			http.MethodGet, "/api/v1/athlete/0/profile", "Tester"),
 		commandFlow("athlete summary", "athlete", "summary", nil, flags("start", "2026-06-01", "end", "2026-06-07"),
@@ -653,8 +653,8 @@ func sportCommandCases() []commandCase {
 			http.MethodDelete, "/api/v1/athlete/0/sport-settings/1", ""),
 		commandFlow("ftp show", "ftp", "show", nil, flags("sport", "Ride"),
 			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "ftp"),
-		commandFlow("ftp update", "ftp", "update", nil, flags("sport", "Ride", "value", "285", "indoor", "true"),
-			http.MethodPut, "/api/v1/athlete/0/sport-settings/Ride", "Ride"),
+		commandFlow("ftp update", "ftp", "update", nil, flags("sport", "Ride", "value", "280", "indoor", "true"),
+			http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", "Ride"), // read-back GET follows the PUT
 	}
 }
 

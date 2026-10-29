@@ -169,7 +169,7 @@ func eventsUpdateCommand() *Command {
 
 				return writeJSON(stdout, map[string]any{
 					"id": eventID, "dryRun": true, "applied": false, "body": request.Body,
-					"changes": eventUpdateChanges(raw, request.Body), "message": "dry-run: nothing written",
+					"changes": eventUpdateChanges(raw, request.Body), "message": dryRunNothingWritten,
 				})
 			}
 			path, _, err := backupEventChecked(client, eventID, "events update", validate)

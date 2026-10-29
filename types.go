@@ -306,6 +306,11 @@ type ActivitySearchResult struct {
 	Description    string   `json:"description,omitempty"`
 }
 
+// Wellness is the CLI's read/output shape. Its JSON keys (restingHr, hrvSdnn,
+// avgSleepingHr, baevskySi) are part of the CLI output contract and stay as-is;
+// decoding the API's restingHR/hrvSDNN/... works because encoding/json matches
+// keys case-insensitively. Writes go through WellnessWrite, which uses the
+// API's exact names.
 type Wellness struct {
 	ID string `json:"id"`
 	// CTLLoad/ATLLoad are the day's load as intervals.icu feeds it into
