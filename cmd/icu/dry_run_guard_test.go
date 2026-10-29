@@ -310,10 +310,12 @@ func writeCommands() map[string]bool {
 // command) of a dry run that must exit 0 without any write.
 func dryRunCommands() map[string][]string {
 	return map[string][]string{
-		"events update": {"1", "--name", "X", "--dry-run"},
-		"events delete": {"1", "--dry-run"},
-		"events revert": {"--id", "1", "--dry-run"},
-		"sports update": {"Ride", "--ftp", "250", "--dry-run"},
+		"events update":  {"1", "--name", "X", "--dry-run"},
+		"events delete":  {"1", "--dry-run"},
+		"events revert":  {"--id", "1", "--dry-run"},
+		"sports update":  {"Ride", "--ftp", "250", "--dry-run"},
+		"athlete update": {"--weight", "70", "--dry-run"},
+		"ftp update":     {"--value", "250", "--dry-run"},
 	}
 }
 
@@ -366,6 +368,11 @@ func newGuardMock(t *testing.T) *guardMock {
 
 				return
 			}
+		}
+		if r.URL.Path == "/api/v1/athlete/i1" {
+			_, _ = w.Write([]byte(`{"id":"i1","name":"A","weight":71,"sportSettings":[{"id":1,"types":["Ride"],"ftp":200}]}`))
+
+			return
 		}
 		_, _ = w.Write([]byte(`{"id":1,"name":"Z2","type":"Ride","types":["Ride"],"ftp":200,` +
 			`"category":"WORKOUT","start_date_local":"2026-10-28T07:00:00"}`))
@@ -529,21 +536,6 @@ func TestCommandsRunAgainstMock(t *testing.T) {
 	}
 	if totalWrites == 0 {
 		t.Fatal("no write command reached the mock; the plain-run pass is not exercising writes")
-	}
-}
-
-//nolint:paralleltest // replaces newCommandClient and sets env.
-func TestAthleteUpdateDryRunRejectedWithoutRequests(t *testing.T) {
-	guardEnv(t)
-	mock := newGuardMock(t)
-	mock.phase("athlete update", false)
-	var stdout, stderr bytes.Buffer
-	code := run([]string{"icu", "athlete", "update", "--weight", "70", "--dry-run"}, &stdout, &stderr)
-	if code == 0 || !strings.Contains(stderr.String(), "unknown flag --dry-run") {
-		t.Fatalf("code=%d stderr=%q", code, stderr.String())
-	}
-	if requests, _ := mock.counts("athlete update"); requests != 0 {
-		t.Fatalf("athlete update --dry-run sent %d request(s)", requests)
 	}
 }
 

@@ -6,27 +6,27 @@ func registerCustomCommands(registry *CommandRegistry) {
 	registry.Register("custom", "list", listAllCommand[[]icu.CustomItem]("custom-item", "custom list", "List custom items."))
 	registry.Register("custom", "get", getByIDCommand[icu.CustomItem]("custom-item", "custom get <id>", "Get a custom item.", "item id", nil))
 
-	registry.Register("custom", "create", createCommand[icu.CustomItem, icu.CustomItem](
+	registry.Register("custom", "create", createCommand[icu.CustomItemWrite, icu.CustomItem](
 		"custom-item",
 		"custom create --name NAME --type FITNESS_CHART|ACTIVITY_FIELD|...",
 		"Create a custom item.",
 		nil,
-		func(flags map[string]string) icu.CustomItem {
-			return icu.CustomItem{
+		func(flags map[string]string) icu.CustomItemWrite {
+			return icu.CustomItemWrite{
 				Name: icu.StringFlag(flags, "name", ""),
 				Type: icu.StringFlag(flags, "type", ""),
 			}
 		},
 	))
 
-	registry.Register("custom", "update", updateByIDCommand[icu.CustomItem, icu.CustomItem](
+	registry.Register("custom", "update", updateByIDCommand[icu.CustomItemWrite, icu.CustomItem](
 		"custom-item",
 		"custom update <id> [--name NAME] [--type TYPE]",
 		"Update a custom item.",
 		"item id",
 		nil,
-		func(flags map[string]string) icu.CustomItem {
-			var item icu.CustomItem
+		func(flags map[string]string) icu.CustomItemWrite {
+			var item icu.CustomItemWrite
 			if v := flags["name"]; v != "" {
 				item.Name = v
 			}

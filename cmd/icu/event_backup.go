@@ -474,7 +474,7 @@ func eventsDeleteCommand() *Command {
 
 				return writeJSON(stdout, map[string]any{
 					"wouldDelete": eventID, "name": event.Name, "dryRun": true, "applied": false,
-					"message": "dry-run: nothing written",
+					"message": dryRunNothingWritten,
 				})
 			}
 			path, err := backupEvent(client, eventID, eventBackupReasonDelete)

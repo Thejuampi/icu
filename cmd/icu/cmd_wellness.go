@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"io"
+	"strings"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -20,14 +22,14 @@ func registerWellnessCommands(registry *CommandRegistry) {
 
 	registry.Register(
 		"wellness", "update",
-		updateByIDCommand[icu.Wellness, icu.Wellness](
+		updateByIDCommand[icu.WellnessWrite, icu.Wellness](
 			"wellness",
 			"wellness update <date> --weight 81 --resting-hr 50 --hrv 72.5 [--sleep-secs 28800] [--sleep-score N] [--locked]",
 			"Update wellness record for a date.",
 			"date (YYYY-MM-DD)",
 			nil,
-			func(flags map[string]string) icu.Wellness {
-				var w icu.Wellness
+			func(flags map[string]string) icu.WellnessWrite {
+				var w icu.WellnessWrite
 				if _, ok := flags["weight"]; ok {
 					w.Weight = floatFlagVal(flags, "weight", 0)
 				}
@@ -83,7 +85,16 @@ func wellnessBulkCommand() *Command {
 				return err
 			}
 
-			return wrapCommandError(client.Put("wellness-bulk", nil, nil, records, nil))
+			if warning := wellnessBulkDroppedWarning(records); warning != "" {
+				fmt.Fprintln(stderr, warning)
+			}
+
+			body := make([]icu.WellnessWrite, len(records))
+			for i := range records {
+				body[i] = icu.NewWellnessWrite(&records[i])
+			}
+
+			return wrapCommandError(client.Put("wellness-bulk", nil, nil, body, nil))
 		},
 	}
 }
@@ -103,4 +114,22 @@ func wellnessUploadCommand() *Command {
 			return wrapCommandError(client.UploadFile("wellness", "", args[0], nil, &resp))
 		},
 	}
+}
+
+// wellnessBulkDroppedWarning reports computed fields present in a bulk file
+// that WellnessWrite does not send (Intervals.icu computes them itself).
+func wellnessBulkDroppedWarning(records []icu.Wellness) string {
+	var ids []string
+	for i := range records {
+		r := &records[i]
+		if r.CTL != 0 || r.ATL != 0 || r.CTLLoad != 0 || r.ATLLoad != 0 || r.RampRate != 0 {
+			ids = append(ids, r.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("warning: wellness bulk: ignoring computed fields ctl/atl/ctlLoad/atlLoad/rampRate for %d record(s) (%s); Intervals.icu computes them",
+		len(ids), strings.Join(ids, ","))
 }
