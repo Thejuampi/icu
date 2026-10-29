@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -425,5 +426,106 @@ func TestWellnessSyncOverwriteRunSkipsSuggestion(t *testing.T) {
 	code, out, _ := runSync(t, fake.serve(t), "--overwrite")
 	if code != 0 || !strings.Contains(out, "partial sync?") || strings.Contains(out, "note:") || !strings.Contains(out, "overwrite") {
 		t.Fatalf("code=%d out=%s", code, out)
+	}
+}
+
+func TestPartialSleepSuggestionQuotingRoundTripsThroughShell(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	tz := "a b'c$(x)"
+	changes := []icu.WellnessSyncChange{{Date: "2026-08-11", Field: icu.SyncFieldSleepSecs, Note: icu.SyncNotePartialSleep}}
+	got := partialSleepSuggestions(changes, suggestionContext{timezone: tz, athleteID: "i1"})
+	if len(got) != 1 {
+		t.Fatalf("got %+v", got)
+	}
+	want := `icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore ` +
+		`--timezone 'a b'\''c$(x)' --athlete-id i1 --apply`
+	if got[0].Suggest != want {
+		t.Fatalf("suggest\n got %s\nwant %s", got[0].Suggest, want)
+	}
+	// Parse the suggestion back with a real shell: icu is replaced by a
+	// function printing one argument per line.
+	script := `icu() { for a in "$@"; do printf '%s\n' "$a"; done; }; ` + got[0].Suggest
+	out, err := exec.CommandContext(t.Context(), "sh", "-c", script).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
+	wantArgs := []string{
+		"wellness", "sync", "--oldest", "2026-08-11", "--newest", "2026-08-11", "--overwrite",
+		"--fields", "sleepSecs,sleepScore", "--timezone", tz, "--athlete-id", "i1", "--apply",
+	}
+	if strings.Join(args, "\x00") != strings.Join(wantArgs, "\x00") {
+		t.Fatalf("round trip\n got %q\nwant %q", args, wantArgs)
+	}
+}
+
+func TestRedactURL(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in, want string
+		stripped bool
+	}{
+		{"", "", false},
+		{"http://127.0.0.1:8080", "http://127.0.0.1:8080", false},
+		{"https://u:p@h.example/x?k=SECRET#frag", "https://h.example/x", true},
+		{"https://u@h.example", "https://h.example", true},
+		{"http://h.example/x?", "http://h.example/x", true},
+		{"http://h.example/%zz", "", true},
+	}
+	for _, tc := range cases {
+		got, stripped := redactURL(tc.in)
+		if got != tc.want || stripped != tc.stripped {
+			t.Errorf("redactURL(%q) = %q,%v want %q,%v", tc.in, got, stripped, tc.want, tc.stripped)
+		}
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncSuggestionRedactsURLSecrets(t *testing.T) {
+	fake := &syncFake{existing: syncExistingPartial}
+	srv := fake.serve(t)
+	withSecret := strings.Replace(srv.URL, "http://", "http://user:SECRETPW@", 1)
+	for _, asJSON := range []bool{false, true} {
+		extra := []string{"--base-url", withSecret, "--zepp-base-url", withSecret}
+		if asJSON {
+			extra = append(extra, "--json")
+		}
+		code, out, errOut := runSync(t, srv, extra...)
+		if code != 0 {
+			t.Fatalf("code=%d stderr=%s", code, errOut)
+		}
+		if strings.Contains(out+errOut, "SECRETPW") || strings.Contains(out+errOut, "user:") {
+			t.Fatalf("secret leaked (json=%v):\nstdout=%s\nstderr=%s", asJSON, out, errOut)
+		}
+		if !strings.Contains(out, "--base-url "+srv.URL+" --zepp-base-url "+srv.URL) {
+			t.Fatalf("suggestion lost the mock URL:\n%s", out)
+		}
+		if !strings.Contains(errOut, "credentials, query or fragment removed") {
+			t.Fatalf("missing warning:\n%s", errOut)
+		}
+	}
+	// A plain URL produces no warning.
+	_, _, errOut := runSync(t, srv)
+	if strings.Contains(errOut, "removed") {
+		t.Fatalf("unexpected warning: %s", errOut)
+	}
+}
+
+func TestPartialSleepSuggestionsQueryStripped(t *testing.T) {
+	t.Parallel()
+	base, _ := redactURL("https://u:p@mock.example/api?k=SECRET#f")
+	zepp, _ := redactURL("http://u:p@127.0.0.1:9/z?token=SECRET")
+	changes := []icu.WellnessSyncChange{{Date: "2026-08-11", Field: icu.SyncFieldSleepSecs, Note: icu.SyncNotePartialSleep}}
+	got := partialSleepSuggestions(changes, suggestionContext{baseURL: base, zeppBaseURL: zepp})
+	if s := got[0].Suggest; strings.Contains(s, "SECRET") || strings.Contains(s, "u:p") ||
+		!strings.Contains(s, "--base-url https://mock.example/api --zepp-base-url http://127.0.0.1:9/z") {
+		t.Fatalf("suggest %s", s)
+	}
+	realAPI := partialSleepSuggestions(changes, suggestionContext{baseURL: "https://INTERVALS.icu/"})
+	if strings.Contains(realAPI[0].Suggest, "--base-url") {
+		t.Fatalf("real API must not be added: %s", realAPI[0].Suggest)
 	}
 }

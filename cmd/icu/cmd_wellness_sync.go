@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -97,7 +98,7 @@ func partialSleepSuggestions(changes []icu.WellnessSyncChange, ctx suggestionCon
 		if ctx.athleteID != "" {
 			args = append(args, "--athlete-id", ctx.athleteID)
 		}
-		if ctx.baseURL != "" && ctx.baseURL != icu.BaseURL {
+		if ctx.baseURL != "" && !icu.IsRealAPIBaseURL(ctx.baseURL) {
 			args = append(args, "--base-url", ctx.baseURL)
 		}
 		if ctx.zeppBaseURL != "" {
@@ -118,6 +119,23 @@ func partialSleepSuggestions(changes []icu.WellnessSyncChange, ctx suggestionCon
 	}
 
 	return out
+}
+
+// redactURL drops userinfo, query and fragment from raw so a suggested
+// command never repeats credentials; stripped reports whether anything was
+// removed. A value that does not parse is dropped entirely.
+func redactURL(raw string) (string, bool) {
+	if raw == "" {
+		return "", false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", true
+	}
+	stripped := parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.RawFragment != ""
+	parsed.User, parsed.RawQuery, parsed.ForceQuery, parsed.Fragment, parsed.RawFragment = nil, "", false, "", ""
+
+	return parsed.String(), stripped
 }
 
 type suggestionContext struct {
@@ -173,10 +191,15 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 
 	plan := icu.PlanWellnessSync(zeppDays, existing, fields, out.Overwrite, out.Lock)
 	out.Changes, out.Writes = plan.Changes, plan.Writes
+	suggestBase, baseStripped := redactURL(client.BaseURL())
+	suggestZepp, zeppStripped := redactURL(zeppBase)
 	out.PartialSleep = partialSleepSuggestions(plan.Changes, suggestionContext{
 		overwrite: out.Overwrite, lock: out.Lock, allowInsecure: BoolFlag(flags, zeppAllowInsecureHostFlag),
-		timezone: out.Timezone, athleteID: icu.StringFlag(flags, "athlete-id", ""), baseURL: client.BaseURL(), zeppBaseURL: zeppBase,
+		timezone: out.Timezone, athleteID: icu.StringFlag(flags, "athlete-id", ""), baseURL: suggestBase, zeppBaseURL: suggestZepp,
 	})
+	if len(out.PartialSleep) > 0 && (baseStripped || zeppStripped) {
+		out.Warnings = append(out.Warnings, "credentials, query or fragment removed from --base-url/--zepp-base-url in the suggested command; add them back if needed")
+	}
 	if len(zeppDays) == 0 {
 		out.Warnings = append(out.Warnings, fmt.Sprintf("no Zepp wellness data between %s and %s", oldest, newest))
 	}

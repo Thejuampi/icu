@@ -30,6 +30,10 @@ type ZeppAuthResult struct {
 	CountryCode string
 }
 
+// zeppAuthTimeout bounds each Zepp login request (tokens and login steps);
+// a var only so tests can shorten it.
+var zeppAuthTimeout = defaultZeppClientTimeout //nolint:gochecknoglobals // test-overridable timeout
+
 func ZeppLogin(email, password string) (*ZeppAuthResult, error) {
 	return ZeppLoginWithURLs(zeppTokensURL, zeppLoginURL, email, password)
 }
@@ -87,6 +91,7 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	req.Header.Set("Accept-Encoding", "gzip")
 
 	client := &http.Client{
+		Timeout: zeppAuthTimeout,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -161,7 +166,7 @@ func performLoginWithURL(loginURL, accessToken, countryCode string) (*ZeppAuthRe
 
 	// Not http.DefaultClient: on a 307/308 it would resend this body (which
 	// carries the access code) to whatever host the Location names.
-	client := &http.Client{Timeout: defaultZeppClientTimeout, CheckRedirect: SameOriginRedirects}
+	client := &http.Client{Timeout: zeppAuthTimeout, CheckRedirect: SameOriginRedirects}
 
 	resp, err := client.Do(req)
 	if err != nil {

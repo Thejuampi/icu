@@ -277,7 +277,7 @@ func TestRunRedirectSink(t *testing.T) {
 		t.Fatalf("run = %d", code)
 	}
 
-	if code := run(context.Background(), []string{"-fixtures", dir, "-redirect-sink", "-host", "256.0.0.1"}, io.Discard, io.Discard); code != 1 {
+	if code := run(context.Background(), []string{"-fixtures", dir, "-redirect-sink", "-host", "256.0.0.1", "-allow-non-loopback"}, io.Discard, io.Discard); code != 2 {
 		t.Fatalf("bad host with sink = %d", code)
 	}
 }
