@@ -208,3 +208,29 @@ func TestRedactSampleOffsetsSAndE(t *testing.T) {
 		}
 	}
 }
+
+// Offset keys as numeric strings get the same bounds as numbers.
+func TestRedactSampleOffsetStrings(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		doc, want string
+		keep      bool
+	}{
+		{`{"value":{"samples":[{"hrv":48,"s":"120000"}]}}`, `"s":"120000"`, true},
+		{`{"value":{"samples":[{"hrv":48,"e":"86400000"}]}}`, `"e":"86400000"`, true},
+		{`{"value":{"samples":[{"hrv":48,"s":"99999999"}]}}`, `99999999`, false},
+		{`{"value":{"samples":[{"hrv":48,"e":"86400001"}]}}`, `86400001`, false},
+		{`{"value":{"e":"600"}}`, `"e":"600"`, true},
+		{`{"value":{"e":"52627800"}}`, `52627800`, false},
+		{`{"value":{"s":"52627800"}}`, `"s":"52627800"`, true},
+		{`{"value":{"s":"123456789"}}`, `123456789`, false},
+	} {
+		out, err := icu.RedactZeppJSON([]byte(c.doc))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kept := strings.Contains(string(out), c.want); kept != c.keep {
+			t.Errorf("%s -> %s (keep=%v)", c.doc, out, c.keep)
+		}
+	}
+}

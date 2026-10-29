@@ -161,6 +161,12 @@ func IsZeppSecretKey(key string) bool {
 // on the safe list, str must have the key's expected shape, and it must not
 // match a sensitive value pattern.
 func IsZeppSafeString(key, str string) bool {
+	return zeppSafeStringIn("", key, str)
+}
+
+// zeppSafeStringIn is IsZeppSafeString for a value whose enclosing key is
+// parent, so offset strings get the same bounds as offset numbers.
+func zeppSafeStringIn(parent, key, str string) bool {
 	var ok bool
 	switch zeppKeyClass(key) {
 	case zeppClassTime:
@@ -168,7 +174,7 @@ func IsZeppSafeString(key, str string) bool {
 	case zeppClassEnum:
 		ok = zeppEnumString(key, str)
 	case zeppClassOffset:
-		ok = zeppOffsetRe.MatchString(str)
+		ok = zeppOffsetRe.MatchString(str) && !zeppOffsetIsSensitive(parent, key, str)
 	case zeppClassMetric:
 		ok = zeppMetricRe.MatchString(str)
 	case zeppClassNone:
@@ -214,7 +220,10 @@ const (
 // "e") or the unexplained "u" must be redacted. Inside samples[] they are kept
 // only as non-negative integers up to one day in ms (86,400,000). Outside
 // samples[], "u" and "e" are kept only up to 65535 and "s" is left to
-// zeppNumberIsSensitive.
+// zeppNumberIsSensitive (up to 8 digits): "s" is a documented ms offset
+// (ZeppBridge metrics.rs) that also appears outside samples[] in older
+// shapes, while "u" and "e" are unexplained there, so they get the tighter
+// cap. The same bounds apply to numeric strings (zeppSafeStringIn).
 func zeppOffsetIsSensitive(parent, key, num string) bool {
 	norm := normalizeZeppKey(key)
 	if norm != "u" && norm != "e" && norm != "s" {
@@ -379,7 +388,7 @@ func writeJSONString(out *bytes.Buffer, s string) {
 }
 
 // redactString applies steps 2-4 to a string value found under key.
-func redactString(str, key string, depth int) string {
+func redactString(str, parent, key string, depth int) string {
 	t := strings.TrimSpace(str)
 	if t != "" && (t[0] == '{' || t[0] == '[' || t[0] == '"') {
 		if depth < zeppRedactMaxDepth && json.Valid([]byte(t)) {
@@ -387,7 +396,7 @@ func redactString(str, key string, depth int) string {
 				var inner string
 				if json.Unmarshal([]byte(t), &inner) == nil {
 					var b bytes.Buffer
-					writeJSONString(&b, redactString(inner, key, depth+1))
+					writeJSONString(&b, redactString(inner, parent, key, depth+1))
 
 					return b.String()
 				}
@@ -398,7 +407,7 @@ func redactString(str, key string, depth int) string {
 
 		return ZeppRedacted // looks like JSON but does not parse (or too deep)
 	}
-	if !IsZeppSafeString(key, str) {
+	if !zeppSafeStringIn(parent, key, str) {
 		return ZeppRedacted
 	}
 
@@ -422,7 +431,7 @@ func redactValue(dec *json.Decoder, out *bytes.Buffer, parent, key string, inArr
 		if inArray {
 			strKey = "" // strings in arrays get no allowlist
 		}
-		writeJSONString(out, redactString(t, strKey, depth))
+		writeJSONString(out, redactString(t, parent, strKey, depth))
 	case json.Number:
 		if zeppNumberIsSensitive(key, t.String()) || zeppOffsetIsSensitive(parent, key, t.String()) {
 			writeJSONString(out, ZeppRedacted)
