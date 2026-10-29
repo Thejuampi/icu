@@ -28,7 +28,7 @@ var errZeppRedactTooDeep = errors.New("json nested too deep")
 //     removed) has its value replaced whatever its type, objects included.
 //  2. Allowlist: any other string is replaced too, unless its key is a
 //     known-safe field AND the string has that field's shape: ISO date/time
-//     or epoch for time keys, known enums or strict code case (<= 20 chars) for enum keys, a short
+//     or epoch for time keys, known enums only (normalized) for enum keys, a short
 //     number for metric keys. Strings inside arrays are never allowlisted.
 //     Numbers, booleans and null are kept (they are the payload), except an
 //     integer of 9+ digits, unless it is an epoch under a time-like key.
@@ -95,7 +95,7 @@ type zeppSafeClass int
 const (
 	zeppClassNone   zeppSafeClass = iota
 	zeppClassTime                 // ISO date/time or a numeric epoch (<= 13 digits)
-	zeppClassEnum                 // known enum or strict code case, <= 20 chars
+	zeppClassEnum                 // known enum only (normalized)
 	zeppClassMetric               // up to 6 digits, optional sign and decimals
 	zeppClassOffset               // sample offset in ms: up to 8 digits
 )
@@ -203,6 +203,31 @@ func zeppNumberIsSensitive(key, num string) bool {
 	return !zeppPlausibleEpoch(n)
 }
 
+// Bounds for the unexplained "u" key: inside samples[] it is kept like an ms
+// offset (a non-negative integer of up to 8 digits); anywhere else only up
+// to 65535.
+const (
+	zeppUSampleMax = 99999999
+	zeppUMax       = 65535
+)
+
+// zeppUIsSensitive reports whether a number under key "u" must be redacted.
+// Other keys are left to zeppNumberIsSensitive.
+func zeppUIsSensitive(parent, key, num string) bool {
+	if normalizeZeppKey(key) != "u" {
+		return false
+	}
+	n, err := strconv.ParseInt(num, 10, 64)
+	if err != nil || n < 0 {
+		return true
+	}
+	if normalizeZeppKey(parent) == "samples" {
+		return n > zeppUSampleMax
+	}
+
+	return n > zeppUMax
+}
+
 // zeppMaxPlainInt is the smallest value whose integer part has 9 digits.
 const zeppMaxPlainInt = 1e8
 
@@ -230,35 +255,36 @@ func zeppEpochString(str string) bool {
 	return err == nil && zeppPlausibleEpoch(n)
 }
 
-// zeppEnumMaxLen caps the length of a pattern-matched enum string.
-const zeppEnumMaxLen = 20
-
-// zeppKnownEnums are enum strings Zepp is known to send that the strict
-// pattern alone would reject (single capitalised or all-caps words).
+// zeppKnownEnums are the only strings kept under an enum key, compared
+// after normalizeZeppKey (case, "_", "-", ".", " " ignored): the v2 preset
+// eventType/subType values plus explicit literals. There is no pattern
+// fallback: a name in code case (alex_rivera, ALEX_RIVERA, arRivera) is
+// indistinguishable from an enum, so anything unknown is redacted.
 func zeppKnownEnums() map[string]bool {
-	out := map[string]bool{"OK": true, "SUCCESS": true, "FAIL": true, "NONE": true, "UNKNOWN": true}
+	lits := []string{
+		"ok", "success", "fail", "failed", "error", "none", "unknown", "true", "false",
+		"real_data", "watch_score", "insight_data", "stress_data", "summary",
+		"ms", "s", "min", "bpm", "kg", "lb", "cm", "km", "m", "kcal", "steps", "percent", "celsius", "fahrenheit",
+	}
+	out := make(map[string]bool, len(lits))
+	for _, l := range lits {
+		out[normalizeZeppKey(l)] = true
+	}
 	for _, p := range v2EventPresets() {
-		out[p.EventType] = true
+		out[normalizeZeppKey(p.EventType)] = true
 		if p.SubType != "" {
-			out[p.SubType] = true
+			out[normalizeZeppKey(p.SubType)] = true
 		}
 	}
 
 	return out
 }
 
-// zeppEnumString reports whether str is an enum value: a known Zepp enum,
-// or at most zeppEnumMaxLen chars of strict code case, i.e. snake_case
-// ("watch_score"), lowerCamelCase with at least one hump ("insightData") or
-// UPPER_SNAKE with at least one underscore ("REAL_DATA"). Single
-// capitalised or all-caps words ("Testy", "JUAN") and anything longer look
-// like names or free text and are redacted.
+// zeppEnumString reports whether str is a known Zepp enum (see zeppKnownEnums).
 func zeppEnumString(str string) bool {
-	if zeppKnownEnums()[str] {
-		return true
-	}
+	norm := normalizeZeppKey(str)
 
-	return len(str) <= zeppEnumMaxLen && zeppStrictEnumRe.MatchString(str)
+	return norm != "" && zeppKnownEnums()[norm]
 }
 
 var (
@@ -275,11 +301,9 @@ var (
 	zeppEpochRe   = regexp.MustCompile(`^(?:\d{10}|\d{13})$`)
 	zeppClockRe   = regexp.MustCompile(`^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$`)
 	zeppOffsetRe  = regexp.MustCompile(`^\d{1,8}$`)
-	// zeppStrictEnumRe: snake_case | lowerCamelCase (1+ hump) | UPPER_SNAKE (1+ "_").
-	zeppStrictEnumRe = regexp.MustCompile(`^(?:[a-z]+(?:_[a-z0-9]+)*|[a-z]+(?:[A-Z][a-z0-9]*)+|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)$`)
-	zeppMetricRe     = regexp.MustCompile(`^-?\d{1,6}(?:\.\d{1,6})?$`)
-	zeppIDKeyRe      = regexp.MustCompile(`^(?:\d+|(?i)[0-9a-f]{8,})$`)
-	zeppNumberRe     = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
+	zeppMetricRe  = regexp.MustCompile(`^-?\d{1,6}(?:\.\d{1,6})?$`)
+	zeppIDKeyRe   = regexp.MustCompile(`^(?:\d+|(?i)[0-9a-f]{8,})$`)
+	zeppNumberRe  = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
 )
 
 // zeppValueLooksSensitive reports whether a string value matches a
@@ -316,7 +340,7 @@ func redactZeppJSONDepth(raw []byte, depth int) ([]byte, error) {
 	dec.UseNumber()
 
 	var out bytes.Buffer
-	if err := redactValue(dec, &out, "", false, depth); err != nil {
+	if err := redactValue(dec, &out, "", "", false, depth); err != nil {
 		return nil, fmt.Errorf("redact zepp json: %w", err)
 	}
 
@@ -366,7 +390,7 @@ func redactString(str, key string, depth int) string {
 	return str
 }
 
-func redactValue(dec *json.Decoder, out *bytes.Buffer, key string, inArray bool, depth int) error {
+func redactValue(dec *json.Decoder, out *bytes.Buffer, parent, key string, inArray bool, depth int) error {
 	if depth > zeppRedactMaxDepth {
 		return errZeppRedactTooDeep
 	}
@@ -385,7 +409,7 @@ func redactValue(dec *json.Decoder, out *bytes.Buffer, key string, inArray bool,
 		}
 		writeJSONString(out, redactString(t, strKey, depth))
 	case json.Number:
-		if zeppNumberIsSensitive(key, t.String()) {
+		if zeppNumberIsSensitive(key, t.String()) || zeppUIsSensitive(parent, key, t.String()) {
 			writeJSONString(out, ZeppRedacted)
 		} else {
 			out.WriteString(t.String())
@@ -437,7 +461,7 @@ func redactContainer(dec *json.Decoder, out *bytes.Buffer, open json.Delim, pare
 			}
 		}
 
-		if err := redactValue(dec, out, key, open == '[', depth+1); err != nil {
+		if err := redactValue(dec, out, parentKey, key, open == '[', depth+1); err != nil {
 			return err
 		}
 	}

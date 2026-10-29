@@ -136,3 +136,53 @@ func decodeNumbers(s string) (any, bool) {
 
 	return v, dec.Decode(&v) == nil
 }
+
+func TestRedactUKey(t *testing.T) {
+	t.Parallel()
+
+	// Top level: only up to 65535.
+	for v, keep := range map[int64]bool{0: true, 600: true, 65535: true, 65536: false, 7000004: false, 52627800: false, 123456789: false} {
+		if got := redactOne(t, "u", v); (got != `"[redacted]"`) != keep {
+			t.Errorf("top-level u=%d: %s (keep=%v)", v, got, keep)
+		}
+	}
+	for _, v := range []any{-1, 1.5, "512"} {
+		if got := redactOne(t, "u", v); got != `"[redacted]"` {
+			t.Errorf("top-level u=%v kept: %s", v, got)
+		}
+	}
+	// Inside samples[]: like an ms offset, up to 8 digits.
+	for v, keep := range map[string]bool{"0": true, "517865": true, "52627800": true, "99999999": true, "123456789": false, "-5": false, "1.5": false} {
+		out, err := icu.RedactZeppJSON([]byte(`{"value":{"samples":[{"s":0,"u":` + v + `,"hrv":48}]}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept := strings.Contains(string(out), `"u":`+v+`,`)
+		if kept != keep {
+			t.Errorf("samples u=%s: %s (keep=%v)", v, out, keep)
+		}
+	}
+	// Under another parent ("other" is not samples), 8 digits are redacted.
+	out, err := icu.RedactZeppJSON([]byte(`{"other":[{"u":52627800}],"value":{"u":7000004}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "52627800") || strings.Contains(string(out), "7000004") {
+		t.Errorf("u outside samples kept: %s", out)
+	}
+}
+
+// Pins list entries that overlapping rules would otherwise hide.
+func TestRedactPinnedEntries(t *testing.T) {
+	t.Parallel()
+
+	if got := redactOne(t, "status", "OK"); got != `"OK"` {
+		t.Errorf("known enum OK lost: %s", got)
+	}
+	// Only the "bluetooth" fragment catches these keys (no id/addr suffix).
+	for _, key := range []string{"bluetoothChannel", "bluetoothVersion", "BLUETOOTH"} {
+		if got := redactOne(t, key, int64(1234567)); got != `"[redacted]"` {
+			t.Errorf("%s kept: %s", key, got)
+		}
+	}
+}

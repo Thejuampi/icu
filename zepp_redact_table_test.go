@@ -396,20 +396,27 @@ func TestRedactTimeKeysEpochRangeAndClock(t *testing.T) {
 func TestRedactEnumShapes(t *testing.T) {
 	t.Parallel()
 
+	// Known enums only, compared case- and separator-insensitively.
 	for _, v := range []string{
-		"readiness", "watch_score", "real_data", "insightData", "HRVRMSSD", "UPPER_SNAKE",
-		"ms", "Charge", "Emotion", "DailyHealth", "skinTemp", "hrv_sdnn", strings.Repeat("x", 20), "SUCCESS",
+		"readiness", "watch_score", "WATCH_SCORE", "Watch-Score", "real_data", "insightData", "insight_data",
+		"HRVRMSSD", "hrvrmssd", "ms", "Charge", "Emotion", "DailyHealth", "skinTemp", "hrv_sdnn", "SUCCESS", "OK", "ok",
 	} {
 		if got := redactOne(t, "type", v); got != `"`+v+`"` {
 			t.Errorf("enum %q lost: %s", v, got)
 		}
 	}
+	// Invented names in every code case and separator shape, plus generic
+	// code-case words: all unknown, all redacted. No length or case rule
+	// lets them through (20 and 21 chars are both redacted).
 	for _, v := range []string{
-		"Testy", "Fakename", "Nowhere", "JUAN", "TESTY", "Fake_Name", "FakeName", "fake__name", "_x", "x_",
-		strings.Repeat("x", 21), strings.Repeat("x", 33), "very_long_enum_name_with_words", "insightDataLongerThanTwenty",
+		"alex", "rivera", "alexriverasantos", "alex_rivera", "alexRivera", "arRivera", "ALEX_RIVERA", "RIVERA_AR",
+		"Alex", "ALEX", "Alex_Rivera", "alex-rivera", "alex.rivera", "Testy", "Fakename", "Nowhere", "UPPER_SNAKE",
+		"some_code", strings.Repeat("x", 20), strings.Repeat("x", 21), strings.Repeat("x", 33), "very_long_enum_name_with_words",
 	} {
-		if got := redactOne(t, "status", v); got != `"[redacted]"` {
-			t.Errorf("%q kept: %s", v, got)
+		for _, key := range []string{"type", "status", "eventType", "subType", "unit", "result"} {
+			if got := redactOne(t, key, v); got != `"[redacted]"` {
+				t.Errorf("%s=%q kept: %s", key, v, got)
+			}
 		}
 	}
 }
