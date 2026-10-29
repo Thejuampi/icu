@@ -499,6 +499,7 @@ func TestCommandsRunAgainstMock(t *testing.T) {
 	registry := NewCommandRegistry()
 	registerAllCommands(registry)
 	totalWrites := 0
+	sawAccept := false
 	for _, resource := range registry.Resources() {
 		for _, action := range registry.Actions(resource) {
 			key := resource + " " + action
@@ -511,20 +512,91 @@ func TestCommandsRunAgainstMock(t *testing.T) {
 			extra := []string{"1"}
 			if key == "activity estimate-power-accept" {
 				path := filepath.Join(t.TempDir(), "estimate.json")
-				if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
+				if err := os.WriteFile(path, []byte(`{"activityId":"1","filledWatts":[150,160,170]}`), 0o600); err != nil {
 					t.Fatal(err)
 				}
 				extra = []string{"--file", path}
 			}
 			_ = run(commandArgs(resource, action, extra...), &stdout, &stderr)
 			_, writes := mock.counts(key)
+			if key == "activity estimate-power-accept" {
+				sawAccept = true
+			}
+			if key == "activity estimate-power-accept" && writes < 1 {
+				t.Errorf("estimate-power-accept with filledWatts sent %d write(s), want >= 1", writes)
+			}
 			if !write && writes != 0 {
 				t.Errorf("read-only %s sent %d write request(s)", key, writes)
 			}
 			totalWrites += writes
 		}
 	}
+	if !sawAccept {
+		t.Fatal("activity estimate-power-accept was never run against the mock")
+	}
 	if totalWrites == 0 {
 		t.Fatal("no write command reached the mock; the plain-run pass is not exercising writes")
+	}
+}
+
+//nolint:paralleltest // replaces newCommandClient and sets env.
+func TestWellnessWriteDryRunRejectedWithoutWrites(t *testing.T) {
+	for _, args := range [][]string{
+		{"icu", "wellness", "bulk", "--dry-run"},
+		{"icu", "wellness", "update", "--dry-run"},
+		{"icu", "wellness", "update", "2026-10-01", "--weight", "70", "--dry-run"},
+	} {
+		guardEnv(t)
+		mock := newGuardMock(t)
+		key := args[1] + " " + args[2]
+		mock.phase(key, false)
+		var stdout, stderr bytes.Buffer
+		code := run(args, &stdout, &stderr)
+		if code == 0 || !strings.Contains(stderr.String(), "unknown flag --dry-run") {
+			t.Fatalf("%v: code=%d stderr=%q", args, code, stderr.String())
+		}
+		if requests, writes := mock.counts(key); requests != 0 || writes != 0 {
+			t.Fatalf("%v sent %d request(s), %d write(s)", args, requests, writes)
+		}
+	}
+}
+
+//nolint:paralleltest // replaces newCommandClient and sets env.
+func TestWarnRealAPIFiresForDefaultBaseURL(t *testing.T) {
+	guardEnv(t)
+	t.Setenv(icu.BaseURLEnv, "")
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"i1","name":"Mock"}`))
+	}))
+	t.Cleanup(server.Close)
+	// The seam points at the loopback server; the resolved base URL stays the default real host.
+	withMockCommandClient(t, icu.NewClient("k", "i1", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL)))
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"icu", "athlete", "show"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("code=%d stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Warning: using the real intervals.icu API") {
+		t.Fatalf("no real-API warning without --base-url: %q", stderr.String())
+	}
+	if requests == 0 {
+		t.Fatal("athlete show did not reach the loopback mock")
+	}
+}
+
+func TestActivityDetailUsageText(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr bytes.Buffer
+	_ = run([]string{"icu", "activity", "--help"}, &stdout, &stderr)
+	help := stdout.String() + stderr.String()
+	if strings.Contains(help, "icu.Activity") || strings.Contains(help, strings.Repeat("icu ", 2)) {
+		t.Fatalf("bad activity usage text:\n%s", help)
+	}
+	for _, want := range []string{"icu activity <id> best-efforts", "icu activity <id> fit-file", "icu activity <id> power-curve"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("activity help missing %q", want)
+		}
 	}
 }
