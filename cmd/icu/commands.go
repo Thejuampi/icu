@@ -44,6 +44,9 @@ func (registry *CommandRegistry) Register(resource, action string, cmd *Command)
 const decouplingUsageFlags = "[--decoupling-source api|streams] [--decoupling-warmup-min N] " +
 	"[--decoupling-cooldown-min N] [--decoupling-hr-lag S] [--decoupling-iqr-k K]"
 
+// dryRunNothingWritten is the message every --dry-run result carries.
+const dryRunNothingWritten = "dry-run: nothing written"
+
 func undocumentedUsageFlags(key string) string {
 	return map[string]string{
 		"activities interval-search":       "[--minReps N] [--maxReps N] [--limit N]",

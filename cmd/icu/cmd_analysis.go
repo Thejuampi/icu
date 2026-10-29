@@ -147,7 +147,7 @@ func analysisCoachingCommand() *Command {
 		Usage: "analysis coaching [--history-oldest DATE --history-newest DATE] " +
 			"[--plan-oldest DATE --plan-newest DATE] [--history-days N] [--plan-days N] " +
 			"[--sport-type TYPE] [--calendar-id ID] [--resolve BOOL] [--activity-fields CSV] [--limit N] " +
-			"[--include-adaptation BOOL] [--adaptation-curves CSV]",
+			"[--include-adaptation BOOL] [--include-private BOOL] [--adaptation-curves CSV]",
 		Description: "Build one JSON coaching context from athlete, sport settings, activities, wellness, plan events, " +
 			"and optional adaptation analysis. Default ranges use the athlete's timezone. " +
 			"The default plan starts the day after today; explicit --plan-oldest/--plan-newest snap to ISO weeks (Monday-Sunday).",
@@ -187,6 +187,11 @@ func analysisCoachingCommand() *Command {
 				TimezoneSource:    tzInfo.source,
 				IncludeAdaptation: BoolFlag(flags, "include-adaptation"),
 			})
+			if context.Athlete != nil {
+				athlete := *context.Athlete
+				redactAthleteForCoaching(&athlete, flags)
+				context.Athlete = &athlete
+			}
 
 			return writeJSON(stdout, context)
 		},
@@ -211,6 +216,7 @@ func analysisCoachingSchema() *CommandSchema {
 				"uses its own fixed field list so wave-2's validity/pairing/compliance fields are never dropped."},
 			{Name: "limit", ValueName: "N", Description: "Maximum history activities fetched.", Kind: commandFlagPositiveInteger},
 			{Name: "include-adaptation", ValueName: "BOOL", Description: "Include adaptation analysis.", Kind: commandFlagBoolean},
+			{Name: "include-private", ValueName: "BOOL", Description: "Keep athlete identity, contact, date of birth and Strava id in the output.", Kind: commandFlagBoolean},
 			{Name: "adaptation-curves", ValueName: "CSV", Description: "Power curves used by adaptation.", Default: "42d,365d"},
 			{Name: "api-key", ValueName: "KEY", Description: "Intervals.icu API key."},
 			{Name: "athlete-id", ValueName: "ID", Description: "Intervals.icu athlete ID."},
