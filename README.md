@@ -331,6 +331,20 @@ curl -s -X POST http://127.0.0.1:8765/_mock/reset   # clear the write log and in
 
 Any athlete id maps onto the `0` fixtures; list endpoints honour `oldest`/`newest`. A missing fixture returns 404 and is logged. `-record -upstream URL` (the upstream is required; there is no default) is the one-time, GET-only fixture capture mode (non-GET requests are refused locally); `-anonymize DIR` re-applies the anonymizer (DOB, Strava/device ids, email, city/state/country, names, gear nicknames, tokens/API keys, GPS) to captured fixtures.
 
+`-redirect-sink` (off by default) is a black-box check that no secret follows a redirect to another host. The mock starts a second loopback listener (printed as `icu-mock redirect sink on URL`). Then:
+
+- `/_redirect/cross307/...` and `/_redirect/cross308/...` answer with a 307/308 to that listener, on the same path.
+- `/_redirect/same307/...` and `/_redirect/same308/...` redirect to the same path on the mock itself.
+- Under a `/_redirect/` prefix, the Zepp tokens step is served normally unless the mode ends in `-tokens`.
+- A synthetic Zepp login (`POST /v2/registrations/tokens`, `POST /v2/client/login`) is served.
+- `GET /_mock/leaks` lists what the second listener received: method, path, query keys, headers and body size, with Authorization/Apptoken/Cookie/Referer redacted. It also reports `codeReceived`, `apiKeyReceived` and `appTokenReceived`. `/_mock/reset` clears it.
+
+```sh
+icu-mock -port 8765 -redirect-sink
+icu zepp login --email rc@example.com --password synthetic --zepp-base-url http://127.0.0.1:8765/_redirect/cross307  # must fail
+curl -s http://127.0.0.1:8765/_mock/leaks   # count 0, every *Received false
+```
+
 ## License
 
 MIT
