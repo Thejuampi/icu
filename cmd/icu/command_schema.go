@@ -11,6 +11,10 @@ import (
 // globalFlags are accepted by every command (auth, output and session
 // selection are resolved outside the command's own Run).
 func isGlobalFlag(name string) bool {
+	// base-url is deliberately not listed: executeCommand resolves it and
+	// deletes it from flags before per-command validation (and
+	// hoistLeadingBaseURL moves a leading --base-url to the end), so listing
+	// it here would only let it leak into commands' own flag handling.
 	switch name {
 	case "api-key", "athlete-id", "output", "session-environment":
 		return true

@@ -399,6 +399,11 @@ func readCoachingAdaptation(
 }
 
 func analysisCyclingCommand() *Command {
+	return analysisCyclingCommandWithClock(nil)
+}
+
+// analysisCyclingCommandWithClock lets tests inject "now" (nil: time.Now).
+func analysisCyclingCommandWithClock(clock func() time.Time) *Command {
 	return &Command{
 		Name:  "",
 		Usage: "analysis cycling [--oldest DATE --newest DATE | --days N] [--min-included-activities N]",
@@ -416,6 +421,7 @@ func analysisCyclingCommand() *Command {
 			if err != nil {
 				return err
 			}
+			tzInfo.clock = clock
 			dateRange, _, err := analysisDateRange(flags, tzInfo.now())
 			if err != nil {
 				return err
@@ -494,6 +500,11 @@ func clampDateToAthleteToday(client *icu.Client, flags map[string]string, date s
 }
 
 func analysisPlanCommand() *Command {
+	return analysisPlanCommandWithClock(nil)
+}
+
+// analysisPlanCommandWithClock lets tests inject "now" (nil: time.Now).
+func analysisPlanCommandWithClock(clock func() time.Time) *Command {
 	return &Command{
 		Name: "",
 		Usage: "analysis plan [--history-oldest DATE --history-newest DATE] " +
@@ -511,6 +522,7 @@ func analysisPlanCommand() *Command {
 			if err != nil {
 				return err
 			}
+			tzInfo.clock = clock
 			dateRanges, _, err := trainingPlanDateRanges(flags, tzInfo.now())
 			if err != nil {
 				return err
