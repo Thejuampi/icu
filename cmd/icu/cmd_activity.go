@@ -96,13 +96,13 @@ func registerActivityDownloadCommands(registry *CommandRegistry) {
 }
 
 func registerActivityCurve(registry *CommandRegistry, name, desc string) {
-	registry.Register("activity", name, getByIDCommand[any]("activity", "icu.Activity <id> "+name, desc, "activity id", nil, name))
+	registry.Register("activity", name, getByIDCommand[any]("activity", "activity <id> "+name, desc, "activity id", nil, name))
 }
 
 func registerActivityDetail(registry *CommandRegistry, name, desc string, queryKeys ...string) {
-	registry.Register("activity", name, getByIDCommand[any]("activity", "icu.Activity <id> "+name, desc, "activity id", queryBuilder(queryKeys...), name))
+	registry.Register("activity", name, getByIDCommand[any]("activity", "activity <id> "+name, desc, "activity id", queryBuilder(queryKeys...), name))
 }
 
 func registerActivityDownload(registry *CommandRegistry, name string) {
-	registry.Register("activity", name, downloadByIDCommand("activity", "icu.Activity <id> "+name, "Download "+name+".", "activity id", name))
+	registry.Register("activity", name, downloadByIDCommand("activity", "activity <id> "+name, "Download "+name+".", "activity id", name))
 }

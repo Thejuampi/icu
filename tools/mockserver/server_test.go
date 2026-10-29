@@ -152,6 +152,14 @@ func TestServerRecordsWritesInMemoryAndResets(t *testing.T) {
 		t.Fatalf("DELETE = %d %s", code, body)
 	}
 
+	if code, body = do(t, http.MethodPut, ts.URL+"/api/v1/activity/i900000001/streams", `[{"type":"watts","data":[1,2]}]`); code != 200 || body != `{"updated":["watts"]}` {
+		t.Fatalf("PUT streams = %d %s", code, body)
+	}
+
+	if code, body = do(t, http.MethodPut, ts.URL+"/api/v1/activity/i900000001/streams", `nope`); code != 200 || body != `{"updated":[]}` {
+		t.Fatalf("PUT streams invalid = %d %s", code, body)
+	}
+
 	if code, body = do(t, http.MethodPut, ts.URL+"/api/v1/athlete/0/new", `[1,2]`); code != 200 || body != `[1,2]` {
 		t.Fatalf("PUT array = %d %s", code, body)
 	}
@@ -170,7 +178,7 @@ func TestServerRecordsWritesInMemoryAndResets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.Count != 6 || got.Writes[0].Method != http.MethodPut || got.Writes[0].Path != "/api/v1/athlete/0/events/800000001" ||
+	if got.Count != 8 || got.Writes[0].Method != http.MethodPut || got.Writes[0].Path != "/api/v1/athlete/0/events/800000001" ||
 		string(got.Writes[0].Body) != `{"name":"x"}` || got.Writes[1].Query != "upsert=true" || string(got.Writes[2].Body) != `"plain text"` ||
 		got.Writes[0].Time != "2026-10-27T12:00:00Z" {
 		t.Fatalf("writes = %+v", got)
