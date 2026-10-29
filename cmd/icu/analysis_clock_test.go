@@ -63,9 +63,16 @@ func runClamp(t *testing.T, command *Command, fake *clampFake, flags map[string]
 	if err := command.Run(nil, flags, fake.client, io.Discard, io.Discard); err != nil {
 		t.Fatal(err)
 	}
+	assertWellnessClamped(t, fake)
+}
+
+// assertWellnessClamped fails when the fake saw no wellness read (the clamp
+// check would otherwise pass vacuously) or when any read ends after 10-27.
+func assertWellnessClamped(t *testing.T, fake *clampFake) {
+	t.Helper()
 	newest := fake.newest()
 	if len(newest) == 0 {
-		t.Fatal("no wellness read")
+		t.Fatal("no wellness read: the clamp assertion would pass vacuously")
 	}
 	for _, got := range newest {
 		if got != "2026-10-27" {
@@ -101,11 +108,7 @@ func TestAnalysisPlanClampsWellnessWithPlanNewest(t *testing.T) {
 	if err := analysisPlanCommandWithClock(clockNY1027).Run(nil, flags, fake.client, &out, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	for _, got := range fake.newest() {
-		if got != "2026-10-27" {
-			t.Fatalf("wellness newest = %v, want 2026-10-27", fake.newest())
-		}
-	}
+	assertWellnessClamped(t, fake)
 	var decoded struct {
 		Scope struct {
 			PlanEndDate string `json:"planEndDate"`
