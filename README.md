@@ -162,6 +162,25 @@ When Zepp auth is configured, `analysis wellness`, `analysis coaching`,
 `HybridCharge`/`BioCharge` for the sleep/recovery signal and only fall back to
 the Intervals wellness `sleepScore` when the Zepp score is unavailable.
 
+#### Syncing Zepp wellness into intervals.icu
+
+`icu wellness sync` copies resting HR, HRV and sleep from Zepp into
+intervals.icu wellness. It is a dry run by default (prints a diff, writes
+nothing); `--apply` writes, and only empty fields are filled unless
+`--overwrite` is passed.
+
+**Suspected partial sleep sync.** intervals.icu sometimes imports only part
+of a night (for example it shows about 1.6 h while Zepp shows a full night).
+When the intervals.icu `sleepSecs` is above zero but strictly below half of
+Zepp's, the dry-run table marks the row `partial sync?` (the `--json` output
+sets `"note": "suspected-partial-sync"` on the change and lists the day in
+`partialSleep`). In fill-only mode the row stays `keep`; nothing changes
+until you run the suggested command for that day:
+
+```bash
+icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore --apply
+```
+
 ## Help And Discovery
 
 The CLI has resource-aware help:
@@ -221,7 +240,7 @@ Current top-level resources:
 | `sports` | `delete`, `get`, `list`, `update` |
 | `tags` | `activities`, `events`, `workouts` |
 | `weather` | `config`, `forecast` |
-| `wellness` | `bulk`, `get`, `list`, `update`, `upload` |
+| `wellness` | `bulk`, `get`, `list`, `sync`, `update`, `upload` |
 | `workouts` | `calculate`, `create`, `delete`, `get`, `list`, `tags`, `update` |
 | `zepp` | `biocharge`, `blood-pressure`, `body-battery`, `events`, `health-summary`, `heart-rate`, `hrv`, `hybridcharge`, `login`, `logout`, `manual-data`, `mood`, `pai`, `profile`, `readiness`, `respiratory-rate`, `second-heart-rate`, `skin-temp`, `sleep`, `spo2`, `spo2-windows`, `sport-load`, `status`, `stress`, `stress-minute`, `summary`, `token`, `vo2`, `weight`, `workout`, `workouts` |
 

@@ -23,7 +23,10 @@ func wellnessSyncCommand() *Command {
 			"[--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--json]",
 		Description: "Copy resting HR, HRV (rMSSD) and sleep from Zepp into intervals.icu wellness. " +
 			"Dry run by default: prints the diff and writes nothing; --apply sends one PUT wellness-bulk. " +
-			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day).",
+			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day). " +
+			"Suspected partial sleep sync: when intervals.icu has sleepSecs below half of Zepp's (e.g. about 1.6 h against a full night), " +
+			"the row is flagged \"partial sync?\" (still keep in fill-only mode) and the output suggests " +
+			"--overwrite --fields sleepSecs,sleepScore for that day.",
 		Schema: &CommandSchema{
 			RejectPositionals: true,
 			Flags: []CommandFlag{
@@ -57,6 +60,27 @@ type wellnessSyncOutput struct {
 	Changes   []icu.WellnessSyncChange `json:"changes"`
 	Writes    []icu.WellnessWrite      `json:"writes"`
 	Warnings  []string                 `json:"warnings"`
+	// PartialSleep lists days whose intervals.icu sleepSecs is below half of
+	// Zepp's, with the suggested command to fix each.
+	PartialSleep []partialSleepSuggestion `json:"partialSleep"`
+}
+
+type partialSleepSuggestion struct {
+	Date    string `json:"date"`
+	Suggest string `json:"suggest"`
+}
+
+func partialSleepSuggestions(changes []icu.WellnessSyncChange) []partialSleepSuggestion {
+	out := []partialSleepSuggestion{}
+	for _, date := range icu.PartialSleepDates(changes) {
+		out = append(out, partialSleepSuggestion{
+			Date: date,
+			Suggest: fmt.Sprintf("icu wellness sync --oldest %s --newest %s --overwrite --fields %s,%s --apply",
+				date, date, icu.SyncFieldSleepSecs, icu.SyncFieldSleepScore),
+		})
+	}
+
+	return out
 }
 
 func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) error {
@@ -78,7 +102,7 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 	}
 
 	out := wellnessSyncOutput{
-		DryRun: !BoolFlag(flags, "apply"), Timezone: tzInfo.timezone, Oldest: oldest, Newest: newest, Fields: fields,
+		DryRun: !BoolFlag(flags, "apply"), Timezone: tzInfo.timezone, Oldest: oldest, Newest: newest, Fields: fields, PartialSleep: []partialSleepSuggestion{},
 		Overwrite: BoolFlag(flags, "overwrite"), Lock: BoolFlag(flags, "lock"), Warnings: []string{},
 	}
 
@@ -97,6 +121,7 @@ func runWellnessSync(_ []string, flags map[string]string, client *icu.Client, st
 
 	plan := icu.PlanWellnessSync(zeppDays, existing, fields, out.Overwrite, out.Lock)
 	out.Changes, out.Writes = plan.Changes, plan.Writes
+	out.PartialSleep = partialSleepSuggestions(plan.Changes)
 	if len(zeppDays) == 0 {
 		out.Warnings = append(out.Warnings, fmt.Sprintf("no Zepp wellness data between %s and %s", oldest, newest))
 	}
@@ -221,12 +246,21 @@ func printWellnessSync(stdout io.Writer, out *wellnessSyncOutput, asJSON bool) e
 	fmt.Fprintf(stdout, "wellness sync %s..%s (%s) %s\n", out.Oldest, out.Newest, out.Timezone, mode)
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "DATE\tFIELD\tINTERVALS\tZEPP\tACTION")
+	fmt.Fprintln(tw, "DATE\tFIELD\tINTERVALS\tZEPP\tACTION\tNOTE")
 	for _, change := range out.Changes {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", change.Date, change.Field, icu.FormatSyncValue(change.Intervals), icu.FormatSyncValue(change.Zepp), change.Action)
+		note := ""
+		if change.Note == icu.SyncNotePartialSleep {
+			note = "partial sync?"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", change.Date, change.Field,
+			icu.FormatSyncValue(change.Intervals), icu.FormatSyncValue(change.Zepp), change.Action, note)
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("print table: %w", err)
+	}
+	for _, suggestion := range out.PartialSleep {
+		fmt.Fprintf(stdout, "note: %s sleepSecs in intervals.icu is under half of Zepp's (suspected partial sync); to replace it run:\n  %s\n",
+			suggestion.Date, suggestion.Suggest)
 	}
 	verb := "would write"
 	if out.Applied {

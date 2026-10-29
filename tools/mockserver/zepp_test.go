@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -149,4 +151,37 @@ func listLen(v any) int {
 	}
 
 	return len(list)
+}
+
+// mockPartialSleepDay is the fixture day whose intervals.icu sleepSecs is a
+// suspected partial sync (under half of the synthetic Zepp night): the RC
+// scenario for the wellness sync partial-sleep flag.
+const mockPartialSleepDay = "2026-08-11"
+
+func TestMockPartialSleepScenario(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "testdata", "fixtures", "api", "v1", "athlete", "0", "wellness.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var days []struct {
+		ID        string `json:"id"`
+		SleepSecs int    `json:"sleepSecs"`
+	}
+	if err := json.Unmarshal(raw, &days); err != nil {
+		t.Fatal(err)
+	}
+	v := mockZeppDayValues(mockPartialSleepDay)
+	zeppSecs := (v.DeepMinutes + v.LightMinutes) * 60
+	for _, day := range days {
+		if day.ID != mockPartialSleepDay {
+			continue
+		}
+		if day.SleepSecs <= 0 || 2*day.SleepSecs >= zeppSecs {
+			t.Fatalf("fixture %s sleepSecs=%d, want >0 and < half of Zepp %d", day.ID, day.SleepSecs, zeppSecs)
+		}
+
+		return
+	}
+	t.Fatalf("fixture day %s missing", mockPartialSleepDay)
 }

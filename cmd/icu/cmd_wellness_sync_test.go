@@ -238,3 +238,59 @@ func TestWellnessSyncDefaultRange(t *testing.T) {
 		t.Fatal("wantsField")
 	}
 }
+
+// Synthetic partial sleep: intervals.icu has 5000 s (about 1.4 h) while the
+// fake Zepp has a full 18000 s night on 2026-08-11.
+const syncExistingPartial = `[{"id":"2026-08-10","restingHR":50,"hrv":40,"sleepSecs":18000,"sleepScore":80},` +
+	`{"id":"2026-08-11","restingHR":50,"hrv":44.5,"sleepSecs":5000,"sleepScore":30}]`
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncFlagsPartialSleep(t *testing.T) {
+	fake := &syncFake{existing: syncExistingPartial}
+	code, out, errOut := runSync(t, fake.serve(t))
+	if code != 0 || len(fake.puts) != 0 {
+		t.Fatalf("code=%d puts=%v stderr=%s", code, fake.puts, errOut)
+	}
+	for _, want := range []string{
+		"NOTE",
+		"2026-08-11  sleepSecs   5000       18000  keep    partial sync?",
+		"note: 2026-08-11 sleepSecs in intervals.icu is under half of Zepp's",
+		"icu wellness sync --oldest 2026-08-11 --newest 2026-08-11 --overwrite --fields sleepSecs,sleepScore --apply",
+		"would write 0 day(s)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "2026-08-10  sleepSecs") && strings.Count(out, "partial sync?") != 1 {
+		t.Errorf("only 2026-08-11 should be flagged:\n%s", out)
+	}
+
+	code, out, _ = runSync(t, fake.serve(t), "--json")
+	var parsed wellnessSyncOutput
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil || code != 0 {
+		t.Fatalf("json %v %s", err, out)
+	}
+	if len(parsed.PartialSleep) != 1 || parsed.PartialSleep[0].Date != "2026-08-11" ||
+		!strings.Contains(parsed.PartialSleep[0].Suggest, "--overwrite --fields sleepSecs,sleepScore") {
+		t.Fatalf("partialSleep %+v", parsed.PartialSleep)
+	}
+	if !strings.Contains(out, `"note": "suspected-partial-sync"`) {
+		t.Fatalf("missing note in json:\n%s", out)
+	}
+
+	code, _, _ = runSync(t, fake.serve(t), "--oldest", "2026-08-11", "--newest", "2026-08-11",
+		"--overwrite", "--fields", "sleepSecs,sleepScore", "--apply")
+	if code != 0 || len(fake.puts) != 1 || fake.puts[0] != `[{"id":"2026-08-11","sleepSecs":18000,"sleepScore":80}]` {
+		t.Fatalf("code=%d puts=%v", code, fake.puts)
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncJSONPartialSleepEmpty(t *testing.T) {
+	fake := &syncFake{existing: syncExisting}
+	_, out, _ := runSync(t, fake.serve(t), "--json")
+	if !strings.Contains(out, `"partialSleep": []`) {
+		t.Fatalf("want empty partialSleep:\n%s", out)
+	}
+}
