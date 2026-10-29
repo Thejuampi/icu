@@ -613,6 +613,18 @@ hosted on `api-mifit.huami.com` and uses its own auth flow. The flow is:
    `SpO2WindowsURL`, `SportHistoryURL`, `SportDetailURL`) are available for
    consumers that need to construct signed requests manually.
 
+   **HRV.** The nightly HRV the Zepp app shows is readiness/watch_score
+   `value.sleepHRV` (rMSSD, ms): `SleepHRVDays` / `DecodeSleepHRV`.
+   `wellness sync` uses it first. `HRVRMSSDDays` returns the mean of the
+   night's `value.samples[].hrv` (an approximation; used only for days without
+   readiness). `hrv_sdnn` may come back empty and HybridCharge
+   (`Charge`/`insight_data`) carries no HRV. 0 and 255 are never readings.
+   Shape sources: lingcang728/ZeppBridge @1012a00
+   `src-tauri/crates/core/src/normalizer/metrics.rs` L111-L145 (HRVRMSSD
+   samples), m4ary/zepp-health-cli @a466dfa `zepp_health.py` L703-L704
+   (event types), plus the structure of a real redacted response kept with
+   synthetic values in `testdata/zepp/real_shape/`.
+
 ```go
 import (
 	"context"

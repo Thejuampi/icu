@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -11,15 +13,23 @@ func timestampDateUTC(ms int64) string {
 	return time.UnixMilli(ms).UTC().Format(time.DateOnly)
 }
 
-// Zepp HRV shapes (see docs in research notes; confirmed by open-source
-// clients, never by our own calls to the real API):
+// Zepp HRV shapes. Sources (public code; never our own calls to the real API):
 //
-//   - HRVRMSSD / hrv_sdnn real_data: each item's "value" is an OBJECT
+//   - HRVRMSSD real_data: each item's "value" is an OBJECT
 //     {"startTime": <ms>, "deviceId": ..., "samples": [{"hrv": 41, "s": 0}, ...]}
-//     where "s" is a millisecond offset from startTime. Older or other
-//     payloads may carry the value as a JSON string or a plain number.
+//     where "s" is a millisecond offset from startTime. See
+//     github.com/lingcang728/ZeppBridge @1012a00,
+//     src-tauri/crates/core/src/normalizer/metrics.rs L111-L145
+//     (hrv_rmssd_samples). hrv_sdnn uses "sdnn" as the sample key. The
+//     eventType/subType pairs (HRVRMSSD/real_data, hrv_sdnn/real_data) are in
+//     github.com/m4ary/zepp-health-cli @a466dfa, zepp_health.py L703-L704.
+//     Older or other payloads may carry the value as a JSON string or a number.
 //   - readiness watch_score: "value" is an object whose "sleepHRV" is the
-//     nightly rMSSD in ms (Zepp's nightly HRV); 0/255 mean "not measured".
+//     nightly rMSSD in ms, the value the Zepp app shows; 0/255 mean "not
+//     measured". Confirmed against the structure of a real (redacted)
+//     response read offline; testdata/zepp/real_shape keeps that structure
+//     with synthetic values. hrv_sdnn came back empty there and HybridCharge
+//     (Charge/insight_data) carries no HRV, so neither is an HRV source.
 //
 // Zero, negative, non-finite and out-of-range readings are failed reads,
 // never values.
@@ -54,26 +64,19 @@ type zeppHRVValue struct {
 	SDNN  json.RawMessage `json:"sdnn"`
 }
 
-// rawNumber parses a JSON number or numeric string; ok=false otherwise.
+// rawNumber parses a JSON number or a numeric JSON string; ok=false otherwise.
 func rawNumber(raw json.RawMessage) (float64, bool) {
-	if len(raw) == 0 {
-		return 0, false
-	}
-	var v any
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return 0, false
-	}
-	switch v.(type) {
-	case float64, string:
-		f := zeppAnyToFloat(v)
-		if s, isStr := v.(string); isStr && f == 0 && s != "0" {
-			return 0, false
-		}
-
+	var f float64
+	if json.Unmarshal(raw, &f) == nil {
 		return f, true
 	}
+	var str string
+	if json.Unmarshal(raw, &str) != nil {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(str), 64)
 
-	return 0, false
+	return f, err == nil
 }
 
 // unwrapJSONString returns the inner JSON when raw is a string holding an

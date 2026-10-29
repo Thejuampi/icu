@@ -25,6 +25,7 @@ type syncFake struct {
 	hits       int
 	bandStatus int
 	hrvStatus  int
+	failEvent  string // eventType answered with 503
 	bulkStatus int
 	existing   string
 	hrvBody    string
@@ -49,6 +50,11 @@ func (f *syncFake) serve(t *testing.T) *httptest.Server {
 		case r.URL.Path == "/v2/users/me/events":
 			if f.hrvStatus != 0 {
 				w.WriteHeader(f.hrvStatus)
+
+				return
+			}
+			if f.failEvent != "" && r.URL.Query().Get("eventType") == f.failEvent {
+				w.WriteHeader(http.StatusServiceUnavailable)
 
 				return
 			}
@@ -542,5 +548,19 @@ func TestPartialSleepSuggestionsNoneWhenURLUnparsable(t *testing.T) {
 	}
 	if got := partialSleepSuggestions(changes, suggestionContext{unparsableURL: true}); len(got) != 0 {
 		t.Fatalf("unparsable --base-url must yield no suggestion, got %+v", got)
+	}
+}
+
+//nolint:paralleltest // sets env
+func TestWellnessSyncWarnsWhenOneHRVSourceFails(t *testing.T) {
+	for event, want := range map[string]string{
+		"readiness": "readiness sleepHRV failed",
+		"HRVRMSSD":  "HRVRMSSD samples failed",
+	} {
+		fake := &syncFake{existing: syncExisting, failEvent: event}
+		code, _, errOut := runSync(t, fake.serve(t), "--fields", "hrv")
+		if code == 0 || !strings.Contains(errOut, want) || strings.Contains(errOut, "zepp hrv failed:") {
+			t.Fatalf("%s: code=%d stderr=%s", event, code, errOut)
+		}
 	}
 }

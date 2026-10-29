@@ -22,7 +22,7 @@ func wellnessSyncCommand() *Command {
 		Name: "",
 		Usage: "wellness sync [--oldest DATE] [--newest DATE] [--fields restingHR,hrv,sleepSecs,sleepScore] " +
 			"[--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--json]",
-		Description: "Copy resting HR, HRV (rMSSD: readiness sleepHRV, else the nightly HRVRMSSD sample mean) and sleep from Zepp into intervals.icu wellness. " +
+		Description: "Copy resting HR, HRV (rMSSD: readiness sleepHRV, the nightly value the Zepp app shows; else the HRVRMSSD sample mean, an approximation) and sleep from Zepp into intervals.icu wellness. " +
 			"Dry run by default: prints the diff and writes nothing; --apply sends one PUT wellness-bulk. " +
 			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day). " +
 			"Suspected partial sleep sync: when intervals.icu has sleepSecs below half of Zepp's (e.g. about 1.6 h against a full night), " +
@@ -292,8 +292,13 @@ func fetchZeppWellness(zeppBase string, fields []string, loc *time.Location, old
 			if errors.Is(errSamples, icu.ErrZeppUnauthorized) {
 				return errSamples
 			}
-			if errSleep != nil && errSamples != nil {
+			switch {
+			case errSleep != nil && errSamples != nil:
 				warnings = append(warnings, fmt.Sprintf("zepp hrv failed: %v; %v", errSleep, errSamples))
+			case errSleep != nil:
+				warnings = append(warnings, fmt.Sprintf("zepp hrv: readiness sleepHRV failed (%v); HRV falls back to the HRVRMSSD sample mean, an approximation", errSleep))
+			case errSamples != nil:
+				warnings = append(warnings, fmt.Sprintf("zepp hrv: HRVRMSSD samples failed (%v); days without readiness sleepHRV get no HRV", errSamples))
 			}
 			hrv = make([]icu.ZeppHRVEvent, 0, len(sleepHRV)+len(samples))
 			hrv = append(hrv, sleepHRV...)

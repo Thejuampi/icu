@@ -19,6 +19,22 @@ import (
 // fraction, quoted or not (Strava and other external ids).
 var longID = regexp.MustCompile(`(^|[^.0-9A-Za-z_-]|[^.0-9A-Za-z_]-)(-?[0-9]{10,})([^0-9A-Za-z_-]|$)`)
 
+// epochTimeLine is a pretty-printed `"timestamp"`/`"startTime"` line holding
+// a 13-digit epoch in milliseconds (the Zepp real-shape fixtures).
+var epochTimeLine = regexp.MustCompile(`^\s*"(timestamp|startTime)": ([0-9]{13}),?$`)
+
+// isEpochTimeLine reports whether line is only a time key with an epoch-ms
+// value between 2000 and 2100: a time, not an external id.
+func isEpochTimeLine(line string) bool {
+	m := epochTimeLine.FindStringSubmatch(line)
+	if m == nil {
+		return false
+	}
+	ms, err := strconv.ParseInt(m[2], 10, 64)
+
+	return err == nil && ms >= 946684800000 && ms < 4102444800000
+}
+
 // TestCommittedFixturesHaveNoExternalIDsOrRealWeight scans every committed
 // JSON under testdata: the mock fixtures, the analysis corpus
 // (wave2_live_corpus.json) and its goldens.
@@ -53,7 +69,7 @@ func TestCommittedFixturesHaveNoExternalIDsOrRealWeight(t *testing.T) {
 		checkDenylist(t, path, body, deniedTokens())
 
 		for _, line := range strings.Split(string(body), "\n") {
-			if match := longID.FindStringSubmatch(line); match != nil {
+			if match := longID.FindStringSubmatch(line); match != nil && !isEpochTimeLine(line) {
 				t.Errorf("%s: numeric id of 10+ digits %s", path, match[2])
 			}
 		}
@@ -496,5 +512,21 @@ func TestDenylistAndClockTimes(t *testing.T) {
 
 	if rec.errors != 3 {
 		t.Fatalf("clock times flagged %d times, want 3", rec.errors)
+	}
+}
+
+func TestIsEpochTimeLine(t *testing.T) {
+	t.Parallel()
+	for line, want := range map[string]bool{
+		`      "timestamp": 1894622400000,`: true,
+		`        "startTime": 1894597200000`: true,
+		`      "timestamp": 9994622400000,`: false,
+		`      "deviceId": 1894622400000,`:  false,
+		`      "timestamp": 18946224000,`:   false,
+		`      "timestamp": 1894622400000, "id": 1234567890123`: false,
+	} {
+		if got := isEpochTimeLine(line); got != want {
+			t.Errorf("%q: got %v, want %v", line, got, want)
+		}
 	}
 }

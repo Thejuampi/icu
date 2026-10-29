@@ -1,0 +1,204 @@
+{
+  "items": [
+    {
+      "userId": "[redacted]",
+      "eventType": "Charge",
+      "subType": "insight_data",
+      "timestamp": 1894579200000,
+      "value": {
+        "startTime": 1894597200000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          },
+          {
+            "s": 60000,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          }
+        ]
+      }
+    },
+    {
+      "userId": "[redacted]",
+      "eventType": "Charge",
+      "subType": "insight_data",
+      "timestamp": 1894665600000,
+      "value": {
+        "startTime": 1894683600000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          },
+          {
+            "s": 60000,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          }
+        ]
+      }
+    },
+    {
+      "userId": "[redacted]",
+      "eventType": "Charge",
+      "subType": "insight_data",
+      "timestamp": 1894752000000,
+      "value": {
+        "startTime": 1894770000000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          },
+          {
+            "s": 60000,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          }
+        ]
+      }
+    },
+    {
+      "userId": "[redacted]",
+      "eventType": "Charge",
+      "subType": "insight_data",
+      "timestamp": 1894838400000,
+      "value": {
+        "startTime": 1894856400000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          },
+          {
+            "s": 60000,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          }
+        ]
+      }
+    },
+    {
+      "userId": "[redacted]",
+      "eventType": "Charge",
+      "subType": "insight_data",
+      "timestamp": 1894924800000,
+      "value": {
+        "startTime": 1894942800000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          },
+          {
+            "s": 60000,
+            "u": 7,
+            "type": 7,
+            "insight": 7,
+            "insightId": "[redacted]",
+            "diff": 7,
+            "slope": 7.0,
+            "thres": 7.0,
+            "trackId": "[redacted]",
+            "jsonExtra": "{\"diffBelowThreshold\":0,\"minsBelowThreshold\":0,\"needAIInsight\":false}"
+          }
+        ]
+      }
+    }
+  ]
+}
