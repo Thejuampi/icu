@@ -11,6 +11,9 @@
 // forwards GET requests to -upstream, anonymizes the responses into the
 // fixture directory, and refuses every non-GET request without forwarding it.
 //
+// -host must be loopback unless -allow-non-loopback is passed (never with
+// -redirect-sink): the mock has no auth.
+//
 // The optional -redirect-sink mode (off by default) starts a second loopback
 // listener and serves /_redirect/<mode>/..., /_mock/leaks and a synthetic Zepp
 // login, so an RC can check that no secret follows a redirect to another host
@@ -51,6 +54,8 @@ type options struct {
 	shiftSalt uint
 	// redirectSink turns on redirect mode (see redirect.go).
 	redirectSink bool
+	// allowNonLoopback lets -host bind a non-loopback address.
+	allowNonLoopback bool
 }
 
 func main() {
@@ -72,6 +77,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 
 	fs.BoolVar(&opts.redirectSink, "redirect-sink", false,
 		"redirect mode: start a second loopback listener and serve /_redirect/<mode>/..., /_mock/leaks and synthetic Zepp login")
+	fs.BoolVar(&opts.allowNonLoopback, "allow-non-loopback", false,
+		"allow a non-loopback -host (never with -redirect-sink); the mock has no auth")
 	fs.StringVar(&opts.anonDir, "anonymize", "", "re-anonymize every fixture in this directory and exit")
 	fs.IntVar(&opts.shiftDays, "shift-days", 0, "with -anonymize: date shift in days (0 = random whole weeks back)")
 	fs.UintVar(&opts.shiftSalt, "shift-salt", 0, "with -anonymize: jitter salt (0 = random)")
@@ -88,7 +95,26 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return opts, fmt.Errorf("invalid -port %d", opts.port)
 	}
 
+	if !isLoopbackHost(opts.host) {
+		if opts.redirectSink {
+			return opts, fmt.Errorf("-host %q is not loopback; -redirect-sink only runs on loopback", opts.host)
+		}
+		if !opts.allowNonLoopback {
+			return opts, fmt.Errorf("-host %q is not loopback; pass -allow-non-loopback to bind it anyway", opts.host)
+		}
+	}
+
 	return opts, nil
+}
+
+// isLoopbackHost reports whether host is localhost or a loopback IP.
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+
+	return ip != nil && ip.IsLoopback()
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {

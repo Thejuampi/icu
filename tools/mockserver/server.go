@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -200,7 +201,12 @@ func (s *server) handleWrite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(raw) > 0 {
-		if json.Valid(raw) {
+		if r.URL.Path == mockZeppTokensPath {
+			// Zepp login form (password, access code): never kept in the
+			// write log. Field names stay, values are redacted.
+			quoted, _ := json.Marshal(redactForm(raw)) //nolint:errchkjson // marshaling a string cannot fail
+			entry.Body = quoted
+		} else if json.Valid(raw) {
 			entry.Body = raw
 		} else {
 			quoted, _ := json.Marshal(string(raw)) //nolint:errchkjson // marshaling a string cannot fail
@@ -213,6 +219,27 @@ func (s *server) handleWrite(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(s.log, "icu-mock: recorded %s %s (not persisted)\n", r.Method, r.URL.Path)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// redactForm returns a form body with every value replaced by redactedValue
+// (field names kept, sorted); a body that does not parse as a form becomes
+// redactedValue.
+func redactForm(raw []byte) string {
+	values, err := url.ParseQuery(string(raw))
+	if err != nil || len(values) == 0 {
+		return redactedValue
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, url.QueryEscape(key)+"="+redactedValue)
+	}
+
+	return strings.Join(parts, "&")
 }
 
 // record stores the write and returns the response body: DELETE answers {},

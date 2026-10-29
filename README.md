@@ -365,6 +365,10 @@ icu zepp login --email rc@example.com --password synthetic --zepp-base-url http:
 curl -s http://127.0.0.1:8765/_mock/leaks   # count 0, every *Received false
 ```
 
+`scripts/redirect-check.sh ICU_BIN ICU_MOCK_BIN FIXTURES_DIR` runs that check end to end against the built binaries: cross-host 307/308 must be refused by the intervals client, the Zepp data client and `zepp login`, a same-host 307 must still work for all three (the control), and the sink must receive nothing.
+
+The mock binds loopback only: a non-loopback `-host` needs `-allow-non-loopback` (the mock has no auth) and is never allowed with `-redirect-sink`. `/_mock/writes` records the Zepp tokens form (`POST /v2/registrations/tokens`) with every value replaced by `[redacted]`.
+
 ## License
 
 MIT

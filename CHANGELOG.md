@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Zepp login: both steps (tokens and login) use a 30 s timeout (`zeppAuthTimeout`); the tokens client had none. Tests cover both with a hanging server.
+- Mock server: a non-loopback `-host` is refused unless `-allow-non-loopback`, and never allowed with `-redirect-sink`; `/_mock/writes` redacts the Zepp tokens form (password) values. New `scripts/redirect-check.sh`: binary-level cross-host redirect refusal for the intervals client, the Zepp data client (`WithHTTPClient`) and `zepp login`, with a same-host control.
+- `wellness sync` suggestion: credentials, query and fragment are removed from `--base-url`/`--zepp-base-url` before they appear in the suggested command or `--json` (with a warning on stderr); the real API is detected with `IsRealAPIBaseURL`; arguments are shell-quoted (round-trip tested through `sh -c`).
 - `wellness sync` flags a suspected partial sleep sync: when intervals.icu `sleepSecs` is > 0 but under half of Zepp's, the dry-run row is marked `partial sync?` (JSON `note: suspected-partial-sync`, `partialSleep` list) and a per-day `--overwrite --fields sleepSecs,sleepScore --apply` command is suggested (sleepScore too: a partial sync also undercounts it). The suggestion keeps the run's `--base-url`, `--zepp-base-url`, `--allow-insecure-zepp-host`, `--timezone`, `--athlete-id` and `--lock` (no secrets) and is skipped when the run already used `--overwrite`. Fill-only behaviour is unchanged (`keep`).
 - `tools/steadyride`: speed follows power with inertia; the comment explains the 45 s generator delay vs the ~53 s detected lag. `activity decoupling` help is built from the `Coach*` constants (#35).
 - Mock server: `-redirect-sink` (off by default) adds a second loopback listener, `/_redirect/{cross307,cross308,same307,same308}[-tokens]/...` redirects, a synthetic Zepp login and `/_mock/leaks` (redacted, with code/API key/Apptoken booleans) for black-box redirect checks.
