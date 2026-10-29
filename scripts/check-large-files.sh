@@ -9,7 +9,7 @@ limit="${1:-1048576}"
 hard_cap=2097152 # 2 MiB: no tracked file may exceed this, allowlisted or not
 # path=sha256 of reviewed data files above the limit.
 allow=(
-  "testdata/wave2_live_corpus.json=7ed6dd5fb274edcb471a1daeb5c4efa07939f4deeae14c987e2a26304b28fd86"
+  "testdata/wave2_live_corpus.json=b39fd98024193429dbbfa646c67a220f2423ee51c0f249c6d1eba0e3426c57ef"
 )
 status=0
 while IFS= read -r -d '' file; do

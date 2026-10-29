@@ -40,6 +40,16 @@ func TestCommittedFixturesHaveNoExternalIDsOrRealWeight(t *testing.T) {
 
 		checked++
 
+		checkFixtureName(t, path)
+
+		// Captured values that must never reappear: the real athlete number
+		// and the activity the reference streams came from (now i632977173).
+		for _, word := range []string{"445643", "202545713"} {
+			if strings.Contains(string(body), word) {
+				t.Errorf("%s: contains captured value %q", path, word)
+			}
+		}
+
 		for _, line := range strings.Split(string(body), "\n") {
 			if match := longID.FindStringSubmatch(line); match != nil {
 				t.Errorf("%s: numeric id of 10+ digits %s", path, match[2])
@@ -167,6 +177,10 @@ func walkPrivacy(t reporter, path, parent string, value any) {
 				checkIDValue(t, path, key, inner)
 			}
 
+			if group, ok := inner.(string); ok && key == "group" && realGroupHash.MatchString(group) {
+				t.Errorf("%s: group = %q is a captured group hash", path, group)
+			}
+
 			if text, ok := inner.(string); ok && athleteIDShape.MatchString(text) {
 				t.Errorf("%s: %s = %q looks like a real athlete id", path, key, text)
 			}
@@ -255,6 +269,22 @@ func checkPerKg(t reporter, path, key string, power, perKg any) {
 	}
 }
 
+func TestCheckFixtureName(t *testing.T) {
+	for path, want := range map[string]int{
+		"streams_i202545713.json":                 1,
+		"streams_i632977173.json":                 0,
+		"api/v1/activity/i900000001/streams.json": 0,
+		"wellness_replay.json":                    0,
+	} {
+		rec := &recordingTB{}
+		checkFixtureName(rec, path)
+
+		if rec.errors != want {
+			t.Errorf("%s: %d errors, want %d", path, rec.errors, want)
+		}
+	}
+}
+
 func TestPrivacyWalkersFlagLeaks(t *testing.T) {
 	cases := map[string]string{
 		"map key":     `{"123456789":{}}`,
@@ -265,6 +295,7 @@ func TestPrivacyWalkersFlagLeaks(t *testing.T) {
 		"curve name":  `{"activities":{"i1":{"name":"Morning Ride"}}}`,
 		"per kg":      `{"average_watts":136,"average_watts_kg":1.67}`,
 		"eftp per kg": `{"eftp":265.9,"eftpPerKg":3.79}`,
+		"group hash":  `{"group":"d347ad98"}`,
 	}
 	for name, body := range cases {
 		var value any
@@ -283,7 +314,7 @@ func TestPrivacyWalkersFlagLeaks(t *testing.T) {
 	var clean any
 	if err := decodeJSON([]byte(`{"id":800000001,"paired_event_id":700012345,"icu_weight_sync":"NONE",`+
 		`"icu_weighted_avg_watts":200,"weight":72.8,"watts":[364],"watts_per_kg":[5],`+
-		`"activities":{"i1":{"name":"Activity i1"}}}`), &clean); err != nil {
+		`"activities":{"i1":{"name":"Activity i1"}},"group":"mkf40142"}`), &clean); err != nil {
 		t.Fatal(err)
 	}
 
@@ -314,6 +345,22 @@ func scanPrivacy(t reporter, value any) {
 	walkPrivacy(t, "case", "", value)
 }
 
+// fileID matches an activity id inside a file name (gear ids never name
+// files, and "b892133" in a golden name is a git commit).
+var fileID = regexp.MustCompile(`i\d{6,}`)
+
+// checkFixtureName flags a testdata file whose name carries a real
+// (not synthetic) activity or gear id.
+func checkFixtureName(t reporter, path string) {
+	t.Helper()
+
+	for _, id := range fileID.FindAllString(path, -1) {
+		if isRealPrefixedID(id) {
+			t.Errorf("%s: file name carries real id %s", path, id)
+		}
+	}
+}
+
 // athleteIDShape matches real intervals.icu athlete ids ("i" + 5-7 digits);
 // the anonymized athlete is "i0" and synthetic activity ids have 9 digits.
 var athleteIDShape = regexp.MustCompile(`^i\d{5,7}$`)
@@ -335,6 +382,26 @@ func checkActivityText(t reporter, path string, obj map[string]any) {
 	for key, want := range activityText() {
 		if value, ok := obj[key]; ok && value != nil && value != want {
 			t.Errorf("%s: activity %v %s = %v, want %v", path, obj["id"], key, value, want)
+		}
+	}
+}
+
+func TestRemapGroupHashKeepsGroupingAndIsIdempotent(t *testing.T) {
+	a, b := remapGroupHash("d347ad98"), remapGroupHash("e11ee258")
+	if a != remapGroupHash("d347ad98") || a == b || realGroupHash.MatchString(a) {
+		t.Fatalf("remap %q %q", a, b)
+	}
+
+	var value any
+	if err := decodeJSON([]byte(`[{"group":"d347ad98"},{"group":"d347ad98"},{"group":"`+a+`"}]`), &value); err != nil {
+		t.Fatal(err)
+	}
+
+	items, _ := anonymize(value).([]any)
+	for _, item := range items {
+		obj, _ := item.(map[string]any)
+		if obj["group"] != a {
+			t.Fatalf("group = %v, want %s", obj["group"], a)
 		}
 	}
 }

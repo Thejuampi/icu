@@ -1,937 +1,937 @@
 {
- "_source": "GET /api/v1/athlete/{id}/wellness (ctl, atl, ctlLoad, atlLoad) and /activities (type, icu_training_load = effective load incl. manual overrides, hr_load/pace_load/power_load), read-only, captured 2026-10-26",
- "rows": [
-  {
-   "id": "2026-07-31",
-   "ctl": 39.46699,
-   "atl": 15.323211,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-01",
-   "ctl": 38.5384,
-   "atl": 13.283353,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-02",
-   "ctl": 39.843315,
-   "atl": 24.028522,
-   "ctlLoad": 94.0,
-   "atlLoad": 94.0,
-   "activities": [
+  "_source": "GET /api/v1/athlete/{id}/wellness (ctl, atl, ctlLoad, atlLoad) and /activities (type, icu_training_load = effective load incl. manual overrides, hr_load/pace_load/power_load), read-only, captured 2026-09-28",
+  "rows": [
     {
-     "type": "Ride",
-     "icuTrainingLoad": 94,
-     "hrLoad": 95,
-     "powerLoad": 94
-    }
-   ]
-  },
-  {
-   "id": "2026-08-03",
-   "ctl": 39.87053,
-   "atl": 26.287802,
-   "ctlLoad": 41.0,
-   "atlLoad": 41.0,
-   "activities": [
-    {
-     "type": "Ride",
-     "icuTrainingLoad": 41,
-     "hrLoad": 41,
-     "powerLoad": 40
-    }
-   ]
-  },
-  {
-   "id": "2026-08-04",
-   "ctl": 41.544086,
-   "atl": 37.56487,
-   "ctlLoad": 111.0,
-   "atlLoad": 111.0,
-   "activities": [
-    {
-     "type": "Ride",
-     "icuTrainingLoad": 111,
-     "hrLoad": 96,
-     "powerLoad": 111
-    }
-   ]
-  },
-  {
-   "id": "2026-08-05",
-   "ctl": 40.566624,
-   "atl": 32.564156,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-06",
-   "ctl": 41.635593,
-   "atl": 39.677647,
-   "ctlLoad": 86.0,
-   "atlLoad": 86.0,
-   "activities": [
-    {
-     "type": "Ride",
-     "icuTrainingLoad": 86,
-     "hrLoad": 86,
-     "powerLoad": 77
-    }
-   ]
-  },
-  {
-   "id": "2026-08-07",
-   "ctl": 40.65598,
-   "atl": 34.395676,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-08",
-   "ctl": 40.99347,
-   "atl": 37.138565,
-   "ctlLoad": 55.0,
-   "atlLoad": 55.0,
-   "activities": [
-    {
-     "type": "Ride",
-     "icuTrainingLoad": 55,
-     "hrLoad": 55,
-     "powerLoad": 46
-    }
-   ]
-  },
-  {
-   "id": "2026-08-09",
-   "ctl": 40.02896,
-   "atl": 32.194603,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-10",
-   "ctl": 39.369488,
-   "atl": 29.506254,
-   "ctlLoad": 12.0,
-   "atlLoad": 12.0,
-   "activities": [
-    {
-     "type": "Walk",
-     "icuTrainingLoad": 12,
-     "paceLoad": 17
-    }
-   ]
-  },
-  {
-   "id": "2026-08-11",
-   "ctl": 38.44319,
-   "atl": 25.57832,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-12",
-   "ctl": 37.726913,
-   "atl": 23.238256,
-   "ctlLoad": 8.0,
-   "atlLoad": 8.0,
-   "activities": [
-    {
-     "type": "Walk",
-     "icuTrainingLoad": 8,
-     "paceLoad": 11
-    }
-   ]
-  },
-  {
-   "id": "2026-08-13",
-   "ctl": 37.451,
-   "atl": 23.605906,
-   "ctlLoad": 26.0,
-   "atlLoad": 26.0,
-   "activities": [
-    {
-     "type": "VirtualRun",
-     "icuTrainingLoad": 18,
-     "hrLoad": 18,
-     "paceLoad": 6
+      "atl": 15.323211,
+      "atlLoad": 0,
+      "ctl": 39.46699,
+      "ctlLoad": 0,
+      "id": "2026-07-03"
     },
     {
-     "type": "Walk",
-     "icuTrainingLoad": 8,
-     "paceLoad": 11
-    }
-   ]
-  },
-  {
-   "id": "2026-08-14",
-   "ctl": 36.56984,
-   "atl": 20.463438,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-15",
-   "ctl": 35.70941,
-   "atl": 17.739302,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-16",
-   "ctl": 35.857418,
-   "atl": 20.968937,
-   "ctlLoad": 42.0,
-   "atlLoad": 42.0,
-   "activities": [
-    {
-     "type": "Ride",
-     "icuTrainingLoad": 42,
-     "hrLoad": 42,
-     "powerLoad": 42
-    }
-   ]
-  },
-  {
-   "id": "2026-08-17",
-   "ctl": 36.637207,
-   "atl": 27.362932,
-   "ctlLoad": 69.0,
-   "atlLoad": 69.0,
-   "activities": [
-    {
-     "type": "Ride",
-     "icuTrainingLoad": 69,
-     "hrLoad": 68,
-     "powerLoad": 69
-    }
-   ]
-  },
-  {
-   "id": "2026-08-18",
-   "ctl": 35.98695,
-   "atl": 25.450909,
-   "ctlLoad": 9.0,
-   "atlLoad": 13.0,
-   "activities": [
-    {
-     "type": "Workout",
-     "icuTrainingLoad": 4,
-     "hrLoad": 4
+      "atl": 13.283353,
+      "atlLoad": 0,
+      "ctl": 38.5384,
+      "ctlLoad": 0,
+      "id": "2026-07-04"
     },
     {
-     "type": "VirtualRun",
-     "icuTrainingLoad": 9,
-     "hrLoad": 25,
-     "paceLoad": 9
-    }
-   ]
-  },
-  {
-   "id": "2026-08-19",
-   "ctl": 35.140236,
-   "atl": 22.06283,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-20",
-   "ctl": 34.313446,
-   "atl": 19.12578,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-21",
-   "ctl": 33.506107,
-   "atl": 16.579716,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-22",
-   "ctl": 32.717766,
-   "atl": 14.372589,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-23",
-   "ctl": 31.947971,
-   "atl": 12.45928,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-24",
-   "ctl": 31.19629,
-   "atl": 10.800674,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-25",
-   "ctl": 30.462294,
-   "atl": 9.362866,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-26",
-   "ctl": 29.745567,
-   "atl": 8.116462,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-27",
-   "ctl": 29.045704,
-   "atl": 7.035981,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-28",
-   "ctl": 28.362307,
-   "atl": 6.0993366,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-29",
-   "ctl": 27.69499,
-   "atl": 5.28738,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-08-30",
-   "ctl": 27.090431,
-   "atl": 6.447222,
-   "ctlLoad": 2.0,
-   "atlLoad": 14.0,
-   "activities": [
-    {
-     "type": "WeightTraining",
-     "icuTrainingLoad": 12,
-     "hrLoad": 12
+      "activities": [
+        {
+          "hrLoad": 95,
+          "icuTrainingLoad": 94,
+          "powerLoad": 94,
+          "type": "Ride"
+        }
+      ],
+      "atl": 24.028522,
+      "atlLoad": 94.0,
+      "ctl": 39.843315,
+      "ctlLoad": 94.0,
+      "id": "2026-07-05"
     },
     {
-     "type": "VirtualRun",
-     "icuTrainingLoad": 2,
-     "hrLoad": 6,
-     "paceLoad": 2
-    }
-   ]
-  },
-  {
-   "id": "2026-08-31",
-   "ctl": 26.45304,
-   "atl": 5.5889544,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-01",
-   "ctl": 25.830645,
-   "atl": 4.844941,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-02",
-   "ctl": 25.222893,
-   "atl": 4.1999726,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-03",
-   "ctl": 24.62944,
-   "atl": 3.6408634,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-04",
-   "ctl": 24.049952,
-   "atl": 3.156184,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-05",
-   "ctl": 23.484097,
-   "atl": 2.736026,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-06",
-   "ctl": 23.096254,
-   "atl": 4.90112,
-   "ctlLoad": 7.0,
-   "atlLoad": 19.0,
-   "activities": [
-    {
-     "type": "WeightTraining",
-     "icuTrainingLoad": 12,
-     "hrLoad": 12
+      "activities": [
+        {
+          "hrLoad": 41,
+          "icuTrainingLoad": 41,
+          "powerLoad": 40,
+          "type": "Ride"
+        }
+      ],
+      "atl": 26.287802,
+      "atlLoad": 41.0,
+      "ctl": 39.87053,
+      "ctlLoad": 41.0,
+      "id": "2026-07-06"
     },
     {
-     "type": "VirtualRun",
-     "icuTrainingLoad": 7,
-     "hrLoad": 16,
-     "paceLoad": 7
-    }
-   ]
-  },
-  {
-   "id": "2026-09-07",
-   "ctl": 22.905764,
-   "atl": 7.8429694,
-   "ctlLoad": 15.0,
-   "atlLoad": 27.0,
-   "activities": [
-    {
-     "type": "WeightTraining",
-     "icuTrainingLoad": 12,
-     "hrLoad": 12
+      "activities": [
+        {
+          "hrLoad": 96,
+          "icuTrainingLoad": 111,
+          "powerLoad": 111,
+          "type": "Ride"
+        }
+      ],
+      "atl": 37.56487,
+      "atlLoad": 111.0,
+      "ctl": 41.544086,
+      "ctlLoad": 111.0,
+      "id": "2026-07-07"
     },
     {
-     "type": "VirtualRun",
-     "icuTrainingLoad": 15,
-     "hrLoad": 15,
-     "paceLoad": 8
-    }
-   ]
-  },
-  {
-   "id": "2026-09-08",
-   "ctl": 22.366829,
-   "atl": 6.798897,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-09",
-   "ctl": 22.87582,
-   "atl": 11.751185,
-   "ctlLoad": 44.0,
-   "atlLoad": 44.0,
-   "activities": [
-    {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 44,
-     "hrLoad": 44,
-     "powerLoad": 44
-    }
-   ]
-  },
-  {
-   "id": "2026-09-10",
-   "ctl": 22.337591,
-   "atl": 10.186843,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-11",
-   "ctl": 21.812025,
-   "atl": 14.421877,
-   "ctlLoad": 0,
-   "atlLoad": 42.0,
-   "activities": [
-    {
-     "type": "WeightTraining",
-     "icuTrainingLoad": 42,
-     "hrLoad": 42
-    }
-   ]
-  },
-  {
-   "id": "2026-09-12",
-   "ctl": 21.298824,
-   "atl": 12.502007,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-13",
-   "ctl": 22.962303,
-   "atl": 23.084946,
-   "ctlLoad": 92.0,
-   "atlLoad": 92.0,
-   "activities": [
-    {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 92,
-     "hrLoad": 92,
-     "powerLoad": 87
-    }
-   ]
-  },
-  {
-   "id": "2026-09-14",
-   "ctl": 22.422039,
-   "atl": 20.01183,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-15",
-   "ctl": 22.55328,
-   "atl": 21.075232,
-   "ctlLoad": 28.0,
-   "atlLoad": 28.0,
-   "activities": [
-    {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 28,
-     "hrLoad": 25,
-     "powerLoad": 28
-    }
-   ]
-  },
-  {
-   "id": "2026-09-16",
-   "ctl": 22.022638,
-   "atl": 18.269653,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-17",
-   "ctl": 21.504482,
-   "atl": 15.837559,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-18",
-   "ctl": 20.998518,
-   "atl": 13.72923,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-19",
-   "ctl": 20.504457,
-   "atl": 11.901566,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-20",
-   "ctl": 21.057268,
-   "atl": 16.174576,
-   "ctlLoad": 44.0,
-   "atlLoad": 44.0,
-   "activities": [
-    {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 9,
-     "hrLoad": 9,
-     "powerLoad": 9
+      "atl": 32.564156,
+      "atlLoad": 0,
+      "ctl": 40.566624,
+      "ctlLoad": 0,
+      "id": "2026-07-08"
     },
     {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 35,
-     "hrLoad": 35,
-     "powerLoad": 29
-    }
-   ]
-  },
-  {
-   "id": "2026-09-21",
-   "ctl": 20.561827,
-   "atl": 14.021382,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-22",
-   "ctl": 21.654438,
-   "atl": 21.074007,
-   "ctlLoad": 67.0,
-   "atlLoad": 67.0,
-   "activities": [
+      "activities": [
+        {
+          "hrLoad": 86,
+          "icuTrainingLoad": 86,
+          "powerLoad": 77,
+          "type": "Ride"
+        }
+      ],
+      "atl": 39.677647,
+      "atlLoad": 86.0,
+      "ctl": 41.635593,
+      "ctlLoad": 86.0,
+      "id": "2026-07-09"
+    },
     {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 67,
-     "hrLoad": 67,
-     "powerLoad": 65
-    }
-   ]
-  },
-  {
-   "id": "2026-09-23",
-   "ctl": 21.144945,
-   "atl": 18.26859,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-24",
-   "ctl": 22.294422,
-   "atl": 25.155186,
-   "ctlLoad": 70.0,
-   "atlLoad": 70.0,
-   "activities": [
+      "atl": 34.395676,
+      "atlLoad": 0,
+      "ctl": 40.65598,
+      "ctlLoad": 0,
+      "id": "2026-07-10"
+    },
     {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 70,
-     "hrLoad": 53,
-     "powerLoad": 70
-    }
-   ]
-  },
-  {
-   "id": "2026-09-25",
-   "ctl": 23.369797,
-   "atl": 30.858778,
-   "ctlLoad": 68.0,
-   "atlLoad": 68.0,
-   "activities": [
+      "activities": [
+        {
+          "hrLoad": 55,
+          "icuTrainingLoad": 55,
+          "powerLoad": 46,
+          "type": "Ride"
+        }
+      ],
+      "atl": 37.138565,
+      "atlLoad": 55.0,
+      "ctl": 40.99347,
+      "ctlLoad": 55.0,
+      "id": "2026-07-11"
+    },
     {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 68,
-     "hrLoad": 68,
-     "powerLoad": 61
-    }
-   ]
-  },
-  {
-   "id": "2026-09-26",
-   "ctl": 22.819944,
-   "atl": 26.750793,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-27",
-   "ctl": 23.953539,
-   "atl": 32.641342,
-   "ctlLoad": 71.0,
-   "atlLoad": 71.0,
-   "activities": [
+      "atl": 32.194603,
+      "atlLoad": 0,
+      "ctl": 40.02896,
+      "ctlLoad": 0,
+      "id": "2026-07-12"
+    },
     {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 71,
-     "hrLoad": 71,
-     "powerLoad": 57
-    }
-   ]
-  },
-  {
-   "id": "2026-09-28",
-   "ctl": 23.389952,
-   "atl": 28.296059,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-29",
-   "ctl": 22.839626,
-   "atl": 24.529228,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-09-30",
-   "ctl": 24.160986,
-   "atl": 31.78049,
-   "ctlLoad": 79.0,
-   "atlLoad": 79.0,
-   "activities": [
+      "activities": [
+        {
+          "icuTrainingLoad": 12,
+          "paceLoad": 17,
+          "type": "Walk"
+        }
+      ],
+      "atl": 29.506254,
+      "atlLoad": 12.0,
+      "ctl": 39.369488,
+      "ctlLoad": 12.0,
+      "id": "2026-07-13"
+    },
     {
-     "type": "VirtualRide",
-     "icuTrainingLoad": 79,
-     "hrLoad": 76,
-     "powerLoad": 72
-    }
-   ]
-  },
-  {
-   "id": "2026-10-01",
-   "ctl": 25.26303,
-   "atl": 37.001472,
-   "ctlLoad": 71.0,
-   "atlLoad": 71.0,
-   "activities": [
+      "atl": 25.57832,
+      "atlLoad": 0,
+      "ctl": 38.44319,
+      "ctlLoad": 0,
+      "id": "2026-07-14"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 71,
-     "hrLoad": 64,
-     "powerLoad": 70
-    }
-   ]
-  },
-  {
-   "id": "2026-10-02",
-   "ctl": 24.668633,
-   "atl": 32.07576,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-03",
-   "ctl": 24.08822,
-   "atl": 27.805767,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-04",
-   "ctl": 23.521465,
-   "atl": 24.104204,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-05",
-   "ctl": 24.356215,
-   "atl": 28.749605,
-   "ctlLoad": 59.0,
-   "atlLoad": 59.0,
-   "activities": [
+      "activities": [
+        {
+          "icuTrainingLoad": 8,
+          "paceLoad": 11,
+          "type": "Walk"
+        }
+      ],
+      "atl": 23.238256,
+      "atlLoad": 8.0,
+      "ctl": 37.726913,
+      "ctlLoad": 8.0,
+      "id": "2026-07-15"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 59,
-     "hrLoad": 58,
-     "powerLoad": 59
-    }
-   ]
-  },
-  {
-   "id": "2026-10-06",
-   "ctl": 25.618362,
-   "atl": 35.30592,
-   "ctlLoad": 78.0,
-   "atlLoad": 78.0,
-   "activities": [
+      "activities": [
+        {
+          "hrLoad": 18,
+          "icuTrainingLoad": 18,
+          "paceLoad": 6,
+          "type": "VirtualRun"
+        },
+        {
+          "icuTrainingLoad": 8,
+          "paceLoad": 11,
+          "type": "Walk"
+        }
+      ],
+      "atl": 23.605906,
+      "atlLoad": 26.0,
+      "ctl": 37.451,
+      "ctlLoad": 26.0,
+      "id": "2026-07-16"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 78,
-     "hrLoad": 78,
-     "powerLoad": 67
-    }
-   ]
-  },
-  {
-   "id": "2026-10-07",
-   "ctl": 25.015606,
-   "atl": 30.60592,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-08",
-   "ctl": 25.885786,
-   "atl": 34.785168,
-   "ctlLoad": 62.0,
-   "atlLoad": 62.0,
-   "activities": [
+      "atl": 20.463438,
+      "atlLoad": 0,
+      "ctl": 36.56984,
+      "ctlLoad": 0,
+      "id": "2026-07-17"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 62,
-     "hrLoad": 62,
-     "powerLoad": 57
-    }
-   ]
-  },
-  {
-   "id": "2026-10-09",
-   "ctl": 25.276737,
-   "atl": 30.154493,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-10",
-   "ctl": 26.705454,
-   "atl": 37.588764,
-   "ctlLoad": 86.0,
-   "atlLoad": 86.0,
-   "activities": [
+      "atl": 17.739302,
+      "atlLoad": 0,
+      "ctl": 35.70941,
+      "ctlLoad": 0,
+      "id": "2026-07-18"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 86,
-     "hrLoad": 85,
-     "powerLoad": 74
-    }
-   ]
-  },
-  {
-   "id": "2026-10-11",
-   "ctl": 26.07712,
-   "atl": 32.58487,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-12",
-   "ctl": 27.39289,
-   "atl": 39.163116,
-   "ctlLoad": 82.0,
-   "atlLoad": 82.0,
-   "activities": [
+      "activities": [
+        {
+          "hrLoad": 42,
+          "icuTrainingLoad": 42,
+          "powerLoad": 42,
+          "type": "Ride"
+        }
+      ],
+      "atl": 20.968937,
+      "atlLoad": 42.0,
+      "ctl": 35.857418,
+      "ctlLoad": 42.0,
+      "id": "2026-07-19"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 82,
-     "hrLoad": 83,
-     "powerLoad": 80
-    }
-   ]
-  },
-  {
-   "id": "2026-10-13",
-   "ctl": 26.748383,
-   "atl": 33.94964,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-14",
-   "ctl": 26.119038,
-   "atl": 29.430191,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-15",
-   "ctl": 25.504501,
-   "atl": 25.512383,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-16",
-   "ctl": 24.904423,
-   "atl": 22.116121,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-17",
-   "ctl": 24.318464,
-   "atl": 19.171976,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-18",
-   "ctl": 25.534443,
-   "atl": 26.737041,
-   "ctlLoad": 76.0,
-   "atlLoad": 76.0,
-   "activities": [
+      "activities": [
+        {
+          "hrLoad": 68,
+          "icuTrainingLoad": 69,
+          "powerLoad": 69,
+          "type": "Ride"
+        }
+      ],
+      "atl": 27.362932,
+      "atlLoad": 69.0,
+      "ctl": 36.637207,
+      "ctlLoad": 69.0,
+      "id": "2026-07-20"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 76,
-     "hrLoad": 76,
-     "powerLoad": 76
-    }
-   ]
-  },
-  {
-   "id": "2026-10-19",
-   "ctl": 26.298304,
-   "atl": 30.898832,
-   "ctlLoad": 58.0,
-   "atlLoad": 58.0,
-   "activities": [
+      "activities": [
+        {
+          "hrLoad": 4,
+          "icuTrainingLoad": 4,
+          "type": "Workout"
+        },
+        {
+          "hrLoad": 25,
+          "icuTrainingLoad": 9,
+          "paceLoad": 9,
+          "type": "VirtualRun"
+        }
+      ],
+      "atl": 25.450909,
+      "atlLoad": 13.0,
+      "ctl": 35.98695,
+      "ctlLoad": 9.0,
+      "id": "2026-07-21"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 58,
-     "hrLoad": 49,
-     "powerLoad": 58
-    }
-   ]
-  },
-  {
-   "id": "2026-10-20",
-   "ctl": 26.197172,
-   "atl": 29.714201,
-   "ctlLoad": 22.0,
-   "atlLoad": 22.0,
-   "activities": [
+      "atl": 22.06283,
+      "atlLoad": 0,
+      "ctl": 35.140236,
+      "ctlLoad": 0,
+      "id": "2026-07-22"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 22,
-     "hrLoad": 22,
-     "powerLoad": 18
-    }
-   ]
-  },
-  {
-   "id": "2026-10-21",
-   "ctl": 25.580797,
-   "atl": 25.758585,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-22",
-   "ctl": 27.167057,
-   "atl": 34.709904,
-   "ctlLoad": 93.0,
-   "atlLoad": 93.0,
-   "activities": [
+      "atl": 19.12578,
+      "atlLoad": 0,
+      "ctl": 34.313446,
+      "ctlLoad": 0,
+      "id": "2026-07-23"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 93,
-     "hrLoad": 74,
-     "powerLoad": 93
-    }
-   ]
-  },
-  {
-   "id": "2026-10-23",
-   "ctl": 28.10426,
-   "atl": 39.00843,
-   "ctlLoad": 67.0,
-   "atlLoad": 67.0,
-   "activities": [
+      "atl": 16.579716,
+      "atlLoad": 0,
+      "ctl": 33.506107,
+      "ctlLoad": 0,
+      "id": "2026-07-24"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 67,
-     "hrLoad": 58,
-     "powerLoad": 67
-    }
-   ]
-  },
-  {
-   "id": "2026-10-24",
-   "ctl": 27.443014,
-   "atl": 33.815548,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  },
-  {
-   "id": "2026-10-25",
-   "ctl": 29.573668,
-   "atl": 45.022358,
-   "ctlLoad": 118.0,
-   "atlLoad": 118.0,
-   "activities": [
+      "atl": 14.372589,
+      "atlLoad": 0,
+      "ctl": 32.717766,
+      "ctlLoad": 0,
+      "id": "2026-07-25"
+    },
     {
-     "type": "Ride",
-     "icuTrainingLoad": 118,
-     "hrLoad": 113,
-     "powerLoad": 118
+      "atl": 12.45928,
+      "atlLoad": 0,
+      "ctl": 31.947971,
+      "ctlLoad": 0,
+      "id": "2026-07-26"
+    },
+    {
+      "atl": 10.800674,
+      "atlLoad": 0,
+      "ctl": 31.19629,
+      "ctlLoad": 0,
+      "id": "2026-07-27"
+    },
+    {
+      "atl": 9.362866,
+      "atlLoad": 0,
+      "ctl": 30.462294,
+      "ctlLoad": 0,
+      "id": "2026-07-28"
+    },
+    {
+      "atl": 8.116462,
+      "atlLoad": 0,
+      "ctl": 29.745567,
+      "ctlLoad": 0,
+      "id": "2026-07-29"
+    },
+    {
+      "atl": 7.035981,
+      "atlLoad": 0,
+      "ctl": 29.045704,
+      "ctlLoad": 0,
+      "id": "2026-07-30"
+    },
+    {
+      "atl": 6.0993366,
+      "atlLoad": 0,
+      "ctl": 28.362307,
+      "ctlLoad": 0,
+      "id": "2026-07-31"
+    },
+    {
+      "atl": 5.28738,
+      "atlLoad": 0,
+      "ctl": 27.69499,
+      "ctlLoad": 0,
+      "id": "2026-08-01"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 12,
+          "icuTrainingLoad": 12,
+          "type": "WeightTraining"
+        },
+        {
+          "hrLoad": 6,
+          "icuTrainingLoad": 2,
+          "paceLoad": 2,
+          "type": "VirtualRun"
+        }
+      ],
+      "atl": 6.447222,
+      "atlLoad": 14.0,
+      "ctl": 27.090431,
+      "ctlLoad": 2.0,
+      "id": "2026-08-02"
+    },
+    {
+      "atl": 5.5889544,
+      "atlLoad": 0,
+      "ctl": 26.45304,
+      "ctlLoad": 0,
+      "id": "2026-08-03"
+    },
+    {
+      "atl": 4.844941,
+      "atlLoad": 0,
+      "ctl": 25.830645,
+      "ctlLoad": 0,
+      "id": "2026-08-04"
+    },
+    {
+      "atl": 4.1999726,
+      "atlLoad": 0,
+      "ctl": 25.222893,
+      "ctlLoad": 0,
+      "id": "2026-08-05"
+    },
+    {
+      "atl": 3.6408634,
+      "atlLoad": 0,
+      "ctl": 24.62944,
+      "ctlLoad": 0,
+      "id": "2026-08-06"
+    },
+    {
+      "atl": 3.156184,
+      "atlLoad": 0,
+      "ctl": 24.049952,
+      "ctlLoad": 0,
+      "id": "2026-08-07"
+    },
+    {
+      "atl": 2.736026,
+      "atlLoad": 0,
+      "ctl": 23.484097,
+      "ctlLoad": 0,
+      "id": "2026-08-08"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 12,
+          "icuTrainingLoad": 12,
+          "type": "WeightTraining"
+        },
+        {
+          "hrLoad": 16,
+          "icuTrainingLoad": 7,
+          "paceLoad": 7,
+          "type": "VirtualRun"
+        }
+      ],
+      "atl": 4.90112,
+      "atlLoad": 19.0,
+      "ctl": 23.096254,
+      "ctlLoad": 7.0,
+      "id": "2026-08-09"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 12,
+          "icuTrainingLoad": 12,
+          "type": "WeightTraining"
+        },
+        {
+          "hrLoad": 15,
+          "icuTrainingLoad": 15,
+          "paceLoad": 8,
+          "type": "VirtualRun"
+        }
+      ],
+      "atl": 7.8429694,
+      "atlLoad": 27.0,
+      "ctl": 22.905764,
+      "ctlLoad": 15.0,
+      "id": "2026-08-10"
+    },
+    {
+      "atl": 6.798897,
+      "atlLoad": 0,
+      "ctl": 22.366829,
+      "ctlLoad": 0,
+      "id": "2026-08-11"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 44,
+          "icuTrainingLoad": 44,
+          "powerLoad": 44,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 11.751185,
+      "atlLoad": 44.0,
+      "ctl": 22.87582,
+      "ctlLoad": 44.0,
+      "id": "2026-08-12"
+    },
+    {
+      "atl": 10.186843,
+      "atlLoad": 0,
+      "ctl": 22.337591,
+      "ctlLoad": 0,
+      "id": "2026-08-13"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 42,
+          "icuTrainingLoad": 42,
+          "type": "WeightTraining"
+        }
+      ],
+      "atl": 14.421877,
+      "atlLoad": 42.0,
+      "ctl": 21.812025,
+      "ctlLoad": 0,
+      "id": "2026-08-14"
+    },
+    {
+      "atl": 12.502007,
+      "atlLoad": 0,
+      "ctl": 21.298824,
+      "ctlLoad": 0,
+      "id": "2026-08-15"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 92,
+          "icuTrainingLoad": 92,
+          "powerLoad": 87,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 23.084946,
+      "atlLoad": 92.0,
+      "ctl": 22.962303,
+      "ctlLoad": 92.0,
+      "id": "2026-08-16"
+    },
+    {
+      "atl": 20.01183,
+      "atlLoad": 0,
+      "ctl": 22.422039,
+      "ctlLoad": 0,
+      "id": "2026-08-17"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 25,
+          "icuTrainingLoad": 28,
+          "powerLoad": 28,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 21.075232,
+      "atlLoad": 28.0,
+      "ctl": 22.55328,
+      "ctlLoad": 28.0,
+      "id": "2026-08-18"
+    },
+    {
+      "atl": 18.269653,
+      "atlLoad": 0,
+      "ctl": 22.022638,
+      "ctlLoad": 0,
+      "id": "2026-08-19"
+    },
+    {
+      "atl": 15.837559,
+      "atlLoad": 0,
+      "ctl": 21.504482,
+      "ctlLoad": 0,
+      "id": "2026-08-20"
+    },
+    {
+      "atl": 13.72923,
+      "atlLoad": 0,
+      "ctl": 20.998518,
+      "ctlLoad": 0,
+      "id": "2026-08-21"
+    },
+    {
+      "atl": 11.901566,
+      "atlLoad": 0,
+      "ctl": 20.504457,
+      "ctlLoad": 0,
+      "id": "2026-08-22"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 9,
+          "icuTrainingLoad": 9,
+          "powerLoad": 9,
+          "type": "VirtualRide"
+        },
+        {
+          "hrLoad": 35,
+          "icuTrainingLoad": 35,
+          "powerLoad": 29,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 16.174576,
+      "atlLoad": 44.0,
+      "ctl": 21.057268,
+      "ctlLoad": 44.0,
+      "id": "2026-08-23"
+    },
+    {
+      "atl": 14.021382,
+      "atlLoad": 0,
+      "ctl": 20.561827,
+      "ctlLoad": 0,
+      "id": "2026-08-24"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 67,
+          "icuTrainingLoad": 67,
+          "powerLoad": 65,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 21.074007,
+      "atlLoad": 67.0,
+      "ctl": 21.654438,
+      "ctlLoad": 67.0,
+      "id": "2026-08-25"
+    },
+    {
+      "atl": 18.26859,
+      "atlLoad": 0,
+      "ctl": 21.144945,
+      "ctlLoad": 0,
+      "id": "2026-08-26"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 53,
+          "icuTrainingLoad": 70,
+          "powerLoad": 70,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 25.155186,
+      "atlLoad": 70.0,
+      "ctl": 22.294422,
+      "ctlLoad": 70.0,
+      "id": "2026-08-27"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 68,
+          "icuTrainingLoad": 68,
+          "powerLoad": 61,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 30.858778,
+      "atlLoad": 68.0,
+      "ctl": 23.369797,
+      "ctlLoad": 68.0,
+      "id": "2026-08-28"
+    },
+    {
+      "atl": 26.750793,
+      "atlLoad": 0,
+      "ctl": 22.819944,
+      "ctlLoad": 0,
+      "id": "2026-08-29"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 71,
+          "icuTrainingLoad": 71,
+          "powerLoad": 57,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 32.641342,
+      "atlLoad": 71.0,
+      "ctl": 23.953539,
+      "ctlLoad": 71.0,
+      "id": "2026-08-30"
+    },
+    {
+      "atl": 28.296059,
+      "atlLoad": 0,
+      "ctl": 23.389952,
+      "ctlLoad": 0,
+      "id": "2026-08-31"
+    },
+    {
+      "atl": 24.529228,
+      "atlLoad": 0,
+      "ctl": 22.839626,
+      "ctlLoad": 0,
+      "id": "2026-09-01"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 76,
+          "icuTrainingLoad": 79,
+          "powerLoad": 72,
+          "type": "VirtualRide"
+        }
+      ],
+      "atl": 31.78049,
+      "atlLoad": 79.0,
+      "ctl": 24.160986,
+      "ctlLoad": 79.0,
+      "id": "2026-09-02"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 64,
+          "icuTrainingLoad": 71,
+          "powerLoad": 70,
+          "type": "Ride"
+        }
+      ],
+      "atl": 37.001472,
+      "atlLoad": 71.0,
+      "ctl": 25.26303,
+      "ctlLoad": 71.0,
+      "id": "2026-09-03"
+    },
+    {
+      "atl": 32.07576,
+      "atlLoad": 0,
+      "ctl": 24.668633,
+      "ctlLoad": 0,
+      "id": "2026-09-04"
+    },
+    {
+      "atl": 27.805767,
+      "atlLoad": 0,
+      "ctl": 24.08822,
+      "ctlLoad": 0,
+      "id": "2026-09-05"
+    },
+    {
+      "atl": 24.104204,
+      "atlLoad": 0,
+      "ctl": 23.521465,
+      "ctlLoad": 0,
+      "id": "2026-09-06"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 58,
+          "icuTrainingLoad": 59,
+          "powerLoad": 59,
+          "type": "Ride"
+        }
+      ],
+      "atl": 28.749605,
+      "atlLoad": 59.0,
+      "ctl": 24.356215,
+      "ctlLoad": 59.0,
+      "id": "2026-09-07"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 78,
+          "icuTrainingLoad": 78,
+          "powerLoad": 67,
+          "type": "Ride"
+        }
+      ],
+      "atl": 35.30592,
+      "atlLoad": 78.0,
+      "ctl": 25.618362,
+      "ctlLoad": 78.0,
+      "id": "2026-09-08"
+    },
+    {
+      "atl": 30.60592,
+      "atlLoad": 0,
+      "ctl": 25.015606,
+      "ctlLoad": 0,
+      "id": "2026-09-09"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 62,
+          "icuTrainingLoad": 62,
+          "powerLoad": 57,
+          "type": "Ride"
+        }
+      ],
+      "atl": 34.785168,
+      "atlLoad": 62.0,
+      "ctl": 25.885786,
+      "ctlLoad": 62.0,
+      "id": "2026-09-10"
+    },
+    {
+      "atl": 30.154493,
+      "atlLoad": 0,
+      "ctl": 25.276737,
+      "ctlLoad": 0,
+      "id": "2026-09-11"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 85,
+          "icuTrainingLoad": 86,
+          "powerLoad": 74,
+          "type": "Ride"
+        }
+      ],
+      "atl": 37.588764,
+      "atlLoad": 86.0,
+      "ctl": 26.705454,
+      "ctlLoad": 86.0,
+      "id": "2026-09-12"
+    },
+    {
+      "atl": 32.58487,
+      "atlLoad": 0,
+      "ctl": 26.07712,
+      "ctlLoad": 0,
+      "id": "2026-09-13"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 83,
+          "icuTrainingLoad": 82,
+          "powerLoad": 80,
+          "type": "Ride"
+        }
+      ],
+      "atl": 39.163116,
+      "atlLoad": 82.0,
+      "ctl": 27.39289,
+      "ctlLoad": 82.0,
+      "id": "2026-09-14"
+    },
+    {
+      "atl": 33.94964,
+      "atlLoad": 0,
+      "ctl": 26.748383,
+      "ctlLoad": 0,
+      "id": "2026-09-15"
+    },
+    {
+      "atl": 29.430191,
+      "atlLoad": 0,
+      "ctl": 26.119038,
+      "ctlLoad": 0,
+      "id": "2026-09-16"
+    },
+    {
+      "atl": 25.512383,
+      "atlLoad": 0,
+      "ctl": 25.504501,
+      "ctlLoad": 0,
+      "id": "2026-09-17"
+    },
+    {
+      "atl": 22.116121,
+      "atlLoad": 0,
+      "ctl": 24.904423,
+      "ctlLoad": 0,
+      "id": "2026-09-18"
+    },
+    {
+      "atl": 19.171976,
+      "atlLoad": 0,
+      "ctl": 24.318464,
+      "ctlLoad": 0,
+      "id": "2026-09-19"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 76,
+          "icuTrainingLoad": 76,
+          "powerLoad": 76,
+          "type": "Ride"
+        }
+      ],
+      "atl": 26.737041,
+      "atlLoad": 76.0,
+      "ctl": 25.534443,
+      "ctlLoad": 76.0,
+      "id": "2026-09-20"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 49,
+          "icuTrainingLoad": 58,
+          "powerLoad": 58,
+          "type": "Ride"
+        }
+      ],
+      "atl": 30.898832,
+      "atlLoad": 58.0,
+      "ctl": 26.298304,
+      "ctlLoad": 58.0,
+      "id": "2026-09-21"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 22,
+          "icuTrainingLoad": 22,
+          "powerLoad": 18,
+          "type": "Ride"
+        }
+      ],
+      "atl": 29.714201,
+      "atlLoad": 22.0,
+      "ctl": 26.197172,
+      "ctlLoad": 22.0,
+      "id": "2026-09-22"
+    },
+    {
+      "atl": 25.758585,
+      "atlLoad": 0,
+      "ctl": 25.580797,
+      "ctlLoad": 0,
+      "id": "2026-09-23"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 74,
+          "icuTrainingLoad": 93,
+          "powerLoad": 93,
+          "type": "Ride"
+        }
+      ],
+      "atl": 34.709904,
+      "atlLoad": 93.0,
+      "ctl": 27.167057,
+      "ctlLoad": 93.0,
+      "id": "2026-09-24"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 58,
+          "icuTrainingLoad": 67,
+          "powerLoad": 67,
+          "type": "Ride"
+        }
+      ],
+      "atl": 39.00843,
+      "atlLoad": 67.0,
+      "ctl": 28.10426,
+      "ctlLoad": 67.0,
+      "id": "2026-09-25"
+    },
+    {
+      "atl": 33.815548,
+      "atlLoad": 0,
+      "ctl": 27.443014,
+      "ctlLoad": 0,
+      "id": "2026-09-26"
+    },
+    {
+      "activities": [
+        {
+          "hrLoad": 113,
+          "icuTrainingLoad": 118,
+          "powerLoad": 118,
+          "type": "Ride"
+        }
+      ],
+      "atl": 45.022358,
+      "atlLoad": 118.0,
+      "ctl": 29.573668,
+      "ctlLoad": 118.0,
+      "id": "2026-09-27"
+    },
+    {
+      "atl": 39.02889,
+      "atlLoad": 0,
+      "ctl": 28.87785,
+      "ctlLoad": 0,
+      "id": "2026-09-28"
     }
-   ]
-  },
-  {
-   "id": "2026-10-26",
-   "ctl": 28.87785,
-   "atl": 39.02889,
-   "ctlLoad": 0,
-   "atlLoad": 0
-  }
- ]
+  ]
 }

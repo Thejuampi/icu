@@ -326,6 +326,12 @@ func anonymize(value any) any {
 				continue
 			}
 
+			if group, ok := inner.(string); ok && key == "group" && realGroupHash.MatchString(group) {
+				typed[key] = remapGroupHash(group)
+
+				continue
+			}
+
 			typed[key] = anonymize(inner)
 		}
 
@@ -429,6 +435,20 @@ func remapPrefixedID(id string) string {
 	}
 
 	return fmt.Sprintf("%c6%07d", id[0], hash.Sum32()%10_000_000)
+}
+
+// realGroupHash matches the 8-hex-digit activity group hashes the API
+// returns; remapped ones carry the non-hex "mk" prefix, so remapping is
+// idempotent.
+var realGroupHash = regexp.MustCompile(`^[0-9a-f]{8}$`)
+
+// remapGroupHash maps a group hash to a stable fake one ("mk" + 6 hex), so
+// activities sharing a group still share one.
+func remapGroupHash(group string) string {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte("group:" + group))
+
+	return fmt.Sprintf("mk%06x", hash.Sum32()&0xffffff)
 }
 
 // activityText lists free-text activity fields and their replacement; the
