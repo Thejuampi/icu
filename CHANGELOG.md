@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `workouts calculate` no longer requires an API key: it runs entirely locally without network requests. Authentication is unchanged for API-backed commands.
+
 - `wellness sync`: an `HRVRMSSD` fetch failure now prints a non-failing `note:` to stderr (`notes` in JSON); the exit code is non-zero only for a band data or readiness sleepHRV failure (documented).
 - `zepp --raw`: inside `samples[]`, `s`, `e` and `u` are kept only up to 86,400,000 (one day in ms); `e` outside samples is capped at 65535 like `u`. Units are kept only under `unit` with their exact spelling (an initial like `M.` is redacted); duplicated preset literals removed from the enum list. Numeric strings under `s`/`e` get the same bounds as numbers.
 - Zepp HRV: `wellness sync` writes only Zepp nightly HRV (readiness sleepHRV). Days without it get no HRV; the HRVRMSSD samples mean is shown only as an `info:` line in the dry run (`hrvSamplesInfo` in JSON) and an HRVRMSSD fetch failure is no longer a sync failure. Source citations corrected (ZeppBridge band_items.rs L614-L624 and official.rs L8). Mockserver test pins the sleepHRV offset.
