@@ -199,12 +199,12 @@ func isIDFirstResource(resource string) bool {
 	return false
 }
 
-func commandRequiresAuth(resource, _ string) bool {
+func commandRequiresAuth(resource, action string) bool {
 	if resource == "config" || resource == "zepp" {
 		return false
 	}
 
-	return true
+	return resource != "workouts" || action != "calculate"
 }
 
 // newCommandClient builds the API client for executeCommand. Tests replace it
