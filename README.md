@@ -45,7 +45,7 @@ icu analysis adaptation --days 42 --type Ride
 icu analysis microcycle --json
 icu analysis workout i123
 
-# Calculate planned workout load locally before writing events
+# Calculate planned workout load locally (no API key or network required)
 icu workouts calculate --ftp 300 --desc "- 60m 70%"
 
 # Multi-session plan from explicit intent (preferred for writing several workouts)
