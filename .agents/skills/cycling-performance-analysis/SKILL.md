@@ -10,7 +10,7 @@ metadata:
 
 # Cycling Performance Analysis
 
-Prefer measured `icu` data over model inference. Read calendar NOTE events before coaching. Preserve the existing plan until it is actually wrong.
+Prefer measured `icu` data over model inference. Read calendar NOTE events and the available historical HRV, sleep, and resting HR records before training recommendations. Preserve the existing plan until it is actually wrong.
 
 For completed sessions, reconstruct execution from the original recording and full time series. Intervals-detected intervals and the execution context derived from them are not coaching evidence; do not fetch or consume them in this workflow. Intent comes from the athlete and the planned WORKOUT / NOTE events. Device laps are recorded boundaries, not proof of intended work/recovery steps.
 
@@ -35,17 +35,30 @@ CLI mechanics live in **intervals-icu**. Do not copy them here.
 
 ## Request router
 
-Classify the ask, then fetch only that row.
+Classify the ask, then fetch that row plus the mandatory recovery-history check below whenever giving training recommendations. The narrow daily scope limits unrelated activity/plan history, not the wellness history needed for a personal baseline.
 
 | Ask | Fetch | Do not fetch |
 |-----|--------|--------------|
-| Today / "should I…?" / read this week's notes | This week's NOTE events, today's event, wellness last 3–7 days, last completed activity | 12-week history, 4-week plan dump, adaptation, session library |
+| Today / "should I…?" / read this week's notes | This week's NOTE events, today's event, recent wellness plus historical recovery baseline, last completed activity | 12-week history, 4-week plan dump, adaptation, session library |
 | Weekly review | `icu analysis coaching` for that ISO week with explicit dates | Adaptation unless they ask about fitness change |
 | Rewrite / 4-week plan | 12-week history + next 4 weeks + [athlete.md](./athlete.md) + [session-library.md](./session-library.md) | Full report prose before the calendar is understood |
 | One completed ride | Activity metadata + planned WORKOUT / surrounding NOTE events + sport settings + original recording + complete streams; load [completed-session.md](./completed-session.md) | Detected intervals, `analysis workout` execution/comparison, a new plan, or 12-week history |
 | Missing metric + "build it" | Development loop below | Coaching prose that pretends the number exists |
 
 `analysis coaching` is the primary contract for weekly and planning work. The original-recording workflow in [completed-session.md](./completed-session.md) is the contract for one completed session. `analysis workout` remains a CLI diagnostic surface, not the default coaching context. Do not present its detected rep counts, warmup/cooldown boundaries, or derived execution labels as observed facts.
+
+## Recovery history before recommendations
+
+Before recommending whether, how hard, how long, or when to train, always read the available historical **HRV, sleep, and resting HR** data for the relevant athlete and period. This applies to daily advice, weekly reviews, plans, return-to-training advice, and next-session advice attached to a completed-ride review. Calendar notes, training load, an isolated latest reading, or a recovery score alone do not replace this check.
+
+- Use an available authorized read-only source. The CLI supports wellness history; a connector may expose a different subset. Verify its actual tools and returned fields rather than assuming CLI support means connector access. A proposed connector tool such as `intervals_wellness_history` is not evidence of access: use it only after verifying availability in the active environment. Do not deploy, change credentials, or start development merely to obtain coaching context.
+- Read recent observations and enough available preceding history to assess that athlete's baseline, variability, trend, and coverage. Choose and state the dates according to the question and data, extending a short recent window when it cannot establish a baseline. Do not fetch unrelated training history just for this check. For historical advice, use data applicable to that date; later records may inform a labeled retrospective comparison, not the original readiness state.
+- Inspect each signal separately: HRV method/source, sleep duration and available quality/score, and resting HR. Preserve documented units, missing values, sample dates, gaps, and source changes; do not label raw `hrv` as RMSSD or infer its device, method, or units without source evidence. Do not mix HRV methods or treat a recovery score as measured sleep duration. Check for stale observations, outliers, sparse history, illness/travel, and baseline shifts. Do not impute missing measurements as zero or normal.
+- Interpret recent values against the individual's applicable baseline and variability, with the method and contributing period stated. Do not invent fixed physiological thresholds or use one isolated value as a stop/go rule. If the available history cannot establish a defensible baseline, keep readiness uncertain rather than manufacturing one.
+- State what was actually read: source, requested/returned period, latest measurement dates, and material coverage limits for each signal. Distinguish **tool/access unavailable**, **read failed**, **not yet read**, **successful read with no records**, and **records present but fields missing/incomplete**. A projected field marked `not_returned` does not establish that no measurement exists upstream; preserve any explicit field-status information. Separate retrieval time from measurement dates and source update times. None of these access or coverage limits implies the athlete has no history elsewhere. Never claim wellness was reviewed without reading it.
+- If relevant data are available but unread, complete the read before recommending. If they cannot be obtained, disclose the limitation before any provisional advice; keep it limited to the available evidence and existing plan/clinical constraints, without asserting recovery clearance. Ask for the missing history when it could materially change the recommendation. A failed or empty read is not evidence of good or poor recovery.
+
+Review changes to this rule against [recovery-history-checks.md](./recovery-history-checks.md), including absent access, partial coverage, historical scope, and a later return to a previously observed baseline.
 
 ## Resolve athlete and dates
 
@@ -105,7 +118,7 @@ Chat language follows the user. Calendar NOTE language follows existing notes, t
 
 - HRV: use `recentMean`, `baselineMean`, `baselineMad`, `zScore`, `zScoreSource`. Treat raw `ratio` as context, not a stop/go rule.
 - Recovery score: `analyses.wellness.sleep.scoreName` is the source of truth. Prefer Zepp BioCharge / `zepp_hybridcharge`. Intervals `sleepScore` is fallback. Read `fallbackScoreName` and `warnings`.
-- Today's empty wellness record means "not logged yet," not a red flag. Use the latest complete day and say so.
+- An empty wellness record has unknown cause unless the source establishes it; do not assume "not logged yet." Use the latest available measurements with their actual dates and per-signal coverage. Missing data are neither a red flag nor recovery clearance.
 - `ftpApplied` provenance/confidence describes that resolver result's scope, not measured fitness or validity for another date/environment. `confidence: medium` is usable with applicable evidence. Disclose material scope/source disagreements even with `confidence: high`; completed-session reviews report their chosen anchor and basis.
 - When `context.timeAccounting.loadAccounting` is `partial`, say the weekly load excludes the enumerated non-cycling sessions. Do not present that total as complete.
 
@@ -136,7 +149,9 @@ A coaching question is not permission to start a CLI change.
 
 | Excuse | Reality |
 |--------|---------|
-| "This touches the plan, so pull 12 weeks" | Daily decisions use the today row of the router. |
+| "This touches the plan, so pull 12 weeks" | Use the daily router plus the recovery-history check; do not expand unrelated activity history. |
+| "No wellness tool means no wellness records" | Disclose unavailable access, not absent athlete history. |
+| "The latest HRV looks fine, so training is cleared" | Read historical HRV, sleep, and resting HR first; use the individual baseline and report gaps. |
 | "High Z1 / low Z2 is the easy option" | On a disruption week the calendar HR cap is the session. |
 | "I should write a NOTE so the next agent sees this" | Write only if the decision changes the week or a gate needs a new fact. |
 | "UTC in scope means I used the wrong timezone" | Explicit calendar dates + `timezoneSource: explicit` is correct. |
