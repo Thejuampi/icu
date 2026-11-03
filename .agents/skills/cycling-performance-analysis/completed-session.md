@@ -2,6 +2,8 @@
 
 Use this workflow for any completed-ride review, especially when the athlete asks for the complete session or sample-by-sample analysis. Prefer the recording over precomputed execution labels. Keep this a read-only coaching task.
 
+Before drawing recovery conclusions or recommending the next session, apply the [recovery-history check](./SKILL.md#recovery-history-before-recommendations). Use contemporaneous history for this ride's context and current history for current prescriptions; do not substitute one for the other. Pure recording reconstruction can proceed with missing wellness, with recovery-dependent conclusions left unavailable.
+
 ## Intent and sources
 
 1. Resolve the activity ID and athlete-local date from activity metadata. Read the planned WORKOUT and surrounding day/week/block NOTE events. Use the athlete's explanation when no plan exists; a missing plan reduces confidence in compliance, not confidence that the recorded effort happened. Keep the daily router's narrow scope.

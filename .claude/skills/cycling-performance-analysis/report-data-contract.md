@@ -16,11 +16,14 @@ Support status meanings:
 - `partial`: some source fields exist, but the grouped report field needs more work.
 - `missing`: not currently produced by `icu`.
 
+Support describes CLI output, not availability through every connector. Before training recommendations, apply the [mandatory recovery-history check](./SKILL.md#recovery-history-before-recommendations), read the underlying historical HRV, sleep, and resting HR records, and disclose access and coverage per signal. A supported aggregate or recovery score does not prove that all required history was read.
+
 ## Physiology Overview
 
 | Field family | Required data | Source | Status |
 | --- | --- | --- | --- |
 | HRV ratio, mean, latest, trend, samples, recent mean, baseline mean, robust z-score | 42-day wellness HRV series | `icu analysis wellness` | supported |
+| Sleep duration, quality/score, dates, and coverage | Available historical `sleepSecs`, `sleepQuality`, `sleepScore` with absent fields preserved | `icu wellness list` raw records | supported (field coverage varies) |
 | Resting HR and delta | 42-day wellness resting HR series | `icu analysis wellness` | supported |
 | Preferred recovery score and coverage | Zepp HybridCharge/BioCharge when available, otherwise wellness sleepScore | `icu analysis wellness.sleep` (`scoreName`, `fallbackScoreName`) | supported |
 | Subjective wellness coverage | fatigue, stress, soreness, mood, motivation | `icu analysis wellness` | supported |
