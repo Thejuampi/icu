@@ -30,7 +30,7 @@ func TestFormatWorkoutDescriptionRampStep(t *testing.T) {
 		},
 	}
 	got := icu.FormatWorkoutDescription(doc)
-	want := "- 10m 55-75% "
+	want := "- 10m ramp 55-75% "
 	if got != want {
 		t.Fatalf("FormatWorkoutDescription ramp = %q, want %q", got, want)
 	}

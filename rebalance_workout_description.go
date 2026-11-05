@@ -30,7 +30,7 @@ func formatWorkoutStep(lines *[]string, step *WorkoutStep, indent string) {
 	}
 	dur := formatWorkoutDuration(step.Duration)
 	if step.Ramp && step.Power != nil {
-		*lines = append(*lines, fmt.Sprintf("%s- %s %.0f-%.0f%% %s", indent, dur, step.Power.Start, step.Power.End, step.Text))
+		*lines = append(*lines, fmt.Sprintf("%s- %s ramp %.0f-%.0f%% %s", indent, dur, step.Power.Start, step.Power.End, step.Text))
 		return
 	}
 	if step.Power != nil {

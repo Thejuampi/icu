@@ -444,3 +444,30 @@ func TestActivityWithIntervalsQuery(t *testing.T) {
 		t.Fatalf("log must record the query string:\n%s", log.String())
 	}
 }
+
+// The repo fixtures serve a synthetic GravelRide sport-settings with
+// non-default power zones (used by the --calculate-load zone RC); Ride keeps
+// the intervals.icu default bands.
+func TestRepoSportSettingsFixtures(t *testing.T) {
+	t.Parallel()
+	srv, err := newServer("../../testdata/fixtures", io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv)
+	t.Cleanup(ts.Close)
+	for sport, want := range map[string]string{
+		"GravelRide": "[50,70,85,100,115,140,999]", "Ride": "[55,75,90,105,120,150,999]",
+	} {
+		code, body := do(t, http.MethodGet, ts.URL+"/api/v1/athlete/0/sport-settings/"+sport, "")
+		var got struct {
+			Zones json.RawMessage `json:"power_zones"`
+		}
+		if code != http.StatusOK || json.Unmarshal([]byte(body), &got) != nil || strings.Join(strings.Fields(string(got.Zones)), "") != want {
+			t.Fatalf("%s: %d %s", sport, code, body)
+		}
+	}
+	if code, _ := do(t, http.MethodGet, ts.URL+"/api/v1/athlete/0/sport-settings/VirtualRide", ""); code != http.StatusNotFound {
+		t.Fatalf("VirtualRide must 404 (fallback path), got %d", code)
+	}
+}

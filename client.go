@@ -17,6 +17,20 @@ import (
 
 var errHTTPStatus = errors.New("HTTP status error")
 
+// HTTPStatusError is a non-2xx API response. Its message is unchanged
+// ("HTTP status error <code>: <body>") and errors.Is(err, errHTTPStatus)
+// still holds; callers use errors.As to branch on StatusCode.
+type HTTPStatusError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("%s %d: %s", errHTTPStatus, e.StatusCode, e.Body)
+}
+
+func (e *HTTPStatusError) Unwrap() error { return errHTTPStatus }
+
 const defaultClientTimeout = 30 * time.Second
 
 type Client struct {
@@ -107,7 +121,7 @@ func (c *Client) Download(resource string, parts []string, query map[string]stri
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 
-		return nil, fmt.Errorf("%w %d: %s", errHTTPStatus, resp.StatusCode, string(body))
+		return nil, &HTTPStatusError{StatusCode: resp.StatusCode, Body: string(body)}
 	}
 
 	data, err := io.ReadAll(resp.Body)
@@ -168,7 +182,7 @@ func (c *Client) UploadFile(resource, localPath, filePath string, query map[stri
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		errBody, _ := io.ReadAll(resp.Body)
 
-		return fmt.Errorf("%w %d: %s", errHTTPStatus, resp.StatusCode, string(errBody))
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Body: string(errBody)}
 	}
 
 	if result != nil {
@@ -217,7 +231,7 @@ func (c *Client) do(method, resource string, parts []string, query map[string]st
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		errBody, _ := io.ReadAll(resp.Body)
 
-		return fmt.Errorf("%w %d: %s", errHTTPStatus, resp.StatusCode, string(errBody))
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Body: string(errBody)}
 	}
 
 	if result != nil {

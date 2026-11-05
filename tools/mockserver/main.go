@@ -3,7 +3,9 @@
 // It serves committed, anonymized fixtures from testdata/fixtures, accepts
 // writes (PUT/POST/DELETE) in memory without persisting them, and exposes
 // /_mock/writes and /_mock/reset so tests and release candidates can verify
-// that a command did (or did not) write. Run it with:
+// that a command did (or did not) write. /_mock/fault (test-only, off by
+// default) makes matching paths fail with a status or a dropped connection,
+// see fault.go. Run it with:
 //
 //	go run ./tools/mockserver -port 8765
 //

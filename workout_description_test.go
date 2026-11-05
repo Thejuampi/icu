@@ -20,7 +20,7 @@ func TestParseWorkoutDescriptionParsesSteadyStep(t *testing.T) {
 func TestParseWorkoutDescriptionParsesRampStep(t *testing.T) {
 	t.Parallel()
 
-	doc, err := icu.ParseWorkoutDescription("- 10m 55-75%")
+	doc, err := icu.ParseWorkoutDescription("- 10m ramp 55-75%")
 
 	if err != nil || len(doc.Steps) != 1 || !doc.Steps[0].Ramp || doc.Steps[0].Power.Start != 55 || doc.Steps[0].Power.End != 75 {
 		t.Fatalf("ParseWorkoutDescription ramp = %+v err=%v, want one ramp 55-75%% step", doc, err)
@@ -76,8 +76,8 @@ func TestParseWorkoutDescriptionParsesLeadingKeywordAndUnitSuffix(t *testing.T) 
 
 	doc, err := icu.ParseWorkoutDescription("- 12m Ramp 50-58% FTP")
 
-	if err != nil || len(doc.Steps) != 1 || !doc.Steps[0].Ramp || doc.Steps[0].Text != "Ramp" {
-		t.Fatalf("ParseWorkoutDescription keyword = %+v err=%v, want one ramp step with text Ramp", doc, err)
+	if err != nil || len(doc.Steps) != 1 || !doc.Steps[0].Ramp || doc.Steps[0].Text != "" {
+		t.Fatalf("ParseWorkoutDescription keyword = %+v err=%v, want one ramp step (keyword not kept as text)", doc, err)
 	}
 }
 
