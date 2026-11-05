@@ -20,10 +20,29 @@ var (
 	// repeated after the percent sign. Durations may be compound ("1h30m",
 	// "2m30s"), as intervals.icu accepts them.
 	durationPartPattern = regexp.MustCompile(`(\d+(?:\.\d+)?)([hms])`)
-	stepLinePattern     = regexp.MustCompile(
-		`^-\s*((?:\d+(?:\.\d+)?[hms])+)\s+(?:([A-Za-z]+)\s+)?(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?%\s*(.*)$`,
+	//
+	// The target is a percent of FTP ("70%", ramp "55-75%"), absolute watts
+	// ("200w", range "110-130w" priced at its midpoint) or a power zone
+	// ("Z1".."Z7", priced at a fixed %FTP, see powerZoneMidpointPercent).
+	stepLinePattern = regexp.MustCompile(
+		`^-\s*((?:\d+(?:\.\d+)?[hms])+)\s+(?:([A-Za-z]+)\s+)?` +
+			`(?:(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?(%|\s*[wW]\b)|[zZ]([1-7])\b)\s*(.*)$`,
 	)
 )
+
+// supportedStepForms is quoted in parse errors so the fix is obvious.
+const supportedStepForms = `supported step forms: "- 10m 70%", "- 10m 55-75%" (ramp), "- 10m 200w", ` +
+	`"- 10m 110-130w" (midpoint), "- 10m Z2" (Z1-Z7); durations like 30s, 10m, 1h30m; repeats as "3x" before the steps`
+
+// powerZoneMidpointPercent prices "Z1".."Z7" as %FTP. Bands follow the
+// intervals.icu default (Coggan) power zones, upper bounds 55/75/90/105/120/150%
+// FTP, and each zone is the midpoint of its band. Z1 (0-55%) uses 50% and the
+// open-ended Z7 (>150%) uses 160%, since a 0% floor or an infinite cap has no
+// meaningful midpoint.
+func powerZoneMidpointPercent(zone int) float64 {
+	//nolint:mnd // the documented zone table itself
+	return [...]float64{1: 50, 2: 65, 3: 82.5, 4: 97.5, 5: 112.5, 6: 135, 7: 160}[zone]
+}
 
 func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
 	lines := strings.Split(description, "\n")
@@ -43,7 +62,7 @@ func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
 
 			block, nextIndex, err := parseRepeatBlock(lines, index+1, reps)
 			if err != nil {
-				return nil, err
+				return nil, lineError(nextIndex, err)
 			}
 			doc.Steps = append(doc.Steps, block)
 			index = nextIndex - 1
@@ -59,7 +78,7 @@ func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
 
 		step, err := parseWorkoutDescriptionStep(line)
 		if err != nil {
-			return nil, err
+			return nil, lineError(index, err)
 		}
 		doc.Steps = append(doc.Steps, step)
 	}
@@ -120,6 +139,11 @@ func parseRepeatBlock(lines []string, startIndex, reps int) (WorkoutStep, int, e
 	return block, index, nil
 }
 
+// lineError names the 1-based description line and the supported forms.
+func lineError(index int, err error) error {
+	return fmt.Errorf("line %d: %w; %s", index+1, err, supportedStepForms)
+}
+
 func nextNonBlankIsIndented(lines []string, index int) bool {
 	for _, raw := range lines[index:] {
 		if strings.TrimSpace(raw) == "" {
@@ -143,25 +167,43 @@ func parseWorkoutDescriptionStep(line string) (WorkoutStep, error) {
 		return WorkoutStep{}, err
 	}
 
+	step := WorkoutStep{
+		Duration: duration,
+		Text:     workoutStepText(matches[2], matches[7]),
+		Power:    &WorkoutTarget{Units: "%ftp"},
+	}
+
+	if matches[6] != "" {
+		zone, _ := strconv.Atoi(matches[6]) // the pattern only admits 1-7
+		step.Power.Value = powerZoneMidpointPercent(zone)
+
+		return step, nil
+	}
+
 	start, err := strconv.ParseFloat(matches[3], 64)
 	if err != nil {
 		return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
 	}
+	end := start
+	if matches[4] != "" {
+		if end, err = strconv.ParseFloat(matches[4], 64); err != nil {
+			return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
+		}
+	}
 
-	step := WorkoutStep{
-		Duration: duration,
-		Text:     workoutStepText(matches[2], matches[5]),
-		Power:    &WorkoutTarget{Units: "%ftp"},
+	if matches[5] != "%" {
+		// Absolute watts; a range is priced at its midpoint, not as a ramp.
+		step.Power.Units = "w"
+		step.Power.Value = (start + end) / 2
+
+		return step, nil
 	}
 
 	if matches[4] != "" {
-		end, parseErr := strconv.ParseFloat(matches[4], 64)
-		if parseErr != nil {
-			return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
-		}
 		step.Ramp = true
 		step.Power.Start = start
 		step.Power.End = end
+
 		return step, nil
 	}
 
