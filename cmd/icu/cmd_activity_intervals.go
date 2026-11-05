@@ -13,8 +13,10 @@ import (
 
 // activityIntervalsCommand prints an activity's icu_intervals and icu_groups as
 // a table (default) or JSON (--json). It uses GET /activity/{id}?intervals=true
-// because that fetches the activity plus its intervals in one call (as observed
-// on the real API); GET /activity/{id}/intervals returns the same IntervalsDTO.
+// because that fetches the activity plus its intervals in one call, per the
+// intervals.icu forum (https://forum.intervals.icu/t/api-access-to-intervals-icu/609)
+// and the OpenAPI spec (https://intervals.icu/api/v1/docs); GET
+// /activity/{id}/intervals returns the same IntervalsDTO.
 // Both send snake_case keys, which IntervalsDTO decodes.
 func activityIntervalsCommand() *Command {
 	return &Command{

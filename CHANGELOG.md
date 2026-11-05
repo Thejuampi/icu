@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `activity <id> intervals` follow-ups: documented that `--json` omits a 0 `decoupling`/`zone` (`omitempty`); exact-row and `dashIfEmpty` tests (each of tab/newline/CR replacement is pinned); source comment cites the intervals.icu forum and OpenAPI spec. `wellness sync` help no longer mentions the removed HRVRMSSD sample-mean fallback.
 - Fix: `activity <id> intervals` returned only `{id, analyzed}` because `IntervalsDTO` only read camelCase keys while the API sends snake_case (`icu_intervals`, `icu_groups`, `average_watts`, ...); the decoder now reads snake_case (camelCase still accepted). The command uses `GET /activity/{id}?intervals=true` (activity plus intervals in one call); `GET /activity/{id}/intervals` returns the same DTO, so `analysis workout` now gets interval watts/HR too. Behaviour change: default output is a table (a real 0 decoupling/zone prints 0, missing prints `-`; tabs/newlines in labels become spaces); use `--json` for JSON (`icuIntervals`/`icuGroups`, always arrays). Mock server: `?intervals=true` on an activity merges its `<id>/intervals` fixture and logs the request with its query string.
 - `workouts calculate` no longer requires an API key: it runs entirely locally without network requests. Authentication is unchanged for API-backed commands.
 
