@@ -223,3 +223,29 @@ func TestAnalysisWorkoutReadsSnakeCaseIntervals(t *testing.T) {
 		t.Fatalf("executed power from snake average_watts = %v (steps %+v)", power, got.Comparison.StepComparison)
 	}
 }
+
+// Each control character is replaced on its own, so dropping any pair from the
+// replacer fails here (a tab would otherwise become a tabwriter cell break).
+func TestDashIfEmpty(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{"": "-", "rep": "rep", "a\tb": "a b", "a\nb": "a b", "a\rb": "a b", "\t\n\r": "   "} {
+		if got := dashIfEmpty(in); got != want {
+			t.Errorf("dashIfEmpty(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The exact row: a tab left in the label would shift every later column.
+func TestActivityIntervalsLabelRowExact(t *testing.T) {
+	t.Parallel()
+	client := bodyClient(t, `{"id":"i970000022","icu_intervals":[{"type":"WORK","label":"x\ty","moving_time":60,"average_watts":200}]}`)
+	out := runIntervals(t, client, "i970000022", map[string]string{})
+	lines := strings.Split(out, "\n")
+	header, row := lines[1], lines[2]
+	if !strings.HasPrefix(row, "1  WORK  x y    0:00   1:00      200") {
+		t.Fatalf("row %q", row)
+	}
+	if strings.Index(header, "AVG W") != strings.Index(row, "200") {
+		t.Fatalf("AVG W column misaligned:\n%s\n%s", header, row)
+	}
+}
