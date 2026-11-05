@@ -29,47 +29,67 @@ var (
 			`(?:(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?(%|\s*[wW]\b)|[zZ](\d+)(?:\s*-\s*[zZ]?(\d+))?\b)\s*(.*)$`,
 	)
 	// nonPowerTargetPattern: HR, LTHR or Pace written after (or as the keyword
-	// before) a target means the step is not a power target.
+	// before) a target means the step is not a power target. Only those words:
+	// other free text (e.g. "heart rate") is a label and the step is priced as
+	// power.
 	nonPowerTargetPattern = regexp.MustCompile(`(?i)^(hr|lthr|pace)\b`)
 	// cadenceTextPattern strips cadence hints ("85rpm", "90-100 rpm",
 	// "cadence 90") from the step label.
 	cadenceTextPattern = regexp.MustCompile(`(?i)\b(?:\d+(?:-\d+)?\s*rpm|cadence\s*\d+(?:-\d+)?)\b`)
 )
 
-// MaxPercentFTPTarget caps a %FTP step target (and, via MaxWattsTarget, a
-// watt target at that share of FTP): above 300% FTP a step is a typo, not a
-// workout, and would inflate the load.
-const MaxPercentFTPTarget = 300
+// Target limits. Above WarnPercentFTPTarget % FTP (a %FTP target, or a watt
+// target against --ftp) a step is still priced but ValidateWorkoutTargets
+// returns a warning: short sprints can be that hard. Only physically absurd
+// values, almost certainly typos, are rejected while parsing:
+// MaxPercentFTPTarget (1000% FTP) and MaxWattsTarget (3000 W).
+const (
+	WarnPercentFTPTarget = 300
+	MaxPercentFTPTarget  = 1000
+	MaxWattsTarget       = 3000
+)
 
 // supportedStepForms is quoted in parse errors so the fix is obvious.
 const supportedStepForms = `supported step forms (power only): "- 10m 70%", "- 10m 65-75%" (range, midpoint), ` +
 	`"- 10m ramp 55-75%" (ramp), "- 10m 200w", "- 10m 110-130w" (midpoint), "- 10m ramp 100-200w", "- 10m Z2" ` +
-	`(sport-settings zones); targets above 0 and at most 300% FTP; durations like 30s, 10m, 1h30m; repeats as "3x" before the steps`
+	`(sport-settings zones); targets above 0, at most 1000% FTP or 3000 W (above 300% FTP: warning); durations like 30s, 10m, 1h30m; repeats as "3x" before the steps`
 
 // Power zone pricing. "Zn" is priced at the midpoint of its band in the
-// athlete's Ride sport-settings power_zones (%FTP upper bounds, the last one
-// open-ended, intervals.icu writes 999). Z1 (0..first bound) is fixed at 50%
-// and the open-ended top zone at 160%, since a 0% floor or an infinite cap has
-// no meaningful midpoint. DefaultPowerZoneBounds (intervals.icu's default
-// Coggan bands) is used only when sport-settings cannot supply zones.
+// athlete's sport-settings power_zones (%FTP upper bounds; intervals.icu writes
+// 999 for an open-ended top zone). Every price stays inside its own band:
+//   - Z1 (0..first bound): 50% when the bound is at least 50, otherwise the
+//     midpoint of 0..bound (bound/2).
+//   - An open-ended top zone (bound >= PowerZoneOpenEndedBound): 160% when the
+//     previous bound is below 160, otherwise previous bound +
+//     PowerZoneTopMarginPercent.
+//   - Any other zone, including a finite top zone: (prev+1+upper)/2.
+//
+// DefaultPowerZoneBounds (intervals.icu's default Coggan bands) is used only
+// when the athlete has no power zones configured.
 const (
-	powerZoneFirstPercent = 50
-	powerZoneTopPercent   = 160
+	powerZoneFirstPercent     = 50
+	powerZoneTopPercent       = 160
+	PowerZoneOpenEndedBound   = 999
+	PowerZoneTopMarginPercent = 10
 )
 
 // DefaultPowerZoneBounds are intervals.icu's default Ride power zones.
 func DefaultPowerZoneBounds() []int { return []int{55, 75, 90, 105, 120, 150, 999} }
 
 // PowerZoneMidpoints returns the %FTP price of Z1..Zn for the given upper
-// bounds: Z1 50%, the top zone 160%, every other zone its band midpoint.
+// bounds, each inside its own band (see the rules above).
 func PowerZoneMidpoints(bounds []int) []float64 {
 	midpoints := make([]float64, len(bounds))
-	for index := range bounds {
+	for index, bound := range bounds {
 		switch {
-		case index == 0:
+		case index == 0 && bound >= powerZoneFirstPercent:
 			midpoints[index] = powerZoneFirstPercent
-		case index == len(bounds)-1:
+		case index == 0:
+			midpoints[index] = float64(bound) / 2 //nolint:mnd // midpoint of 0..bound
+		case bound >= PowerZoneOpenEndedBound && bounds[index-1] < powerZoneTopPercent:
 			midpoints[index] = powerZoneTopPercent
+		case bound >= PowerZoneOpenEndedBound:
+			midpoints[index] = float64(bounds[index-1] + PowerZoneTopMarginPercent)
 		default:
 			midpoints[index] = float64(bounds[index-1]+1+bounds[index]) / 2 //nolint:mnd // band (prev+1 .. upper) midpoint
 		}
@@ -135,6 +155,7 @@ func ParseWorkoutDescriptionWithZones(description string, zones []float64) (*Wor
 		if err != nil {
 			return nil, lineError(index, err)
 		}
+		step.line = index + 1
 		doc.Steps = append(doc.Steps, step)
 	}
 
@@ -183,6 +204,7 @@ func parseRepeatBlock(lines []string, startIndex, reps int, zones []float64) (Wo
 		if err != nil {
 			return block, index, err
 		}
+		step.line = index + 1
 		block.Steps = append(block.Steps, step)
 		index++
 	}
@@ -249,8 +271,11 @@ func parseWorkoutDescriptionStep(line string, zones []float64) (WorkoutStep, err
 	}
 	if matches[5] != "%" {
 		step.Power.Units = "w"
-	} else if end > MaxPercentFTPTarget {
-		return WorkoutStep{}, fmt.Errorf("%w: target above %d%% FTP in %q", ErrWorkoutDescriptionUnsupported, MaxPercentFTPTarget, line)
+		if math.Max(start, end) > MaxWattsTarget {
+			return WorkoutStep{}, fmt.Errorf("%w: target above %d W (a typo?) in %q", ErrWorkoutDescriptionUnsupported, MaxWattsTarget, line)
+		}
+	} else if math.Max(start, end) > MaxPercentFTPTarget {
+		return WorkoutStep{}, fmt.Errorf("%w: target above %d%% FTP (a typo?) in %q", ErrWorkoutDescriptionUnsupported, MaxPercentFTPTarget, line)
 	}
 
 	switch {
@@ -297,25 +322,30 @@ func stepTargetRange(line, first, second string) (float64, float64, error) {
 	return start, end, nil
 }
 
-// ValidateWorkoutTargets rejects watt targets above MaxPercentFTPTarget % of
-// ftp (percent targets are checked while parsing).
-func ValidateWorkoutTargets(steps []WorkoutStep, ftp int) error {
-	limit := float64(ftp) * MaxPercentFTPTarget / percentScale
+// ValidateWorkoutTargets returns one warning per step whose target is above
+// WarnPercentFTPTarget % FTP: a %FTP target always, a watt target when ftp is
+// known. Steps keep their description line, so each warning names it. It
+// never rejects: absurd values are already rejected while parsing.
+func ValidateWorkoutTargets(steps []WorkoutStep, ftp int) []string {
+	var warnings []string
 	for index := range steps {
 		step := &steps[index]
-		if err := ValidateWorkoutTargets(step.Steps, ftp); err != nil {
-			return err
-		}
-		if step.Power == nil || step.Power.Units != "w" || ftp <= 0 {
+		warnings = append(warnings, ValidateWorkoutTargets(step.Steps, ftp)...)
+		if step.Power == nil {
 			continue
 		}
-		if peak := math.Max(step.Power.Value, math.Max(step.Power.Start, step.Power.End)); peak > limit {
-			return fmt.Errorf("%w: %.0fw is above %d%% of FTP %d (%.0fw)",
-				ErrWorkoutDescriptionUnsupported, peak, MaxPercentFTPTarget, ftp, limit)
+		peak := math.Max(step.Power.Value, math.Max(step.Power.Start, step.Power.End))
+		switch {
+		case step.Power.Units == "%ftp" && peak > WarnPercentFTPTarget:
+			warnings = append(warnings, fmt.Sprintf("line %d: target %.0f%% FTP is above %d%% FTP; check for a typo",
+				step.line, peak, WarnPercentFTPTarget))
+		case step.Power.Units == "w" && ftp > 0 && peak > float64(ftp)*WarnPercentFTPTarget/percentScale:
+			warnings = append(warnings, fmt.Sprintf("line %d: %.0fw is above %d%% of FTP %d (%.0fw); check for a typo",
+				step.line, peak, WarnPercentFTPTarget, ftp, float64(ftp)*WarnPercentFTPTarget/percentScale))
 		}
 	}
 
-	return nil
+	return warnings
 }
 
 // workoutStepText joins the keyword written before the target with any text

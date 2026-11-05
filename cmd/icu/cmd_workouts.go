@@ -70,27 +70,39 @@ func workoutsCalculateCommand() *Command {
 					len(icu.DefaultPowerZoneBounds()), icu.DefaultPowerZoneBounds())
 			}
 
+			for _, warning := range estimate.TargetWarnings {
+				fmt.Fprintln(stderr, "warning: "+warning)
+			}
+
 			return writeJSON(stdout, estimate)
 		},
 	}
 }
 
-func workoutEstimateFromFlags(flags map[string]string) (icu.PlannedLoadEstimate, error) {
+// workoutEstimate is the calculate output: the estimate plus warnings for
+// targets above icu.WarnPercentFTPTarget % FTP (also printed to stderr).
+type workoutEstimate struct {
+	icu.PlannedLoadEstimate
+	TargetWarnings []string `json:"targetWarnings,omitempty"`
+}
+
+func workoutEstimateFromFlags(flags map[string]string) (workoutEstimate, error) {
 	desc := icu.StringFlag(flags, "desc", "")
 	if desc == "" {
 		desc = icu.StringFlag(flags, "description", "")
 	}
 	if desc == "" {
-		return icu.PlannedLoadEstimate{}, errMissing("desc")
+		return workoutEstimate{}, errMissing("desc")
 	}
 
 	doc, err := icu.ParseWorkoutDescription(desc)
 	if err != nil {
-		return icu.PlannedLoadEstimate{}, fmt.Errorf("parse workout description: %w", err)
+		return workoutEstimate{}, fmt.Errorf("parse workout description: %w", err)
 	}
-	if err := icu.ValidateWorkoutTargets(doc.Steps, IntFlag(flags, "ftp", 0)); err != nil {
-		return icu.PlannedLoadEstimate{}, fmt.Errorf("parse workout description: %w", err)
-	}
+	warnings := icu.ValidateWorkoutTargets(doc.Steps, IntFlag(flags, "ftp", 0))
 
-	return icu.EstimatePlannedLoad(doc, icu.FTPSelectionFromWatts(IntFlag(flags, "ftp", 0))), nil
+	return workoutEstimate{
+		PlannedLoadEstimate: icu.EstimatePlannedLoad(doc, icu.FTPSelectionFromWatts(IntFlag(flags, "ftp", 0))),
+		TargetWarnings:      warnings,
+	}, nil
 }

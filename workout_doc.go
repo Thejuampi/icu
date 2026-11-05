@@ -39,6 +39,10 @@ type WorkoutStep struct {
 	Pace     *WorkoutTarget `json:"pace,omitempty"`
 	Cadence  *WorkoutTarget `json:"cadence,omitempty"`
 	Steps    []WorkoutStep  `json:"steps,omitempty"`
+
+	// line is the 1-based description line the step came from (0 when the
+	// doc was not parsed from a description); used in target warnings.
+	line int
 }
 
 type WorkoutTarget struct {

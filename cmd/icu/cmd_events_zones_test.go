@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +16,7 @@ import (
 
 // zoneEventServer is a synthetic intervals.icu: event 1 (type Ride) and, when
 // settings is non-empty, GET sport-settings/Ride returns it; otherwise 404.
+// settings "status:N" answers N, and "network" drops the connection.
 type zoneEventServer struct {
 	mu       sync.Mutex
 	settings string
@@ -36,6 +38,21 @@ func (s *zoneEventServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(r.URL.Path, "/sport-settings/Ride"):
 		if s.settings == "" {
 			w.WriteHeader(http.StatusNotFound)
+
+			return
+		}
+		if code, ok := strings.CutPrefix(s.settings, "status:"); ok {
+			status, _ := strconv.Atoi(code)
+			w.WriteHeader(status)
+
+			return
+		}
+		if s.settings == "network" {
+			if hijacker, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hijacker.Hijack(); err == nil {
+					_ = conn.Close()
+				}
+			}
 
 			return
 		}
@@ -129,7 +146,9 @@ func TestEventsUpdateZonesFromSportSettings(t *testing.T) {
 
 //nolint:paralleltest // t.Setenv
 func TestEventsUpdateZonesFallbackIsAnnounced(t *testing.T) {
-	for name, settings := range map[string]string{"unreadable": "", "no zones": `{"types":["Ride"],"ftp":266}`} {
+	for name, settings := range map[string]string{
+		"404": "", "missing power_zones": `{"types":["Ride"],"ftp":266}`, "empty power_zones": `{"types":["Ride"],"power_zones":[]}`,
+	} {
 		out, stderr, srv, err := runZoneUpdate(t, settings, "- 60m Z2")
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -174,7 +193,8 @@ func TestEventsUpdateRejectsBeforeWriting(t *testing.T) {
 	for desc, want := range map[string]string{
 		"- 10m Z1\n- 10m easy":      "line 2",
 		"- 10m 50%\n- 30m Z2 HR":    "HR, LTHR or Pace",
-		"- 1m 99999w":               "above 300% of FTP 266",
+		"- 1m 99999w":               "above 3000 W",
+		"- 10m 50%\n- 1m 1001%":     "line 2",
 		"- 10m Z3-Z4":               "zone ranges",
 		"- 10m 50%\n- 30m 70% Pace": "line 2",
 	} {
@@ -195,5 +215,69 @@ func TestWorkoutsCalculateZonesNote(t *testing.T) {
 	}
 	if _, err := workoutEstimateFromFlags(flags("ftp", "266", "desc", "- 1m 99999w")); err == nil {
 		t.Fatal("watt cap")
+	}
+}
+
+// Hugo's m2 decision: only "no zones configured" falls back; 401, 403, 5xx
+// and network failures abort before any write.
+//
+//nolint:paralleltest // t.Setenv
+func TestEventsUpdateZonesReadFailureWritesNothing(t *testing.T) {
+	for _, settings := range []string{"status:401", "status:403", "status:500", "status:503", "network"} {
+		_, stderr, srv, err := runZoneUpdate(t, settings, "- 60m Z2")
+		if err == nil || !strings.Contains(err.Error(), "read Ride sport-settings power zones (nothing written") ||
+			len(srv.puts) != 0 || strings.Contains(stderr, "default bands") {
+			t.Fatalf("%s: err=%v stderr=%q puts=%v", settings, err, stderr, srv.puts)
+		}
+		srv.mu.Lock()
+		methods := append([]string(nil), srv.methods...)
+		srv.mu.Unlock()
+		for _, method := range methods {
+			if method != http.MethodGet {
+				t.Fatalf("%s: only GETs allowed, got %v", settings, methods)
+			}
+		}
+		_, _, srv, err = runZoneUpdate(t, settings, "- 60m Z2", "dry-run", "true")
+		if err == nil || len(srv.puts) != 0 {
+			t.Fatalf("%s dry run: err=%v puts=%v", settings, err, srv.puts)
+		}
+	}
+}
+
+// Above 300% FTP is a warning (stderr and JSON), not a rejection.
+//
+//nolint:paralleltest // t.Setenv
+func TestEventsUpdateHighTargetWarns(t *testing.T) {
+	out, stderr, srv, err := runZoneUpdate(t, syntheticRideZones, "- 10m 50%\n- 10s 1000w")
+	if err != nil || len(srv.puts) != 1 {
+		t.Fatalf("1000w at FTP 266 must pass: err=%v puts=%v", err, srv.puts)
+	}
+	const want = "line 2: 1000w is above 300% of FTP 266 (798w); check for a typo"
+	var got calculatedEventResponse
+	if !strings.Contains(stderr, "warning: "+want) || json.Unmarshal([]byte(out), &got) != nil || !slicesContains(got.Warnings, want) {
+		t.Fatalf("stderr=%q out=%s", stderr, out)
+	}
+	out, stderr, srv, err = runZoneUpdate(t, syntheticRideZones, "- 10s 1000w", "dry-run", "true")
+	if err != nil || len(srv.puts) != 0 || !strings.Contains(stderr, "warning: line 1") || !strings.Contains(out, `"targetWarnings"`) {
+		t.Fatalf("dry run: err=%v stderr=%q out=%s", err, stderr, out)
+	}
+}
+
+func slicesContains(list []string, want string) bool {
+	for _, item := range list {
+		if item == want {
+			return true
+		}
+	}
+
+	return false
+}
+
+//nolint:paralleltest // captureStdout
+func TestWorkoutsCalculateHighTargetWarns(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := workoutsCalculateCommand().Run(nil, flags("ftp", "266", "desc", "- 10s 1000w"), nil, &stdout, &stderr)
+	if err != nil || !strings.Contains(stderr.String(), "warning: line 1: 1000w") || !strings.Contains(stdout.String(), `"targetWarnings"`) {
+		t.Fatalf("err=%v stderr=%q out=%s", err, stderr.String(), stdout.String())
 	}
 }

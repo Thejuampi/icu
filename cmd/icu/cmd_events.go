@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -24,6 +26,9 @@ type calculatedEventRequest struct {
 	Body     icu.EventEx
 	Estimate *icu.PlannedLoadEstimate
 	Zones    *eventPowerZones
+	// TargetWarnings: steps above icu.WarnPercentFTPTarget % FTP (priced,
+	// printed to stderr and returned in JSON).
+	TargetWarnings []string
 }
 
 type calculatedEventResponse struct {
@@ -35,8 +40,8 @@ type calculatedEventResponse struct {
 
 // eventPowerZones says how "Zn" steps were priced. Source is
 // "sport-settings" (the event type's power_zones) or "default-fallback"
-// (intervals.icu default bands, used only when sport-settings cannot be read
-// or has no power zones; Note then explains why and is also printed to stderr).
+// (intervals.icu default bands, used only when the athlete has no power zones
+// configured for the sport; Note then says so and is also printed to stderr).
 type eventPowerZones struct {
 	Source    string    `json:"source"`
 	Sport     string    `json:"sport"`
@@ -59,21 +64,36 @@ func sportSettingsPowerZones(client *icu.Client) powerZoneReader {
 	}
 }
 
+// powerZonesNotConfigured decides which sport-settings read failures mean
+// "the athlete has no zones for this sport" (fall back to the default bands)
+// rather than "we could not ask" (abort, write nothing). Only a 404 counts;
+// 401/403, 5xx and network errors abort so no PUT goes out with guessed
+// bands. Kept in one place so the policy is easy to change.
+func powerZonesNotConfigured(err error) bool {
+	var status *icu.HTTPStatusError
+
+	return errors.As(err, &status) && status.StatusCode == http.StatusNotFound
+}
+
 // resolveEventPowerZones prices zones from the event type's sport settings.
 // The hardcoded fallback (intervals.icu default bands) is the client's
-// decision for when those cannot be read; it is always announced.
-func resolveEventPowerZones(read powerZoneReader, sport string) *eventPowerZones {
+// decision, used only when no zones are configured (404, or empty or missing
+// power_zones); it is always announced. Any other read failure is an error.
+func resolveEventPowerZones(read powerZoneReader, sport string) (*eventPowerZones, error) {
 	var bounds []int
 	var err error
 	if read != nil {
 		bounds, err = read(sport)
 	}
-	if read != nil && err == nil && len(bounds) > 0 {
-		return &eventPowerZones{Source: "sport-settings", Sport: sport, Bounds: bounds, Midpoints: icu.PowerZoneMidpoints(bounds)}
+	if err != nil && !powerZonesNotConfigured(err) {
+		return nil, fmt.Errorf("read %s sport-settings power zones (nothing written; Zn steps need them): %w", sport, err)
 	}
-	reason := "no power_zones"
+	if read != nil && err == nil && len(bounds) > 0 {
+		return &eventPowerZones{Source: "sport-settings", Sport: sport, Bounds: bounds, Midpoints: icu.PowerZoneMidpoints(bounds)}, nil
+	}
+	reason := "no power_zones configured"
 	if err != nil {
-		reason = err.Error()
+		reason = "no " + sport + " sport settings (404)"
 	} else if read == nil {
 		reason = "not read"
 	}
@@ -83,12 +103,15 @@ func resolveEventPowerZones(read powerZoneReader, sport string) *eventPowerZones
 		Source: "default-fallback", Sport: sport, Bounds: bounds, Midpoints: icu.PowerZoneMidpoints(bounds),
 		Note: fmt.Sprintf("could not use %s sport-settings power zones (%s); priced Z1-Z%d with the intervals.icu default bands %v",
 			sport, reason, len(bounds), bounds),
-	}
+	}, nil
 }
 
-func noteEventZones(stderr io.Writer, zones *eventPowerZones) {
-	if zones != nil && zones.Note != "" {
-		fmt.Fprintln(stderr, "note: "+zones.Note)
+func noteEventZones(stderr io.Writer, request *calculatedEventRequest) {
+	if request.Zones != nil && request.Zones.Note != "" {
+		fmt.Fprintln(stderr, "note: "+request.Zones.Note)
+	}
+	for _, warning := range request.TargetWarnings {
+		fmt.Fprintln(stderr, "warning: "+warning)
 	}
 }
 
@@ -149,7 +172,7 @@ func eventsCreateCommand() *Command {
 			if err != nil {
 				return wrapCommandError(err)
 			}
-			noteEventZones(stderr, request.Zones)
+			noteEventZones(stderr, &request)
 
 			var targets upsertTargets
 			if BoolFlag(flags, "upsert") {
@@ -228,13 +251,16 @@ func eventsUpdateCommand() *Command {
 				if err := validate(raw); err != nil {
 					return err
 				}
-				noteEventZones(stderr, request.Zones)
+				noteEventZones(stderr, &request)
 				out := map[string]any{
 					"id": eventID, "dryRun": true, "applied": false, "body": request.Body,
 					"changes": eventUpdateChanges(raw, request.Body), "message": dryRunNothingWritten,
 				}
 				if request.Zones != nil {
 					out["powerZones"] = request.Zones
+				}
+				if len(request.TargetWarnings) > 0 {
+					out["targetWarnings"] = request.TargetWarnings
 				}
 
 				return writeJSON(stdout, out)
@@ -243,7 +269,7 @@ func eventsUpdateCommand() *Command {
 			if err != nil {
 				return err
 			}
-			noteEventZones(stderr, request.Zones)
+			noteEventZones(stderr, &request)
 
 			var result icu.Event
 			if err := client.Put("events", []string{args[0]}, nil, request.Body, &result); err != nil {
@@ -356,9 +382,12 @@ func applyCalculatedEventLoad(flags map[string]string, body *icu.EventEx, eventT
 		return request, errMissing("desc")
 	}
 
+	var err error
 	midpoints := icu.PowerZoneMidpoints(icu.DefaultPowerZoneBounds())
 	if icu.WorkoutDescriptionUsesPowerZones(body.Description) {
-		request.Zones = resolveEventPowerZones(zones, eventType)
+		if request.Zones, err = resolveEventPowerZones(zones, eventType); err != nil {
+			return request, err
+		}
 		midpoints = request.Zones.Midpoints
 	}
 	doc, err := icu.ParseWorkoutDescriptionWithZones(body.Description, midpoints)
@@ -366,9 +395,7 @@ func applyCalculatedEventLoad(flags map[string]string, body *icu.EventEx, eventT
 		return request, fmt.Errorf("parse workout description: %w", err)
 	}
 	ftp := IntFlag(flags, "ftp", 0)
-	if err := icu.ValidateWorkoutTargets(doc.Steps, ftp); err != nil {
-		return request, fmt.Errorf("parse workout description: %w", err)
-	}
+	request.TargetWarnings = icu.ValidateWorkoutTargets(doc.Steps, ftp)
 
 	estimate := icu.EstimatePlannedLoad(doc, icu.FTPSelectionFromWatts(ftp))
 	if len(estimate.Warnings) > 0 {
@@ -388,7 +415,7 @@ func calculatedEventOutput(event *icu.Event, request *calculatedEventRequest) ca
 		Event:    *event,
 		Estimate: request.Estimate,
 		Zones:    request.Zones,
-		Warnings: calculatedEventWarnings(event, request.Estimate),
+		Warnings: append(calculatedEventWarnings(event, request.Estimate), request.TargetWarnings...),
 	}
 }
 

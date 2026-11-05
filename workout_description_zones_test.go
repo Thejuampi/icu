@@ -48,6 +48,40 @@ func TestParseWorkoutDescriptionDefaultZones(t *testing.T) {
 	wantParseError(t, "- 10m Z8", "line 1", "zone Z8 does not exist", "Z1-Z7")
 }
 
+// m4: a non-power keyword before the target is rejected too.
+func TestParseWorkoutDescriptionRejectsKeywordBeforeTarget(t *testing.T) {
+	t.Parallel()
+	for _, desc := range []string{"- 10m HR 70%", "- 5m 50%\n- 10m LTHR 90%", "- 10m pace 80%"} {
+		wantParseError(t, desc, "HR, LTHR or Pace, not power")
+	}
+	wantParseError(t, "- 5m 50%\n- 10m HR 70%", "line 2")
+}
+
+// M1: every price stays inside its own band.
+func TestPowerZoneMidpointsStayInBand(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		bounds []int
+		want   []float64
+	}{
+		"low Z1, open top":         {[]int{45, 60, 80, 999}, []float64{22.5, 53, 70.5, 160}},
+		"high bands, open top":     {[]int{55, 75, 90, 105, 120, 200, 999}, []float64{50, 65.5, 83, 98, 113, 160.5, 210}},
+		"finite top":               {[]int{55, 75, 90, 105, 120, 150}, []float64{50, 65.5, 83, 98, 113, 135.5}},
+		"open top above 160 bound": {[]int{50, 160, 999}, []float64{50, 105.5, 170}},
+		"defaults":                 {icu.DefaultPowerZoneBounds(), []float64{50, 65.5, 83, 98, 113, 135.5, 160}},
+	} {
+		got := icu.PowerZoneMidpoints(tc.bounds)
+		if len(got) != len(tc.want) {
+			t.Fatalf("%s: %v", name, got)
+		}
+		for index := range got {
+			if got[index] != tc.want[index] {
+				t.Fatalf("%s: got %v want %v", name, got, tc.want)
+			}
+		}
+	}
+}
+
 func TestParseWorkoutDescriptionCustomZones(t *testing.T) {
 	t.Parallel()
 	zones := icu.PowerZoneMidpoints([]int{50, 70, 85, 100, 999})
@@ -106,21 +140,29 @@ func TestParseWorkoutDescriptionTargetBounds(t *testing.T) {
 	for _, desc := range []string{"- 10m 0%", "- 10m 0w", "- 10m 0-100w", "- 10m ramp 0-50%"} {
 		wantParseError(t, desc, "line 1", "above 0")
 	}
-	wantParseError(t, "- 10m 301%", "above 300% FTP")
-	if s := parseOne(t, "- 10m 300%"); s.Power.Value != 300 {
-		t.Fatalf("300%% is allowed: %+v", *s.Power)
+	wantParseError(t, "- 10m 50%\n- 10m 1001%", "line 2", "above 1000% FTP")
+	wantParseError(t, "- 10m 50%\n- 1m ramp 100-3001w", "line 2", "above 3000 W")
+	if s := parseOne(t, "- 10m 1000%"); s.Power.Value != 1000 {
+		t.Fatalf("1000%% is allowed: %+v", *s.Power)
 	}
-	doc, _ := icu.ParseWorkoutDescription("3x\n- 1m 99999w")
-	if err := icu.ValidateWorkoutTargets(doc.Steps, 266); err == nil || !strings.Contains(err.Error(), "above 300% of FTP 266") {
-		t.Fatalf("99999w at FTP 266: %v", err)
+	if s := parseOne(t, "- 10s 3000w"); s.Power.Value != 3000 {
+		t.Fatalf("3000w is allowed: %+v", *s.Power)
 	}
-	doc, _ = icu.ParseWorkoutDescription("- 1m ramp 100-798w\n- 1m 798w")
-	if err := icu.ValidateWorkoutTargets(doc.Steps, 266); err != nil {
-		t.Fatalf("798w = 300%% of 266 allowed: %v", err)
+	// Above 300% FTP: priced, with a warning naming the line (m1).
+	doc, err := icu.ParseWorkoutDescription("- 10m 50%\n- 10s 1000w")
+	if err != nil {
+		t.Fatal(err)
 	}
-	doc, _ = icu.ParseWorkoutDescription("- 1m ramp 100-799w")
-	if icu.ValidateWorkoutTargets(doc.Steps, 266) == nil {
-		t.Fatal("ramp end above cap must fail")
+	if got := icu.ValidateWorkoutTargets(doc.Steps, 266); len(got) != 1 || got[0] != "line 2: 1000w is above 300% of FTP 266 (798w); check for a typo" {
+		t.Fatalf("1000w at FTP 266: %q", got)
+	}
+	doc, _ = icu.ParseWorkoutDescription("intro\n3x\n  - 1m ramp 100-799w\n  - 1m 798w\n- 1m 301%\n- 1m 300%")
+	got := icu.ValidateWorkoutTargets(doc.Steps, 266)
+	if len(got) != 2 || !strings.HasPrefix(got[0], "line 3: 799w") || got[1] != "line 5: target 301% FTP is above 300% FTP; check for a typo" {
+		t.Fatalf("warnings %q", got)
+	}
+	if got := icu.ValidateWorkoutTargets(doc.Steps, 0); len(got) != 1 {
+		t.Fatalf("no FTP: only the %% warning, got %q", got)
 	}
 }
 
