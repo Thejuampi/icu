@@ -64,10 +64,13 @@ func TestPowerZoneMidpointsStayInBand(t *testing.T) {
 		bounds []int
 		want   []float64
 	}{
-		"low Z1, open top":         {[]int{45, 60, 80, 999}, []float64{22.5, 53, 70.5, 160}},
+		"Z1 bound 45, open top":    {[]int{45, 60, 80, 999}, []float64{44.5, 53, 70.5, 160}},
+		"Z1 bound 49":              {[]int{49, 60, 999}, []float64{48.5, 55, 160}},
+		"Z1 bound 50":              {[]int{50, 70, 999}, []float64{49.5, 60.5, 160}},
+		"Z1 bound 60":              {[]int{60, 70, 999}, []float64{50, 65.5, 160}},
 		"high bands, open top":     {[]int{55, 75, 90, 105, 120, 200, 999}, []float64{50, 65.5, 83, 98, 113, 160.5, 210}},
 		"finite top":               {[]int{55, 75, 90, 105, 120, 150}, []float64{50, 65.5, 83, 98, 113, 135.5}},
-		"open top above 160 bound": {[]int{50, 160, 999}, []float64{50, 105.5, 170}},
+		"open top above 160 bound": {[]int{55, 160, 999}, []float64{50, 108, 170}},
 		"defaults":                 {icu.DefaultPowerZoneBounds(), []float64{50, 65.5, 83, 98, 113, 135.5, 160}},
 	} {
 		got := icu.PowerZoneMidpoints(tc.bounds)

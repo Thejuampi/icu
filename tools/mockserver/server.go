@@ -36,6 +36,8 @@ type server struct {
 	now      func() time.Time
 	// sink is the second listener for -redirect-sink; nil = mode off.
 	sink *redirectSink
+	// fault is the injected failure (fault.go); nil = off.
+	fault *fault
 }
 
 func newServer(dir string, log io.Writer) (*server, error) {
@@ -110,7 +112,13 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.serveFault(w, r) {
+		return
+	}
+
 	switch {
+	case r.URL.Path == "/_mock/fault" && (r.Method == http.MethodPost || r.Method == http.MethodDelete):
+		s.handleFaultControl(w, r)
 	case r.URL.Path == "/_mock/writes" && r.Method == http.MethodGet:
 		s.handleWrites(w)
 	case r.URL.Path == "/_mock/reset" && (r.Method == http.MethodPost || r.Method == http.MethodDelete):
@@ -147,6 +155,7 @@ func (s *server) handleReset(w http.ResponseWriter) {
 	s.mu.Lock()
 	s.writes = nil
 	s.overlay = map[string][]byte{}
+	s.fault = nil
 	s.mu.Unlock()
 
 	if s.sink != nil {

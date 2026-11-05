@@ -52,13 +52,13 @@ const (
 // supportedStepForms is quoted in parse errors so the fix is obvious.
 const supportedStepForms = `supported step forms (power only): "- 10m 70%", "- 10m 65-75%" (range, midpoint), ` +
 	`"- 10m ramp 55-75%" (ramp), "- 10m 200w", "- 10m 110-130w" (midpoint), "- 10m ramp 100-200w", "- 10m Z2" ` +
-	`(sport-settings zones); targets above 0, at most 1000% FTP or 3000 W (above 300% FTP: warning); durations like 30s, 10m, 1h30m; repeats as "3x" before the steps`
+	`(sport-settings zones, band midpoint; Z1 min(50%, bound-0.5)); targets above 0, at most 1000% FTP or 3000 W (above 300% FTP: warning); durations like 30s, 10m, 1h30m; repeats as "3x" before the steps`
 
 // Power zone pricing. "Zn" is priced at the midpoint of its band in the
 // athlete's sport-settings power_zones (%FTP upper bounds; intervals.icu writes
 // 999 for an open-ended top zone). Every price stays inside its own band:
-//   - Z1 (0..first bound): 50% when the bound is at least 50, otherwise the
-//     midpoint of 0..bound (bound/2).
+//   - Z1 (0..first bound): min(50, bound - 0.5), so 50% unless the bound is
+//     50.5 or lower (bound 50 gives 49.5, bound 45 gives 44.5).
 //   - An open-ended top zone (bound >= PowerZoneOpenEndedBound): 160% when the
 //     previous bound is below 160, otherwise previous bound +
 //     PowerZoneTopMarginPercent.
@@ -68,6 +68,7 @@ const supportedStepForms = `supported step forms (power only): "- 10m 70%", "- 1
 // when the athlete has no power zones configured.
 const (
 	powerZoneFirstPercent     = 50
+	powerZoneFirstMargin      = 0.5
 	powerZoneTopPercent       = 160
 	PowerZoneOpenEndedBound   = 999
 	PowerZoneTopMarginPercent = 10
@@ -82,10 +83,8 @@ func PowerZoneMidpoints(bounds []int) []float64 {
 	midpoints := make([]float64, len(bounds))
 	for index, bound := range bounds {
 		switch {
-		case index == 0 && bound >= powerZoneFirstPercent:
-			midpoints[index] = powerZoneFirstPercent
 		case index == 0:
-			midpoints[index] = float64(bound) / 2 //nolint:mnd // midpoint of 0..bound
+			midpoints[index] = math.Min(powerZoneFirstPercent, float64(bound)-powerZoneFirstMargin)
 		case bound >= PowerZoneOpenEndedBound && bounds[index-1] < powerZoneTopPercent:
 			midpoints[index] = powerZoneTopPercent
 		case bound >= PowerZoneOpenEndedBound:
