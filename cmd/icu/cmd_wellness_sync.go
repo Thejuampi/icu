@@ -22,7 +22,8 @@ func wellnessSyncCommand() *Command {
 		Name: "",
 		Usage: "wellness sync [--oldest DATE] [--newest DATE] [--fields restingHR,hrv,sleepSecs,sleepScore] " +
 			"[--apply] [--overwrite] [--lock] [--timezone TZ] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--json]",
-		Description: "Copy resting HR, HRV (rMSSD: readiness sleepHRV, the nightly value the Zepp app shows; else the HRVRMSSD sample mean, an approximation) and sleep from Zepp into intervals.icu wellness. " +
+		Description: "Copy resting HR, HRV (Zepp readiness sleepHRV, the nightly value the Zepp app shows; method not documented; " +
+			"HRVRMSSD-only days: dry-run info line, no write) and sleep from Zepp into intervals.icu wellness. " +
 			"Dry run by default: prints the diff and writes nothing; --apply sends one PUT wellness-bulk. " +
 			"Fills only empty fields unless --overwrite. HRV goes on the athlete's local day (18:00+ readings count for the next day). " +
 			"Suspected partial sleep sync: when intervals.icu has sleepSecs below half of Zepp's (e.g. about 1.6 h against a full night), " +
