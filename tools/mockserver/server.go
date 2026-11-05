@@ -184,7 +184,42 @@ func (s *server) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.URL.Query().Get("intervals") == "true" {
+		fmt.Fprintf(s.log, "icu-mock: GET %s (merged intervals)\n", r.URL.RequestURI())
+		body = s.withIntervals(key, body)
+	}
+
 	writeJSON(w, http.StatusOK, filterByDate(body, r.URL.Query().Get("oldest"), r.URL.Query().Get("newest")))
+}
+
+// withIntervals serves GET /activity/{id}?intervals=true like intervals.icu:
+// the activity with icu_intervals and icu_groups filled in. They come from the
+// activity's own body when present, else from the <id>/intervals fixture.
+func (s *server) withIntervals(key string, body []byte) []byte {
+	parts := strings.Split(key, "/")
+	if len(parts) < 2 || parts[len(parts)-2] != "activity" {
+		return body
+	}
+	var activity map[string]json.RawMessage
+	if json.Unmarshal(body, &activity) != nil {
+		return body
+	}
+	extra, ok := s.lookup(key + "/intervals") // lookup already accepts a .json key
+	var dto map[string]json.RawMessage
+	if !ok || json.Unmarshal(extra, &dto) != nil {
+		return body
+	}
+	for _, k := range []string{"icu_intervals", "icu_groups"} {
+		if v, have := activity[k]; (!have || string(v) == "null") && dto[k] != nil {
+			activity[k] = dto[k]
+		}
+	}
+	merged, err := json.Marshal(activity)
+	if err != nil {
+		return body
+	}
+
+	return merged
 }
 
 func (s *server) handleWrite(w http.ResponseWriter, r *http.Request) {

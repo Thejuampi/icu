@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `events create/update --calculate-load`: workout steps may target power zones `Z1`–`Z7` (priced at fixed %FTP midpoints of the intervals.icu default bands: 50/65/82.5/97.5/112.5/135/160) and watts (`200w`, range `110-130w` at its midpoint). Unparseable steps now fail with the line number and the supported forms.
+- Fix: `activity <id> intervals` returned only `{id, analyzed}` because `IntervalsDTO` only read camelCase keys while the API sends snake_case (`icu_intervals`, `icu_groups`, `average_watts`, ...); the decoder now reads snake_case (camelCase still accepted). The command uses `GET /activity/{id}?intervals=true` (activity plus intervals in one call); `GET /activity/{id}/intervals` returns the same DTO, so `analysis workout` now gets interval watts/HR too. Behaviour change: default output is a table (a real 0 decoupling/zone prints 0, missing prints `-`; tabs/newlines in labels become spaces); use `--json` for JSON (`icuIntervals`/`icuGroups`, always arrays). Mock server: `?intervals=true` on an activity merges its `<id>/intervals` fixture and logs the request with its query string.
 - `workouts calculate` no longer requires an API key: it runs entirely locally without network requests. Authentication is unchanged for API-backed commands.
 
 - `wellness sync`: an `HRVRMSSD` fetch failure now prints a non-failing `note:` to stderr (`notes` in JSON); the exit code is non-zero only for a band data or readiness sleepHRV failure (documented).

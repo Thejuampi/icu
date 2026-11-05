@@ -500,7 +500,7 @@ func activityDetailCommandCases() []commandCase {
 		commandFlow("activity delete", "activity", "delete", []string{"i1"}, nil,
 			http.MethodDelete, "/api/v1/activity/i1", "deleted"),
 		commandFlow("activity intervals", "activity", "intervals", []string{"i1"}, nil,
-			http.MethodGet, "/api/v1/activity/i1/intervals", "icuIntervals"),
+			http.MethodGet, "/api/v1/activity/i1", "interval(s)"),
 		commandFlow("activity streams", "activity", "streams", []string{"i1"}, flags("types", "watts"),
 			http.MethodGet, "/api/v1/activity/i1/streams", "watts"),
 		commandFlow("activity power curve", "activity", "power-curve", []string{"i1"}, nil,

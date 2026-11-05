@@ -1,0 +1,14 @@
+{
+  "id": "i970000001",
+  "name": "Synthetic Threshold Session",
+  "type": "Ride",
+  "analyzed": "2030-03-04T10:00:00.000+00:00",
+  "icu_intervals": [
+    {"id": 1, "type": "RECOVERY", "label": null, "group_id": null, "start_index": 0, "end_index": 600, "start_time": 0, "end_time": 600, "moving_time": 600, "elapsed_time": 600, "average_watts": 150, "weighted_average_watts": 155, "max_watts": 210, "average_heartrate": 120, "max_heartrate": 131, "decoupling": 1.5, "zone": 2, "intensity": 55, "training_load": 8.4, "average_cadence": 85.5},
+    {"id": 2, "type": "WORK", "label": "rep 1", "group_id": "g-syn-1", "start_index": 600, "end_index": 1080, "start_time": 600, "end_time": 1080, "moving_time": 480, "elapsed_time": 480, "average_watts": 312, "weighted_average_watts": 315, "max_watts": 401, "average_heartrate": 161, "max_heartrate": 170, "decoupling": 4.2, "zone": 4, "intensity": 104, "training_load": 14.2, "average_cadence": 92.0},
+    {"id": 3, "type": "WORK", "label": "rep 2", "group_id": "g-syn-1", "start_index": 1380, "end_index": 1860, "start_time": 1380, "end_time": 1860, "moving_time": 480, "elapsed_time": 480, "average_watts": 308, "weighted_average_watts": 311, "max_watts": 395, "average_heartrate": 164, "max_heartrate": 173, "decoupling": 5.1, "zone": 4, "intensity": 103, "training_load": 13.9, "average_cadence": 91.0}
+  ],
+  "icu_groups": [
+    {"id": "g-syn-1", "count": 2, "start_index": 600, "end_index": 1860, "moving_time": 480, "elapsed_time": 480, "average_watts": 310, "weighted_average_watts": 313, "max_watts": 401, "average_heartrate": 162, "max_heartrate": 173, "decoupling": 4.6, "training_load": 28.1}
+  ]
+}
