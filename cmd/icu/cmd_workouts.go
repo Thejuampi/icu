@@ -63,6 +63,12 @@ func workoutsCalculateCommand() *Command {
 			if err != nil {
 				return wrapCommandError(err)
 			}
+			if icu.WorkoutDescriptionUsesPowerZones(stringFlagAlias(flags, "desc", "description")) {
+				// Offline by design: no sport-settings, so zones use the
+				// default bands (the client's fallback), announced here.
+				fmt.Fprintf(stderr, "note: workouts calculate runs offline; Z1-Z%d priced with the intervals.icu default bands %v\n",
+					len(icu.DefaultPowerZoneBounds()), icu.DefaultPowerZoneBounds())
+			}
 
 			return writeJSON(stdout, estimate)
 		},
@@ -80,6 +86,9 @@ func workoutEstimateFromFlags(flags map[string]string) (icu.PlannedLoadEstimate,
 
 	doc, err := icu.ParseWorkoutDescription(desc)
 	if err != nil {
+		return icu.PlannedLoadEstimate{}, fmt.Errorf("parse workout description: %w", err)
+	}
+	if err := icu.ValidateWorkoutTargets(doc.Steps, IntFlag(flags, "ftp", 0)); err != nil {
 		return icu.PlannedLoadEstimate{}, fmt.Errorf("parse workout description: %w", err)
 	}
 

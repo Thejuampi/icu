@@ -26,25 +26,80 @@ var (
 	// ("Z1".."Z7", priced at a fixed %FTP, see powerZoneMidpointPercent).
 	stepLinePattern = regexp.MustCompile(
 		`^-\s*((?:\d+(?:\.\d+)?[hms])+)\s+(?:([A-Za-z]+)\s+)?` +
-			`(?:(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?(%|\s*[wW]\b)|[zZ]([1-7])\b)\s*(.*)$`,
+			`(?:(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?(%|\s*[wW]\b)|[zZ](\d+)(?:\s*-\s*[zZ]?(\d+))?\b)\s*(.*)$`,
 	)
+	// nonPowerTargetPattern: HR, LTHR or Pace written after (or as the keyword
+	// before) a target means the step is not a power target.
+	nonPowerTargetPattern = regexp.MustCompile(`(?i)^(hr|lthr|pace)\b`)
+	// cadenceTextPattern strips cadence hints ("85rpm", "90-100 rpm",
+	// "cadence 90") from the step label.
+	cadenceTextPattern = regexp.MustCompile(`(?i)\b(?:\d+(?:-\d+)?\s*rpm|cadence\s*\d+(?:-\d+)?)\b`)
 )
 
-// supportedStepForms is quoted in parse errors so the fix is obvious.
-const supportedStepForms = `supported step forms: "- 10m 70%", "- 10m 55-75%" (ramp), "- 10m 200w", ` +
-	`"- 10m 110-130w" (midpoint), "- 10m Z2" (Z1-Z7); durations like 30s, 10m, 1h30m; repeats as "3x" before the steps`
+// MaxPercentFTPTarget caps a %FTP step target (and, via MaxWattsTarget, a
+// watt target at that share of FTP): above 300% FTP a step is a typo, not a
+// workout, and would inflate the load.
+const MaxPercentFTPTarget = 300
 
-// powerZoneMidpointPercent prices "Z1".."Z7" as %FTP. Bands follow the
-// intervals.icu default (Coggan) power zones, upper bounds 55/75/90/105/120/150%
-// FTP, and each zone is the midpoint of its band. Z1 (0-55%) uses 50% and the
-// open-ended Z7 (>150%) uses 160%, since a 0% floor or an infinite cap has no
-// meaningful midpoint.
-func powerZoneMidpointPercent(zone int) float64 {
-	//nolint:mnd // the documented zone table itself
-	return [...]float64{1: 50, 2: 65, 3: 82.5, 4: 97.5, 5: 112.5, 6: 135, 7: 160}[zone]
+// supportedStepForms is quoted in parse errors so the fix is obvious.
+const supportedStepForms = `supported step forms (power only): "- 10m 70%", "- 10m 65-75%" (range, midpoint), ` +
+	`"- 10m ramp 55-75%" (ramp), "- 10m 200w", "- 10m 110-130w" (midpoint), "- 10m ramp 100-200w", "- 10m Z2" ` +
+	`(sport-settings zones); targets above 0 and at most 300% FTP; durations like 30s, 10m, 1h30m; repeats as "3x" before the steps`
+
+// Power zone pricing. "Zn" is priced at the midpoint of its band in the
+// athlete's Ride sport-settings power_zones (%FTP upper bounds, the last one
+// open-ended, intervals.icu writes 999). Z1 (0..first bound) is fixed at 50%
+// and the open-ended top zone at 160%, since a 0% floor or an infinite cap has
+// no meaningful midpoint. DefaultPowerZoneBounds (intervals.icu's default
+// Coggan bands) is used only when sport-settings cannot supply zones.
+const (
+	powerZoneFirstPercent = 50
+	powerZoneTopPercent   = 160
+)
+
+// DefaultPowerZoneBounds are intervals.icu's default Ride power zones.
+func DefaultPowerZoneBounds() []int { return []int{55, 75, 90, 105, 120, 150, 999} }
+
+// PowerZoneMidpoints returns the %FTP price of Z1..Zn for the given upper
+// bounds: Z1 50%, the top zone 160%, every other zone its band midpoint.
+func PowerZoneMidpoints(bounds []int) []float64 {
+	midpoints := make([]float64, len(bounds))
+	for index := range bounds {
+		switch {
+		case index == 0:
+			midpoints[index] = powerZoneFirstPercent
+		case index == len(bounds)-1:
+			midpoints[index] = powerZoneTopPercent
+		default:
+			midpoints[index] = float64(bounds[index-1]+1+bounds[index]) / 2 //nolint:mnd // band (prev+1 .. upper) midpoint
+		}
+	}
+
+	return midpoints
 }
 
+var zoneStepPattern = regexp.MustCompile(`^-\s*(?:\d+(?:\.\d+)?[hms])+\s+(?:[A-Za-z]+\s+)?[zZ]\d+\b`)
+
+// WorkoutDescriptionUsesPowerZones reports whether any step targets "Zn", so
+// callers fetch sport-settings zones only when they matter.
+func WorkoutDescriptionUsesPowerZones(description string) bool {
+	for _, line := range strings.Split(description, "\n") {
+		if zoneStepPattern.MatchString(strings.TrimSpace(line)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ParseWorkoutDescription parses with the default power zones.
 func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
+	return ParseWorkoutDescriptionWithZones(description, PowerZoneMidpoints(DefaultPowerZoneBounds()))
+}
+
+// ParseWorkoutDescriptionWithZones prices "Zn" steps with zones[n-1] (%FTP),
+// see PowerZoneMidpoints.
+func ParseWorkoutDescriptionWithZones(description string, zones []float64) (*WorkoutDoc, error) {
 	lines := strings.Split(description, "\n")
 	var doc WorkoutDoc
 
@@ -60,7 +115,7 @@ func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
 				return nil, fmt.Errorf("%w: invalid repeat %q", ErrWorkoutDescriptionUnsupported, line)
 			}
 
-			block, nextIndex, err := parseRepeatBlock(lines, index+1, reps)
+			block, nextIndex, err := parseRepeatBlock(lines, index+1, reps, zones)
 			if err != nil {
 				return nil, lineError(nextIndex, err)
 			}
@@ -76,7 +131,7 @@ func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
 			continue
 		}
 
-		step, err := parseWorkoutDescriptionStep(line)
+		step, err := parseWorkoutDescriptionStep(line, zones)
 		if err != nil {
 			return nil, lineError(index, err)
 		}
@@ -97,7 +152,7 @@ func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
 // layouts are accepted: the indented form, where every child line starts with
 // whitespace, and the intervals.icu native form, where un-indented "-" steps
 // follow the header and a blank line (or any non-step line) closes the block.
-func parseRepeatBlock(lines []string, startIndex, reps int) (WorkoutStep, int, error) {
+func parseRepeatBlock(lines []string, startIndex, reps int, zones []float64) (WorkoutStep, int, error) {
 	block := WorkoutStep{Reps: reps}
 	index := startIndex
 	indentedBlock := nextNonBlankIsIndented(lines, startIndex)
@@ -124,7 +179,7 @@ func parseRepeatBlock(lines []string, startIndex, reps int) (WorkoutStep, int, e
 			return block, index, fmt.Errorf("%w: nested repeats are not supported", ErrWorkoutDescriptionUnsupported)
 		}
 
-		step, err := parseWorkoutDescriptionStep(line)
+		step, err := parseWorkoutDescriptionStep(line, zones)
 		if err != nil {
 			return block, index, err
 		}
@@ -156,10 +211,15 @@ func nextNonBlankIsIndented(lines []string, index int) bool {
 	return false
 }
 
-func parseWorkoutDescriptionStep(line string) (WorkoutStep, error) {
+func parseWorkoutDescriptionStep(line string, zones []float64) (WorkoutStep, error) {
 	matches := stepLinePattern.FindStringSubmatch(line)
 	if matches == nil {
 		return WorkoutStep{}, fmt.Errorf("%w: %q", ErrWorkoutDescriptionUnsupported, line)
+	}
+	keyword, trailing := matches[2], strings.TrimSpace(matches[8])
+	if nonPowerTargetPattern.MatchString(keyword) || nonPowerTargetPattern.MatchString(trailing) {
+		return WorkoutStep{}, fmt.Errorf("%w: %q targets HR, LTHR or Pace, not power; only power steps can be priced",
+			ErrWorkoutDescriptionUnsupported, line)
 	}
 
 	duration, err := parseWorkoutDuration(matches[1])
@@ -167,49 +227,95 @@ func parseWorkoutDescriptionStep(line string) (WorkoutStep, error) {
 		return WorkoutStep{}, err
 	}
 
+	// Only the "ramp" keyword makes a ramp; a range without it is priced at
+	// its midpoint (%FTP or watts alike).
+	ramp := strings.EqualFold(keyword, "ramp")
+	if ramp {
+		keyword = ""
+	}
 	step := WorkoutStep{
 		Duration: duration,
-		Text:     workoutStepText(matches[2], matches[7]),
+		Text:     workoutStepText(keyword, trailing),
 		Power:    &WorkoutTarget{Units: "%ftp"},
 	}
 
 	if matches[6] != "" {
-		zone, _ := strconv.Atoi(matches[6]) // the pattern only admits 1-7
-		step.Power.Value = powerZoneMidpointPercent(zone)
-
-		return step, nil
+		return zoneStep(step, line, matches[6], matches[7], ramp, zones)
 	}
 
-	start, err := strconv.ParseFloat(matches[3], 64)
+	start, end, err := stepTargetRange(line, matches[3], matches[4])
 	if err != nil {
-		return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
+		return WorkoutStep{}, err
 	}
+	if matches[5] != "%" {
+		step.Power.Units = "w"
+	} else if end > MaxPercentFTPTarget {
+		return WorkoutStep{}, fmt.Errorf("%w: target above %d%% FTP in %q", ErrWorkoutDescriptionUnsupported, MaxPercentFTPTarget, line)
+	}
+
+	switch {
+	case ramp && matches[4] == "":
+		return WorkoutStep{}, fmt.Errorf("%w: a ramp needs a range like \"ramp 55-75%%\" in %q", ErrWorkoutDescriptionUnsupported, line)
+	case ramp:
+		step.Ramp = true
+		step.Power.Start, step.Power.End = start, end
+	default:
+		step.Power.Value = (start + end) / 2 //nolint:mnd // range midpoint (start == end for a single value)
+	}
+
+	return step, nil
+}
+
+func zoneStep(step WorkoutStep, line, first, last string, ramp bool, zones []float64) (WorkoutStep, error) {
+	if last != "" {
+		return WorkoutStep{}, fmt.Errorf("%w: zone ranges like \"Z3-Z4\" are not supported in %q; use a %% or watt range",
+			ErrWorkoutDescriptionUnsupported, line)
+	}
+	if ramp {
+		return WorkoutStep{}, fmt.Errorf("%w: a ramp needs a %% or watt range, not a zone, in %q", ErrWorkoutDescriptionUnsupported, line)
+	}
+	zone, err := strconv.Atoi(first)
+	if err != nil || zone < 1 || zone > len(zones) {
+		return WorkoutStep{}, fmt.Errorf("%w: zone Z%s does not exist (power zones define Z1-Z%d) in %q",
+			ErrWorkoutDescriptionUnsupported, first, len(zones), line)
+	}
+	step.Power.Value = zones[zone-1]
+
+	return step, nil
+}
+
+func stepTargetRange(line, first, second string) (float64, float64, error) {
+	start, err := strconv.ParseFloat(first, 64)
 	end := start
-	if matches[4] != "" {
-		if end, err = strconv.ParseFloat(matches[4], 64); err != nil {
-			return WorkoutStep{}, fmt.Errorf("%w: invalid power target %q", ErrWorkoutDescriptionUnsupported, line)
+	if err == nil && second != "" {
+		end, err = strconv.ParseFloat(second, 64)
+	}
+	if err != nil || start <= 0 || end <= 0 {
+		return 0, 0, fmt.Errorf("%w: power target must be above 0 in %q", ErrWorkoutDescriptionUnsupported, line)
+	}
+
+	return start, end, nil
+}
+
+// ValidateWorkoutTargets rejects watt targets above MaxPercentFTPTarget % of
+// ftp (percent targets are checked while parsing).
+func ValidateWorkoutTargets(steps []WorkoutStep, ftp int) error {
+	limit := float64(ftp) * MaxPercentFTPTarget / percentScale
+	for index := range steps {
+		step := &steps[index]
+		if err := ValidateWorkoutTargets(step.Steps, ftp); err != nil {
+			return err
+		}
+		if step.Power == nil || step.Power.Units != "w" || ftp <= 0 {
+			continue
+		}
+		if peak := math.Max(step.Power.Value, math.Max(step.Power.Start, step.Power.End)); peak > limit {
+			return fmt.Errorf("%w: %.0fw is above %d%% of FTP %d (%.0fw)",
+				ErrWorkoutDescriptionUnsupported, peak, MaxPercentFTPTarget, ftp, limit)
 		}
 	}
 
-	if matches[5] != "%" {
-		// Absolute watts; a range is priced at its midpoint, not as a ramp.
-		step.Power.Units = "w"
-		step.Power.Value = (start + end) / 2
-
-		return step, nil
-	}
-
-	if matches[4] != "" {
-		step.Ramp = true
-		step.Power.Start = start
-		step.Power.End = end
-
-		return step, nil
-	}
-
-	step.Power.Value = start
-
-	return step, nil
+	return nil
 }
 
 // workoutStepText joins the keyword written before the target with any text
@@ -220,7 +326,8 @@ func workoutStepText(keyword, trailing string) string {
 	if keyword = strings.TrimSpace(keyword); keyword != "" {
 		parts = append(parts, keyword)
 	}
-	if trailing = strings.TrimSpace(trailing); trailing != "" && !strings.EqualFold(trailing, "ftp") {
+	trailing = strings.Join(strings.Fields(cadenceTextPattern.ReplaceAllString(trailing, "")), " ")
+	if trailing != "" && !strings.EqualFold(trailing, "ftp") {
 		parts = append(parts, trailing)
 	}
 

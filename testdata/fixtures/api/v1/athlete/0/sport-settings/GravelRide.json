@@ -1,0 +1,8 @@
+{
+  "id": 2,
+  "athlete_id": "i0",
+  "types": ["GravelRide"],
+  "ftp": 266,
+  "power_zones": [50, 70, 85, 100, 115, 140, 999],
+  "power_zone_names": ["Synthetic Z1", "Synthetic Z2", "Synthetic Z3", "Synthetic Z4", "Synthetic Z5", "Synthetic Z6", "Synthetic Z7"]
+}
