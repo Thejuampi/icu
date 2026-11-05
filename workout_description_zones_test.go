@@ -73,7 +73,10 @@ func TestPowerZoneMidpointsStayInBand(t *testing.T) {
 		"open top above 160 bound": {[]int{55, 160, 999}, []float64{50, 108, 170}},
 		"defaults":                 {icu.DefaultPowerZoneBounds(), []float64{50, 65.5, 83, 98, 113, 135.5, 160}},
 	} {
-		got := icu.PowerZoneMidpoints(tc.bounds)
+		got, err := icu.PowerZoneMidpoints(tc.bounds)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
 		if len(got) != len(tc.want) {
 			t.Fatalf("%s: %v", name, got)
 		}
@@ -87,7 +90,7 @@ func TestPowerZoneMidpointsStayInBand(t *testing.T) {
 
 func TestParseWorkoutDescriptionCustomZones(t *testing.T) {
 	t.Parallel()
-	zones := icu.PowerZoneMidpoints([]int{50, 70, 85, 100, 999})
+	zones, _ := icu.PowerZoneMidpoints([]int{50, 70, 85, 100, 999})
 	if got := []float64{50, 60.5, 78, 93, 160}; len(zones) != 5 || zones[1] != got[1] || zones[2] != got[2] || zones[3] != got[3] || zones[4] != 160 {
 		t.Fatalf("midpoints %v want %v", zones, got)
 	}
@@ -199,5 +202,37 @@ func TestParseWorkoutDescriptionActionableError(t *testing.T) {
 	}
 	for desc, line := range cases {
 		wantParseError(t, desc, append([]string{line + ":"}, forms...)...)
+	}
+}
+
+// m2: unpriceable bounds are rejected.
+func TestPowerZoneMidpointsRejectsInvalidBounds(t *testing.T) {
+	t.Parallel()
+	for name, bounds := range map[string][]int{
+		"empty": nil, "zero": {0, 75, 999}, "negative": {55, -1, 999},
+		"descending": {90, 75, 55, 999}, "repeated 999": {55, 75, 999, 999}, "equal": {55, 55, 999},
+	} {
+		got, err := icu.PowerZoneMidpoints(bounds)
+		if !errors.Is(err, icu.ErrInvalidPowerZones) || got != nil {
+			t.Fatalf("%s %v: got %v err %v", name, bounds, got, err)
+		}
+	}
+	if _, err := icu.PowerZoneMidpoints([]int{90, 75, 55, 999}); err == nil || !strings.Contains(err.Error(), "Z2 bound 75 is not above Z1 bound 90") {
+		t.Fatalf("message: %v", err)
+	}
+	if got := icu.DefaultPowerZoneMidpoints(); len(got) != 7 || got[0] != 50 || got[6] != 160 {
+		t.Fatalf("defaults %v", got)
+	}
+}
+
+// m1: a descending range is capped on its larger end (kills max(start,end) -> end).
+func TestParseWorkoutDescriptionDescendingRangeCap(t *testing.T) {
+	t.Parallel()
+	wantParseError(t, "- 1m ramp 3500-200w", "line 1", "above 3000 W")
+	wantParseError(t, "- 1m 3500-200w", "above 3000 W")
+	wantParseError(t, "- 1m ramp 1200-100%", "line 1", "above 1000% FTP")
+	wantParseError(t, "- 1m 1200-100%", "above 1000% FTP")
+	if s := parseOne(t, "- 1m ramp 3000-200w"); !s.Ramp || s.Power.Start != 3000 || s.Power.End != 200 {
+		t.Fatalf("3000-200w allowed: %+v", *s.Power)
 	}
 }

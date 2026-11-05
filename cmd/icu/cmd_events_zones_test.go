@@ -258,7 +258,7 @@ func TestEventsUpdateHighTargetWarns(t *testing.T) {
 		t.Fatalf("stderr=%q out=%s", stderr, out)
 	}
 	out, stderr, srv, err = runZoneUpdate(t, syntheticRideZones, "- 10s 1000w", "dry-run", "true")
-	if err != nil || len(srv.puts) != 0 || !strings.Contains(stderr, "warning: line 1") || !strings.Contains(out, `"targetWarnings"`) {
+	if err != nil || len(srv.puts) != 0 || !strings.Contains(stderr, "warning: line 1") || !strings.Contains(out, `"warnings"`) {
 		t.Fatalf("dry run: err=%v stderr=%q out=%s", err, stderr, out)
 	}
 }
@@ -277,7 +277,24 @@ func slicesContains(list []string, want string) bool {
 func TestWorkoutsCalculateHighTargetWarns(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := workoutsCalculateCommand().Run(nil, flags("ftp", "266", "desc", "- 10s 1000w"), nil, &stdout, &stderr)
-	if err != nil || !strings.Contains(stderr.String(), "warning: line 1: 1000w") || !strings.Contains(stdout.String(), `"targetWarnings"`) {
+	if err != nil || !strings.Contains(stderr.String(), "warning: line 1: 1000w") || !strings.Contains(stdout.String(), `"warnings"`) {
 		t.Fatalf("err=%v stderr=%q out=%s", err, stderr.String(), stdout.String())
+	}
+}
+
+// m2: bad sport-settings bounds abort before any write; m4: the 404 note
+// names the requested type.
+//
+//nolint:paralleltest // t.Setenv
+func TestEventsUpdateInvalidZonesAndNoteType(t *testing.T) {
+	for _, zones := range []string{"[0,75,999]", "[90,75,55,999]", "[55,75,999,999]"} {
+		_, _, srv, err := runZoneUpdate(t, `{"types":["Ride"],"power_zones":`+zones+`}`, "- 60m Z2")
+		if err == nil || !strings.Contains(err.Error(), "invalid power zones") || !strings.Contains(err.Error(), "nothing written") || len(srv.puts) != 0 {
+			t.Fatalf("%s: err=%v puts=%v", zones, err, srv.puts)
+		}
+	}
+	_, stderr, _, err := runZoneUpdate(t, "", "- 60m Z2", "dry-run", "true")
+	if err != nil || !strings.Contains(stderr, "sport-settings for requested type Ride not found (404)") {
+		t.Fatalf("err=%v stderr=%q", err, stderr)
 	}
 }

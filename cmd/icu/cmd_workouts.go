@@ -70,7 +70,7 @@ func workoutsCalculateCommand() *Command {
 					len(icu.DefaultPowerZoneBounds()), icu.DefaultPowerZoneBounds())
 			}
 
-			for _, warning := range estimate.TargetWarnings {
+			for _, warning := range estimate.targetWarnings {
 				fmt.Fprintln(stderr, "warning: "+warning)
 			}
 
@@ -79,11 +79,13 @@ func workoutsCalculateCommand() *Command {
 	}
 }
 
-// workoutEstimate is the calculate output: the estimate plus warnings for
-// targets above icu.WarnPercentFTPTarget % FTP (also printed to stderr).
+// workoutEstimate is the calculate output. Warnings for targets above
+// icu.WarnPercentFTPTarget % FTP are appended to the estimate's "warnings"
+// (the same key as events create/update and their --dry-run) and printed to
+// stderr.
 type workoutEstimate struct {
 	icu.PlannedLoadEstimate
-	TargetWarnings []string `json:"targetWarnings,omitempty"`
+	targetWarnings []string
 }
 
 func workoutEstimateFromFlags(flags map[string]string) (workoutEstimate, error) {
@@ -101,8 +103,8 @@ func workoutEstimateFromFlags(flags map[string]string) (workoutEstimate, error) 
 	}
 	warnings := icu.ValidateWorkoutTargets(doc.Steps, IntFlag(flags, "ftp", 0))
 
-	return workoutEstimate{
-		PlannedLoadEstimate: icu.EstimatePlannedLoad(doc, icu.FTPSelectionFromWatts(IntFlag(flags, "ftp", 0))),
-		TargetWarnings:      warnings,
-	}, nil
+	estimate := icu.EstimatePlannedLoad(doc, icu.FTPSelectionFromWatts(IntFlag(flags, "ftp", 0)))
+	estimate.Warnings = append(estimate.Warnings, warnings...)
+
+	return workoutEstimate{PlannedLoadEstimate: estimate, targetWarnings: warnings}, nil
 }

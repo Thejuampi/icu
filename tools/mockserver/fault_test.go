@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -63,4 +64,58 @@ func TestFaultInjection(t *testing.T) {
 	if code, body := do(t, http.MethodGet, ts.URL+"/_mock/writes", ""); code != http.StatusOK || !strings.Contains(body, `"count":0`) {
 		t.Fatalf("faults are not writes: %d %s", code, body)
 	}
+}
+
+// match=/ matches every API path but never /_mock/*, so the control and
+// inspection endpoints keep working.
+func TestFaultInjectionExemptsMockPaths(t *testing.T) {
+	t.Parallel()
+	srv, err := newServer("../../testdata/fixtures", io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv)
+	t.Cleanup(ts.Close)
+	if code, _ := do(t, http.MethodPost, ts.URL+"/_mock/fault?match=/&mode=500", ""); code != http.StatusOK {
+		t.Fatalf("set: %d", code)
+	}
+	if code, _ := do(t, http.MethodGet, ts.URL+"/api/v1/athlete/0", ""); code != http.StatusInternalServerError {
+		t.Fatalf("API path must fail: %d", code)
+	}
+	for _, path := range []string{"/_mock/health", "/_mock/writes"} {
+		if code, _ := do(t, http.MethodGet, ts.URL+path, ""); code != http.StatusOK {
+			t.Fatalf("%s exempt: %d", path, code)
+		}
+	}
+	if code, _ := do(t, http.MethodDelete, ts.URL+"/_mock/fault", ""); code != http.StatusOK {
+		t.Fatalf("clear: %d", code)
+	}
+}
+
+// close mode: a hijackable connection is closed with no response bytes; a
+// writer that cannot hijack aborts the handler (http.ErrAbortHandler).
+func TestFaultInjectionCloseMode(t *testing.T) {
+	t.Parallel()
+	srv, err := newServer("../../testdata/fixtures", io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.setFault(&fault{match: "/sport-settings/", mode: faultModeClose})
+	ts := httptest.NewServer(srv)
+	t.Cleanup(ts.Close)
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_, _ = io.WriteString(conn, "GET /api/v1/athlete/0/sport-settings/Ride HTTP/1.1\r\nHost: x\r\n\r\n")
+	if raw, _ := io.ReadAll(conn); len(raw) != 0 {
+		t.Fatalf("close mode sent bytes: %q", raw)
+	}
+	defer func() {
+		if recovered := recover(); recovered != http.ErrAbortHandler { //nolint:errorlint // panic value identity
+			t.Fatalf("non-hijacker: recovered %v", recovered)
+		}
+	}()
+	srv.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/athlete/0/sport-settings/Ride", nil))
 }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Zone pricing follow-ups (#48 review):
+  - Behaviour change (JSON): target warnings use one key, `warnings`, everywhere. `events update --dry-run` and `workouts calculate` used `targetWarnings`; `workouts calculate` appends them to its existing `warnings` list.
+  - `PowerZoneMidpoints` validates bounds and returns an error (`ErrInvalidPowerZones`): bounds must be above 0 and strictly increasing; a repeated 999 is rejected (no fixture or mock response repeats it). Invalid sport-settings bounds abort before any write.
+  - The 404 fallback note names the requested type ("sport-settings for requested type VirtualRide not found (404)"). Documented that zones are read for the requested type as given and that the mock 404s VirtualRide (no fixture of its own).
+  - Tests: descending ranges (`ramp 3500-200w`, `ramp 1200-100%`) are capped on their larger end; mock fault injection exempts `/_mock/*` under `match=/`, and close mode sends no bytes (or aborts a non-hijackable writer).
 - `events create/update --calculate-load` (and `workouts calculate`): new step targets and stricter parsing.
   - Power zones `Zn` are priced from the event type's sport-settings `power_zones` (%FTP upper bounds): each zone is the intervals.icu midpoint of its band (previous bound + 1 .. bound, e.g. default Z2 = 65.5%); Every price stays inside its band (client decision): Z1 is min(50%, bound - 0.5) (bound 50: 49.5%, bound 60: 50%); an open-ended top zone (bound 999) is 160% when the previous bound is below 160, else previous bound + 10; a finite top zone gets its normal midpoint. A zone number the settings do not define is an error. Sport-settings are read only when a step uses a zone.
   - Fallback (client decision): only when the athlete has no zones configured for the sport (sport-settings 404, or `power_zones` missing or empty), zones use the intervals.icu default bands 55/75/90/105/120/150/999, announced with a `note:` on stderr and `powerZones.source: "default-fallback"` plus `powerZones.note` in the JSON (`powerZones` is also in the dry-run JSON). `workouts calculate` is offline, so it always uses the default bands and prints the note. Any other sport-settings failure (401/403, 5xx, network) aborts with an error and writes nothing, including in `--dry-run`.

@@ -77,9 +77,44 @@ const (
 // DefaultPowerZoneBounds are intervals.icu's default Ride power zones.
 func DefaultPowerZoneBounds() []int { return []int{55, 75, 90, 105, 120, 150, 999} }
 
+// DefaultPowerZoneMidpoints prices DefaultPowerZoneBounds (always valid).
+func DefaultPowerZoneMidpoints() []float64 {
+	midpoints, _ := PowerZoneMidpoints(DefaultPowerZoneBounds())
+
+	return midpoints
+}
+
+// ErrInvalidPowerZones: power_zones that cannot be priced.
+var ErrInvalidPowerZones = errors.New("invalid power zones")
+
+// ValidatePowerZoneBounds rejects bounds that are empty, <= 0 or not strictly
+// increasing. A repeated open-ended 999 is rejected too: no fixture or mock
+// response (athlete sportSettings, sport-settings/Ride) ever repeats it, so
+// there is no evidence the API sends it and a duplicate zone cannot be priced.
+func ValidatePowerZoneBounds(bounds []int) error {
+	if len(bounds) == 0 {
+		return fmt.Errorf("%w: no bounds", ErrInvalidPowerZones)
+	}
+	for index, bound := range bounds {
+		if bound <= 0 {
+			return fmt.Errorf("%w: Z%d bound %d is not above 0 in %v", ErrInvalidPowerZones, index+1, bound, bounds)
+		}
+		if index > 0 && bound <= bounds[index-1] {
+			return fmt.Errorf("%w: Z%d bound %d is not above Z%d bound %d in %v (bounds must strictly increase)",
+				ErrInvalidPowerZones, index+1, bound, index, bounds[index-1], bounds)
+		}
+	}
+
+	return nil
+}
+
 // PowerZoneMidpoints returns the %FTP price of Z1..Zn for the given upper
-// bounds, each inside its own band (see the rules above).
-func PowerZoneMidpoints(bounds []int) []float64 {
+// bounds, each inside its own band (see the rules above). It returns
+// ErrInvalidPowerZones for bounds ValidatePowerZoneBounds rejects.
+func PowerZoneMidpoints(bounds []int) ([]float64, error) {
+	if err := ValidatePowerZoneBounds(bounds); err != nil {
+		return nil, err
+	}
 	midpoints := make([]float64, len(bounds))
 	for index, bound := range bounds {
 		switch {
@@ -94,7 +129,7 @@ func PowerZoneMidpoints(bounds []int) []float64 {
 		}
 	}
 
-	return midpoints
+	return midpoints, nil
 }
 
 var zoneStepPattern = regexp.MustCompile(`^-\s*(?:\d+(?:\.\d+)?[hms])+\s+(?:[A-Za-z]+\s+)?[zZ]\d+\b`)
@@ -113,7 +148,7 @@ func WorkoutDescriptionUsesPowerZones(description string) bool {
 
 // ParseWorkoutDescription parses with the default power zones.
 func ParseWorkoutDescription(description string) (*WorkoutDoc, error) {
-	return ParseWorkoutDescriptionWithZones(description, PowerZoneMidpoints(DefaultPowerZoneBounds()))
+	return ParseWorkoutDescriptionWithZones(description, DefaultPowerZoneMidpoints())
 }
 
 // ParseWorkoutDescriptionWithZones prices "Zn" steps with zones[n-1] (%FTP),
