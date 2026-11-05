@@ -106,3 +106,120 @@ func TestActivityIntervalsEmpty(t *testing.T) {
 		t.Fatal("missing id must fail")
 	}
 }
+
+func bodyClient(t *testing.T, body string) *icu.Client {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+
+	return icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+}
+
+func runIntervals(t *testing.T, client *icu.Client, id string, flags map[string]string) string {
+	t.Helper()
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return activityIntervalsCommand().Run([]string{id}, flags, client, stdout, io.Discard)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return out
+}
+
+// Kills: missing id falls back to the argument; missing icu_groups is [] not null.
+func TestActivityIntervalsIDFallbackAndEmptyGroups(t *testing.T) {
+	t.Parallel()
+	client := bodyClient(t, `{"icu_intervals":[{"type":"WORK","moving_time":60}]}`)
+	out := runIntervals(t, client, "i970000020", map[string]string{"json": "true"})
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatal(err)
+	}
+	if string(got["id"]) != `"i970000020"` || string(got["icuGroups"]) != "[]" {
+		t.Fatalf("id=%s icuGroups=%s", got["id"], got["icuGroups"])
+	}
+	if table := runIntervals(t, client, "i970000020", map[string]string{}); !strings.Contains(table, "activity i970000020: 1 interval(s), 0 group(s)") {
+		t.Fatalf("table: %s", table)
+	}
+}
+
+// Kills the hours branch of clock; real 0 decoupling/zone print 0; tabs and
+// newlines in labels become spaces.
+func TestActivityIntervalsCells(t *testing.T) {
+	t.Parallel()
+	client := bodyClient(t, `{"id":"i970000021","icu_intervals":[`+
+		`{"type":"WORK","label":"a\tb\nc","start_time":3600,"moving_time":3725,"decoupling":0,"zone":0},`+
+		`{"type":"RECOVERY","moving_time":59}]}`)
+	out := runIntervals(t, client, "i970000021", map[string]string{})
+	lines := strings.Split(out, "\n")
+	if len(lines) < 4 {
+		t.Fatalf("output: %s", out)
+	}
+	work, rec := strings.Fields(lines[2]), strings.Fields(lines[3])
+	// # TYPE LABEL(a b c) START DURATION AVG NP MAX AVGHR MAXHR DEC ZONE LOAD GROUP
+	want := []string{"1", "WORK", "a", "b", "c", "1:00:00", "1:02:05", "-", "-", "-", "-", "-", "0.0%", "0", "-", "-"}
+	if strings.Join(work, "|") != strings.Join(want, "|") {
+		t.Fatalf("work row %q\nwant %q", work, want)
+	}
+	if rec[3] != "0:00" || rec[4] != "0:59" || rec[10] != "-" || rec[11] != "-" {
+		t.Fatalf("recovery row %q", rec)
+	}
+}
+
+// analysis workout reads GET /activity/{id}/intervals; the real API sends
+// snake_case there too, which must reach the analysis (synthetic fixture).
+//
+//nolint:paralleltest // captureStdout uses a package-level stdout override.
+func TestAnalysisWorkoutReadsSnakeCaseIntervals(t *testing.T) {
+	intervals, err := os.ReadFile("../../testdata/activity_intervals/analysis_snake_intervals.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	watts := "[" + strings.TrimRight(strings.Repeat("250,", 120), ",") + "]"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch p := r.URL.Path; {
+		case strings.HasSuffix(p, "/activity/i970000010/intervals"):
+			_, _ = w.Write(intervals)
+		case strings.HasSuffix(p, "/activity/i970000010/streams"):
+			_, _ = io.WriteString(w, `[{"type":"watts","data":`+watts+`}]`)
+		case strings.HasSuffix(p, "/activity/i970000010"):
+			_, _ = io.WriteString(w, `{"id":"i970000010","name":"Synthetic 2x18","type":"Ride",`+
+				`"startDateLocal":"2030-03-05T18:00:00","movingTime":3000}`)
+		case strings.Contains(p, "/events"):
+			_, _ = io.WriteString(w, `[{"id":5,"category":"WORKOUT","type":"Ride","name":"Synthetic 2x18",`+
+				`"startDateLocal":"2030-03-05T00:00:00","movingTime":3000,"workoutDoc":{"steps":[{"reps":2,`+
+				`"steps":[{"duration":1080,"power":{"start":90,"end":94,"units":"%ftp"}}]}]}}]`)
+		case strings.Contains(p, "/sport-settings"):
+			_, _ = io.WriteString(w, sportJSON())
+		default:
+			_, _ = io.WriteString(w, okJSON)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := icu.NewClient("k", "0", icu.WithHTTPClient(server.Client()), icu.WithBaseURL(server.URL))
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return analysisWorkoutCommand().Run([]string{"i970000010"}, map[string]string{"json": "true"}, client, stdout, io.Discard)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got icu.WorkoutExecutionAnalysis
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Execution.IntervalsFound != 3 || got.Comparison.RepCount.Executed != 2 {
+		t.Fatalf("intervalsFound=%d repCount=%+v", got.Execution.IntervalsFound, got.Comparison.RepCount)
+	}
+	var power []float64
+	for _, step := range got.Comparison.StepComparison {
+		if step.ExecutedAveragePower > 0 {
+			power = append(power, step.ExecutedAveragePower)
+		}
+	}
+	if len(power) != 2 || power[0] != 263 || power[1] != 259 {
+		t.Fatalf("executed power from snake average_watts = %v (steps %+v)", power, got.Comparison.StepComparison)
+	}
+}

@@ -185,6 +185,7 @@ func (s *server) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Query().Get("intervals") == "true" {
+		fmt.Fprintf(s.log, "icu-mock: GET %s (merged intervals)\n", r.URL.RequestURI())
 		body = s.withIntervals(key, body)
 	}
 
@@ -203,10 +204,7 @@ func (s *server) withIntervals(key string, body []byte) []byte {
 	if json.Unmarshal(body, &activity) != nil {
 		return body
 	}
-	extra, ok := s.lookup(key + "/intervals")
-	if !ok {
-		extra, ok = s.lookup(key + "/intervals.json")
-	}
+	extra, ok := s.lookup(key + "/intervals") // lookup already accepts a .json key
 	var dto map[string]json.RawMessage
 	if !ok || json.Unmarshal(extra, &dto) != nil {
 		return body

@@ -419,7 +419,8 @@ func TestActivityWithIntervalsQuery(t *testing.T) {
 		`{"id":"i970000001","icu_intervals":[{"type":"WORK","average_watts":300}],"icu_groups":[{"id":"g1","count":1}]}`)
 	writeFixture(t, dir, "api/v1/activity/i970000002.json", `{"id":"i970000002"}`)
 	writeFixture(t, dir, "api/v1/activity/i970000003.json", `[1]`)
-	srv, err := newServer(dir, io.Discard)
+	var log bytes.Buffer
+	srv, err := newServer(dir, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,5 +439,8 @@ func TestActivityWithIntervalsQuery(t *testing.T) {
 	}
 	if _, body := do(t, http.MethodGet, base+"i970000003?intervals=true", ""); !strings.Contains(body, "[1]") {
 		t.Fatalf("non-object body: %s", body)
+	}
+	if !strings.Contains(log.String(), "GET /api/v1/activity/i970000001?intervals=true") {
+		t.Fatalf("log must record the query string:\n%s", log.String())
 	}
 }

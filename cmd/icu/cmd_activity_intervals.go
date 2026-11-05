@@ -1,17 +1,21 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	icu "github.com/Thejuampi/icu"
 )
 
-// activityIntervalsCommand reads GET /activity/{id}?intervals=true, the
-// endpoint that returns icu_intervals and icu_groups, and prints them as a
-// table (default) or JSON (--json).
+// activityIntervalsCommand prints an activity's icu_intervals and icu_groups as
+// a table (default) or JSON (--json). It uses GET /activity/{id}?intervals=true
+// because that fetches the activity plus its intervals in one call (as observed
+// on the real API); GET /activity/{id}/intervals returns the same IntervalsDTO.
+// Both send snake_case keys, which IntervalsDTO decodes.
 func activityIntervalsCommand() *Command {
 	return &Command{
 		Name:  "",
@@ -27,9 +31,13 @@ func activityIntervalsCommand() *Command {
 			if len(args) == 0 {
 				return errMissing("activity id")
 			}
-			var dto icu.IntervalsDTO
-			if err := client.Get("activity", []string{args[0]}, map[string]string{"intervals": "true"}, &dto); err != nil {
+			var raw json.RawMessage
+			if err := client.Get("activity", []string{args[0]}, map[string]string{"intervals": "true"}, &raw); err != nil {
 				return wrapCommandError(err)
+			}
+			var dto icu.IntervalsDTO
+			if err := json.Unmarshal(raw, &dto); err != nil {
+				return fmt.Errorf("decode intervals: %w", err)
 			}
 			if dto.ID == "" {
 				dto.ID = args[0]
@@ -44,12 +52,32 @@ func activityIntervalsCommand() *Command {
 				return writeJSON(stdout, dto)
 			}
 
-			return printActivityIntervals(stdout, &dto)
+			return printActivityIntervals(stdout, &dto, presentIntervalValues(raw))
 		},
 	}
 }
 
-func printActivityIntervals(stdout io.Writer, dto *icu.IntervalsDTO) error {
+// intervalPresence records which per-interval decoupling/zone values the API
+// actually sent, so the table prints a real 0 as 0 and only a missing one as "-".
+type intervalPresence struct {
+	Decoupling *float64 `json:"decoupling"`
+	Zone       *float64 `json:"zone"`
+}
+
+func presentIntervalValues(raw json.RawMessage) []intervalPresence {
+	var body struct {
+		Snake []intervalPresence `json:"icu_intervals"`
+		Camel []intervalPresence `json:"icuIntervals"`
+	}
+	_ = json.Unmarshal(raw, &body) // best effort: a mismatch only means "-" cells
+	if body.Snake != nil {
+		return body.Snake
+	}
+
+	return body.Camel
+}
+
+func printActivityIntervals(stdout io.Writer, dto *icu.IntervalsDTO, present []intervalPresence) error {
 	fmt.Fprintf(stdout, "activity %s: %d interval(s), %d group(s)\n", dto.ID, len(dto.Intervals), len(dto.Groups))
 	if len(dto.Intervals) == 0 {
 		fmt.Fprintln(stdout, "no intervals")
@@ -60,9 +88,13 @@ func printActivityIntervals(stdout io.Writer, dto *icu.IntervalsDTO) error {
 	fmt.Fprintln(tw, "#\tTYPE\tLABEL\tSTART\tDURATION\tAVG W\tNP\tMAX W\tAVG HR\tMAX HR\tDECOUPLING\tZONE\tLOAD\tGROUP")
 	for i := range dto.Intervals {
 		iv := &dto.Intervals[i]
+		var p intervalPresence
+		if i < len(present) {
+			p = present[i]
+		}
 		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", i+1, dashIfEmpty(iv.Type), dashIfEmpty(iv.Label),
 			clock(iv.StartTime), clock(iv.MovingTime), intCell(iv.AvgPower), intCell(iv.WeightedPower), intCell(iv.MaxPower),
-			intCell(iv.AvgHR), intCell(iv.MaxHR), pctCell(iv.Decoupling), intCell(iv.Zone), floatCell(iv.TrainingLoad), dashIfEmpty(iv.GroupID))
+			intCell(iv.AvgHR), intCell(iv.MaxHR), presentCell(p.Decoupling, "%.1f%%"), presentCell(p.Zone, "%.0f"), floatCell(iv.TrainingLoad), dashIfEmpty(iv.GroupID))
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("print intervals: %w", err)
@@ -81,7 +113,16 @@ func dashIfEmpty(s string) string {
 		return "-"
 	}
 
-	return s
+	return strings.NewReplacer("\t", " ", "\n", " ", "\r", " ").Replace(s)
+}
+
+// presentCell prints a real 0 as 0: only a missing value (nil) is "-".
+func presentCell(v *float64, format string) string {
+	if v == nil {
+		return "-"
+	}
+
+	return fmt.Sprintf(format, *v)
 }
 
 func intCell(v int) string {
@@ -98,14 +139,6 @@ func floatCell(v float64) string {
 	}
 
 	return fmt.Sprintf("%.1f", v)
-}
-
-func pctCell(v float64) string {
-	if v == 0 {
-		return "-"
-	}
-
-	return fmt.Sprintf("%.1f%%", v)
 }
 
 // clock formats seconds as H:MM:SS or M:SS.
