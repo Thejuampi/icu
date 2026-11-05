@@ -44,7 +44,7 @@ func registerActivityCommands(registry *CommandRegistry) {
 	)
 	registry.Register(
 		"activity", "intervals",
-		getByIDCommand[icu.IntervalsDTO]("activity", "activity <id> intervals", "Get detected intervals.", "activity id", nil, "intervals"),
+		activityIntervalsCommand(),
 	)
 	registry.Register(
 		"activity", "streams",

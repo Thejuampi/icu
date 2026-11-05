@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: `activity <id> intervals` returned only `{id, analyzed}`. It now calls `GET /activity/{id}?intervals=true` and decodes the API's snake_case `icu_intervals`/`icu_groups` (watts, NP, HR, decoupling, zone, load, group). Behaviour change: default output is a table; use `--json` for JSON (`icuIntervals`/`icuGroups`, always arrays). The snake_case decoding also fixes interval fields read by `analysis` commands. Mock server: `?intervals=true` on an activity merges its `<id>/intervals` fixture.
 - `workouts calculate` no longer requires an API key: it runs entirely locally without network requests. Authentication is unchanged for API-backed commands.
 
 - `wellness sync`: an `HRVRMSSD` fetch failure now prints a non-failing `note:` to stderr (`notes` in JSON); the exit code is non-zero only for a band data or readiness sleepHRV failure (documented).

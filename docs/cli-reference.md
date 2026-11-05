@@ -93,8 +93,9 @@ Invoke these commands as `icu activity <id> <action>`.
   Example: `icu activity i123 delete`
 
 - `intervals`
-  Invocation: `icu activity <id> intervals`
-  Example: `icu activity i123 intervals`
+  Invocation: `icu activity <id> intervals [--json]`
+  Example: `icu activity i123 intervals --json`
+  Calls `GET /api/v1/activity/{id}?intervals=true`. Default output is a table of `icu_intervals` (type, label, start, duration, avg/NP/max W, avg/max HR, decoupling, zone, load, group) plus one line per `icu_groups` entry; `--json` prints `{id, icuIntervals, icuGroups}` (empty arrays when there are none).
 
 - `streams`
   Invocation: `icu activity <id> streams [--types watts,heartrate,cadence]`

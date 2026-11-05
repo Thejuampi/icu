@@ -512,6 +512,13 @@ type SportSettings struct {
 }
 
 type Interval struct {
+	ID            int     `json:"id,omitempty"`
+	Label         string  `json:"label,omitempty"`
+	StartTime     int     `json:"startTime,omitempty"`
+	EndTime       int     `json:"endTime,omitempty"`
+	ElapsedTime   int     `json:"elapsedTime,omitempty"`
+	WeightedPower int     `json:"weightedAverageWatts,omitempty"`
+	Decoupling    float64 `json:"decoupling,omitempty"`
 	StartIndex    int     `json:"startIndex,omitempty"`
 	EndIndex      int     `json:"endIndex,omitempty"`
 	Type          string  `json:"type,omitempty"`
@@ -533,24 +540,28 @@ type Interval struct {
 type IntervalsDTO struct {
 	ID        string          `json:"id,omitempty"`
 	Analyzed  string          `json:"analyzed,omitempty"`
-	Intervals []Interval      `json:"icuIntervals,omitempty"`
-	Groups    []IntervalGroup `json:"icuGroups,omitempty"`
+	Intervals []Interval      `json:"icuIntervals"`
+	Groups    []IntervalGroup `json:"icuGroups"`
 }
 
 type IntervalGroup struct {
-	StartIndex   int     `json:"startIndex,omitempty"`
-	EndIndex     int     `json:"endIndex,omitempty"`
-	Distance     float64 `json:"distance,omitempty"`
-	MovingTime   int     `json:"movingTime,omitempty"`
-	AvgPower     int     `json:"averageWatts,omitempty"`
-	MaxPower     int     `json:"maxWatts,omitempty"`
-	AvgHR        int     `json:"averageHeartrate,omitempty"`
-	MaxHR        int     `json:"maxHeartrate,omitempty"`
-	Intensity    int     `json:"intensity,omitempty"`
-	TrainingLoad float64 `json:"trainingLoad,omitempty"`
-	Joules       int     `json:"joules,omitempty"`
-	Zone         int     `json:"zone,omitempty"`
-	Count        int     `json:"count,omitempty"`
+	ID            string  `json:"id,omitempty"`
+	ElapsedTime   int     `json:"elapsedTime,omitempty"`
+	WeightedPower int     `json:"weightedAverageWatts,omitempty"`
+	Decoupling    float64 `json:"decoupling,omitempty"`
+	StartIndex    int     `json:"startIndex,omitempty"`
+	EndIndex      int     `json:"endIndex,omitempty"`
+	Distance      float64 `json:"distance,omitempty"`
+	MovingTime    int     `json:"movingTime,omitempty"`
+	AvgPower      int     `json:"averageWatts,omitempty"`
+	MaxPower      int     `json:"maxWatts,omitempty"`
+	AvgHR         int     `json:"averageHeartrate,omitempty"`
+	MaxHR         int     `json:"maxHeartrate,omitempty"`
+	Intensity     int     `json:"intensity,omitempty"`
+	TrainingLoad  float64 `json:"trainingLoad,omitempty"`
+	Joules        int     `json:"joules,omitempty"`
+	Zone          int     `json:"zone,omitempty"`
+	Count         int     `json:"count,omitempty"`
 }
 
 type ActivityStream struct {
