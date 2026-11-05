@@ -53,6 +53,12 @@ type eventPowerZones struct {
 // powerZoneReader reads a sport's power_zones (%FTP upper bounds).
 type powerZoneReader func(sport string) ([]int, error)
 
+// sportSettingsPowerZones asks GET sport-settings/{type} with the event type
+// as given (--type, else the stored event type); the client does not map
+// VirtualRide etc. to Ride itself. Per the OpenAPI spec the id may be an
+// activity type, which intervals.icu resolves to the sport settings whose
+// types list it. The mock serves by path only, so a type without its own
+// fixture (VirtualRide) is a 404 there and takes the announced fallback.
 func sportSettingsPowerZones(client *icu.Client) powerZoneReader {
 	return func(sport string) ([]int, error) {
 		var settings icu.SportSettings
@@ -89,18 +95,23 @@ func resolveEventPowerZones(read powerZoneReader, sport string) (*eventPowerZone
 		return nil, fmt.Errorf("read %s sport-settings power zones (nothing written; Zn steps need them): %w", sport, err)
 	}
 	if read != nil && err == nil && len(bounds) > 0 {
-		return &eventPowerZones{Source: "sport-settings", Sport: sport, Bounds: bounds, Midpoints: icu.PowerZoneMidpoints(bounds)}, nil
+		midpoints, zoneErr := icu.PowerZoneMidpoints(bounds)
+		if zoneErr != nil {
+			return nil, fmt.Errorf("%s sport-settings power zones (nothing written; Zn steps need them): %w", sport, zoneErr)
+		}
+
+		return &eventPowerZones{Source: "sport-settings", Sport: sport, Bounds: bounds, Midpoints: midpoints}, nil
 	}
-	reason := "no power_zones configured"
+	reason := "no power_zones configured for type " + sport
 	if err != nil {
-		reason = "no " + sport + " sport settings (404)"
+		reason = "sport-settings for requested type " + sport + " not found (404)"
 	} else if read == nil {
 		reason = "not read"
 	}
 	bounds = icu.DefaultPowerZoneBounds()
 
 	return &eventPowerZones{
-		Source: "default-fallback", Sport: sport, Bounds: bounds, Midpoints: icu.PowerZoneMidpoints(bounds),
+		Source: "default-fallback", Sport: sport, Bounds: bounds, Midpoints: icu.DefaultPowerZoneMidpoints(),
 		Note: fmt.Sprintf("could not use %s sport-settings power zones (%s); priced Z1-Z%d with the intervals.icu default bands %v",
 			sport, reason, len(bounds), bounds),
 	}, nil
@@ -260,7 +271,7 @@ func eventsUpdateCommand() *Command {
 					out["powerZones"] = request.Zones
 				}
 				if len(request.TargetWarnings) > 0 {
-					out["targetWarnings"] = request.TargetWarnings
+					out["warnings"] = request.TargetWarnings
 				}
 
 				return writeJSON(stdout, out)
@@ -383,7 +394,7 @@ func applyCalculatedEventLoad(flags map[string]string, body *icu.EventEx, eventT
 	}
 
 	var err error
-	midpoints := icu.PowerZoneMidpoints(icu.DefaultPowerZoneBounds())
+	midpoints := icu.DefaultPowerZoneMidpoints()
 	if icu.WorkoutDescriptionUsesPowerZones(body.Description) {
 		if request.Zones, err = resolveEventPowerZones(zones, eventType); err != nil {
 			return request, err
