@@ -1,0 +1,8 @@
+{
+  "id": "i970000010",
+  "icu_intervals": [
+    {"type": "RECOVERY", "start_index": 0, "end_index": 300, "moving_time": 300, "average_watts": 140, "average_heartrate": 118},
+    {"type": "WORK", "start_index": 300, "end_index": 1380, "moving_time": 1080, "average_watts": 263, "average_heartrate": 157, "decoupling": 0, "zone": 0},
+    {"type": "WORK", "start_index": 1680, "end_index": 2760, "moving_time": 1080, "average_watts": 259, "average_heartrate": 160}
+  ]
+}

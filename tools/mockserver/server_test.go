@@ -408,3 +408,39 @@ func TestParseOptionsLoopbackOnly(t *testing.T) {
 		}
 	}
 }
+
+// GET /activity/{id}?intervals=true merges the <id>/intervals fixture into the
+// activity, like intervals.icu; without the query the activity is unchanged.
+func TestActivityWithIntervalsQuery(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFixture(t, dir, "api/v1/activity/i970000001.json", `{"id":"i970000001","icu_intervals":null}`)
+	writeFixture(t, dir, "api/v1/activity/i970000001/intervals.json",
+		`{"id":"i970000001","icu_intervals":[{"type":"WORK","average_watts":300}],"icu_groups":[{"id":"g1","count":1}]}`)
+	writeFixture(t, dir, "api/v1/activity/i970000002.json", `{"id":"i970000002"}`)
+	writeFixture(t, dir, "api/v1/activity/i970000003.json", `[1]`)
+	var log bytes.Buffer
+	srv, err := newServer(dir, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv)
+	t.Cleanup(ts.Close)
+	base := ts.URL + "/api/v1/activity/"
+	if code, body := do(t, http.MethodGet, base+"i970000001?intervals=true", ""); code != http.StatusOK ||
+		!strings.Contains(body, `"average_watts":300`) || !strings.Contains(body, `"g1"`) {
+		t.Fatalf("merged: %d %s", code, body)
+	}
+	if _, body := do(t, http.MethodGet, base+"i970000001", ""); strings.Contains(body, "WORK") {
+		t.Fatalf("no query must not merge: %s", body)
+	}
+	if _, body := do(t, http.MethodGet, base+"i970000002?intervals=true", ""); strings.Contains(body, "icu_intervals") {
+		t.Fatalf("no intervals fixture: %s", body)
+	}
+	if _, body := do(t, http.MethodGet, base+"i970000003?intervals=true", ""); !strings.Contains(body, "[1]") {
+		t.Fatalf("non-object body: %s", body)
+	}
+	if !strings.Contains(log.String(), "GET /api/v1/activity/i970000001?intervals=true") {
+		t.Fatalf("log must record the query string:\n%s", log.String())
+	}
+}
