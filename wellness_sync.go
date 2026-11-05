@@ -190,7 +190,7 @@ func BuildZeppWellnessDays(band []BandDataDay, hrv []ZeppHRVEvent, loc *time.Loc
 	}
 
 	// Per local day the best source wins (readiness sleepHRV, the nightly
-	// value the app shows, over a sample mean over a scalar), then the latest
+	// value the app shows, over an HRVRMSSD samples mean over a scalar reading), then the latest
 	// reading, then the higher value on an exact tie. Invalid readings (0,
 	// negative, out of range) are never values.
 	type pick struct {
