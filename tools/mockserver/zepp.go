@@ -100,6 +100,31 @@ func mockZeppDays(from, to time.Time) []string {
 	return days
 }
 
+// mockZeppHeartRateDay builds a synthetic `data_hr` blob in the real wire
+// shape: 1440 bytes, one unsigned byte per minute. The first six hours are
+// 254 ("no read"), after that a reading every third minute with 255 ("not
+// required") in between. Readings are resting + a small deterministic wave.
+func mockZeppHeartRateDay(resting int) []byte {
+	const (
+		minutesPerDay = 1440
+		noReadMinutes = 360
+	)
+
+	blob := make([]byte, minutesPerDay)
+	for i := range blob {
+		switch {
+		case i < noReadMinutes:
+			blob[i] = 254
+		case i%3 == 0:
+			blob[i] = byte(resting + i%25) //nolint:gosec // resting is 46..54, so the value stays below 254
+		default:
+			blob[i] = 255
+		}
+	}
+
+	return blob
+}
+
 func (s *server) zeppBand(w http.ResponseWriter, r *http.Request) {
 	from, errFrom := time.Parse(time.DateOnly, r.URL.Query().Get("from_date"))
 	to, errTo := time.Parse(time.DateOnly, r.URL.Query().Get("to_date"))
@@ -122,6 +147,7 @@ func (s *server) zeppBand(w http.ResponseWriter, r *http.Request) {
 		items = append(items, map[string]any{
 			"uid": "mock-user", "data_type": 0, "date_time": day,
 			"summary": base64.StdEncoding.EncodeToString(summary),
+			"data_hr": base64.StdEncoding.EncodeToString(mockZeppHeartRateDay(v.RestingHR)),
 		})
 	}
 
