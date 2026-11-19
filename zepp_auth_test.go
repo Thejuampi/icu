@@ -2,7 +2,6 @@ package icu_test
 
 import (
 	"encoding/base64"
-	"encoding/binary"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,10 +9,6 @@ import (
 
 	icu "github.com/Thejuampi/icu"
 )
-
-func binaryPutUint16(buf []byte, v int) {
-	binary.LittleEndian.PutUint16(buf, uint16(v)) //nolint:gosec // test helper, v is always small
-}
 
 func base64EncodeForTest(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)
@@ -188,9 +183,7 @@ func TestZeppLoginEncryptsAndPostsPayload(t *testing.T) {
 func TestZeppClientRejectsZeroLengthHRSentinel(t *testing.T) {
 	t.Parallel()
 
-	hrBytes := make([]byte, 4)
-	binaryPutUint16(hrBytes, 254)
-	binaryPutUint16(hrBytes[2:], 72)
+	hrBytes := []byte{254, 72}
 
 	encoded := base64EncodeForTest(hrBytes)
 
@@ -219,6 +212,10 @@ func TestZeppClientRejectsZeroLengthHRSentinel(t *testing.T) {
 
 	if hr[0].BPM != 0 {
 		t.Errorf("hr[0] = %d, want 0 (sentinel 254 mapped to 0)", hr[0].BPM)
+	}
+
+	if hr[0].Timestamp == 0 {
+		t.Errorf("hr[0] timestamp = 0, want the real minute timestamp even for a sentinel")
 	}
 
 	if hr[1].BPM != 72 {

@@ -66,7 +66,7 @@ The events endpoints return `minStress`, `maxStress`, `avgStress`, `relaxProport
 
 ### 4. Sentinels in Heart Rate Data
 
-HR per-minute values 254 and 255 are sentinels ("no read" / "not required"). Map to 0.
+HR per-minute values 254 and 255 are sentinels ("no read" / "not required"). Map to bpm 0 but keep the minute timestamp.
 
 ### 5. Heart Rate Timestamps
 
@@ -87,7 +87,7 @@ The `/v1/sport/run/history.json` endpoint may require additional query params (`
 | User profile  | `huami.health.getUserInfo.json` (on data host)      |
 | Daily summary | `/v1/data/band_data.json` (base64-packed bins)      |
 | Sleep         | Extracted from band_data summary (`slp` field)      |
-| Heart rate    | Decoded from band_data `data_hr` (2-byte LE shorts) |
+| Heart rate    | Decoded from band_data `data_hr` (1 byte per minute) |
 | Stress        | Events endpoint: `eventType=all_day_stress`         |
 | SpO2          | Events endpoint: `eventType=blood_oxygen`           |
 | PAI           | Events endpoint: `eventType=PaiHealthInfo`          |
@@ -102,7 +102,7 @@ The `hr_split`, `pace_split`, `altitude_split`, `power_split`, `step_split` fiel
 
 The `summary` field is base64-encoded JSON with fields: `stp` (steps), `slp` (sleep), `goal`, `sn` (serial), `sync` (last sync epoch).
 
-The `data_hr` field is base64-encoded binary of 2-byte little-endian unsigned shorts (1440 entries = full day per-minute HR).
+The `data_hr` field is base64-encoded binary with ONE unsigned byte per minute (1440 bytes = full day per-minute HR). Reading it as 2-byte shorts makes almost every value >= 254 (sentinel), so every point comes out as `{timestamp:0,bpm:0}`.
 
 ## Key Files
 

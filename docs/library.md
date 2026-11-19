@@ -690,7 +690,7 @@ decoded typed form so downstream code can do whichever is convenient:
 - `BandDataDay.SummaryRaw` (`json.RawMessage`): the base64-decoded JSON that
   was packed inside `summary`. `BandDataDay.Summary` is the typed
   `BandDataSummary` parsed from it.
-- `BandDataDay.DataHRRaw` (`[]byte`): the raw 2-byte little-endian shorts.
+- `BandDataDay.DataHRRaw` (`[]byte`): the raw `data_hr` bytes (one unsigned byte per minute).
   `BandDataDay.HeartRate` is the slice of `BandDataHeartPoint` decoded from it.
 - `WorkoutDetail.HRSeries` / `PaceSeries` / `AltSeries` / `PowerSeries` /
   `StepSeries` are decoded from Zepp's delta-encoded 2-byte shorts back into

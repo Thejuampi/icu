@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	icu "github.com/Thejuampi/icu"
 )
@@ -269,15 +270,8 @@ func TestZeppClientBandDataDecodesSummary(t *testing.T) { //nolint:gocyclo,cyclo
 func TestZeppClientBandDataDecodesHeartRate(t *testing.T) {
 	t.Parallel()
 
-	hrBytes := make([]byte, 0, 6)
-
-	for _, bpm := range []uint16{72, 95, 110} {
-		buf := make([]byte, 2)
-		binary.LittleEndian.PutUint16(buf, bpm)
-		hrBytes = append(hrBytes, buf...)
-	}
-
-	encodedHR := base64.StdEncoding.EncodeToString(hrBytes)
+	// data_hr is one unsigned byte per minute.
+	encodedHR := base64.StdEncoding.EncodeToString([]byte{72, 95, 110})
 
 	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"uid":"u1","date_time":"2026-06-01","summary":"","data":"","data_hr":"` + encodedHR + `"}]}`
@@ -355,15 +349,7 @@ func TestZeppClientSleepDaysExtractsFromBandData(t *testing.T) {
 func TestZeppClientHeartRateSeriesExtractsFromBandData(t *testing.T) {
 	t.Parallel()
 
-	hrBytes := make([]byte, 0, 4)
-
-	for _, bpm := range []uint16{60, 75} {
-		buf := make([]byte, 2)
-		binary.LittleEndian.PutUint16(buf, bpm)
-		hrBytes = append(hrBytes, buf...)
-	}
-
-	encodedHR := base64.StdEncoding.EncodeToString(hrBytes)
+	encodedHR := base64.StdEncoding.EncodeToString([]byte{60, 75})
 
 	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"date_time":"2026-06-01","summary":"","data":"","data_hr":"` + encodedHR + `"}]}`
@@ -2073,5 +2059,72 @@ func TestZeppClientDataHostDateRangeMethodsReturnErrorOnNon2xx(t *testing.T) {
 				t.Fatalf("%s: expected error on 5xx", tc.name)
 			}
 		})
+	}
+}
+
+// TestZeppClientBandDataFullDayHeartRateIsOneBytePerMinute pins the wire format
+// of data_hr: 1440 bytes, one unsigned byte per minute, 254/255 meaning "no
+// read"/"not required". The fixture is synthetic (made-up values) but has the
+// real shape: a leading run of 254 (watch not worn / not yet synced), readings
+// every few minutes with 255 in between.
+func TestZeppClientBandDataFullDayHeartRateIsOneBytePerMinute(t *testing.T) {
+	t.Parallel()
+
+	const minutesPerDay = 1440
+
+	blob := make([]byte, minutesPerDay)
+	for i := range blob {
+		switch {
+		case i < 360:
+			blob[i] = 254
+		case i%3 == 0:
+			blob[i] = byte(60 + i%40) //nolint:gosec // synthetic value in 60..99
+		default:
+			blob[i] = 255
+		}
+	}
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		body := `{"code":1,"message":"success","data":[{"uid":"u1","data_type":0,"date_time":"2026-06-01","source":256,"uuid":"null","summary":"","data":"","data_hr":"` + base64.StdEncoding.EncodeToString(blob) + `"}]}`
+
+		return http.StatusOK, body
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+
+	series, err := client.HeartRateSeries(t.Context(), "2026-06-01", "2026-06-01")
+	if err != nil {
+		t.Fatalf("HeartRateSeries: %v", err)
+	}
+
+	if len(series) != 1 || len(series[0]) != minutesPerDay {
+		t.Fatalf("series shape = %d days, want 1 day of %d points", len(series), minutesPerDay)
+	}
+
+	midnight := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC).UnixMilli()
+	valid := 0
+
+	for i, p := range series[0] {
+		if want := midnight + int64(i)*60_000; p.Timestamp != want {
+			t.Fatalf("point %d timestamp = %d, want %d", i, p.Timestamp, want)
+		}
+
+		switch {
+		case i < 360 || i%3 != 0:
+			if p.BPM != 0 {
+				t.Fatalf("point %d bpm = %d, want 0 for a sentinel", i, p.BPM)
+			}
+		default:
+			valid++
+
+			if want := 60 + i%40; p.BPM != want {
+				t.Fatalf("point %d bpm = %d, want %d", i, p.BPM, want)
+			}
+		}
+	}
+
+	if valid != 360 {
+		t.Fatalf("valid readings = %d, want 360", valid)
 	}
 }

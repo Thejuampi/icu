@@ -1439,11 +1439,13 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 	}, nil
 }
 
-// decodeBandDataHeartRate decodes the base64-packed binary blob of 2-byte
-// little-endian shorts. Each short is one minute of heart rate; the day
-// starts at midnight (local time at the watch). Values 254/255 are sentinels
-// for "no read" and "not required" and are preserved as-is.
-// dateStr is the ISO date (e.g. "2026-06-03") used to compute per-minute timestamps.
+// decodeBandDataHeartRate decodes the base64 `data_hr` blob of one day. The
+// blob holds ONE UNSIGNED BYTE per minute (1440 bytes for a full day), not
+// 2-byte shorts: byte i is the heart rate of minute i after midnight. The
+// values 254 and 255 are sentinels ("no read" / "not required"); they are kept
+// in place (so the index stays the minute of the day) with BPM 0 and the real
+// minute timestamp. dateStr is the ISO date (e.g. "2026-06-03") used to
+// compute the timestamps (UTC midnight + minute, in milliseconds).
 func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, error) {
 	if encoded == "" {
 		return nil, errors.New("empty data_hr")
@@ -1452,10 +1454,6 @@ func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, err
 	raw, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return nil, fmt.Errorf("base64 decode: %w", err)
-	}
-
-	if len(raw)%2 != 0 {
-		return nil, fmt.Errorf("data_hr length %d is not a multiple of 2", len(raw))
 	}
 
 	midnight := int64(0)
@@ -1469,17 +1467,16 @@ func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, err
 	const sentinel = 254
 	const millisPerMinute = 60_000
 
-	points := make([]BandDataHeartPoint, 0, len(raw)/2)
+	points := make([]BandDataHeartPoint, 0, len(raw))
 
-	for i := 0; i < len(raw); i += 2 {
-		bpm := int(binary.LittleEndian.Uint16(raw[i : i+2]))
+	for i, b := range raw {
+		ts := midnight + int64(i)*millisPerMinute
+
+		bpm := int(b)
 		if bpm >= sentinel {
-			points = append(points, BandDataHeartPoint{BPM: 0})
-
-			continue
+			bpm = 0
 		}
 
-		ts := midnight + int64(i/2)*millisPerMinute
 		points = append(points, BandDataHeartPoint{Timestamp: ts, BPM: bpm})
 	}
 
