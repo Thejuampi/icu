@@ -127,6 +127,95 @@ func TestZeppLoginRejectsPartialURLOverrides(t *testing.T) {
 	}
 }
 
+func TestZeppWebLoginKeepsExistingSessionUntilSuccessfulReauthentication(t *testing.T) {
+	withZeppTestEnv(t)
+	before := icu.Config{
+		ZeppDeviceID: "29894371-a279-4fbb-b7a3-37790e992c29", ZeppLoginToken: "previous-login",
+		ZeppAppToken: "previous-app", ZeppUserID: "previous-user", ZeppCountryCode: "US",
+	}
+	if err := icu.SaveConfig(&before); err != nil {
+		t.Fatal(err)
+	}
+
+	var registrations atomic.Int32
+	var allowExchange atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /registrations/fixture@example.invalid/tokens", func(w http.ResponseWriter, _ *http.Request) {
+		registrations.Add(1)
+		if _, err := io.WriteString(w, `{"access":"fixture-code","country_code":"DE"}`); err != nil {
+			t.Error(err)
+		}
+	})
+	mux.HandleFunc("POST /v2/client/login", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil || r.PostForm.Get("app_name") != "com.huami.webapp" ||
+			r.PostForm.Get("code") != "fixture-code" {
+			t.Error("CLI did not select the web exchange")
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+		if !allowExchange.Load() {
+			w.WriteHeader(http.StatusUnauthorized)
+
+			return
+		}
+		if _, err := io.WriteString(w, `{"token_info":{"login_token":"web-login","app_token":"web-app","user_id":"web-user"}}`); err != nil {
+			t.Error(err)
+		}
+	})
+	mock := httptest.NewServer(mux)
+	t.Cleanup(mock.Close)
+
+	args := []string{"icu", "zepp", "login", "--web", "--email", "fixture@example.invalid", "--zepp-base-url", mock.URL}
+	var stderr bytes.Buffer
+	if code := run(args, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "--reauthenticate") ||
+		strings.Contains(stderr.String(), "Password:") || registrations.Load() != 0 {
+		t.Fatal("saved session did not block the web login before prompting or making a request")
+	}
+
+	reauthenticate := slices.Concat(args, []string{"--reauthenticate", "--password", "synthetic-password"})
+	if code := run(reauthenticate, io.Discard, io.Discard); code == 0 || registrations.Load() != 1 {
+		t.Fatal("expected one web login and a failed exchange")
+	}
+	after, err := icu.LoadConfig()
+	if err != nil || after == nil || *after != before {
+		t.Fatalf("failed web login changed saved credentials or UUID, err=%v", err)
+	}
+
+	allowExchange.Store(true)
+	runZeppSuccess(t, reauthenticate)
+	after, err = icu.LoadConfig()
+	if err != nil || after == nil || after.ZeppLoginToken != "web-login" || after.ZeppAppToken != "web-app" ||
+		after.ZeppUserID != "web-user" || after.ZeppCountryCode != "DE" || after.ZeppDeviceID != before.ZeppDeviceID ||
+		registrations.Load() != 2 {
+		t.Fatalf("successful web login did not save the new session and retain the Android UUID, err=%v", err)
+	}
+}
+
+func TestZeppWebLoginAsksForBaseURLWhenAuthOverridesAreSet(t *testing.T) {
+	withZeppTestEnv(t)
+	t.Setenv("ZEPP_TOKENS_URL", "http://127.0.0.1:1/v2/registrations/tokens")
+	t.Setenv("ZEPP_LOGIN_URL", "http://127.0.0.1:1/v2/client/login")
+
+	var stderr bytes.Buffer
+	args := []string{"icu", "zepp", "login", "--web", "--email", "fixture@example.invalid"}
+	if code := run(args, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "use --zepp-base-url") ||
+		strings.Contains(stderr.String(), "Password:") {
+		t.Fatal("web login with Android auth overrides should stop before prompting or using the default hosts")
+	}
+}
+
+func TestZeppLoginRejectsInvalidWebFlagBeforeSendingCredentials(t *testing.T) {
+	withZeppTestEnv(t)
+	var hits atomic.Int32
+	mock := newZeppAuthMock(t, &hits)
+	var stderr bytes.Buffer
+	args := []string{"icu", "zepp", "login", "--web=typo", "--email", "fixture@example.invalid", "--zepp-base-url", mock.URL, "--password", "synthetic-password"}
+	if code := run(args, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "--web must be a boolean") || hits.Load() != 0 {
+		t.Fatal("invalid web flag should fail locally")
+	}
+}
+
 func runZeppSuccess(t *testing.T, args []string) {
 	t.Helper()
 	var stderr bytes.Buffer

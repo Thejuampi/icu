@@ -24,6 +24,7 @@ const (
 	// neither loopback nor a Zepp domain.
 	zeppAllowInsecureHostFlag = "allow-insecure-zepp-host"
 	zeppReauthenticateFlag    = "reauthenticate"
+	zeppWebLoginFlag          = "web"
 	zeppTokensPath            = "/v2/registrations/tokens"
 	zeppLoginPathPart         = "/v2/client/login"
 )
@@ -130,8 +131,8 @@ func zeppTokenCommand() *Command {
 
 func zeppLoginCommand() *Command {
 	return zeppAuthCommand(
-		"zepp login --email EMAIL [--password PASSWORD] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--reauthenticate]",
-		"Save a Zepp login. Use --reauthenticate to sign in again when credentials are already saved.",
+		"zepp login --email EMAIL [--password PASSWORD] [--web] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--reauthenticate]",
+		"Save a Zepp login. --web selects the experimental web login. Use --reauthenticate when credentials are already saved.",
 		runZeppLogin,
 	)
 }
@@ -539,6 +540,14 @@ func runZeppLogin(stdout, stderr io.Writer, flags map[string]string) error {
 		return errors.New("credentials for Zepp are already saved. Use them for reads, or pass --reauthenticate to sign in again and risk signing out the phone")
 	}
 
+	if err := validateCommandFlag(CommandFlag{Name: zeppWebLoginFlag, Kind: commandFlagBoolean}, flags[zeppWebLoginFlag]); err != nil {
+		return err
+	}
+	web := BoolFlag(flags, zeppWebLoginFlag)
+	if web && icu.StringFlag(flags, zeppBaseURLFlag, "") == "" && (osGetenv("ZEPP_TOKENS_URL") != "" || osGetenv("ZEPP_LOGIN_URL") != "") {
+		return errors.New("use --zepp-base-url for custom auth endpoints with --web")
+	}
+
 	input, err := readZeppLoginInput(stderr, flags)
 	if err != nil {
 		return err
@@ -546,7 +555,7 @@ func runZeppLogin(stdout, stderr io.Writer, flags map[string]string) error {
 
 	fmt.Fprintln(stdout, "Authenticating with Zepp...")
 
-	auth, err := zeppLogin(input.email, input.password, input.baseURL, previous.ZeppDeviceID)
+	auth, err := authenticateZeppLogin(input, previous.ZeppDeviceID, web)
 	if err != nil {
 		return wrapCommandError(fmt.Errorf("zepp login failed: %w", err))
 	}
@@ -560,7 +569,9 @@ func runZeppLogin(stdout, stderr io.Writer, flags map[string]string) error {
 	cfg.ZeppAppToken = auth.AppToken
 	cfg.ZeppUserID = auth.UserID
 	cfg.ZeppCountryCode = auth.CountryCode
-	cfg.ZeppDeviceID = auth.DeviceID
+	if auth.DeviceID != "" {
+		cfg.ZeppDeviceID = auth.DeviceID
+	}
 
 	if err := icu.SaveConfigWithAction(cfg, "zepp_login"); err != nil {
 		return wrapCommandError(fmt.Errorf("saving config: %w", err))
@@ -570,6 +581,19 @@ func runZeppLogin(stdout, stderr io.Writer, flags map[string]string) error {
 	fmt.Fprintf(stdout, "Tokens saved to %s\n", icu.ConfigPath())
 
 	return nil
+}
+
+func authenticateZeppLogin(input zeppLoginInput, deviceID string, web bool) (*icu.ZeppSession, error) {
+	if !web {
+		return zeppLogin(input.email, input.password, input.baseURL, deviceID)
+	}
+
+	auth, err := icu.ZeppWebLogin(input.email, input.password, input.baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("web login: %w", err)
+	}
+
+	return &icu.ZeppSession{ZeppAuthResult: auth}, nil
 }
 
 func runZeppLogout(stdout io.Writer) error {

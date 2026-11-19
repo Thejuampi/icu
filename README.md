@@ -100,10 +100,13 @@ The `zepp` resource reads the same data the official Zepp mobile app shows
 `api-mifit.huami.com` v1 API the app uses. The CLI uses a password exchange.
 Zepp offers a separate OAuth platform for approved partners.
 
-After a successful login, the CLI saves the tokens and its installation UUID
-in the config file. Read commands reuse those tokens. A new password login
-with saved credentials requires `--reauthenticate`. A password login can
-displace the phone session. Coexistence with a reused UUID is unverified.
+After a successful login, the CLI saves the tokens in the config file and
+reuses them for reads. The default Android login also saves an installation
+UUID. In the November 19 incident, an explicit Android login displaced the
+phone session even with a reused UUID. `icu zepp login --web` selects an
+experimental web login verified against `icu-mock`. Coexistence with the
+phone still needs production validation. A password login with saved
+credentials requires `--reauthenticate`.
 [Zepp session analysis and mock walkthrough](docs/zepp-session.md).
 
 ```bash
