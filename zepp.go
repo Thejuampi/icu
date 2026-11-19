@@ -41,8 +41,11 @@ type ZeppUserInfo struct {
 // BandDataDay is one day of data from /v1/data/band_data.json.
 // SummaryRaw is the base64-packed JSON returned by the API; Summary is the
 // decoded structure (steps, sleep with stages, goal, serial, last-sync).
-// DataHRRaw is the base64-packed binary blob with one unsigned byte per minute
-// (1440 bytes/day); HeartRate is the decoded per-minute series.
+// DataHRRaw is the base64-packed binary blob with one unsigned byte per local
+// wall-clock minute (typically 1440 bytes/day, including 23- and 25-hour DST
+// days). HeartRate is the decoded series: byte i is hour i/60 and minute i%60
+// in the user's timezone; minutes in the spring-forward gap are omitted, and
+// a fall-back repeated hour uses the first (summer) offset.
 type BandDataDay struct {
 	Date       string                 `json:"date"`
 	UID        string                 `json:"uid,omitempty"`

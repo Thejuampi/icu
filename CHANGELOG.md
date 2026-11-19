@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix: `zepp heart-rate --source band` stamped each `data_hr` minute from UTC midnight, so times were shifted by the user's timezone (point 0 of 2026-11-18 was 00:00 UTC). Byte `i` is now the local wall-clock hour `i/60` and minute `i%60` (system timezone, or `--tz <IANA>`). The blob is 1440 bytes even on a 25-hour day. Minutes in the spring-forward gap are dropped; a fall-back repeated hour uses the first (summer) offset. `--source app` is unchanged.
+
 - Fix: `zepp heart-rate --source band` returned only `{timestamp:0,bpm:0}`. The band `data_hr` blob is one unsigned byte per minute (1440 bytes a day), but it was decoded as 2-byte little-endian shorts, so nearly every value read as a sentinel. It now decodes one byte per minute; sentinels 254/255 stay in place as bpm 0 with their real minute timestamp (they used to get timestamp 0). Tests use a synthetic full-day fixture with the real wire shape. `--source app` (the `/users/{id}/heartRate` endpoint) is unchanged: its response was not verified.
 
 - Zone pricing follow-ups (#48 review):

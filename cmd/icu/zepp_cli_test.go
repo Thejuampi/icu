@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -936,6 +937,81 @@ func TestZeppHeartRateCommandRejectsInvalidSource(t *testing.T) {
 	cmd, _ := registry.Lookup("zepp", "heart-rate")
 	if err := cmd.Run(nil, map[string]string{"source": "invalid"}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatalf("expected error for invalid source")
+	}
+}
+
+func TestZeppHeartRateCommandRejectsInvalidTimezone(t *testing.T) {
+	t.Parallel()
+
+	registry := NewCommandRegistry()
+	registerZeppCommands(registry)
+
+	cmd, _ := registry.Lookup("zepp", "heart-rate")
+	err := cmd.Run(nil, map[string]string{
+		"source": "band",
+		"oldest": "2026-11-18",
+		"newest": "2026-11-18",
+		"tz":     "Not/AZone",
+	}, nil, io.Discard, io.Discard)
+	if err == nil {
+		t.Fatal("expected error for invalid --tz")
+	}
+
+	if !strings.Contains(err.Error(), "invalid --tz") || !strings.Contains(err.Error(), "Not/AZone") {
+		t.Fatalf("error = %v, want invalid --tz mention of Not/AZone", err)
+	}
+}
+
+func TestZeppHeartRateCommandTzStampsLocalMidnight(t *testing.T) {
+	withZeppTestEnv(t)
+
+	encodedHR := base64.StdEncoding.EncodeToString([]byte{72, 80})
+
+	srv := newZeppMockServer(func(_ zeppMockRequest) (int, string) {
+		body := `{"code":1,"message":"success","data":[{"date_time":"2026-11-18","summary":"","data":"","data_hr":"` + encodedHR + `"}]}`
+
+		return http.StatusOK, body
+	})
+	t.Cleanup(srv.Close)
+	t.Setenv("ZEPP_BASE_URL", srv.URL())
+
+	registry := NewCommandRegistry()
+	registerZeppCommands(registry)
+
+	cmd, _ := registry.Lookup("zepp", "heart-rate")
+
+	var stdout bytes.Buffer
+
+	err := cmd.Run(nil, map[string]string{
+		"source": "band",
+		"oldest": "2026-11-18",
+		"newest": "2026-11-18",
+		"tz":     "America/New_York",
+	}, nil, &stdout, io.Discard)
+	if err != nil {
+		t.Fatalf("heart-rate --tz: %v", err)
+	}
+
+	var series [][]icu.BandDataHeartPoint
+	if err := json.Unmarshal(stdout.Bytes(), &series); err != nil {
+		t.Fatalf("decode output: %v\n%s", err, stdout.String())
+	}
+
+	if len(series) != 1 || len(series[0]) != 2 {
+		t.Fatalf("series = %+v, want 1 day with 2 points", series)
+	}
+
+	// 2026-11-18 00:00 and 00:01 in America/New_York (EST, UTC-5).
+	const nyMidnight int64 = 1_794_978_000_000
+	const nyMinute1 int64 = 1_794_978_060_000
+	const utcMidnight int64 = 1_794_960_000_000
+
+	if series[0][0].Timestamp == utcMidnight {
+		t.Fatalf("point 0 still uses UTC midnight (%d)", utcMidnight)
+	}
+
+	if series[0][0].Timestamp != nyMidnight || series[0][1].Timestamp != nyMinute1 {
+		t.Fatalf("timestamps = [%d %d], want [%d %d]", series[0][0].Timestamp, series[0][1].Timestamp, nyMidnight, nyMinute1)
 	}
 }
 

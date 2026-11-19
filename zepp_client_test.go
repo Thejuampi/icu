@@ -71,7 +71,7 @@ func (s *zeppTestServer) Last() zeppRequestRecord {
 	return s.records[len(s.records)-1]
 }
 
-func newTestZeppClient(srv *zeppTestServer) *icu.ZeppClient {
+func newTestZeppClient(srv *zeppTestServer, options ...icu.ZeppClientOption) *icu.ZeppClient {
 	auth := &icu.ZeppAuthResult{
 		LoginToken:  "tok-abc",
 		AppToken:    "test-app-token",
@@ -79,12 +79,14 @@ func newTestZeppClient(srv *zeppTestServer) *icu.ZeppClient {
 		CountryCode: "US",
 	}
 
-	return icu.NewZeppClientFromAuth(
-		auth,
+	opts := []icu.ZeppClientOption{
 		icu.WithZeppBaseURL(srv.server.URL),
 		icu.WithZeppEventsURL(srv.server.URL),
 		icu.WithZeppHTTPClient(srv.server.Client()),
-	)
+	}
+	opts = append(opts, options...)
+
+	return icu.NewZeppClientFromAuth(auth, opts...)
 }
 
 func TestZeppClientUserInfoHitsCorrectPath(t *testing.T) {
@@ -2091,7 +2093,7 @@ func TestZeppClientBandDataFullDayHeartRateIsOneBytePerMinute(t *testing.T) {
 	})
 	t.Cleanup(srv.Close)
 
-	client := newTestZeppClient(srv)
+	client := newTestZeppClient(srv, icu.WithZeppLocation(time.UTC))
 
 	series, err := client.HeartRateSeries(t.Context(), "2026-06-01", "2026-06-01")
 	if err != nil {
@@ -2126,5 +2128,174 @@ func TestZeppClientBandDataFullDayHeartRateIsOneBytePerMinute(t *testing.T) {
 
 	if valid != 360 {
 		t.Fatalf("valid readings = %d, want 360", valid)
+	}
+}
+
+func mustNY(t *testing.T) *time.Location {
+	t.Helper()
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatalf("LoadLocation(America/New_York): %v", err)
+	}
+
+	return loc
+}
+
+func heartRateSeriesOn(t *testing.T, date string, blob []byte, loc *time.Location) []icu.BandDataHeartPoint {
+	t.Helper()
+
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		body := `{"code":1,"message":"success","data":[{"date_time":"` + date + `","summary":"","data":"","data_hr":"` + base64.StdEncoding.EncodeToString(blob) + `"}]}`
+
+		return http.StatusOK, body
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv, icu.WithZeppLocation(loc))
+
+	series, err := client.HeartRateSeries(t.Context(), date, date)
+	if err != nil {
+		t.Fatalf("HeartRateSeries(%s): %v", date, err)
+	}
+
+	if len(series) != 1 {
+		t.Fatalf("series days = %d, want 1", len(series))
+	}
+
+	return series[0]
+}
+
+func fullDayHRBlob() []byte {
+	const minutesPerDay = 1440
+
+	blob := make([]byte, minutesPerDay)
+	for i := range blob {
+		blob[i] = 70
+	}
+
+	return blob
+}
+
+func TestZeppClientBandHeartRateUsesLocalMidnight(t *testing.T) {
+	t.Parallel()
+
+	ny := mustNY(t)
+	// 2026-11-18 is a normal EST day. The real wire shape is 1440 bytes.
+	// UTC midnight is 1794960000000; local midnight is five hours later.
+	points := heartRateSeriesOn(t, "2026-11-18", fullDayHRBlob(), ny)
+
+	if len(points) != 1440 {
+		t.Fatalf("points = %d, want 1440", len(points))
+	}
+
+	const utcMidnight int64 = 1_794_960_000_000
+	const nyMidnight int64 = 1_794_978_000_000
+	const nyMinute1 int64 = 1_794_978_060_000
+	const nyLast int64 = 1_795_064_340_000 // 23:59 EST
+
+	if points[0].Timestamp == utcMidnight {
+		t.Fatalf("point 0 still uses UTC midnight (%d)", utcMidnight)
+	}
+
+	if points[0].Timestamp != nyMidnight || points[1].Timestamp != nyMinute1 || points[1439].Timestamp != nyLast {
+		t.Fatalf("timestamps[0,1,1439] = [%d %d %d], want [%d %d %d]", points[0].Timestamp, points[1].Timestamp, points[1439].Timestamp, nyMidnight, nyMinute1, nyLast)
+	}
+}
+
+func TestZeppClientBandHeartRateSpringForward(t *testing.T) {
+	t.Parallel()
+
+	// 2026-03-08 in America/New_York skips 02:00-02:59. A 1440-byte blob
+	// drops those 60 minutes and keeps 1380 points. Output index 120 is
+	// input byte 180 (03:00 EDT).
+	points := heartRateSeriesOn(t, "2026-03-08", fullDayHRBlob(), mustNY(t))
+	if len(points) != 1380 {
+		t.Fatalf("points = %d, want 1380", len(points))
+	}
+
+	want := map[int]int64{
+		0:    1_772_946_000_000, // byte 0:   00:00 EST
+		119:  1_772_953_140_000, // byte 119: 01:59 EST
+		120:  1_772_953_200_000, // byte 180: 03:00 EDT
+		121:  1_772_953_260_000, // byte 181: 03:01 EDT
+		1379: 1_773_028_740_000, // byte 1439: 23:59 EDT
+	}
+
+	for i, ts := range want {
+		if points[i].Timestamp != ts {
+			t.Fatalf("output %d timestamp = %d, want %d", i, points[i].Timestamp, ts)
+		}
+	}
+}
+
+func TestZeppClientBandHeartRateFallBack(t *testing.T) {
+	t.Parallel()
+
+	// 2026-11-01 in America/New_York is a 25-hour day, but the blob is
+	// still 1440 bytes. Byte 60 is 01:00 EDT (first, summer offset); byte
+	// 120 is 02:00 EST. The repeated 01:00 EST hour is a gap.
+	points := heartRateSeriesOn(t, "2026-11-01", fullDayHRBlob(), mustNY(t))
+	if len(points) != 1440 {
+		t.Fatalf("points = %d, want 1440", len(points))
+	}
+
+	const edt0100 int64 = 1_793_509_200_000 // byte 60
+	const est0200 int64 = 1_793_516_400_000 // byte 120
+
+	if points[60].Timestamp != edt0100 {
+		t.Fatalf("byte 60 timestamp = %d, want %d (01:00 EDT)", points[60].Timestamp, edt0100)
+	}
+
+	if points[120].Timestamp != est0200 {
+		t.Fatalf("byte 120 timestamp = %d, want %d (02:00 EST)", points[120].Timestamp, est0200)
+	}
+}
+
+func TestZeppClientBandHeartRateKolkataMidnight(t *testing.T) {
+	t.Parallel()
+
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		t.Fatalf("LoadLocation(Asia/Kolkata): %v", err)
+	}
+
+	points := heartRateSeriesOn(t, "2026-11-18", fullDayHRBlob(), loc)
+	if len(points) != 1440 {
+		t.Fatalf("points = %d, want 1440", len(points))
+	}
+
+	// 2026-11-18 00:00 IST (UTC+5:30) = 2026-11-17 18:30 UTC.
+	const istMidnight int64 = 1_794_940_200_000
+
+	if points[0].Timestamp != istMidnight {
+		t.Fatalf("minute 0 timestamp = %d, want %d (Kolkata midnight)", points[0].Timestamp, istMidnight)
+	}
+}
+
+func TestZeppClientBandHeartRateDefaultsToLocal(t *testing.T) {
+	t.Parallel()
+
+	date := "2026-11-18"
+	points := heartRateSeriesOn(t, date, []byte{64}, time.Local)
+	// A second client with no WithZeppLocation must match time.Local.
+	srv := newZeppTestServer(func(_ zeppRequestRecord) (int, string) {
+		body := `{"code":1,"message":"success","data":[{"date_time":"` + date + `","summary":"","data":"","data_hr":"` + base64.StdEncoding.EncodeToString([]byte{64}) + `"}]}`
+
+		return http.StatusOK, body
+	})
+	t.Cleanup(srv.Close)
+
+	got, err := newTestZeppClient(srv).HeartRateSeries(t.Context(), date, date)
+	if err != nil {
+		t.Fatalf("HeartRateSeries: %v", err)
+	}
+
+	if len(got) != 1 || len(got[0]) != 1 {
+		t.Fatalf("series = %+v, want 1 point", got)
+	}
+
+	if got[0][0].Timestamp != points[0].Timestamp {
+		t.Fatalf("default timestamp = %d, want time.Local midnight %d", got[0][0].Timestamp, points[0].Timestamp)
 	}
 }

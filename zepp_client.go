@@ -112,6 +112,7 @@ type ZeppClient struct {
 	countryCode string
 	dataHost    string
 	eventsBase  string
+	loc         *time.Location
 }
 
 type ZeppClientOption func(*ZeppClient)
@@ -147,6 +148,26 @@ func WithZeppCountryCode(countryCode string) ZeppClientOption {
 			client.dataHost = zeppDataHostFor(countryCode)
 		}
 	}
+}
+
+// WithZeppLocation sets the timezone used to stamp band heart-rate minutes.
+// Byte i of data_hr is the local wall-clock hour i/60 and minute i%60 of that
+// calendar day. If the option is omitted, BandData uses the system local
+// timezone.
+func WithZeppLocation(loc *time.Location) ZeppClientOption {
+	return func(client *ZeppClient) {
+		if loc != nil {
+			client.loc = loc
+		}
+	}
+}
+
+func (c *ZeppClient) location() *time.Location {
+	if c != nil && c.loc != nil {
+		return c.loc
+	}
+
+	return time.Local
 }
 
 // withSameOriginRedirects returns a copy of httpClient whose redirects stay on
@@ -316,7 +337,7 @@ func (c *ZeppClient) BandData(ctx context.Context, oldest, newest string) ([]Ban
 			day.Summary = summary
 		}
 
-		if points, err := decodeBandDataHeartRate(item.DataHR, item.DateTime); err == nil {
+		if points, err := decodeBandDataHeartRate(item.DataHR, item.DateTime, c.location()); err == nil {
 			day.HeartRate = points
 		}
 
@@ -1440,13 +1461,23 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 }
 
 // decodeBandDataHeartRate decodes the base64 `data_hr` blob of one day. The
-// blob holds ONE UNSIGNED BYTE per minute (1440 bytes for a full day), not
-// 2-byte shorts: byte i is the heart rate of minute i after midnight. The
-// values 254 and 255 are sentinels ("no read" / "not required"); they are kept
-// in place (so the index stays the minute of the day) with BPM 0 and the real
-// minute timestamp. dateStr is the ISO date (e.g. "2026-06-03") used to
-// compute the timestamps (UTC midnight + minute, in milliseconds).
-func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, error) {
+// blob holds ONE UNSIGNED BYTE per local wall-clock minute and is 1440 bytes
+// even on 23- and 25-hour DST days (not 2-byte shorts). Byte i is the heart
+// rate at hour i/60, minute i%60 in loc (system local if loc is nil) on
+// dateStr (ISO date, e.g. "2026-06-03"). The values 254 and 255 are sentinels
+// ("no read" / "not required"); they are kept (unless the wall time is
+// dropped, below) with BPM 0 and the real minute timestamp.
+//
+// Spring forward: minutes of the nonexistent hour (02:00-02:59 in
+// America/New_York on 2026-03-08) are dropped. time.Date normalizes a
+// nonexistent wall time, so a point is dropped when the result's Hour or
+// Minute does not match the requested ones.
+//
+// Fall back: the repeated hour resolves to the first, summer offset (EDT).
+// Go's time.Date already picks the earlier of the two instants. Two wall
+// minutes may map to the same instant, or there may be a gap (the second
+// 01:00 EST hour is not in a 1440-byte blob); both are accepted.
+func decodeBandDataHeartRate(encoded, dateStr string, loc *time.Location) ([]BandDataHeartPoint, error) {
 	if encoded == "" {
 		return nil, errors.New("empty data_hr")
 	}
@@ -1456,21 +1487,39 @@ func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, err
 		return nil, fmt.Errorf("base64 decode: %w", err)
 	}
 
-	midnight := int64(0)
+	if loc == nil {
+		loc = time.Local
+	}
+
+	var year int
+	var month time.Month
+	var dayN int
+	haveDate := false
 
 	if dateStr != "" {
-		if t, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC); err == nil {
-			midnight = t.UnixMilli()
+		if parsed, err := time.Parse("2006-01-02", dateStr); err == nil {
+			year, month, dayN = parsed.Date()
+			haveDate = true
 		}
 	}
 
 	const sentinel = 254
-	const millisPerMinute = 60_000
 
 	points := make([]BandDataHeartPoint, 0, len(raw))
 
 	for i, b := range raw {
-		ts := midnight + int64(i)*millisPerMinute
+		hour, minute := i/60, i%60
+
+		var ts int64
+
+		if haveDate {
+			t := time.Date(year, month, dayN, hour, minute, 0, 0, loc)
+			if t.Hour() != hour || t.Minute() != minute {
+				continue
+			}
+
+			ts = t.UnixMilli()
+		}
 
 		bpm := int(b)
 		if bpm >= sentinel {

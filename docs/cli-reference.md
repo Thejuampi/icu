@@ -683,13 +683,18 @@ the raw components.
   Example: `icu zepp sleep --oldest 2026-05-01 --newest 2026-05-07`
 
 - `heart-rate`
-  Invocation: `icu zepp heart-rate --source band|app --oldest DATE --newest DATE`
-  Notes: Default source `band` decodes the binary `data_hr` field (1440
-  bytes per day, one unsigned byte per minute) from `band_data.json`; sentinel
-  values 254 (no read) and 255 (not required) are mapped to bpm 0 and keep
-  their minute timestamp (UTC midnight of the day + minute). Source `app` calls
-  `/users/{id}/heartRate` on the regional data host.
-  Example: `icu zepp heart-rate --source app --oldest 2026-05-01 --newest 2026-05-01`
+  Invocation: `icu zepp heart-rate --source band|app --oldest DATE --newest DATE [--tz IANA]`
+  Notes: Default source `band` decodes the binary `data_hr` field (one
+  unsigned byte per local wall-clock minute; typically 1440 bytes a day, also
+  on 23- and 25-hour DST days) from `band_data.json`; sentinel values 254 (no
+  read) and 255 (not required) are mapped to bpm 0 and keep their minute
+  timestamp. Byte `i` is hour `i/60` and minute `i%60` in the system local
+  timezone, or in `--tz` (an IANA name such as `America/New_York`). Minutes
+  in the spring-forward gap are dropped; a fall-back repeated hour uses the
+  first (summer) offset, so the series may contain gaps. An unknown `--tz` is
+  an error. Source `app` calls `/users/{id}/heartRate` on the regional data
+  host and is not shifted by `--tz`.
+  Example: `icu zepp heart-rate --source band --oldest 2026-11-18 --newest 2026-11-18 --tz America/New_York`
 
 - `spo2`
   Invocation: `icu zepp spo2 --oldest DATE --newest DATE`
