@@ -94,7 +94,7 @@ func TestZeppLoginBaseURLFlagOverridesEnv(t *testing.T) {
 	t.Setenv("ZEPP_TOKENS_URL", "http://127.0.0.1:1/v2/registrations/tokens")
 	t.Setenv("ZEPP_LOGIN_URL", "http://127.0.0.1:1/v2/client/login")
 
-	auth, err := zeppLogin("u@example.com", "secret", zepp.URL)
+	auth, err := zeppLogin("u@example.com", "secret", zepp.URL, "")
 	if err != nil || auth.LoginToken != "lt" || hits.Load() != 2 {
 		t.Fatalf("auth=%+v err=%v hits=%d", auth, err, hits.Load())
 	}

@@ -30,6 +30,19 @@ type ZeppAuthResult struct {
 	CountryCode string
 }
 
+// ZeppLoginOptions selects the CLI installation identity and optional auth URLs.
+type ZeppLoginOptions struct {
+	DeviceID  string
+	TokensURL string
+	LoginURL  string
+}
+
+// ZeppSession pairs the returned credentials with the device ID sent at login.
+type ZeppSession struct {
+	*ZeppAuthResult
+	DeviceID string `json:"-"`
+}
+
 // zeppAuthTimeout bounds each Zepp login request (tokens and login steps);
 // a var only so tests can shorten it.
 var zeppAuthTimeout = defaultZeppClientTimeout //nolint:gochecknoglobals // test-overridable timeout
@@ -41,12 +54,40 @@ func ZeppLogin(email, password string) (*ZeppAuthResult, error) {
 // ZeppLoginWithURLs is the testable form of ZeppLogin. It accepts explicit URLs
 // for the two auth endpoints so tests can point at httptest servers.
 func ZeppLoginWithURLs(tokensURL, loginURL, email, password string) (*ZeppAuthResult, error) {
+	return zeppLoginWithDevice(tokensURL, loginURL, email, password, generateUUID())
+}
+
+// ZeppLoginSession performs a password login and returns the device ID used.
+// Supply the ID returned by a prior login to reuse that installation identity.
+// With neither URL set, it uses the default Zepp auth endpoints.
+func ZeppLoginSession(email, password string, options ZeppLoginOptions) (*ZeppSession, error) {
+	if options.TokensURL == "" && options.LoginURL == "" {
+		options.TokensURL, options.LoginURL = zeppTokensURL, zeppLoginURL
+	}
+	if options.TokensURL == "" || options.LoginURL == "" {
+		return nil, errors.New("custom Zepp auth URLs must specify both the tokens and login URLs")
+	}
+
+	deviceID := options.DeviceID
+	if deviceID == "" {
+		deviceID = generateUUID()
+	}
+
+	auth, err := zeppLoginWithDevice(options.TokensURL, options.LoginURL, email, password, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ZeppSession{ZeppAuthResult: auth, DeviceID: deviceID}, nil
+}
+
+func zeppLoginWithDevice(tokensURL, loginURL, email, password, deviceID string) (*ZeppAuthResult, error) {
 	accessToken, countryCode, err := getAccessTokenWithURL(tokensURL, email, password)
 	if err != nil {
 		return nil, fmt.Errorf("get access token: %w", err)
 	}
 
-	result, err := performLoginWithURL(loginURL, accessToken, countryCode)
+	result, err := performLoginWithURL(loginURL, accessToken, countryCode, deviceID)
 	if err != nil {
 		return nil, fmt.Errorf("perform login: %w", err)
 	}
@@ -132,9 +173,7 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	return accessToken, countryCode, nil
 }
 
-func performLoginWithURL(loginURL, accessToken, countryCode string) (*ZeppAuthResult, error) {
-	deviceID := generateUUID()
-
+func performLoginWithURL(loginURL, accessToken, countryCode, deviceID string) (*ZeppAuthResult, error) {
 	payload := url.Values{
 		"code":               {accessToken},
 		"device_id":          {deviceID},

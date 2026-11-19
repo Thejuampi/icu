@@ -613,6 +613,14 @@ hosted on `api-mifit.huami.com` and uses its own auth flow. The flow is:
    `SpO2WindowsURL`, `SportHistoryURL`, `SportDetailURL`) are available for
    consumers that need to construct signed requests manually.
 
+To keep a stable installation identity, call
+`ZeppLoginSession(email, password, ZeppLoginOptions{DeviceID: savedID})`.
+An empty `DeviceID` generates a UUID. Save the returned `DeviceID` for the
+next explicit password login and pass `session.ZeppAuthResult` to
+`NewZeppClientFromAuth`. For custom auth endpoints, supply both `TokensURL`
+and `LoginURL`. A password login may displace another session.
+[Zepp session analysis](zepp-session.md).
+
    **HRV.** `SleepHRVDays` / `DecodeSleepHRV` read Zepp nightly HRV
    (readiness sleepHRV): readiness/watch_score `value.sleepHRV` in ms, the
    value the Zepp app shows (not documented as RMSSD). `wellness sync` writes

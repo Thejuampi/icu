@@ -628,23 +628,24 @@ the raw components.
 
 - `token`
   Invocation: `icu zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL] [--allow-insecure-zepp-host]`
-  Notes: Obtain Zepp API tokens without saving to config. WARNING: outputs tokens in plaintext. Use `login` for normal authentication. This command is intended for debugging and manual token management.
+  Notes: Obtain Zepp API tokens without saving to config. This debugging command starts a new login that can displace the phone session and outputs the tokens in plaintext.
   Example: `icu zepp token --email jane@example.com` (the CLI will prompt for the password if it is not provided).
 
 - `login`
-  Invocation: `icu zepp login --email EMAIL --password PASSWORD [--zepp-base-url URL] [--allow-insecure-zepp-host]`
-  Notes: Persists `zeppLoginToken`, `zeppAppToken`, `zeppUserID`, and
-  `zeppCountryCode` in the config file. `--zepp-base-url URL` must be https unless the host is loopback, and warns on stderr when the host is not loopback, `zepp.com` or `huami.com` (or a subdomain). It points both auth calls
+  Invocation: `icu zepp login --email EMAIL [--password PASSWORD] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--reauthenticate]`
+  Notes: Persists `zeppLoginToken`, `zeppAppToken`, `zeppUserId`, `zeppCountryCode` and
+  `zeppDeviceId` in the config file. With saved credentials the command exits before prompting for a password or making auth calls, unless `--reauthenticate` is passed. A password login can displace the phone session. If the config has no UUID, a successful login saves the generated one for later logins.
+  `--zepp-base-url URL` must be https unless the host is loopback, and warns on stderr when the host is not loopback, `zepp.com` or `huami.com` (or a subdomain). It points both auth calls
   (`URL/v2/registrations/tokens`, `URL/v2/client/login`) at another host such
   as a mock and wins over `ZEPP_TOKENS_URL`/`ZEPP_LOGIN_URL`. It is separate
   from the global intervals.icu `--base-url`, which never reaches Zepp. The
-  same applies to `zepp token`.
+  same URL handling applies to `zepp token`. When using the environment overrides, set both URLs.
   Example: `icu zepp login --email jane@example.com --password '...'` (the CLI
   will prompt for the password if it is not provided).
 
 - `logout`
   Invocation: `icu zepp logout`
-  Notes: Clears all persisted Zepp credentials from the config file (`zeppLoginToken`, `zeppAppToken`, `zeppUserID`, `zeppCountryCode`).
+  Notes: Clears the saved Zepp credentials and account metadata (`zeppLoginToken`, `zeppAppToken`, `zeppUserId`, `zeppCountryCode`). Retains the CLI installation UUID (`zeppDeviceId`).
   Example: `icu zepp logout`
 
 - `status`

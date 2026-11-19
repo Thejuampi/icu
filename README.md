@@ -88,7 +88,7 @@ API base URL resolution order:
 `--base-url` may appear before the resource (`icu --base-url URL athlete show`) or among the command flags. It only redirects intervals.icu calls and HTTP redirects to a different scheme or host are refused. Two outside services ignore it:
 
 - **Open-Meteo** (weather for `activity estimate-power` and `activity estimate-power-backtest`): pass `--no-weather` when testing against the mock. Only those two commands fetch weather and accept `--no-weather`; other commands (for example `analysis coaching`) make no weather calls and reject it as an unknown flag.
-- **Zepp** (`zepp ...`): not served by the mock. `zepp login`/`zepp token` take `--zepp-base-url URL` (wins over `ZEPP_TOKENS_URL`/`ZEPP_LOGIN_URL`); other `zepp` commands use the `ZEPP_*` settings. The global `--base-url` is never passed to Zepp.
+- **Zepp** (`zepp ...`) has synthetic login, band data and event endpoints in `icu-mock`. Login and token take `--zepp-base-url URL`, which overrides `ZEPP_TOKENS_URL` and `ZEPP_LOGIN_URL`. Reads use `ZEPP_BASE_URL` and `ZEPP_EVENTS_URL`. [Zepp mock walkthrough](docs/zepp-session.md#verify-with-icu-mock).
 
 `icu config show` prints the config file path and shows only a 12-character SHA256 fingerprint for the stored API key (never partial or raw characters).
 `icu config diagnose` prints source resolution details and a non-reversible fingerprint, not the raw secret.
@@ -97,9 +97,14 @@ API base URL resolution order:
 
 The `zepp` resource reads the same data the official Zepp mobile app shows
 (sleep, HR, SpO2, stress, PAI, steps, workouts) directly from the
-`api-mifit.huami.com` v1 API the app uses. Login is the standard
-email/password exchange the mobile app performs — there is no public OAuth
-flow, and Zepp does not issue developer credentials for health data.
+`api-mifit.huami.com` v1 API the app uses. The CLI uses a password exchange.
+Zepp offers a separate OAuth platform for approved partners.
+
+After a successful login, the CLI saves the tokens and its installation UUID
+in the config file. Read commands reuse those tokens. A new password login
+with saved credentials requires `--reauthenticate`. A password login can
+displace the phone session. Coexistence with a reused UUID is unverified.
+[Zepp session analysis and mock walkthrough](docs/zepp-session.md).
 
 ```bash
 # 1. Log in (the password can be entered interactively if --password is omitted)
