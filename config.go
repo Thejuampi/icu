@@ -12,6 +12,7 @@ type Config struct {
 	ZeppAppToken    string `json:"zeppAppToken,omitempty"`
 	ZeppUserID      string `json:"zeppUserId,omitempty"`
 	ZeppCountryCode string `json:"zeppCountryCode,omitempty"`
+	ZeppDeviceID    string `json:"zeppDeviceId,omitempty"` // local CLI installation UUID
 	// Profile holds the athlete's local goals and caps. It is never sent to
 	// intervals.icu; plan show/preview validate against it.
 	Profile *TrainingProfile `json:"profile,omitempty"`

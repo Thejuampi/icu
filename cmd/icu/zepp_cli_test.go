@@ -70,8 +70,10 @@ func withZeppTestEnv(t *testing.T) {
 	t.Setenv("ZEPP_APP_TOKEN", "test-app-token")
 	t.Setenv("ZEPP_USER_ID", "u1")
 	t.Setenv("ZEPP_COUNTRY_CODE", "US")
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("USERPROFILE", t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("ICU_CONFIG_DIR", dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 }
 
 func TestRunZeppLoginRequiresEmailAndPassword(t *testing.T) {

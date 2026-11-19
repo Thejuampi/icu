@@ -56,7 +56,7 @@ func TestZeppLoginStepTimesOut(t *testing.T) { //nolint:paralleltest // override
 	srv := hangingServer(t)
 	start := time.Now()
 	err := withDeadline(t, func() error {
-		_, err := performLoginWithURL(srv.URL, "synthetic-access", "US")
+		_, err := performLoginWithURL(srv.URL, "synthetic-access", "US", "synthetic-device")
 
 		return err
 	})

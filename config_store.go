@@ -388,6 +388,7 @@ func buildConfigAuditEntry(action, configPath, auditPath string, previous, next 
 	appendSecretMutation(&secretMutations, previous.ZeppAppToken, next.ZeppAppToken, "zeppAppToken")
 	appendChangedField(&changedFields, previous.ZeppUserID, next.ZeppUserID, "zeppUserId")
 	appendChangedField(&changedFields, previous.ZeppCountryCode, next.ZeppCountryCode, "zeppCountryCode")
+	appendChangedField(&changedFields, previous.ZeppDeviceID, next.ZeppDeviceID, "zeppDeviceId")
 	appendChangedField(&changedFields, profileFingerprint(previous.Profile), profileFingerprint(next.Profile), "profile")
 
 	return ConfigAuditEntry{
