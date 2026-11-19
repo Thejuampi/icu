@@ -102,22 +102,27 @@ credentials and return auth failures without starting a new login.
 
 ### November 19 incident
 
-On November 19, 2026, between 12:18 and 12:21 EST, `4982ee0` on a Linux
-datacenter server displaced the phone session on a password login. Signing
-back in on the phone invalidated the CLI session. A second explicit CLI
-login reused its saved UUID and displaced the phone again. The repeated
-login guard worked. These observations rule out a changing UUID as a
-necessary condition in that incident.
+On November 19, 2026, between 12:18 and 12:21 EST, the reported test used
+`/workspace/bin/icu`, compiled from `master` at `4982ee0`, to run
+`zepp login --email EMAIL --reauthenticate`. The incident report records
+Linux and a datacenter IP. Signing in from the CLI displaced the phone
+session. Signing back in on the phone invalidated the CLI session. A second
+explicit CLI login reused its saved UUID and displaced the phone again.
+The repeated login guard worked. A changing UUID was unnecessary for
+displacement in this incident.
 
 The installed Windows `icu.exe` identified its build as a modified checkout
 of `d737e971`. It and the #52 binary sent the same registration headers and
 session fields to a loopback mock, including the Android `app_name` in the
 second form. Both sent a UUID v4 and exchanged a mock US country code.
-Only #52 stored the UUID in the synthetic config. The reported local login
-that coexisted with the phone still lacks a link to a specific binary,
-command or script. The comparison leaves
-client identity and connection origin unresolved as explanations of that
-local observation.
+Only #52 stored the UUID in the synthetic config.
+
+The earlier Zepp logins recorded in this investigation used `icu-mock`.
+The real account check by the local agent was a read from
+Intervals.icu with `icu wellness list`. The earlier statement that a
+separate local Zepp login kept the phone signed in is withdrawn. The
+available history provides no paired production comparison by client
+identity or connection origin.
 
 | Request detail | `icu` on #52 | `ha-zepp` web reference |
 | --- | --- | --- |
@@ -136,8 +141,8 @@ clients. [ha-zepp implementation](https://github.com/yardeff/ha-zepp/blob/9142ca
 [ha-zepp README](https://github.com/yardeff/ha-zepp/blob/9142ca6fb10af15611a587894580cbdaaaf6def6/README.md),
 [amazfit-mcp implementation](https://github.com/fjuliofontes/amazfit-mcp/blob/adf63107c437b8209aa66e761d1f278f0a201cdf/zepp_client.py#L76-L165).
 
-`icu zepp login --web` opts into the two-step `ha-zepp` exchange. The
-web app name is explicit in both forms and both requests. The server's
+`icu zepp login --web` runs the two-step exchange published by `ha-zepp`.
+The web app name is explicit in both forms and both requests. The server's
 country takes precedence over the returned region, with `US` as fallback.
 The web flow uses the reference's fixed web device identifier. Successful
 login saves the token bundle for the normal read commands. The CLI writes
