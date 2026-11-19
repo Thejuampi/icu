@@ -55,6 +55,12 @@ func TestZeppMockBandAndEvents(t *testing.T) {
 		t.Fatalf("summary %s want %+v", raw, want)
 	}
 
+	hrEncoded, _ := first["data_hr"].(string)
+	hr, err := base64.StdEncoding.DecodeString(hrEncoded)
+	if err != nil || len(hr) != 1440 || hr[0] != 254 || hr[361] != 255 || int(hr[360]) != want.RestingHR+360%25 {
+		t.Fatalf("data_hr len=%d err=%v", len(hr), err)
+	}
+
 	from := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC).UnixMilli()
 	to := time.Date(2026, 8, 11, 23, 59, 59, 0, time.UTC).UnixMilli()
 	q := "?eventType=HRVRMSSD&subType=real_data&from=" + itoa(from) + "&to=" + itoa(to)

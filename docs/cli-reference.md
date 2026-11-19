@@ -674,8 +674,9 @@ the raw components.
 - `heart-rate`
   Invocation: `icu zepp heart-rate --source band|app --oldest DATE --newest DATE`
   Notes: Default source `band` decodes the binary `data_hr` field (1440
-  two-byte shorts per day) from `band_data.json`; sentinel values 254 (no
-  read) and 255 (not required) are mapped to 0. Source `app` calls
+  bytes per day, one unsigned byte per minute) from `band_data.json`; sentinel
+  values 254 (no read) and 255 (not required) are mapped to bpm 0 and keep
+  their minute timestamp (UTC midnight of the day + minute). Source `app` calls
   `/users/{id}/heartRate` on the regional data host.
   Example: `icu zepp heart-rate --source app --oldest 2026-05-01 --newest 2026-05-01`
 

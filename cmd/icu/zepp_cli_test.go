@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -295,15 +294,7 @@ func TestZeppSleepCommandReturnsDecodedSleep(t *testing.T) {
 func TestZeppHeartRateCommandDecodesHR(t *testing.T) {
 	withZeppTestEnv(t)
 
-	hrBytes := make([]byte, 0, 4)
-
-	for _, bpm := range []uint16{72, 95} {
-		buf := make([]byte, 2)
-		binary.LittleEndian.PutUint16(buf, bpm)
-		hrBytes = append(hrBytes, buf...)
-	}
-
-	encodedHR := base64.StdEncoding.EncodeToString(hrBytes)
+	encodedHR := base64.StdEncoding.EncodeToString([]byte{72, 95})
 
 	srv := newZeppMockServer(func(_ zeppMockRequest) (int, string) {
 		body := `{"code":1,"message":"success","data":[{"date_time":"2026-06-01","summary":"","data":"","data_hr":"` + encodedHR + `"}]}`
