@@ -112,6 +112,7 @@ type ZeppClient struct {
 	countryCode string
 	dataHost    string
 	eventsBase  string
+	loc         *time.Location
 }
 
 type ZeppClientOption func(*ZeppClient)
@@ -147,6 +148,25 @@ func WithZeppCountryCode(countryCode string) ZeppClientOption {
 			client.dataHost = zeppDataHostFor(countryCode)
 		}
 	}
+}
+
+// WithZeppLocation sets the timezone used to stamp band heart-rate minutes.
+// Byte i of data_hr is minute i after local midnight of that calendar day.
+// If the option is omitted, BandData uses the system local timezone.
+func WithZeppLocation(loc *time.Location) ZeppClientOption {
+	return func(client *ZeppClient) {
+		if loc != nil {
+			client.loc = loc
+		}
+	}
+}
+
+func (c *ZeppClient) location() *time.Location {
+	if c != nil && c.loc != nil {
+		return c.loc
+	}
+
+	return time.Local
 }
 
 // withSameOriginRedirects returns a copy of httpClient whose redirects stay on
@@ -316,7 +336,7 @@ func (c *ZeppClient) BandData(ctx context.Context, oldest, newest string) ([]Ban
 			day.Summary = summary
 		}
 
-		if points, err := decodeBandDataHeartRate(item.DataHR, item.DateTime); err == nil {
+		if points, err := decodeBandDataHeartRate(item.DataHR, item.DateTime, c.location()); err == nil {
 			day.HeartRate = points
 		}
 
@@ -1440,13 +1460,15 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 }
 
 // decodeBandDataHeartRate decodes the base64 `data_hr` blob of one day. The
-// blob holds ONE UNSIGNED BYTE per minute (1440 bytes for a full day), not
-// 2-byte shorts: byte i is the heart rate of minute i after midnight. The
-// values 254 and 255 are sentinels ("no read" / "not required"); they are kept
-// in place (so the index stays the minute of the day) with BPM 0 and the real
-// minute timestamp. dateStr is the ISO date (e.g. "2026-06-03") used to
-// compute the timestamps (UTC midnight + minute, in milliseconds).
-func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, error) {
+// blob holds ONE UNSIGNED BYTE per minute (1440 bytes for a 24-hour day; 1380
+// or 1500 on DST 23- and 25-hour days), not 2-byte shorts: byte i is the
+// heart rate of minute i after local midnight. The values 254 and 255 are
+// sentinels ("no read" / "not required"); they are kept in place (so the
+// index stays the elapsed minute) with BPM 0 and the real minute timestamp.
+// dateStr is the ISO date (e.g. "2026-06-03"). Timestamps are local midnight
+// in loc (system local if loc is nil) plus i minutes, so a spring-forward
+// day skips the missing hour and a fall-back day includes the repeated one.
+func decodeBandDataHeartRate(encoded, dateStr string, loc *time.Location) ([]BandDataHeartPoint, error) {
 	if encoded == "" {
 		return nil, errors.New("empty data_hr")
 	}
@@ -1456,21 +1478,27 @@ func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, err
 		return nil, fmt.Errorf("base64 decode: %w", err)
 	}
 
-	midnight := int64(0)
+	if loc == nil {
+		loc = time.Local
+	}
+
+	var midnight time.Time
 
 	if dateStr != "" {
-		if t, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC); err == nil {
-			midnight = t.UnixMilli()
+		if day, err := time.Parse("2006-01-02", dateStr); err == nil {
+			midnight = time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, loc)
 		}
 	}
 
 	const sentinel = 254
-	const millisPerMinute = 60_000
 
 	points := make([]BandDataHeartPoint, 0, len(raw))
 
 	for i, b := range raw {
-		ts := midnight + int64(i)*millisPerMinute
+		// Add elapsed minutes rather than time.Date(..., min=i): overflowing
+		// the minute field is wall-clock math and duplicates or skips instants
+		// on 23- and 25-hour DST days.
+		ts := midnight.Add(time.Duration(i) * time.Minute).UnixMilli()
 
 		bpm := int(b)
 		if bpm >= sentinel {

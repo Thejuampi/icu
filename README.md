@@ -119,7 +119,7 @@ icu zepp status
 # 3. Read data (--oldest/--newest as YYYY-MM-DD, --date as YYYY-MM-DD)
 icu zepp summary --oldest 2026-06-01 --newest 2026-06-07
 icu zepp sleep   --oldest 2026-06-01 --newest 2026-06-07
-icu zepp heart-rate --source band --oldest 2026-06-01 --newest 2026-06-01
+icu zepp heart-rate --source band --oldest 2026-06-01 --newest 2026-06-01 --tz America/New_York
 icu zepp spo2    --oldest 2026-06-01 --newest 2026-06-07
 icu zepp stress  --oldest 2026-06-01 --newest 2026-06-07
 icu zepp pai     --oldest 2026-06-01 --newest 2026-06-07

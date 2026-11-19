@@ -191,13 +191,50 @@ func zeppSimpleCommand[T any](name, description string, fetch func(*icu.ZeppClie
 }
 
 func zeppHeartRateCommand() *Command {
-	return zeppSwitchCommand(
-		"zepp heart-rate --source band|app --oldest YYYY-MM-DD --newest YYYY-MM-DD",
-		"Heart rate time series for the date range from band summary or the user heart-rate endpoint.",
-		"source", "band", "band", "app",
-		(*icu.ZeppClient).HeartRateSeries,
-		(*icu.ZeppClient).HeartRateEndpoint,
-	)
+	return &Command{
+		Name:  "",
+		Usage: "zepp heart-rate --source band|app --oldest YYYY-MM-DD --newest YYYY-MM-DD [--tz IANA]",
+		Description: "Heart rate time series for the date range from band summary or the user heart-rate endpoint. " +
+			"For --source band, each minute is stamped from local midnight of that calendar day " +
+			"(system timezone, or --tz).",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
+			value := icu.StringFlag(flags, "source", "band")
+			if value != "band" && value != "app" {
+				return fmt.Errorf("invalid source %q: must be band or app", value)
+			}
+
+			options := zeppClientOptionsForRun()
+
+			if tzName := icu.StringFlag(flags, "tz", ""); tzName != "" {
+				loc, err := time.LoadLocation(tzName)
+				if err != nil {
+					return fmt.Errorf("invalid --tz %q: use an IANA name such as America/New_York", tzName)
+				}
+
+				options = append(options, icu.WithZeppLocation(loc))
+			}
+
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClientOptions(options, func(ctx context.Context, client *icu.ZeppClient) error {
+				var records any
+
+				var err error
+
+				if value == "band" {
+					records, err = client.HeartRateSeries(ctx, oldest, newest)
+				} else {
+					records, err = client.HeartRateEndpoint(ctx, oldest, newest)
+				}
+
+				if err != nil {
+					return fmt.Errorf("fetch source: %w", err)
+				}
+
+				return writeJSON(stdout, records)
+			})
+		},
+	}
 }
 
 func zeppHRVCommand() *Command {
