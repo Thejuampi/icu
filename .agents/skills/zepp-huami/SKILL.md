@@ -70,7 +70,7 @@ HR per-minute values 254 and 255 are sentinels ("no read" / "not required"). Map
 
 ### 5. Heart Rate Timestamps
 
-`decodeBandDataHeartRate` must receive the date string to compute per-minute timestamps (midnight + index * 60s). Without a date, timestamps are 0.
+`decodeBandDataHeartRate` must receive the date string and a timezone (system local, or `--tz`). Byte `i` of `data_hr` is the local wall-clock hour `i/60` and minute `i%60` of that calendar day — not elapsed minutes from midnight. The blob is 1440 bytes even on 23- and 25-hour DST days. Minutes in the spring-forward gap (the nonexistent hour) are dropped. A fall-back repeated hour uses the first, summer offset (EDT in America/New_York); the series may contain gaps, or two wall minutes may map to the same instant. Without a date, timestamps are 0.
 
 ### 6. Sleep Stage Minutes
 
@@ -102,7 +102,7 @@ The `hr_split`, `pace_split`, `altitude_split`, `power_split`, `step_split` fiel
 
 The `summary` field is base64-encoded JSON with fields: `stp` (steps), `slp` (sleep), `goal`, `sn` (serial), `sync` (last sync epoch).
 
-The `data_hr` field is base64-encoded binary with ONE unsigned byte per minute (1440 bytes = full day per-minute HR). Reading it as 2-byte shorts makes almost every value >= 254 (sentinel), so every point comes out as `{timestamp:0,bpm:0}`.
+The `data_hr` field is base64-encoded binary with ONE unsigned byte per local wall-clock minute (1440 bytes a day, including 23- and 25-hour DST days). Reading it as 2-byte shorts makes almost every value >= 254 (sentinel), so every point comes out as `{timestamp:0,bpm:0}`.
 
 ## Key Files
 

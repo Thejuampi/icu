@@ -2166,65 +2166,65 @@ func heartRateSeriesOn(t *testing.T, date string, blob []byte, loc *time.Locatio
 	return series[0]
 }
 
+func fullDayHRBlob() []byte {
+	const minutesPerDay = 1440
+
+	blob := make([]byte, minutesPerDay)
+	for i := range blob {
+		blob[i] = 70
+	}
+
+	return blob
+}
+
 func TestZeppClientBandHeartRateUsesLocalMidnight(t *testing.T) {
 	t.Parallel()
 
 	ny := mustNY(t)
-	// 2026-11-18 is a normal EST day. UTC midnight is 1794960000000; local
-	// midnight is five hours later. A two-byte blob is enough to pin both
-	// the base and the +1 minute step.
-	points := heartRateSeriesOn(t, "2026-11-18", []byte{72, 80}, ny)
+	// 2026-11-18 is a normal EST day. The real wire shape is 1440 bytes.
+	// UTC midnight is 1794960000000; local midnight is five hours later.
+	points := heartRateSeriesOn(t, "2026-11-18", fullDayHRBlob(), ny)
 
-	if len(points) != 2 {
-		t.Fatalf("points = %d, want 2", len(points))
+	if len(points) != 1440 {
+		t.Fatalf("points = %d, want 1440", len(points))
 	}
 
 	const utcMidnight int64 = 1_794_960_000_000
 	const nyMidnight int64 = 1_794_978_000_000
 	const nyMinute1 int64 = 1_794_978_060_000
+	const nyLast int64 = 1_795_064_340_000 // 23:59 EST
 
 	if points[0].Timestamp == utcMidnight {
 		t.Fatalf("point 0 still uses UTC midnight (%d)", utcMidnight)
 	}
 
-	if points[0].Timestamp != nyMidnight || points[1].Timestamp != nyMinute1 {
-		t.Fatalf("timestamps = [%d %d], want [%d %d]", points[0].Timestamp, points[1].Timestamp, nyMidnight, nyMinute1)
-	}
-
-	if points[0].BPM != 72 || points[1].BPM != 80 {
-		t.Fatalf("bpm = [%d %d], want [72 80]", points[0].BPM, points[1].BPM)
+	if points[0].Timestamp != nyMidnight || points[1].Timestamp != nyMinute1 || points[1439].Timestamp != nyLast {
+		t.Fatalf("timestamps[0,1,1439] = [%d %d %d], want [%d %d %d]", points[0].Timestamp, points[1].Timestamp, points[1439].Timestamp, nyMidnight, nyMinute1, nyLast)
 	}
 }
 
 func TestZeppClientBandHeartRateSpringForward(t *testing.T) {
 	t.Parallel()
 
-	// 2026-03-08 in America/New_York skips 02:00-03:00. Elapsed minute 120
-	// is 03:00 EDT, and a 1380-byte (23-hour) blob ends at 23:59 that day.
-	const minutes = 1380
-
-	blob := make([]byte, minutes)
-	for i := range blob {
-		blob[i] = 70
-	}
-
-	points := heartRateSeriesOn(t, "2026-03-08", blob, mustNY(t))
-	if len(points) != minutes {
-		t.Fatalf("points = %d, want %d", len(points), minutes)
+	// 2026-03-08 in America/New_York skips 02:00-02:59. A 1440-byte blob
+	// drops those 60 minutes and keeps 1380 points. Output index 120 is
+	// input byte 180 (03:00 EDT).
+	points := heartRateSeriesOn(t, "2026-03-08", fullDayHRBlob(), mustNY(t))
+	if len(points) != 1380 {
+		t.Fatalf("points = %d, want 1380", len(points))
 	}
 
 	want := map[int]int64{
-		0:    1_772_946_000_000, // 00:00 EST
-		119:  1_772_953_140_000, // 01:59 EST
-		120:  1_772_953_200_000, // 03:00 EDT (02:00 skipped)
-		121:  1_772_953_260_000, // 03:01 EDT
-		180:  1_772_956_800_000, // 04:00 EDT
-		1379: 1_773_028_740_000, // 23:59 EDT
+		0:    1_772_946_000_000, // byte 0:   00:00 EST
+		119:  1_772_953_140_000, // byte 119: 01:59 EST
+		120:  1_772_953_200_000, // byte 180: 03:00 EDT
+		121:  1_772_953_260_000, // byte 181: 03:01 EDT
+		1379: 1_773_028_740_000, // byte 1439: 23:59 EDT
 	}
 
 	for i, ts := range want {
 		if points[i].Timestamp != ts {
-			t.Fatalf("minute %d timestamp = %d, want %d", i, points[i].Timestamp, ts)
+			t.Fatalf("output %d timestamp = %d, want %d", i, points[i].Timestamp, ts)
 		}
 	}
 }
@@ -2232,33 +2232,44 @@ func TestZeppClientBandHeartRateSpringForward(t *testing.T) {
 func TestZeppClientBandHeartRateFallBack(t *testing.T) {
 	t.Parallel()
 
-	// 2026-11-01 in America/New_York repeats 01:00. Elapsed minute 120 is
-	// the second 01:00 (EST); a 1500-byte (25-hour) blob ends at 23:59.
-	const minutes = 1500
-
-	blob := make([]byte, minutes)
-	for i := range blob {
-		blob[i] = 70
+	// 2026-11-01 in America/New_York is a 25-hour day, but the blob is
+	// still 1440 bytes. Byte 60 is 01:00 EDT (first, summer offset); byte
+	// 120 is 02:00 EST. The repeated 01:00 EST hour is a gap.
+	points := heartRateSeriesOn(t, "2026-11-01", fullDayHRBlob(), mustNY(t))
+	if len(points) != 1440 {
+		t.Fatalf("points = %d, want 1440", len(points))
 	}
 
-	points := heartRateSeriesOn(t, "2026-11-01", blob, mustNY(t))
-	if len(points) != minutes {
-		t.Fatalf("points = %d, want %d", len(points), minutes)
+	const edt0100 int64 = 1_793_509_200_000 // byte 60
+	const est0200 int64 = 1_793_516_400_000 // byte 120
+
+	if points[60].Timestamp != edt0100 {
+		t.Fatalf("byte 60 timestamp = %d, want %d (01:00 EDT)", points[60].Timestamp, edt0100)
 	}
 
-	want := map[int]int64{
-		0:    1_793_505_600_000, // 00:00 EDT
-		119:  1_793_512_740_000, // 01:59 EDT
-		120:  1_793_512_800_000, // 01:00 EST (repeated hour)
-		121:  1_793_512_860_000, // 01:01 EST
-		180:  1_793_516_400_000, // 02:00 EST
-		1499: 1_793_595_540_000, // 23:59 EST
+	if points[120].Timestamp != est0200 {
+		t.Fatalf("byte 120 timestamp = %d, want %d (02:00 EST)", points[120].Timestamp, est0200)
+	}
+}
+
+func TestZeppClientBandHeartRateKolkataMidnight(t *testing.T) {
+	t.Parallel()
+
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		t.Fatalf("LoadLocation(Asia/Kolkata): %v", err)
 	}
 
-	for i, ts := range want {
-		if points[i].Timestamp != ts {
-			t.Fatalf("minute %d timestamp = %d, want %d", i, points[i].Timestamp, ts)
-		}
+	points := heartRateSeriesOn(t, "2026-11-18", fullDayHRBlob(), loc)
+	if len(points) != 1440 {
+		t.Fatalf("points = %d, want 1440", len(points))
+	}
+
+	// 2026-11-18 00:00 IST (UTC+5:30) = 2026-11-17 18:30 UTC.
+	const istMidnight int64 = 1_794_940_200_000
+
+	if points[0].Timestamp != istMidnight {
+		t.Fatalf("minute 0 timestamp = %d, want %d (Kolkata midnight)", points[0].Timestamp, istMidnight)
 	}
 }
 

@@ -195,7 +195,7 @@ func zeppHeartRateCommand() *Command {
 		Name:  "",
 		Usage: "zepp heart-rate --source band|app --oldest YYYY-MM-DD --newest YYYY-MM-DD [--tz IANA]",
 		Description: "Heart rate time series for the date range from band summary or the user heart-rate endpoint. " +
-			"For --source band, each minute is stamped from local midnight of that calendar day " +
+			"For --source band, byte i is the local wall-clock hour i/60 and minute i%60 " +
 			"(system timezone, or --tz).",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			value := icu.StringFlag(flags, "source", "band")

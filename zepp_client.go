@@ -151,8 +151,9 @@ func WithZeppCountryCode(countryCode string) ZeppClientOption {
 }
 
 // WithZeppLocation sets the timezone used to stamp band heart-rate minutes.
-// Byte i of data_hr is minute i after local midnight of that calendar day.
-// If the option is omitted, BandData uses the system local timezone.
+// Byte i of data_hr is the local wall-clock hour i/60 and minute i%60 of that
+// calendar day. If the option is omitted, BandData uses the system local
+// timezone.
 func WithZeppLocation(loc *time.Location) ZeppClientOption {
 	return func(client *ZeppClient) {
 		if loc != nil {
@@ -1460,14 +1461,22 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 }
 
 // decodeBandDataHeartRate decodes the base64 `data_hr` blob of one day. The
-// blob holds ONE UNSIGNED BYTE per minute (1440 bytes for a 24-hour day; 1380
-// or 1500 on DST 23- and 25-hour days), not 2-byte shorts: byte i is the
-// heart rate of minute i after local midnight. The values 254 and 255 are
-// sentinels ("no read" / "not required"); they are kept in place (so the
-// index stays the elapsed minute) with BPM 0 and the real minute timestamp.
-// dateStr is the ISO date (e.g. "2026-06-03"). Timestamps are local midnight
-// in loc (system local if loc is nil) plus i minutes, so a spring-forward
-// day skips the missing hour and a fall-back day includes the repeated one.
+// blob holds ONE UNSIGNED BYTE per local wall-clock minute and is 1440 bytes
+// even on 23- and 25-hour DST days (not 2-byte shorts). Byte i is the heart
+// rate at hour i/60, minute i%60 in loc (system local if loc is nil) on
+// dateStr (ISO date, e.g. "2026-06-03"). The values 254 and 255 are sentinels
+// ("no read" / "not required"); they are kept (unless the wall time is
+// dropped, below) with BPM 0 and the real minute timestamp.
+//
+// Spring forward: minutes of the nonexistent hour (02:00-02:59 in
+// America/New_York on 2026-03-08) are dropped. time.Date normalizes a
+// nonexistent wall time, so a point is dropped when the result's Hour or
+// Minute does not match the requested ones.
+//
+// Fall back: the repeated hour resolves to the first, summer offset (EDT).
+// Go's time.Date already picks the earlier of the two instants. Two wall
+// minutes may map to the same instant, or there may be a gap (the second
+// 01:00 EST hour is not in a 1440-byte blob); both are accepted.
 func decodeBandDataHeartRate(encoded, dateStr string, loc *time.Location) ([]BandDataHeartPoint, error) {
 	if encoded == "" {
 		return nil, errors.New("empty data_hr")
@@ -1482,11 +1491,15 @@ func decodeBandDataHeartRate(encoded, dateStr string, loc *time.Location) ([]Ban
 		loc = time.Local
 	}
 
-	var midnight time.Time
+	var year int
+	var month time.Month
+	var dayN int
+	haveDate := false
 
 	if dateStr != "" {
-		if day, err := time.Parse("2006-01-02", dateStr); err == nil {
-			midnight = time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, loc)
+		if parsed, err := time.Parse("2006-01-02", dateStr); err == nil {
+			year, month, dayN = parsed.Date()
+			haveDate = true
 		}
 	}
 
@@ -1495,10 +1508,18 @@ func decodeBandDataHeartRate(encoded, dateStr string, loc *time.Location) ([]Ban
 	points := make([]BandDataHeartPoint, 0, len(raw))
 
 	for i, b := range raw {
-		// Add elapsed minutes rather than time.Date(..., min=i): overflowing
-		// the minute field is wall-clock math and duplicates or skips instants
-		// on 23- and 25-hour DST days.
-		ts := midnight.Add(time.Duration(i) * time.Minute).UnixMilli()
+		hour, minute := i/60, i%60
+
+		var ts int64
+
+		if haveDate {
+			t := time.Date(year, month, dayN, hour, minute, 0, 0, loc)
+			if t.Hour() != hour || t.Minute() != minute {
+				continue
+			}
+
+			ts = t.UnixMilli()
+		}
 
 		bpm := int(b)
 		if bpm >= sentinel {
