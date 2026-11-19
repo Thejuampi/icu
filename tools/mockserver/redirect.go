@@ -21,8 +21,9 @@ import (
 //	  reaches the code-bearing login call) unless <mode> ends in "-tokens".
 //	POST /v2/registrations/tokens  synthetic Zepp step 1: 303 with
 //	    access=mockZeppAccessCode in the Location (never followed)
+//	POST /registrations/<email>/tokens  synthetic web step 1: JSON access code
 //	POST /v2/client/login          synthetic Zepp step 2: token_info when
-//	    the form carries code=mockZeppAccessCode, else 401
+//	    the form carries a matching access code and web identity if applicable
 //	GET  /_mock/leaks              what the sink received, secrets redacted
 //
 // The sink records every request (method, path, query keys, headers, body
@@ -33,9 +34,15 @@ const (
 	mockZeppTokensPath  = "/v2/registrations/tokens"
 	mockZeppLoginPath   = "/v2/client/login"
 	mockZeppAccessCode  = "mock-access-code"
+	mockZeppWebCode     = "mock-web-access-code"
 	tokensOnlySuffix    = "-tokens"
 	redactedValue       = "[redacted]"
 	mockZeppLoginResult = `{"result":"ok","token_info":{"login_token":"mock-login-token","app_token":"mock-app-token","user_id":"mock-user"}}`
+)
+
+const (
+	mockWebZeppAppName     = "com.huami.webapp"
+	mockWebZeppLoginResult = `{"result":"ok","token_info":{"login_token":"mock-web-login-token","app_token":"mock-web-app-token","user_id":"mock-user"}}`
 )
 
 // Leak is one request the sink received, with secret values redacted.
@@ -164,19 +171,62 @@ func (s *server) serveRedirectMode(w http.ResponseWriter, r *http.Request) bool 
 		_, _ = io.Copy(io.Discard, io.LimitReader(r.Body, maxBodyBytes))
 		w.Header().Set("Location", "https://mock.invalid/callback?access="+mockZeppAccessCode+"&refresh=mock-refresh&country_code=US")
 		w.WriteHeader(http.StatusSeeOther)
+	case isMockZeppWebRegistrationPath(r.URL.EscapedPath()) && r.Method == http.MethodPost:
+		serveMockZeppWebRegistration(w, r)
 	case r.URL.Path == mockZeppLoginPath && r.Method == http.MethodPost:
-		if err := r.ParseForm(); err != nil || r.PostForm.Get("code") != mockZeppAccessCode {
+		if err := r.ParseForm(); err != nil {
+			writeError(w, http.StatusUnauthorized, "invalid login form")
+
+			return true
+		}
+		body := mockZeppLoginResponse(r.PostForm)
+		if body == "" {
 			writeError(w, http.StatusUnauthorized, "bad or missing code")
 
 			return true
 		}
 
-		writeJSON(w, http.StatusOK, []byte(mockZeppLoginResult))
+		writeJSON(w, http.StatusOK, []byte(body))
 	default:
 		return false
 	}
 
 	return true
+}
+
+func isMockZeppWebRegistrationPath(requestPath string) bool {
+	rest, ok := strings.CutPrefix(requestPath, "/registrations/")
+	email, hasSuffix := strings.CutSuffix(rest, "/tokens")
+
+	return ok && hasSuffix && email != "" && !strings.Contains(email, "/")
+}
+
+func serveMockZeppWebRegistration(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil || r.PostForm.Get("client_id") != "HuaMi" ||
+		r.PostForm.Get("app_name") != mockWebZeppAppName || r.Header.Get("App_name") != mockWebZeppAppName ||
+		r.PostForm.Get("json_response") != "true" || r.PostForm.Get("password") == "" {
+		writeError(w, http.StatusBadRequest, "invalid Zepp web registration form")
+
+		return
+	}
+
+	writeJSON(w, http.StatusOK, []byte(`{"access":"`+mockZeppWebCode+`","country_code":"US"}`))
+}
+
+func mockZeppLoginResponse(form url.Values) string {
+	switch form.Get("code") {
+	case mockZeppAccessCode:
+		return mockZeppLoginResult
+	case mockZeppWebCode:
+		if form.Get("app_name") == mockWebZeppAppName &&
+			form.Get("device_model") == "web" &&
+			form.Get("device_id") == "02:00:00:00:00:00" &&
+			form.Get("grant_type") == "access_token" {
+			return mockWebZeppLoginResult
+		}
+	}
+
+	return ""
 }
 
 func redirectStatus(code string) int {

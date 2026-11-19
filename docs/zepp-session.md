@@ -97,12 +97,74 @@ default exits before the password prompt or any auth request. Old config files
 can keep using their saved tokens and obtain a UUID on their next explicit
 successful login. Local logout clears the credentials and retains the UUID.
 
-This prevents accidental repeated password exchanges. Phone coexistence after
-an actual password login is unverified. Reads use the current credentials and
-return auth failures without starting a new login.
+This prevents accidental repeated password exchanges. Reads use the current
+credentials and return auth failures without starting a new login.
 
-The first production check to consider, with explicit approval and an already
-valid CLI session, is one `GET /v1/client/app_tokens` on the session's account
+### November 19 incident
+
+On November 19, 2026, between 12:18 and 12:21 EST, the reported test used
+`/workspace/bin/icu`, compiled from `master` at `4982ee0`, to run
+`zepp login --email EMAIL --reauthenticate`. The incident report records
+Linux and a datacenter IP. Signing in from the CLI displaced the phone
+session. Signing back in on the phone invalidated the CLI session. A second
+explicit CLI login reused its saved UUID and displaced the phone again.
+The repeated login guard worked. A changing UUID was unnecessary for
+displacement in this incident.
+
+The installed Windows `icu.exe` identified its build as a modified checkout
+of `d737e971`. It and the #52 binary sent the same registration headers and
+session fields to a loopback mock, including the Android `app_name` in the
+second form. Both sent a UUID v4 and exchanged a mock US country code.
+Only #52 stored the UUID in the synthetic config.
+
+The earlier Zepp logins recorded in this investigation used `icu-mock`.
+The real account check by the local agent was a read from
+Intervals.icu with `icu wellness list`. The earlier statement that a
+separate local Zepp login kept the phone signed in is withdrawn. The
+available history provides no paired production comparison by client
+identity or connection origin.
+
+| Request detail | `icu` on #52 | `ha-zepp` web reference |
+| --- | --- | --- |
+| Credentials | `POST api-user-us2.zepp.com/v2/registrations/tokens`, encrypted form and 303 access code | `POST api-user.huami.com/registrations/<email>/tokens`, URL-encoded form over HTTPS and JSON access code |
+| Registration fields | `client_id=HuaMi`, `country_code=US`, `region=us-west-2` | `client_id=HuaMi`, `app_name=com.huami.webapp`, `json_response=true`, optional country |
+| Registration headers | Android app headers, `X-Hm-Ekv: 1` and Zepp 9.12.5 Android user agent | `App_name: com.huami.webapp`, form content type and `Accept-Language` |
+| Session endpoint and grant | `POST api-mifit-us2.zepp.com/v2/client/login`, `grant_type=access_token` | `POST account.huami.com/v2/client/login`, `grant_type=access_token` |
+| Session form | `app_name=com.huami.midong`, `device_model=android_phone`, installation UUID, Android `source`, version `9.12.5` | `app_name=com.huami.webapp`, `device_model=web`, `device_id=02:00:00:00:00:00`, version `4.3.0` |
+| Session headers | Web app name, Firefox user agent, web origin and referrer | Form content type and the HTTP library's default headers |
+| Session country | Returned `country_code`, default `US` | Returned `country_code`, requested country or region inference, with the area lookup and `US` as fallbacks |
+
+`ha-zepp` reports that its web login coexists with the phone.
+`amazfit-mcp` also uses a web form, with another account host, a generated
+`web_` device ID and a separate app-token request. Both are community
+clients. [ha-zepp implementation](https://github.com/yardeff/ha-zepp/blob/9142ca6fb10af15611a587894580cbdaaaf6def6/custom_components/zepp/api.py#L51-L186),
+[ha-zepp README](https://github.com/yardeff/ha-zepp/blob/9142ca6fb10af15611a587894580cbdaaaf6def6/README.md),
+[amazfit-mcp implementation](https://github.com/fjuliofontes/amazfit-mcp/blob/adf63107c437b8209aa66e761d1f278f0a201cdf/zepp_client.py#L76-L165).
+
+`icu zepp login --web` runs the two-step exchange published by `ha-zepp`.
+The web app name is explicit in both forms and both requests. The server's
+country takes precedence over the returned region, with `US` as fallback.
+The web flow uses the reference's fixed web device identifier. Successful
+login saves the token bundle for the normal read commands. The CLI writes
+the bundle only after both requests succeed. Either flow requires
+`--reauthenticate` to replace an existing bundle.
+
+### Production verification
+
+With explicit authorization, test one `icu zepp login --web --email EMAIL`
+from the datacenter against an isolated config while the phone is signed in.
+The two requests are the web credential registration at `api-user.huami.com`
+and the access-code exchange at `account.huami.com` listed above. Verify
+that the phone still syncs a new sample, then read the corresponding sleep,
+nightly HRV and band heart rate with the CLI. Verify the same conditions
+after an authorized web reauthentication. A successful password exchange
+can displace a server-side session, including a session held by the phone
+or another web client. A separate local config only isolates the saved
+credentials on disk. Phone sync and matching measurements on both passes
+would support using that web flow in the tested environment.
+
+For the Android SDK renewal flow, a separate check with explicit approval
+and a valid session would use one `GET /v1/client/app_tokens` on its account
 host (fallback `https://api-mifit.zepp.com`). `WebAPI#syncToken` sends
 `login_token`, `os_version`, `source`, and `dn` in the query and the
 manifest app name in the `app_name` header. Check whether the returned app
@@ -155,6 +217,21 @@ login succeeds and uses the first login's UUID. The focused tests assert the
 wire device ID, local persistence, failed reauthentication and migration from
 configs without a UUID.
 
+Use a second config in the same loopback environment to verify the web path.
+
+```powershell
+$env:ICU_CONFIG_DIR = Join-Path $scratch 'web-config'
+& "$scratch/icu.exe" zepp login --web --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
+& "$scratch/icu.exe" zepp sleep --oldest 2026-08-10 --newest 2026-08-10
+& "$scratch/icu.exe" zepp heart-rate --source band --oldest 2026-08-10 --newest 2026-08-10
+& "$scratch/icu.exe" zepp readiness --oldest 2026-08-10 --newest 2026-08-10
+& "$scratch/icu.exe" zepp login --web --reauthenticate --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
+```
+
+The mock verifies the explicit web identity on exchange. The commands read
+synthetic sleep, per-minute heart rate, and nightly HRV in `extra.value.sleepHRV`.
+The same reads work after explicit web reauthentication.
+
 ```bash
-go test ./cmd/icu -run 'TestZeppLogin' -count=1
+go test ./... -run 'TestZepp(Web|Login)' -count=1
 ```

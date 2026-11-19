@@ -621,6 +621,13 @@ next explicit password login and pass `session.ZeppAuthResult` to
 and `LoginURL`. A password login may displace another session.
 [Zepp session analysis](zepp-session.md).
 
+`ZeppWebLogin(email, password, baseURL)` is an experimental alternative
+that returns the same `ZeppAuthResult` from the web registration and session
+endpoints. An empty `baseURL` selects the Huami passport and account hosts.
+A custom HTTPS or loopback base replaces both hosts for tests or proxies.
+It uses the web client's device identifier. Phone coexistence still needs
+production validation. [Zepp web login evidence and mock](zepp-session.md).
+
    **HRV.** `SleepHRVDays` / `DecodeSleepHRV` read Zepp nightly HRV
    (readiness sleepHRV): readiness/watch_score `value.sleepHRV` in ms, the
    value the Zepp app shows (not documented as RMSSD). `wellness sync` writes

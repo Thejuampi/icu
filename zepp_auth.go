@@ -101,7 +101,7 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 		"state":        {"REDIRECTION"},
 		"client_id":    {"HuaMi"},
 		"password":     {password},
-		"redirect_uri": {"https://s3-us-west-2.amazonaws.com/hm-registration/successsignin.html"},
+		"redirect_uri": {zeppRegistrationRedirectURI},
 		"region":       {"us-west-2"},
 		"token":        {"access", "refresh"},
 		"country_code": {"US"},
@@ -132,10 +132,8 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	req.Header.Set("Accept-Encoding", "gzip")
 
 	client := &http.Client{
-		Timeout: zeppAuthTimeout,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
+		Timeout:       zeppAuthTimeout,
+		CheckRedirect: stopZeppAuthRedirect,
 	}
 
 	resp, err := client.Do(req)
@@ -173,6 +171,10 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 	return accessToken, countryCode, nil
 }
 
+func stopZeppAuthRedirect(_ *http.Request, _ []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
 func performLoginWithURL(loginURL, accessToken, countryCode, deviceID string) (*ZeppAuthResult, error) {
 	payload := url.Values{
 		"code":               {accessToken},
@@ -194,8 +196,8 @@ func performLoginWithURL(loginURL, accessToken, countryCode, deviceID string) (*
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("App_name", "com.huami.webapp")
-	req.Header.Set("Appname", "com.huami.webapp")
+	req.Header.Set("App_name", webZeppAppName)
+	req.Header.Set("Appname", webZeppAppName)
 	req.Header.Set("Origin", "https://user.zepp.com")
 	req.Header.Set("Referer", "https://user.zepp.com/")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0")
@@ -213,6 +215,10 @@ func performLoginWithURL(loginURL, accessToken, countryCode, deviceID string) (*
 	}
 	defer resp.Body.Close()
 
+	return decodeZeppLogin(resp, countryCode)
+}
+
+func decodeZeppLogin(resp *http.Response, countryCode string) (*ZeppAuthResult, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("expected status 200, got %d", resp.StatusCode)
 	}

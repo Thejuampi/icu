@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Thejuampi/icu"
 )
 
 // newRedirectTestServer is the mock with redirect mode on: the sink is a
@@ -178,6 +180,33 @@ func TestRedirectModeSyntheticZeppLogin(t *testing.T) {
 
 	if got := leaks(t, ts.URL); got.Count != 0 {
 		t.Fatalf("same-origin redirect reached the sink: %+v", got)
+	}
+}
+
+func TestRedirectModeSyntheticZeppWebLogin(t *testing.T) {
+	t.Parallel()
+
+	ts, sink := newRedirectTestServer(t)
+	auth, err := icu.ZeppWebLogin("fixture@example.invalid", "synthetic-password", ts.URL)
+	if err != nil || auth == nil || auth.AppToken != "mock-web-app-token" || auth.CountryCode != "US" {
+		t.Fatalf("web login did not receive the mock web session, err=%v", err)
+	}
+
+	mobileForm := url.Values{"code": {mockZeppWebCode}, "app_name": {"com.huami.midong"}}.Encode()
+	if resp := send(t, noFollowClient(), http.MethodPost, ts.URL+mockZeppLoginPath, mobileForm, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("web access code with Android app name: HTTP %d, want 401", resp.StatusCode)
+	}
+
+	registrationPath := "/registrations/fixture@example.invalid/tokens"
+	if resp := send(t, noFollowClient(), http.MethodPost, ts.URL+registrationPath, "a=b", nil); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("incomplete web registration: HTTP %d, want 400", resp.StatusCode)
+	}
+
+	if _, err := icu.ZeppWebLogin("fixture@example.invalid", "synthetic-password", ts.URL+"/_redirect/cross307"); err == nil {
+		t.Fatal("web registration followed a redirect")
+	}
+	if got := leaks(t, ts.URL); got.Count != 0 {
+		t.Fatalf("unexpected request to the redirect sink %s", sink.URL)
 	}
 }
 
