@@ -106,10 +106,10 @@ func TestBackfillCanaryWireRejectsRedirectAndUnsafeInput(t *testing.T) {
 	}
 
 	for _, test := range []struct {
-		origin  string
-		method  string
-		path    string
-		supp    string
+		origin string
+		method string
+		path   string
+		supp   string
 	}{
 		{zeppDataHostGlobal + ".other.invalid", http.MethodDelete, backfillCanaryWireSummaryPath, ""},
 		{zeppDataHostGlobal, http.MethodDelete, backfillCanaryWireDetailPath, ""},
