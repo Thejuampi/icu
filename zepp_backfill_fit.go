@@ -12,8 +12,24 @@ import (
 )
 
 const (
-	fitUnixEpoch   = 631065600
-	maxZeppFITSize = 64 << 20
+	fitUnixEpoch          = 631065600
+	maxZeppFITSize        = 64 << 20
+	fitCRCPolynomial      = 0xa001
+	fitCompressedFlag     = 0x80
+	fitTimeOffsetMask     = 31
+	fitTimeOffsetCycle    = 32
+	fitUint32Modulus      = 1 << 32
+	fitSessionMessage     = 18
+	fitLapMessage         = 19
+	fitRecordMessage      = 20
+	fitAvgSpeedEnhanced   = 124
+	fitAltitudeEnhanced   = 78
+	fitSpeedEnhanced      = 73
+	fitMillisPerSecond    = 1000
+	fitSpeedScale         = 1000
+	fitAltitudeUpperBound = 1e6
+	fitSpeedUpperBound    = 1e6
+	zeppCoordinateScale   = 1e8
 )
 
 // ZeppRideFIT contains one FIT cycling session, with UTC Unix seconds and SI units.
@@ -46,7 +62,7 @@ type zeppFITDef struct {
 
 type zeppFITRecords struct {
 	definitions   [16]*zeppFITDef
-	lastTimestamp uint32
+	lastTimestamp int64 
 	hasTimestamp  bool
 	ride          ZeppRideFIT
 	foundSession  bool
@@ -67,7 +83,7 @@ func DecodeZeppRideFIT(input io.Reader) (ZeppRideFIT, error) {
 		return ZeppRideFIT{}, errors.New("invalid FIT header")
 	}
 	h := int(raw[0])
-	if uint64(h)+uint64(binary.LittleEndian.Uint32(raw[4:8]))+2 != uint64(len(raw)) {
+	if uint64(raw[0])+uint64(binary.LittleEndian.Uint32(raw[4:8]))+2 != uint64(len(raw)) {
 		return ZeppRideFIT{}, errors.New("FIT data length mismatch (chained files unsupported)")
 	}
 	if h >= 14 && binary.LittleEndian.Uint16(raw[h-2:h]) != 0 && zeppFITCRC(raw[:h]) != 0 {
@@ -77,13 +93,13 @@ func DecodeZeppRideFIT(input io.Reader) (ZeppRideFIT, error) {
 		return ZeppRideFIT{}, errors.New("invalid FIT file CRC")
 	}
 	state := zeppFITRecords{}
-	if err = state.decode(raw[h : len(raw)-2]); err != nil {
+	if err := state.decode(raw[h : len(raw)-2]); err != nil {
 		return ZeppRideFIT{}, err
 	}
 	if !state.foundSession {
 		return ZeppRideFIT{}, errors.New("FIT lacks a cycling session")
 	}
-	if err = validateZeppRideFIT(state.ride); err != nil {
+	if err := validateZeppRideFIT(state.ride); err != nil {
 		return ZeppRideFIT{}, err
 	}
 	return state.ride, nil
@@ -95,7 +111,7 @@ func zeppFITCRC(data []byte) uint16 {
 		crc ^= uint16(b)
 		for range 8 {
 			if crc&1 != 0 {
-				crc = crc>>1 ^ 0xa001
+				crc = crc>>1 ^ fitCRCPolynomial
 			} else {
 				crc >>= 1
 			}
@@ -108,11 +124,11 @@ func readZeppFITDef(data []byte, developer bool) (*zeppFITDef, int, error) {
 	if len(data) < 5 || data[1] > 1 {
 		return nil, 0, errors.New("invalid FIT message definition")
 	}
-	d := &zeppFITDef{order: binary.LittleEndian}
+	definition := &zeppFITDef{order: binary.LittleEndian}
 	if data[1] == 1 {
-		d.order = binary.BigEndian
+		definition.order = binary.BigEndian
 	}
-	d.global = d.order.Uint16(data[2:4])
+	definition.global = definition.order.Uint16(data[2:4])
 	at := 5
 	count := int(data[4])
 	if len(data) < at+3*count {
@@ -123,7 +139,7 @@ func readZeppFITDef(data []byte, developer bool) (*zeppFITDef, int, error) {
 		if size == 0 {
 			return nil, 0, errors.New("zero-length FIT field")
 		}
-		d.fields = append(d.fields, zeppFITField{n, size, base})
+		definition.fields = append(definition.fields, zeppFITField{n, size, base})
 		at += 3
 	}
 	if developer {
@@ -136,18 +152,18 @@ func readZeppFITDef(data []byte, developer bool) (*zeppFITDef, int, error) {
 			return nil, 0, io.ErrUnexpectedEOF
 		}
 		for range count {
-			d.developerBytes += int(data[at+1])
+			definition.developerBytes += int(data[at+1])
 			at += 3
 		}
 	}
-	return d, at, nil
+	return definition, at, nil
 }
 
 func (s *zeppFITRecords) decode(data []byte) error {
 	for len(data) > 0 {
 		header := data[0]
 		data = data[1:]
-		compressed := header&0x80 != 0
+		compressed := header&fitCompressedFlag != 0
 		local := header & 15
 		if compressed {
 			local = (header >> 5) & 3
@@ -164,7 +180,7 @@ func (s *zeppFITRecords) decode(data []byte) error {
 		if d == nil {
 			return fmt.Errorf("undefined FIT local message %d", local)
 		}
-		n, err := s.readRecord(d, data, compressed, header&31)
+		n, err := s.readRecord(d, data, compressed, header&fitTimeOffsetMask)
 		if err != nil {
 			return fmt.Errorf("FIT message %d: %w", d.global, err)
 		}
@@ -173,23 +189,23 @@ func (s *zeppFITRecords) decode(data []byte) error {
 	return nil
 }
 
-func (s *zeppFITRecords) readRecord(d *zeppFITDef, data []byte, compressed bool, offset byte) (int, error) {
+func (s *zeppFITRecords) readRecord(definition *zeppFITDef, data []byte, compressed bool, offset byte) (int, error) {
 	var (
 		present [256]bool
 		value   [256]int64
 	)
 	if compressed {
-		if !s.hasTimestamp || s.lastTimestamp >= math.MaxUint32-31 {
+		if !s.hasTimestamp || s.lastTimestamp >= math.MaxUint32-fitTimeOffsetMask {
 			return 0, errors.New("invalid compressed FIT timestamp")
 		}
-		t := s.lastTimestamp&^31 | uint32(offset)
+		t := s.lastTimestamp&^fitTimeOffsetMask | int64(offset)
 		if t < s.lastTimestamp {
-			t += 32
+			t += fitTimeOffsetCycle
 		}
-		value[253], present[253] = int64(t), true
+		value[253], present[253] = t, true
 	}
 	at := 0
-	for i, f := range d.fields {
+	for i, f := range definition.fields {
 		if compressed && f.number == 253 {
 			if i != 0 || f.size != 4 || f.base != 0x86 {
 				return 0, errors.New("invalid compressed timestamp field definition")
@@ -200,29 +216,30 @@ func (s *zeppFITRecords) readRecord(d *zeppFITDef, data []byte, compressed bool,
 		if next > len(data) {
 			return 0, io.ErrUnexpectedEOF
 		}
-		if f.number == 253 || d.global == 18 || d.global == 20 {
-			value[f.number], present[f.number] = zeppFITNumeric(d.order, f, data[at:next])
+		if f.number == 253 || definition.global == fitSessionMessage || definition.global == fitRecordMessage {
+			value[f.number], present[f.number] = zeppFITNumeric(definition.order, f, data[at:next])
 		}
 		at = next
 	}
-	at += d.developerBytes
+	at += definition.developerBytes
 	if at > len(data) {
 		return 0, io.ErrUnexpectedEOF
 	}
 	if present[253] {
-		if value[253] < 0 || value[253] >= math.MaxUint32 {
+		stamp := value[253]
+		if stamp < 0 || stamp >= math.MaxUint32 {
 			return 0, errors.New("invalid FIT timestamp value")
 		}
-		s.lastTimestamp = uint32(value[253])
+		s.lastTimestamp = stamp
 		s.hasTimestamp = true
 	}
-	switch d.global {
-	case 18:
+	switch definition.global {
+	case fitSessionMessage:
 		return at, s.addSession(value, present)
-	case 19:
+	case fitLapMessage:
 		s.ride.Laps++
 		return at, nil
-	case 20:
+	case fitRecordMessage:
 		return at, s.addPoint(value, present)
 	default:
 		return at, nil
@@ -232,7 +249,7 @@ func (s *zeppFITRecords) readRecord(d *zeppFITDef, data []byte, compressed bool,
 func zeppFITNumeric(order binary.ByteOrder, f zeppFITField, data []byte) (int64, bool) {
 	switch {
 	case len(data) == 1 && (f.base == 0 || f.base == 2):
-		return int64(data[0]), data[0] != 0xff
+		return int64(data[0]), data[0] != math.MaxUint8
 	case len(data) == 2 && f.base == 0x84:
 		i := order.Uint16(data)
 		return int64(i), i != math.MaxUint16
@@ -240,8 +257,11 @@ func zeppFITNumeric(order binary.ByteOrder, f zeppFITField, data []byte) (int64,
 		i := order.Uint32(data)
 		return int64(i), i != math.MaxUint32
 	case len(data) == 4 && f.base == 0x85:
-		i := int32(order.Uint32(data))
-		return int64(i), i != math.MaxInt32
+		i := int64(order.Uint32(data))
+		if i > math.MaxInt32 {
+			return i - fitUint32Modulus, true
+		}
+		return i, i != math.MaxInt32
 	default:
 		return 0, false
 	}
@@ -262,16 +282,20 @@ func (s *zeppFITRecords) addSession(v [256]int64, p [256]bool) error {
 	s.ride.End = v[253] + fitUnixEpoch
 	s.ride.Indoor = p[6] && v[6] == 6
 	s.ride.Distance = float64(v[9]) / 100
-	s.ride.AverageSpeed = zeppFITScaled(v, p, 124, 14, 1000, 0)
+	s.ride.AverageSpeed = zeppFITScaled(v, p, fitAvgSpeedEnhanced, 14, fitSpeedScale, 0)
 	if p[11] {
-		k := uint16(v[11])
+		reading := v[11]
+		if reading < 0 || reading > math.MaxUint16 {
+			return errors.New("invalid FIT calories")
+		}
+		k := uint16(reading)
 		s.ride.Calories = &k
 	}
 	if p[7] {
-		s.ride.Elapsed = float64(v[7]) / 1000
+		s.ride.Elapsed = float64(v[7]) / fitMillisPerSecond
 	}
 	if p[8] {
-		s.ride.Timer = float64(v[8]) / 1000
+		s.ride.Timer = float64(v[8]) / fitMillisPerSecond
 	} else {
 		s.ride.Timer = s.ride.Elapsed
 	}
@@ -291,19 +315,31 @@ func (s *zeppFITRecords) addPoint(v [256]int64, p [256]bool) error {
 		longitude := math.Ldexp(float64(v[1])*180, -31)
 		pt.Longitude = &longitude
 	}
-	pt.Altitude = zeppFITScaled(v, p, 78, 2, 5, -500)
-	pt.Speed = zeppFITScaled(v, p, 73, 6, 1000, 0)
+	pt.Altitude = zeppFITScaled(v, p, fitAltitudeEnhanced, 2, 5, -500)
+	pt.Speed = zeppFITScaled(v, p, fitSpeedEnhanced, 6, fitSpeedScale, 0)
 	pt.Distance = zeppFITScaled(v, p, 5, 5, 100, 0)
 	if p[3] {
-		hr := uint16(v[3])
+		reading := v[3]
+		if reading < 0 || reading > math.MaxUint16 {
+			return errors.New("invalid FIT heart rate")
+		}
+		hr := uint16(reading)
 		pt.HeartRate = &hr
 	}
 	if p[4] {
-		cadence := uint16(v[4])
+		reading := v[4]
+		if reading < 0 || reading > math.MaxUint16 {
+			return errors.New("invalid FIT cadence")
+		}
+		cadence := uint16(reading)
 		pt.Cadence = &cadence
 	}
 	if p[7] {
-		power := uint16(v[7])
+		reading := v[7]
+		if reading < 0 || reading > math.MaxUint16 {
+			return errors.New("invalid FIT power")
+		}
+		power := uint16(reading)
 		pt.Power = &power
 	}
 	s.ride.Points = append(s.ride.Points, pt)
@@ -340,8 +376,8 @@ func validateZeppRideFIT(r ZeppRideFIT) error {
 			return errors.New("FIT samples are outside the session or not strictly ordered")
 		}
 		last = p.At
-		if p.Altitude != nil && !zeppFITInRange(*p.Altitude, -500, 1e6) ||
-			p.Speed != nil && !zeppFITInRange(*p.Speed, 0, 1e6) ||
+		if p.Altitude != nil && !zeppFITInRange(*p.Altitude, -500, fitAltitudeUpperBound) ||
+			p.Speed != nil && !zeppFITInRange(*p.Speed, 0, fitSpeedUpperBound) ||
 			p.Distance != nil && !zeppFITInRange(*p.Distance, 0, math.MaxUint32) ||
 			p.Latitude != nil && !zeppFITInRange(*p.Latitude, -90, 90) ||
 			p.Longitude != nil && !zeppFITInRange(*p.Longitude, -180, 180) ||
@@ -356,15 +392,15 @@ func zeppFITInRange(n, minValue, maxValue float64) bool { return n >= minValue &
 
 // EncodeZeppRideFIT is the pure wire encoder for the observed Zepp cycling
 // upload format. Unverified pause and lap fields are deliberately absent.
-func EncodeZeppRideFIT(r ZeppRideFIT) (summary, detail map[string]string, err error) {
-	if err = validateZeppRideFIT(r); err != nil {
+func EncodeZeppRideFIT(r ZeppRideFIT) (map[string]string, map[string]string, error) {
+	if err := validateZeppRideFIT(r); err != nil {
 		return nil, nil, err
 	}
 	typ := "9"
 	if r.Indoor {
 		typ = "10"
 	}
-	summary = map[string]string{
+	summary := map[string]string{
 		"trackid": strconv.FormatInt(r.Start, 10), "end_time": strconv.FormatInt(r.End, 10),
 		"dis": strconv.FormatInt(int64(math.Round(r.Distance)), 10), "run_time": strconv.FormatInt(int64(math.Round(r.Timer)), 10),
 		"avg_pace": "0", "type": typ, "sport_mode": "0", "source": "run.fit.huami.com",
@@ -373,7 +409,7 @@ func EncodeZeppRideFIT(r ZeppRideFIT) (summary, detail map[string]string, err er
 	// Distance divided by recorded timer duration is the Garmin running/cycling
 	// session-average speed definition when the explicit summary speed is absent.
 	if r.AverageSpeed != nil {
-		if !zeppFITInRange(*r.AverageSpeed, 0, 1e6) {
+		if !zeppFITInRange(*r.AverageSpeed, 0, fitSpeedUpperBound) {
 			return nil, nil, errors.New("invalid FIT average speed")
 		}
 		if *r.AverageSpeed > 0 {
@@ -385,7 +421,7 @@ func EncodeZeppRideFIT(r ZeppRideFIT) (summary, detail map[string]string, err er
 	if r.Calories != nil {
 		summary["calorie"] = strconv.FormatUint(uint64(*r.Calories), 10)
 	}
-	detail, err = encodeZeppFITPoints(r)
+	detail, err := encodeZeppFITPoints(r)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -441,9 +477,9 @@ func encodeZeppFITPoints(r ZeppRideFIT) (map[string]string, error) {
 			if gpsCount == 0 && i != 0 {
 				return nil, errors.New("unaligned FIT GPS series")
 			}
-			gps.WriteString(strconv.FormatInt(int64((*p.Latitude-lastLat)*1e8), 10))
+			gps.WriteString(strconv.FormatInt(int64((*p.Latitude-lastLat)*zeppCoordinateScale), 10))
 			gps.WriteByte(',')
-			writeZeppFITNumber(&gps, int64((*p.Longitude-lastLon)*1e8))
+			writeZeppFITNumber(&gps, int64((*p.Longitude-lastLon)*zeppCoordinateScale))
 			lastLat, lastLon = *p.Latitude, *p.Longitude
 			gpsCount++
 		}

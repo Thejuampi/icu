@@ -39,8 +39,13 @@ func zeppFITFixture(t *testing.T) []byte {
 }
 
 func zeppFITFile(data []byte) []byte {
-	raw := []byte{14, 0x20, 0, 0, 0, 0, 0, 0, '.', 'F', 'I', 'T', 0, 0}
-	binary.LittleEndian.PutUint32(raw[4:8], uint32(len(data)))
+	dataLen := len(data)
+	if dataLen < 0 || dataLen > maxZeppFITSize {
+		panic("oversized synthetic FIT fixture")
+	}
+	raw := make([]byte, 0, 14+dataLen+2)
+	raw = append(raw, 14, 0x20, 0, 0, 0, 0, 0, 0, '.', 'F', 'I', 'T', 0, 0)
+	binary.LittleEndian.PutUint32(raw[4:8], uint32(dataLen))
 	binary.LittleEndian.PutUint16(raw[12:14], zeppFITCRC(raw[:12]))
 	raw = append(raw, data...)
 	return binary.LittleEndian.AppendUint16(raw, zeppFITCRC(raw))

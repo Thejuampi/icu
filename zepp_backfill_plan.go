@@ -13,11 +13,14 @@ import (
 	"time"
 )
 
-const zeppBackfillHistoryPageLimit = 1000
+const (
+	zeppBackfillHistoryPageLimit = 1000
+	zeppBackfillHistoryMaxBytes  = 16 << 20
+)
 
 var (
-	errBackfillHistoryIncomplete   = errors.New("Zepp history feed is incomplete")
-	errBackfillHistoryUnauthorized = errors.New("Zepp rejected the saved session; stopped without signing in")
+	errBackfillHistoryIncomplete   = errors.New("history feed from Zepp is incomplete")
+	errBackfillHistoryUnauthorized = errors.New("saved session rejected by Zepp; stopped without signing in")
 )
 
 type zeppBackfillInterval struct {
@@ -112,7 +115,7 @@ func (c *ZeppClient) readZeppBackfillHistoryPage(ctx context.Context, cursor int
 	if resp.StatusCode != http.StatusOK {
 		return page, fmt.Errorf("%w: HTTP %d", errBackfillHistoryIncomplete, resp.StatusCode)
 	}
-	lr := &io.LimitedReader{R: resp.Body, N: 16 << 20}
+	lr := &io.LimitedReader{R: resp.Body, N: zeppBackfillHistoryMaxBytes}
 	dec := json.NewDecoder(lr)
 	if err := dec.Decode(&page); err != nil {
 		return page, errBackfillHistoryIncomplete
@@ -158,7 +161,8 @@ func (c *ZeppClient) PlanRideBackfill(ctx context.Context, activities []Activity
 
 func planRideBackfill(activities []Activity, history []zeppBackfillInterval) []ZeppBackfillPlanItem {
 	items := make([]ZeppBackfillPlanItem, 0, len(activities))
-	for _, a := range activities {
+	for i := range activities {
+		a := &activities[i]
 		switch a.Type {
 		case "Ride", "VirtualRide", "MountainBikeRide", "GravelRide", "EBikeRide", "EMountainBikeRide":
 		default:
@@ -204,7 +208,8 @@ func planRideBackfill(activities []Activity, history []zeppBackfillInterval) []Z
 				cur.Status = "source-conflict"
 			}
 		}
-		active = append(kept, i)
+		active = kept
+		active = append(active, i)
 	}
 	return items
 }
