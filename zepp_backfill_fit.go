@@ -62,7 +62,7 @@ type zeppFITDef struct {
 
 type zeppFITRecords struct {
 	definitions   [16]*zeppFITDef
-	lastTimestamp int64 
+	lastTimestamp int64
 	hasTimestamp  bool
 	ride          ZeppRideFIT
 	foundSession  bool
