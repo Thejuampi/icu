@@ -43,5 +43,5 @@ identify confidently, including when history does not return the expected source
 Run the focused synthetic tests without contacting the live service:
 
 ```sh
-go test ./... -run 'Test(Backfill|PlanRideBackfill|ZeppBackfill|ZeppRideFIT|ZeppFIT)'
+go test ./... -run 'Test(Backfill|PlanRideBackfill|RideBackfillCanary|ZeppBackfill|ZeppRideFIT|ZeppFIT)'
 ```

@@ -40,7 +40,7 @@ func (c *ZeppClient) TestRideBackfill(ctx context.Context, fit io.Reader) (int64
 		return 0, errBackfillCanaryWireInput
 	}
 
-	target := zeppBackfillInterval{Start: ride.Start, End: ride.End, Source: summaryFields["source"]}
+	target := zeppBackfillInterval{Start: ride.Start, End: ride.End, Source: summaryFields[backfillCanarySourceKey]}
 	history, err := c.readZeppBackfillHistory(ctx)
 	if err != nil {
 		return 0, err
@@ -59,7 +59,7 @@ func (c *ZeppClient) TestRideBackfill(ctx context.Context, fit io.Reader) (int64
 		return target.Start, backfillCanaryFailure("writing workout summary", err)
 	}
 
-	if err := c.verifyBackfillCanary(ctx, target, summaryFields["trackid"]); err != nil {
+	if err := c.verifyBackfillCanary(ctx, target, summaryFields[backfillCanaryTrackKey]); err != nil {
 		return target.Start, err
 	}
 	return target.Start, nil
@@ -74,7 +74,7 @@ func (c *ZeppClient) verifyBackfillCanary(ctx context.Context, target zeppBackfi
 		return fmt.Errorf("%w: workout not attributable; no deletion attempted", errBackfillCanaryUncertain)
 	}
 
-	identity := url.Values{"trackid": {trackID}, "source": {target.Source}}
+	identity := url.Values{backfillCanaryTrackKey: {trackID}, backfillCanarySourceKey: {target.Source}}
 	if err := c.deleteBackfillCanarySummary(ctx, identity); err != nil {
 		return backfillCanaryFailure("deleting the attributed workout", err)
 	}

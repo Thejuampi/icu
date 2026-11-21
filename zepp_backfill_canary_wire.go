@@ -17,11 +17,13 @@ const (
 	backfillCanaryWireSummaryPath = "/v1/sport/run/summary.json"
 	backfillCanaryWireSource      = "run.fit.huami.com"
 	backfillCanaryWireMaxReply    = 1 << 20
+	backfillCanaryTrackKey        = "trackid"
+	backfillCanarySourceKey       = "source"
 )
 
 var (
 	errBackfillCanaryWireInput        = errors.New("invalid Zepp canary write input; no request sent")
-	errBackfillCanaryWriteUnconfirmed = errors.New("Zepp canary write outcome unconfirmed; do not retry")
+	errBackfillCanaryWriteUnconfirmed = errors.New("zepp canary write outcome unconfirmed; do not retry")
 )
 
 // The caller owns the overlap guard, one-ride limit, and ownership checks.
@@ -123,9 +125,9 @@ func validBackfillCanaryWireValues(method, path, userID string, values url.Value
 		return false
 	}
 
-	trackID := values.Get("trackid")
+	trackID := values.Get(backfillCanaryTrackKey)
 	id, err := strconv.ParseInt(trackID, 10, 64)
-	if err != nil || id <= 0 || trackID != strconv.FormatInt(id, 10) || values.Get("source") != backfillCanaryWireSource {
+	if err != nil || id <= 0 || trackID != strconv.FormatInt(id, 10) || values.Get(backfillCanarySourceKey) != backfillCanaryWireSource {
 		return false
 	}
 
@@ -135,7 +137,7 @@ func validBackfillCanaryWireValues(method, path, userID string, values url.Value
 		}
 
 		switch key {
-		case "trackid", "source", "v", "appid", "lang", "country", "timezone", "channel", "device", "bind_device", "cv":
+		case backfillCanaryTrackKey, backfillCanarySourceKey, "v", "appid", "lang", "country", "timezone", "channel", "device", "bind_device", "cv":
 		case "userid":
 			if items[0] != userID {
 				return false
@@ -230,14 +232,14 @@ func parseBackfillCanaryReplyCode(raw json.RawMessage) (string, error) {
 
 	if raw[0] == '"' {
 		if err := json.Unmarshal(raw, &word); err != nil {
-			return "", err
+			return "", errBackfillCanaryWriteUnconfirmed
 		}
 		return word, nil
 	}
 
 	var number int
 	if err := json.Unmarshal(raw, &number); err != nil {
-		return "", err
+		return "", errBackfillCanaryWriteUnconfirmed
 	}
 
 	return strconv.Itoa(number), nil

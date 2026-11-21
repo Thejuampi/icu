@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	icu "github.com/Thejuampi/icu"
@@ -40,11 +41,17 @@ func runZeppBackfillTest(args []string, flags map[string]string, _ *icu.Client, 
 		return errors.New("no usable saved Zepp web-session configuration; stopped without login")
 	}
 
-	info, err := os.Stat(path)
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return errors.New("could not open the FIT file directory")
+	}
+	defer root.Close()
+	name := filepath.Base(path)
+	info, err := root.Stat(name)
 	if err != nil || !info.Mode().IsRegular() {
 		return errors.New("FIT must be a readable regular file")
 	}
-	fit, err := os.Open(path)
+	fit, err := root.Open(name)
 	if err != nil {
 		return errors.New("could not open the FIT file")
 	}
