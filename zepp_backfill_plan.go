@@ -16,7 +16,7 @@ import (
 const zeppBackfillHistoryPageLimit = 1000
 
 var (
-	errBackfillHistoryIncomplete = errors.New("Zepp history feed is incomplete")
+	errBackfillHistoryIncomplete   = errors.New("Zepp history feed is incomplete")
 	errBackfillHistoryUnauthorized = errors.New("Zepp rejected the saved session; stopped without signing in")
 )
 
