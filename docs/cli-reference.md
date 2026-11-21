@@ -813,6 +813,13 @@ the raw components.
   Notes: VO2 max estimates from `/v2/watch/users/{id}/WatchSportStatistics/VO2_MAX`.
   Example: `icu zepp vo2 --oldest 2026-06-01 --newest 2026-06-07`
 
+- `backfill-test`
+  Invocation: `icu zepp backfill-test --real-write-test --fit FILE`
+  Experimental. Without the explicit write flag it does nothing. Uses one local
+  cycling FIT and the saved web session only; it never logs in or contacts
+  Intervals.icu. On success it verifies both upload and removal by track ID.
+  See the [one-ride safety checklist](zepp-backfill.md) before running it.
+
 - `workouts`
   Invocation: `icu zepp workouts [--sport NAME] --oldest DATE --newest DATE`
   Notes: Calls `/v1/sport/{sport}/history.json` (default `run`). Supports

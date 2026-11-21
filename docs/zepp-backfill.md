@@ -1,21 +1,47 @@
-# Zepp cycling backfill prototype
+# Zepp cycling backfill test
 
-This is a read-only library preview, not a CLI upload feature.
+This is a **single-ride experiment**, not bulk backfill. The write path is
+off unless you pass `--real-write-test`. No command here logs in, refreshes
+credentials, or calls Intervals.icu.
 
-- `ZeppClient.PlanRideBackfill` compares caller-supplied Intervals.icu rides
-  against the paginated Zepp run-history feed with an already configured
-  client. It never logs in. Incomplete responses, auth failures and redirects
-  stop the preview. `not-in-feed` means only that no overlap was observed in
-  that feed; it is not proof of absence from Zepp or permission to upload.
-- `DecodeZeppRideFIT` decodes a local, single-session cycling FIT with bounds
-  and CRC checks. `EncodeZeppRideFIT` builds provisional form fields based on
-  static format analysis for Zepp Android 10.9.0-play (151983). The known
-  cycling series are covered by synthetic fixtures. The complete
-  distance, laps and pauses contract is unverified. Neither function does I/O
-  beyond reading the caller's FIT reader.
-- No POST or DELETE transport is wired. Mock responses cannot establish that
-  a saved web session can safely write and undo a workout, or that the feed
-  covers all conflicting sports. Do not use this prototype for writes.
+## One-ride test
 
-Run the focused mock and codec tests with
-`go test . -run 'Test(BackfillHistory|PlanRideBackfill|ZeppRideFIT|ZeppFIT)'`.
+Use a FIT you already have on disk. Verify that the phone app is signed in
+and that the CLI config contains credentials from your existing
+`icu zepp login --web` session. This command reads the saved config only.
+It does not infer the login mode from the token, use environment token
+overrides, or accept a Zepp URL override. It never asks you to log in.
+
+```powershell
+icu zepp backfill-test --real-write-test --fit ".\ride.fit"
+```
+
+The command checks the paginated run-history feed for overlap before any
+write. If clear, it uploads the detail and summary, checks the new track in
+history, deletes the identified workout by track ID, and checks that the
+track ID is gone. A successful run reports `undo_verified: true`. Confirm
+the phone still works afterward. A history read by the CLI cannot verify
+the phone's session for you.
+
+**Limitations:** Zepp's production upload and delete permissions for saved
+web sessions are unverified. The run-history feed's coverage across sports
+and its freshness are not established. Run one test at a time. A failed request, ambiguous
+readback, or invalidated session can leave a partial or visible workout.
+The command stops on authentication failures without retrying or logging
+in. If it reports an uncertain write, don't rerun: use the reported track ID
+to inspect the phone history first. It will not delete a workout it cannot
+identify confidently, including when history does not return the expected source.
+
+## Offline preview and mock tests
+
+- `ZeppClient.PlanRideBackfill` is a read-only library preview against the
+  run-history feed; `not-in-feed` alone does not establish absence.
+- `DecodeZeppRideFIT` and `EncodeZeppRideFIT` use provisional form fields
+  based on static format analysis of Zepp Android 10.9.0-play (151983).
+  The complete distance, laps, and pauses contract is unverified.
+
+Run the focused synthetic tests without contacting the live service:
+
+```sh
+go test ./... -run 'Test(Backfill|PlanRideBackfill|ZeppBackfill|ZeppRideFIT|ZeppFIT)'
+```

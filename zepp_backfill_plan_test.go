@@ -18,6 +18,7 @@ func TestBackfillHistoryFailClosed(t *testing.T) {
 	const done = `{"code":1,"data":{"next":-1,"summary":[]}}`
 	const first = `{"code":1,"data":{"next":100,"summary":[{"trackid":"100","end_time":"110"}]}}`
 	const later = `{"code":1,"data":{"next":-1,"summary":[{"trackid":"200","end_time":"210"}]}}`
+	const mismatchedSource = `{"code":1,"data":{"next":-1,"summary":[{"trackid":"100","end_time":"110","source":"different"}]}}`
 	tests := []struct {
 		name    string
 		status  int
@@ -33,6 +34,7 @@ func TestBackfillHistoryFailClosed(t *testing.T) {
 		{"missing summary", 200, []string{`{"code":1,"data":{"next":-1}}`}, errBackfillHistoryIncomplete, 0, 1},
 		{"bad record", 200, []string{`{"code":1,"data":{"next":-1,"summary":[{"trackid":"100","end_time":"99"}]}}`}, errBackfillHistoryIncomplete, 0, 1},
 		{"cycle no followup", 200, []string{first, first}, errBackfillHistoryIncomplete, 0, 2},
+		{"conflicting track sources", 200, []string{first, mismatchedSource}, errBackfillHistoryIncomplete, 0, 2},
 		{"401 no followup", 401, []string{first}, errBackfillHistoryUnauthorized, 0, 1},
 		{"403 no followup", 403, []string{first}, errBackfillHistoryUnauthorized, 0, 1},
 		{"logical auth", 200, []string{`{"code":401}`}, errBackfillHistoryUnauthorized, 0, 1},

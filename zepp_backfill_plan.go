@@ -24,8 +24,10 @@ var (
 )
 
 type zeppBackfillInterval struct {
-	Start int64
-	End   int64
+	Start     int64
+	End       int64
+	Source    string
+	Duplicate bool
 }
 
 type zeppBackfillHistoryPage struct {
@@ -35,6 +37,7 @@ type zeppBackfillHistoryPage struct {
 		Summary *[]struct {
 			TrackID string `json:"trackid"`
 			EndTime string `json:"end_time"`
+			Source  string `json:"source"`
 		} `json:"summary"`
 	} `json:"data"`
 }
@@ -56,7 +59,7 @@ func zeppBackfillOverlap(candidate zeppBackfillInterval, existing []zeppBackfill
 func (c *ZeppClient) readZeppBackfillHistory(ctx context.Context) ([]zeppBackfillInterval, error) {
 	var records []zeppBackfillInterval
 	seenCursor := make(map[int64]bool)
-	seenTrack := make(map[int64]int64)
+	seenTrack := make(map[int64]int)
 	for cursor, page := int64(0), 0; page < zeppBackfillHistoryPageLimit; page++ {
 		if seenCursor[cursor] {
 			return nil, errBackfillHistoryIncomplete
@@ -72,14 +75,15 @@ func (c *ZeppClient) readZeppBackfillHistory(ctx context.Context) ([]zeppBackfil
 			if e1 != nil || e2 != nil || start <= 0 || end < start {
 				return nil, errBackfillHistoryIncomplete
 			}
-			if oldEnd, seen := seenTrack[start]; seen {
-				if oldEnd != end {
+			if ix, seen := seenTrack[start]; seen {
+				if records[ix].End != end || records[ix].Source != item.Source {
 					return nil, errBackfillHistoryIncomplete
 				}
+				records[ix].Duplicate = true
 				continue
 			}
-			seenTrack[start] = end
-			records = append(records, zeppBackfillInterval{Start: start, End: end})
+			seenTrack[start] = len(records)
+			records = append(records, zeppBackfillInterval{Start: start, End: end, Source: item.Source})
 		}
 		next := *p.Data.Next
 		if next == -1 {
@@ -174,7 +178,7 @@ func planRideBackfill(activities []Activity, history []zeppBackfillInterval) []Z
 			item.TrackID = at.Unix()
 			item.EndTime = item.TrackID + int64(a.ElapsedTime)
 			item.Status = "not-in-feed"
-			if zeppBackfillOverlap(zeppBackfillInterval{item.TrackID, item.EndTime}, history) {
+			if zeppBackfillOverlap(zeppBackfillInterval{Start: item.TrackID, End: item.EndTime}, history) {
 				item.Status = "overlap"
 			}
 		}
