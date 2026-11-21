@@ -11,8 +11,10 @@ import (
 	"strings"
 )
 
-const fitUnixEpoch = 631065600
-const maxZeppFITSize = 64 << 20
+const (
+	fitUnixEpoch   = 631065600
+	maxZeppFITSize = 64 << 20
+)
 
 // ZeppRideFIT contains one FIT cycling session, with UTC Unix seconds and SI units.
 type ZeppRideFIT struct {
@@ -34,6 +36,7 @@ type ZeppRideFITPoint struct {
 }
 
 type zeppFITField struct{ number, size, base byte }
+
 type zeppFITDef struct {
 	order          binary.ByteOrder
 	global         uint16
@@ -171,8 +174,10 @@ func (s *zeppFITRecords) decode(data []byte) error {
 }
 
 func (s *zeppFITRecords) readRecord(d *zeppFITDef, data []byte, compressed bool, offset byte) (int, error) {
-	var present [256]bool
-	var value [256]int64
+	var (
+		present [256]bool
+		value   [256]int64
+	)
 	if compressed {
 		if !s.hasTimestamp || s.lastTimestamp >= math.MaxUint32-31 {
 			return 0, errors.New("invalid compressed FIT timestamp")
@@ -422,8 +427,10 @@ func encodeZeppFITPoints(r ZeppRideFIT) (map[string]string, error) {
 	cad := zeppFITSeries{lastAt: r.Start}
 	power := zeppFITSeries{lastAt: r.Start}
 	lastTime := r.Start
-	var lastLat, lastLon float64
-	var gpsCount, altCount, speedCount int
+	var (
+		lastLat, lastLon               float64
+		gpsCount, altCount, speedCount int
+	)
 	for i, p := range r.Points {
 		writeZeppFITNumber(&times, p.At-lastTime)
 		lastTime = p.At
