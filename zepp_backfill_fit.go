@@ -23,6 +23,7 @@ const (
 	fitLapMessage         = 19
 	fitRecordMessage      = 20
 	fitAvgSpeedEnhanced   = 124
+	fitAvgSpeedLegacy     = 14
 	fitAltitudeEnhanced   = 78
 	fitSpeedEnhanced      = 73
 	fitMillisPerSecond    = 1000
@@ -282,7 +283,7 @@ func (s *zeppFITRecords) addSession(v [256]int64, p [256]bool) error {
 	s.ride.End = v[253] + fitUnixEpoch
 	s.ride.Indoor = p[6] && v[6] == 6
 	s.ride.Distance = float64(v[9]) / 100
-	s.ride.AverageSpeed = zeppFITScaled(v, p, fitAvgSpeedEnhanced, 14, fitSpeedScale, 0)
+	s.ride.AverageSpeed = zeppFITScaled(v, p, fitAvgSpeedEnhanced, fitAvgSpeedLegacy, fitSpeedScale, 0)
 	if p[11] {
 		reading := v[11]
 		if reading < 0 || reading > math.MaxUint16 {
