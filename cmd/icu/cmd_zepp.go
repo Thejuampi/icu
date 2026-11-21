@@ -66,6 +66,7 @@ func registerZeppCommands(registry *CommandRegistry) {
 	registerWatchStatCommand(registry, "vo2", (*icu.ZeppClient).VO2Max, "VO2 max estimates from the watch sport statistics.")
 	registry.Register("zepp", "workouts", zeppWorkoutsCommand())
 	registry.Register("zepp", "workout", zeppWorkoutCommand())
+	registry.Register("zepp", "backfill-test", zeppBackfillTestCommand())
 }
 
 func mustV2EventPreset(name string) icu.V2EventPreset {

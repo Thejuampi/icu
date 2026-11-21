@@ -296,7 +296,7 @@ func writeCommands() map[string]bool {
 		"rebalance accept", "rebalance approve", "sports delete", "sports update", "weather config",
 		"wellness bulk", "wellness sync", "wellness update", "wellness upload",
 		"workouts create", "workouts delete", "workouts update",
-		"zepp login", "zepp logout", "zepp token",
+		"zepp backfill-test", "zepp login", "zepp logout", "zepp token",
 	}
 	out := make(map[string]bool, len(keys))
 	for _, key := range keys {
