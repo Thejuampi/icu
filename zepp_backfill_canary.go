@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 )
 
 var (
@@ -24,23 +23,16 @@ func (c *ZeppClient) TestRideBackfill(ctx context.Context, fit io.Reader) (int64
 		return 0, errBackfillCanaryWireInput
 	}
 
-	ride, err := DecodeZeppRideFIT(fit)
+	ride, detail, summary, err := prepareZeppRideForms(fit, backfillCanaryCommonFields(c.userID, c.countryCode))
 	if err != nil {
 		return 0, err
 	}
-	summaryFields, detailFields, err := EncodeZeppRideFIT(ride)
-	if err != nil {
-		return 0, err
-	}
-
-	summary := backfillCanaryForm(summaryFields)
-	detail := backfillCanaryForm(detailFields)
 	if !validBackfillCanaryWireValues(http.MethodPost, backfillCanaryWireSummaryPath, c.userID, summary) ||
 		!validBackfillCanaryWireValues(http.MethodPost, backfillCanaryWireDetailPath, c.userID, detail) {
 		return 0, errBackfillCanaryWireInput
 	}
 
-	target := zeppBackfillInterval{Start: ride.Start, End: ride.End, Source: summaryFields[backfillCanarySourceKey]}
+	target := zeppBackfillInterval{Start: ride.Start, End: ride.End, Source: summary.Get(backfillCanarySourceKey)}
 	history, err := c.readZeppBackfillHistory(ctx)
 	if err != nil {
 		return 0, err
@@ -59,7 +51,7 @@ func (c *ZeppClient) TestRideBackfill(ctx context.Context, fit io.Reader) (int64
 		return target.Start, backfillCanaryFailure("writing workout summary", err)
 	}
 
-	if err := c.verifyBackfillCanary(ctx, target, summaryFields[backfillCanaryTrackKey]); err != nil {
+	if err := c.verifyBackfillCanary(ctx, target, summary.Get(backfillCanaryTrackKey)); err != nil {
 		return target.Start, err
 	}
 	return target.Start, nil
@@ -74,7 +66,9 @@ func (c *ZeppClient) verifyBackfillCanary(ctx context.Context, target zeppBackfi
 		return fmt.Errorf("%w: workout not attributable; no deletion attempted", errBackfillCanaryUncertain)
 	}
 
-	identity := url.Values{backfillCanaryTrackKey: {trackID}, backfillCanarySourceKey: {target.Source}}
+	identity := backfillCanaryCommonFields(c.userID, c.countryCode)
+	identity.Set(backfillCanaryTrackKey, trackID)
+	identity.Set(backfillCanarySourceKey, target.Source)
 	if err := c.deleteBackfillCanarySummary(ctx, identity); err != nil {
 		return backfillCanaryFailure("deleting the attributed workout", err)
 	}
@@ -102,14 +96,6 @@ func backfillCanaryAttributed(target zeppBackfillInterval, history []zeppBackfil
 		}
 	}
 	return matched
-}
-
-func backfillCanaryForm(fields map[string]string) url.Values {
-	form := make(url.Values, len(fields))
-	for key, value := range fields {
-		form.Set(key, value)
-	}
-	return form
 }
 
 func backfillCanaryFailure(stage string, err error) error {

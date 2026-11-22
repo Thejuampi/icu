@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -114,7 +115,7 @@ func canaryMockClient(t *testing.T, steps []canaryMockStep) (*ZeppClient, *int) 
 		assertCanaryMockRequest(t, req)
 		return &http.Response{StatusCode: step.status, Body: io.NopCloser(strings.NewReader(step.body))}, nil
 	})
-	client := NewZeppClientFromAuth(&ZeppAuthResult{AppToken: backfillCanaryTestToken, UserID: "1"},
+	client := NewZeppClientFromAuth(&ZeppAuthResult{AppToken: backfillCanaryTestToken, UserID: "1", CountryCode: "us"},
 		WithZeppHTTPClient(&http.Client{Transport: transport}), WithZeppBaseURL(zeppDataHostGlobal))
 	return client, &calls
 }
@@ -126,6 +127,7 @@ func assertCanaryMockRequest(t *testing.T, req *http.Request) {
 		if err := req.ParseForm(); err != nil {
 			t.Fatal(err)
 		}
+		assertCanaryAppFields(t, req.PostForm)
 		if req.PostForm.Get("trackid") != backfillCanaryTestTrack || req.PostForm.Get("source") != backfillCanaryTestSource {
 			t.Fatal("wrong upload identity")
 		}
@@ -140,8 +142,58 @@ func assertCanaryMockRequest(t *testing.T, req *http.Request) {
 			}
 		}
 	case http.MethodDelete:
+		assertCanaryAppFields(t, req.URL.Query())
 		if q := req.URL.Query(); q.Get("trackid") != backfillCanaryTestTrack || q.Get("source") != backfillCanaryTestSource || q.Has("apptoken") {
 			t.Fatal("wrong deletion identity")
 		}
+	}
+}
+
+func assertCanaryAppFields(t *testing.T, fields url.Values) {
+	t.Helper()
+	for key, want := range map[string]string{
+		"userid": "1", "appid": "2882303761517383915", "v": "2.0",
+		"lang": "en_US", "country": "US", "timezone": "UTC", "channel": "play",
+		"device": "android_32", "device_type": "android_phone", "cv": "151983_10.9.0-play",
+	} {
+		if fields.Get(key) != want {
+			t.Errorf("missing or incorrect app field %s", key)
+		}
+	}
+}
+
+func TestRideBackfillCanaryGappedFITStopsOnDetailUnauthorized(t *testing.T) {
+	calls := 0
+	transport := backfillHistoryTransport(func(req *http.Request) (*http.Response, error) {
+		calls++
+		switch calls {
+		case 1:
+			if req.Method != http.MethodGet || req.URL.Path != backfillCanaryHistoryPath {
+				t.Fatal("expected preflight history")
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"code":1,"data":{"next":-1,"summary":[]}}`))}, nil
+		case 2:
+			if req.Method != http.MethodPost || req.URL.Path != backfillCanaryDetailPath {
+				t.Fatal("expected detail POST")
+			}
+			if err := req.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			assertCanaryAppFields(t, req.PostForm)
+			if req.PostForm.Get("time") != "6" || req.PostForm.Get("altitude") != "-2000000" ||
+				req.PostForm.Get("heart_rate") != "1,140;2,5;3,-2" || req.PostForm.Get("pace") != "0.00" {
+				t.Fatal("unexpected encoded gapped FIT")
+			}
+			return &http.Response{StatusCode: http.StatusUnauthorized, Body: http.NoBody}, nil
+		default:
+			t.Fatal("must not retry or send summary after authorization failure")
+			return nil, errBackfillCanaryWireInput
+		}
+	})
+	client := NewZeppClientFromAuth(&ZeppAuthResult{AppToken: backfillCanaryTestToken, UserID: "1", CountryCode: "US"},
+		WithZeppHTTPClient(&http.Client{Transport: transport}), WithZeppBaseURL(zeppDataHostGlobal))
+	got, err := client.TestRideBackfill(t.Context(), bytes.NewReader(zeppFITGapFixture(t)))
+	if got != 631066600 || !errors.Is(err, errBackfillHistoryUnauthorized) || calls != 2 {
+		t.Fatalf("unexpected result: %d, %v, %d requests", got, err, calls)
 	}
 }

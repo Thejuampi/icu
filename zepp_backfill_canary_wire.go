@@ -19,6 +19,7 @@ const (
 	backfillCanaryWireMaxReply    = 1 << 20
 	backfillCanaryTrackKey        = "trackid"
 	backfillCanarySourceKey       = "source"
+	backfillCanaryUserIDKey       = "userid"
 )
 
 var (
@@ -61,8 +62,8 @@ func (c *ZeppClient) doBackfillCanaryWrite(ctx context.Context, method, path str
 		return errBackfillCanaryWireInput
 	}
 
-	// Match the existing ZeppClient web read headers. Do not add mobile
-	// session credentials, signing, or auth properties to the URL.
+	// Match the existing ZeppClient web read headers. The form metadata
+	// does not change the web session or put any credential in the URL.
 	req.Header.Set("Apptoken", c.appToken)
 	req.Header.Set("Appname", "com.xiaomi.hm.health")
 	req.Header.Set("Appplatform", "web")
@@ -107,6 +108,25 @@ func (c *ZeppClient) doBackfillCanaryWrite(ctx context.Context, method, path str
 	return parseBackfillCanaryWriteReply(resp.StatusCode, resp.Body)
 }
 
+// The Android FIT upload and delete callers merge the common field map
+// from z0l.j(true). The pinned app ID, channel and version are from the
+// 10.9.0-play APK; the CLI uses its documented static platform/locale
+// profile instead of guessing the actual phone SDK or locale.
+func backfillCanaryCommonFields(userID, country string) url.Values {
+	return url.Values{
+		backfillCanaryUserIDKey: {userID},
+		"appid":                 {"2882303761517383915"},
+		"v":                     {"2.0"},
+		"lang":                  {"en_US"},
+		"country":               {strings.ToUpper(country)},
+		"timezone":              {"UTC"},
+		"channel":               {"play"},
+		"device":                {"android_32"},
+		"device_type":           {"android_phone"},
+		"cv":                    {"151983_10.9.0-play"},
+	}
+}
+
 func allowedBackfillCanaryOrigin(origin string) bool {
 	switch origin {
 	case zeppEventsHost, zeppDataHostGlobal, zeppDataHostCN, zeppDataHostEU:
@@ -137,8 +157,8 @@ func validBackfillCanaryWireValues(method, path, userID string, values url.Value
 		}
 
 		switch key {
-		case backfillCanaryTrackKey, backfillCanarySourceKey, "v", "appid", "lang", "country", "timezone", "channel", "device", "bind_device", "cv":
-		case "userid":
+		case backfillCanaryTrackKey, backfillCanarySourceKey, "v", "appid", "lang", "country", "timezone", "channel", "device", "device_type", "bind_device", "cv":
+		case backfillCanaryUserIDKey:
 			if items[0] != userID {
 				return false
 			}

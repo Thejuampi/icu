@@ -814,10 +814,13 @@ the raw components.
   Example: `icu zepp vo2 --oldest 2026-06-01 --newest 2026-06-07`
 
 - `backfill-test`
-  Invocation: `icu zepp backfill-test --real-write-test --fit FILE`
-  Experimental. Without the explicit write flag it does nothing. Uses one local
-  cycling FIT and the saved web session only; it never logs in or contacts
-  Intervals.icu. On success it verifies both upload and removal by track ID.
+  Invocation: `icu zepp backfill-test (--preview | --real-write-test) --fit FILE`
+  Choose exactly one mode. `--preview` validates one local cycling FIT and
+  prints redacted detail and summary metadata as JSON. It does not load
+  configuration, log in, or contact either service. The experimental
+  `--real-write-test` uses the saved Zepp web session only; it never logs in
+  or contacts Intervals.icu. On success it verifies both upload and removal
+  by track ID.
   See the [one-ride safety checklist](zepp-backfill.md) before running it.
 
 - `workouts`

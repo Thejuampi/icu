@@ -170,6 +170,12 @@ When Zepp auth is configured, `analysis wellness`, `analysis coaching`,
 `HybridCharge`/`BioCharge` for the sleep/recovery signal and only fall back to
 the Intervals wellness `sleepScore` when the Zepp score is unavailable.
 
+#### Preview a Zepp cycling backfill
+
+`icu zepp backfill-test --preview --fit ride.fit` inspects one local cycling FIT
+and prints redacted JSON without reading credentials or making network requests.
+See the [Zepp backfill guide](docs/zepp-backfill.md) for limitations.
+
 #### Wellness sync from Zepp
 
 `icu wellness sync` copies resting HR, HRV and sleep from Zepp into intervals.icu
@@ -259,7 +265,7 @@ Current top-level resources:
 | `weather` | `config`, `forecast` |
 | `wellness` | `bulk`, `get`, `list`, `sync`, `update`, `upload` |
 | `workouts` | `calculate`, `create`, `delete`, `get`, `list`, `tags`, `update` |
-| `zepp` | `biocharge`, `blood-pressure`, `body-battery`, `events`, `health-summary`, `heart-rate`, `hrv`, `hybridcharge`, `login`, `logout`, `manual-data`, `mood`, `pai`, `profile`, `readiness`, `respiratory-rate`, `second-heart-rate`, `skin-temp`, `sleep`, `spo2`, `spo2-windows`, `sport-load`, `status`, `stress`, `stress-minute`, `summary`, `token`, `vo2`, `weight`, `workout`, `workouts` |
+| `zepp` | `backfill-test`, `biocharge`, `blood-pressure`, `body-battery`, `events`, `health-summary`, `heart-rate`, `hrv`, `hybridcharge`, `login`, `logout`, `manual-data`, `mood`, `pai`, `profile`, `readiness`, `respiratory-rate`, `second-heart-rate`, `skin-temp`, `sleep`, `spo2`, `spo2-windows`, `sport-load`, `status`, `stress`, `stress-minute`, `summary`, `token`, `vo2`, `weight`, `workout`, `workouts` |
 
 ## Power Gap Fill (PM Death)
 

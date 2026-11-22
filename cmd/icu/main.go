@@ -230,6 +230,12 @@ func executeCommand(
 		return 1
 	}
 
+	// A local FIT preview must bypass even the global credential and endpoint
+	// resolution. A malformed preview request must not enter the write path.
+	if _, preview := flags[zeppBackfillPreviewFlag]; resource == "zepp" && action == "backfill-test" && preview {
+		return runCommandWithClient(cmd, posArgs, flags, nil, stdout, stderr)
+	}
+
 	// --base-url is a global flag: resolve and strip it before per-command
 	// schema validation so commands with a strict schema accept it.
 	baseURL := icu.ResolveBaseURL(flags)
@@ -258,6 +264,10 @@ func executeCommand(
 
 	client := newCommandClient(apiKey, athleteID, baseURL)
 
+	return runCommandWithClient(cmd, posArgs, flags, client, stdout, stderr)
+}
+
+func runCommandWithClient(cmd *Command, posArgs []string, flags map[string]string, client *icu.Client, stdout, stderr io.Writer) int {
 	if err := cmd.Run(posArgs, flags, client, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 

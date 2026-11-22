@@ -22,6 +22,8 @@ const (
 	fitSessionMessage     = 18
 	fitLapMessage         = 19
 	fitRecordMessage      = 20
+	fitIndoorCycling      = 6
+	fitVirtualActivity    = 58
 	fitAvgSpeedEnhanced   = 124
 	fitAvgSpeedLegacy     = 14
 	fitAltitudeEnhanced   = 78
@@ -31,6 +33,8 @@ const (
 	fitAltitudeUpperBound = 1e6
 	fitSpeedUpperBound    = 1e6
 	zeppCoordinateScale   = 1e8
+	zeppFITNoAltitude     = -20000
+	zeppCentimetersPerM   = 100
 )
 
 // ZeppRideFIT contains one FIT cycling session, with UTC Unix seconds and SI units.
@@ -281,7 +285,7 @@ func (s *zeppFITRecords) addSession(v [256]int64, p [256]bool) error {
 	s.foundSession = true
 	s.ride.Start = v[2] + fitUnixEpoch
 	s.ride.End = v[253] + fitUnixEpoch
-	s.ride.Indoor = p[6] && v[6] == 6
+	s.ride.Indoor = p[6] && (v[6] == fitIndoorCycling || v[6] == fitVirtualActivity)
 	s.ride.Distance = float64(v[9]) / 100
 	s.ride.AverageSpeed = zeppFITScaled(v, p, fitAvgSpeedEnhanced, fitAvgSpeedLegacy, fitSpeedScale, 0)
 	if p[11] {
@@ -422,10 +426,7 @@ func EncodeZeppRideFIT(r ZeppRideFIT) (map[string]string, map[string]string, err
 	if r.Calories != nil {
 		summary["calorie"] = strconv.FormatUint(uint64(*r.Calories), 10)
 	}
-	detail, err := encodeZeppFITPoints(r)
-	if err != nil {
-		return nil, nil, err
-	}
+	detail := encodeZeppFITPoints(r)
 	for _, k := range []string{"trackid", "source", "version"} {
 		detail[k] = summary[k]
 	}
@@ -449,7 +450,7 @@ func (s *zeppFITSeries) add(at, value int64, deltaValue bool) {
 	}
 	s.hasValue = true
 	s.lastValue = value
-	if !deltaValue || delta != 1 {
+	if first || !deltaValue || delta != 1 {
 		s.text.WriteString(strconv.FormatInt(delta, 10))
 	}
 	s.text.WriteByte(',')
@@ -457,46 +458,104 @@ func (s *zeppFITSeries) add(at, value int64, deltaValue bool) {
 	s.text.WriteByte(';')
 }
 
-func encodeZeppFITPoints(r ZeppRideFIT) (map[string]string, error) {
-	var times, gps, altitude, pace strings.Builder
+// zeppFITDense selects the common time axis for positional fields. Where a
+// ride has GPS, records without a complete fix cannot be put on that axis.
+// Keep original time deltas; do not fill, repeat, or interpolate positions.
+type zeppFITDense struct {
+	time, gps, altitude, pace strings.Builder
+	lastAt, lastLat, lastLon  int64
+}
+
+func (s *zeppFITDense) add(p ZeppRideFITPoint, hasGPS bool) {
+	writeZeppFITNumber(&s.time, p.At-s.lastAt)
+	s.lastAt = p.At
+
+	if hasGPS {
+		lat := int64(*p.Latitude * zeppCoordinateScale)
+		lon := int64(*p.Longitude * zeppCoordinateScale)
+		s.gps.WriteString(strconv.FormatInt(lat-s.lastLat, 10))
+		s.gps.WriteByte(',')
+		writeZeppFITNumber(&s.gps, lon-s.lastLon)
+		s.lastLat, s.lastLon = lat, lon
+
+		// n2g.c uses -20,000 m as its no-altitude protocol sentinel.
+		// oo60.f serializes it (like measured altitude) in centimeters.
+		altitude := float64(zeppFITNoAltitude)
+		if p.Altitude != nil {
+			altitude = *p.Altitude
+		}
+		writeZeppFITNumber(&s.altitude, int64(altitude*zeppCentimetersPerM))
+	}
+
+	// The Trackdata builder uses 0 for unknown pace on the GPS axis.
+	s.pace.WriteString(zeppFITDecimal(zeppFITPace(p.Speed)))
+	s.pace.WriteByte(';')
+}
+
+func (s *zeppFITDense) fields(hasGPS, hasSpeed bool) map[string]string {
+	detail := map[string]string{"time": strings.TrimSuffix(s.time.String(), ";")}
+	if hasGPS {
+		detail["longitude_latitude"] = strings.TrimSuffix(s.gps.String(), ";")
+		detail["altitude"] = strings.TrimSuffix(s.altitude.String(), ";")
+	}
+	if hasGPS || hasSpeed {
+		detail["pace"] = strings.TrimSuffix(s.pace.String(), ";")
+	}
+	return detail
+}
+
+func zeppFITHasPosition(p ZeppRideFITPoint) bool {
+	// zy20.b discards an explicit zero/missing-altitude marker, not a
+	// missing FIT altitude. We also drop one-sided positions instead of
+	// using the app's zero-coordinate substitution.
+	return p.Latitude != nil && p.Longitude != nil &&
+		(p.Altitude == nil || (*p.Altitude != 0 && *p.Altitude != zeppFITNoAltitude))
+}
+
+// zeppFITPace follows zy20.a / oo60.o: the native intermediate uses
+// rounded milliseconds per meter. Java Math.round saturates at MaxInt32
+// for a measured stop (inverse speed is infinite); unknown speed is zero.
+func zeppFITPace(speed *float64) float32 {
+	if speed == nil {
+		return 0
+	}
+	milliseconds := float32(1/float64(float32(*speed))) * fitMillisPerSecond
+	if milliseconds >= math.MaxInt32 {
+		return float32(math.MaxInt32) / fitMillisPerSecond
+	}
+	return float32(math.Round(float64(milliseconds))) / fitMillisPerSecond
+}
+
+func zeppFITDecimal(value float32) string {
+	return strconv.FormatFloat(float64(value), 'f', 2, 32)
+}
+
+func encodeZeppFITPoints(r ZeppRideFIT) map[string]string {
+	dense := zeppFITDense{lastAt: r.Start}
 	speed := zeppFITSeries{lastAt: r.Start}
 	hr := zeppFITSeries{lastAt: r.Start}
 	cad := zeppFITSeries{lastAt: r.Start}
 	power := zeppFITSeries{lastAt: r.Start}
-	lastTime := r.Start
-	var (
-		lastLat, lastLon               float64
-		gpsCount, altCount, speedCount int
-	)
-	for i, p := range r.Points {
-		writeZeppFITNumber(&times, p.At-lastTime)
-		lastTime = p.At
-		if (p.Latitude == nil) != (p.Longitude == nil) {
-			return nil, errors.New("FIT sample has only one GPS coordinate")
+	var hasGPS, hasSpeed bool
+	for _, p := range r.Points {
+		hasGPS = hasGPS || zeppFITHasPosition(p)
+		hasSpeed = hasSpeed || p.Speed != nil
+	}
+
+	for _, p := range r.Points {
+		// With no accepted GPS, the app uses its separately sampled
+		// speed timeline. Keep a local time axis for sensor-only FITs.
+		if (hasGPS && zeppFITHasPosition(p)) || (!hasGPS && (!hasSpeed || p.Speed != nil)) {
+			dense.add(p, hasGPS)
 		}
-		if p.Latitude != nil {
-			if gpsCount == 0 && i != 0 {
-				return nil, errors.New("unaligned FIT GPS series")
-			}
-			gps.WriteString(strconv.FormatInt(int64((*p.Latitude-lastLat)*zeppCoordinateScale), 10))
-			gps.WriteByte(',')
-			writeZeppFITNumber(&gps, int64((*p.Longitude-lastLon)*zeppCoordinateScale))
-			lastLat, lastLon = *p.Latitude, *p.Longitude
-			gpsCount++
-		}
-		if p.Altitude != nil {
-			writeZeppFITNumber(&altitude, int64(*p.Altitude*100))
-			altCount++
-		}
+		// Independently timestamped fields keep the readings from the full
+		// activity, including during a gap in the position stream.
 		if p.Speed != nil {
-			pace.WriteString(strconv.FormatFloat(*p.Speed, 'f', 2, 64))
-			pace.WriteByte(';')
-			speedCount++
-			inverse := "0.00"
-			if *p.Speed > 0 {
-				inverse = strconv.FormatFloat(1 / *p.Speed, 'f', 2, 64)
+			var metersPerSecond float32
+			if pace := zeppFITPace(p.Speed); pace != 0 {
+				metersPerSecond = 1 / pace
 			}
-			speed.text.WriteString(strconv.FormatInt(p.At-speed.lastAt, 10) + "," + inverse + ";")
+			speed.text.WriteString(strconv.FormatInt(p.At-speed.lastAt, 10) + "," + zeppFITDecimal(metersPerSecond) + ";")
 			speed.lastAt = p.At
 		}
 		if p.HeartRate != nil {
@@ -509,22 +568,16 @@ func encodeZeppFITPoints(r ZeppRideFIT) (map[string]string, error) {
 			power.add(p.At, int64(*p.Power), false)
 		}
 	}
-	for _, n := range []int{gpsCount, altCount, speedCount} {
-		if n != 0 && n != len(r.Points) {
-			return nil, errors.New("FIT has gaps in aligned GPS, altitude or speed data; refusing to drop or invent samples")
-		}
-	}
-	detail := map[string]string{"time": strings.TrimSuffix(times.String(), ";")}
+	detail := dense.fields(hasGPS, hasSpeed)
 	for k, v := range map[string]string{
-		"longitude_latitude": strings.TrimSuffix(gps.String(), ";"), "altitude": strings.TrimSuffix(altitude.String(), ";"),
-		"pace": strings.TrimSuffix(pace.String(), ";"), "speed": strings.TrimSuffix(speed.text.String(), ";"),
-		"heart_rate": strings.TrimSuffix(hr.text.String(), ";"), "cadence": cad.text.String(), "power_meter": power.text.String(),
+		"speed": strings.TrimSuffix(speed.text.String(), ";"), "heart_rate": strings.TrimSuffix(hr.text.String(), ";"),
+		"cadence": cad.text.String(), "power_meter": power.text.String(),
 	} {
 		if v != "" {
 			detail[k] = v
 		}
 	}
-	return detail, nil
+	return detail
 }
 
 func writeZeppFITNumber(b *strings.Builder, n int64) {
