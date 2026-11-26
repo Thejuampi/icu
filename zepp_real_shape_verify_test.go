@@ -213,8 +213,8 @@ func TestRealShapeBodyBatteryDecode(t *testing.T) {
 	if !ok {
 		t.Fatalf("sample 0 = %#v, want object", samples[0])
 	}
-	if total, _ := first["total"].(float64); total != 61 {
-		t.Errorf("sample 0 total = %v, want 61", first["total"])
+	if total, _ := first["total"].(float64); total != 50 {
+		t.Errorf("sample 0 total = %v, want 50", first["total"])
 	}
 }
 
@@ -243,8 +243,8 @@ func TestRealShapeHealthSummaryDecode(t *testing.T) {
 	if !ok {
 		t.Fatalf("sample 0 = %#v, want object", samples[0])
 	}
-	if steps, _ := first["totalSteps"].(float64); steps != 2360 {
-		t.Errorf("sample 0 totalSteps = %v, want 2360", first["totalSteps"])
+	if steps, _ := first["totalSteps"].(float64); steps != 1234 {
+		t.Errorf("sample 0 totalSteps = %v, want 1234", first["totalSteps"])
 	}
 }
 
@@ -273,8 +273,8 @@ func TestRealShapeStressMinuteDecode(t *testing.T) {
 	if !ok {
 		t.Fatalf("sample 0 = %#v, want object", samples[0])
 	}
-	if minute, _ := first["minuteOfDay"].(float64); minute != 493 {
-		t.Errorf("sample 0 minuteOfDay = %v, want 493", first["minuteOfDay"])
+	if minute, _ := first["minuteOfDay"].(float64); minute != 480 {
+		t.Errorf("sample 0 minuteOfDay = %v, want 480", first["minuteOfDay"])
 	}
 }
 

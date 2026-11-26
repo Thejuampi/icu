@@ -1053,7 +1053,7 @@ func TestDecodeBodyBattery(t *testing.T) {
 	t.Parallel()
 
 	// Real backend shape: value is an object with samples, never a scalar.
-	raw := `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"real_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"total":55,"mental":41.8,"physical":75.3,"status":0,"jsonExtra":"{}"}]}}]}`
+	raw := `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"real_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"total":55,"mental":20.5,"physical":60.5,"status":0,"jsonExtra":"{}"}]}}]}`
 
 	events, err := icu.DecodeBodyBattery([]byte(raw))
 	if err != nil {
@@ -1298,7 +1298,7 @@ func TestDecodeStressMinute(t *testing.T) {
 	t.Parallel()
 
 	// Real backend shape: value is an object with samples.
-	raw := `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"stress_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"u":1000,"stressInfo":"mock","minuteOfDay":493},{"s":0,"e":86399999,"u":1001,"stressInfo":"mock","minuteOfDay":541}]}}]}`
+	raw := `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"stress_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"u":1000,"stressInfo":"mock","minuteOfDay":480},{"s":0,"e":86399999,"u":1001,"stressInfo":"mock","minuteOfDay":540}]}}]}`
 
 	events, err := icu.DecodeStressMinute([]byte(raw))
 	if err != nil {

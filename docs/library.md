@@ -649,8 +649,8 @@ the phone Zepp app. [Zepp web login evidence and mock](zepp-session.md).
    synthetic values in `testdata/zepp/real_shape/`.
 
    **V2 object payloads.** Some `/v2/users/me/events` presets carry `value` as
-   an object, not a scalar. The anonymized real-shape fixtures and a live
-   backend capture (2026-11-26) confirm this for readiness/watch_score
+   an object, not a scalar. The anonymized real-shape fixtures and a check
+   verified 2026-11-26 confirm this for readiness/watch_score
    (`value.sleepHRV`, `rdnsScore`, `hrvScore`, …), Charge/insight_data
    (`value.samples[]`), Charge/real_data (body battery `samples[]` with
    `total`/`mental`/`physical`/`status`/`jsonExtra`), DailyHealth/summary
@@ -671,8 +671,7 @@ the phone Zepp app. [Zepp web login evidence and mock](zepp-session.md).
    available. `startEpoch`/`endEpoch` are anchored to the day's midnight
    for the stages before the first midnight wrap and to the next day's
    midnight for stages after it (stop < start marks a wrap), so epochs are
-   contiguous across the night. Verified against a live backend capture
-   (2026-11-26).
+   contiguous across the night. Verified 2026-11-26.
 
    **Health summary.** `HealthSummaryDays` returns the day's `timestamp`,
    `date` and `extra` for each `DailyHealth/summary` event. The real shape
@@ -680,7 +679,7 @@ the phone Zepp app. [Zepp web login evidence and mock](zepp-session.md).
    `totalCalories`/`totalBurningDuration`/`stepGoal`/`calorieGoal`/
    `burningDurationGoal`/`hyroxCount`/`dateString`), so no scalar `value` is
    available: the record keeps `value: 0` and the full payload stays under
-   `extra.value` (verified against a live backend capture and the anonymized
+   `extra.value` (verified 2026-11-26 and pinned by the anonymized
    real-shape fixture).
 
    **Heart rate (app source).** `HeartRateEndpoint` calls
@@ -765,8 +764,8 @@ decoded typed form so downstream code can do whichever is convenient:
   `StepSeries` are decoded from Zepp's delta-encoded 2-byte shorts back into
   absolute values. The first short is absolute, each subsequent short is the
   signed delta from the previous one. The cumulative sum reconstructs the
-  absolute series. The detail response itself is unverified against the live
-  backend (the live capture returned an empty `trackId`).
+  absolute series. The detail response shape is unverified; an empty detail is
+  returned as an error naming the trackid and source.
 
 ### V2 wellness events
 

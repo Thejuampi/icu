@@ -17,14 +17,14 @@
             "s": 0,
             "u": 7,
             "stressInfo": "[redacted]",
-            "minuteOfDay": 493
+            "minuteOfDay": 480
           },
           {
             "s": 0,
             "e": 86399999,
             "u": 7,
             "stressInfo": "[redacted]",
-            "minuteOfDay": 541
+            "minuteOfDay": 540
           }
         ]
       }
