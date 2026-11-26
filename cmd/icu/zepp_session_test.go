@@ -303,6 +303,60 @@ func TestZeppLoginRejectsWebAndAndroidUnsafeTogether(t *testing.T) {
 	}
 }
 
+func TestZeppLoginAndroidUnsafeWithWebFalseUsesAndroidPath(t *testing.T) {
+	withZeppTestEnv(t)
+	var tokens, logins atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v2/registrations/tokens", func(w http.ResponseWriter, _ *http.Request) {
+		tokens.Add(1)
+		w.Header().Set("Location", "https://mock.invalid/callback?access=synthetic-code&country_code=US")
+		w.WriteHeader(http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /registrations/fixture@example.invalid/tokens", func(http.ResponseWriter, *http.Request) {
+		t.Error("--web=false with --android-unsafe hit the web registration path")
+	})
+	mux.HandleFunc("POST /v2/client/login", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil || r.PostForm.Get("app_name") != "com.huami.midong" ||
+			r.PostForm.Get("device_model") != "android_phone" {
+			t.Errorf("android form = %v", r.PostForm)
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+		logins.Add(1)
+		if _, err := io.WriteString(w, `{"token_info":{"login_token":"android-login","app_token":"android-app","user_id":"android-user"}}`); err != nil {
+			t.Error(err)
+		}
+	})
+	mock := httptest.NewServer(mux)
+	t.Cleanup(mock.Close)
+
+	var stderr bytes.Buffer
+	args := []string{"icu", "zepp", "login", "--android-unsafe", "--web=false", "--email", "fixture@example.invalid", "--password", "synthetic-password", "--zepp-base-url", mock.URL}
+	if code := run(args, io.Discard, &stderr); code != 0 {
+		t.Fatalf("android-unsafe with --web=false exited %d, stderr=%s", code, &stderr)
+	}
+	if !strings.Contains(stderr.String(), zeppAndroidUnsafeWarning) {
+		t.Fatalf("expected android-unsafe warning, stderr=%s", &stderr)
+	}
+	if strings.Contains(stderr.String(), zeppWebAliasMessage) {
+		t.Fatalf("did not expect --web alias note with --web=false, stderr=%s", &stderr)
+	}
+	if tokens.Load() != 1 || logins.Load() != 1 {
+		t.Fatalf("expected the Android path, tokens=%d logins=%d", tokens.Load(), logins.Load())
+	}
+}
+
+func TestZeppLoginWebFalseAloneUsesWebPath(t *testing.T) {
+	stderr := assertZeppWebLoginRequest(t, []string{"--web=false"}, "")
+	if strings.Contains(stderr, zeppWebAliasMessage) {
+		t.Fatalf("--web=false is not the alias and should not print the note, stderr=%s", stderr)
+	}
+	if strings.Contains(stderr, zeppAndroidUnsafeWarning) {
+		t.Fatalf("--web=false alone must not use the Android path, stderr=%s", stderr)
+	}
+}
+
 func TestZeppTokenDefaultUsesWebEndpoints(t *testing.T) {
 	assertZeppWebLoginRequest(t, nil, "token")
 }

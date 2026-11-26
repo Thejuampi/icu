@@ -612,8 +612,10 @@ func authenticateZeppLogin(input zeppLoginInput, deviceID string, android bool) 
 }
 
 // zeppUsesAndroidLogin reports whether the caller opted into the Android
-// login. Every other combination, including the deprecated --web alias,
-// uses the web path. The Android path is reached only through this flag.
+// login. The Android path is reached only through --android-unsafe.
+// --web or --web=true is a deprecated alias for the default web path and
+// cannot be combined with --android-unsafe. --web=false does not select
+// Android; with --android-unsafe it is allowed and uses the Android path.
 func zeppUsesAndroidLogin(stderr io.Writer, flags map[string]string) (bool, error) {
 	if err := validateCommandFlag(CommandFlag{Name: zeppWebLoginFlag, Kind: commandFlagBoolean}, flags[zeppWebLoginFlag]); err != nil {
 		return false, err
@@ -622,7 +624,8 @@ func zeppUsesAndroidLogin(stderr io.Writer, flags map[string]string) (bool, erro
 		return false, err
 	}
 	android := BoolFlag(flags, zeppAndroidUnsafeFlag)
-	if android && BoolFlag(flags, zeppWebLoginFlag) {
+	web := BoolFlag(flags, zeppWebLoginFlag)
+	if android && web {
 		return false, errors.New("cannot combine --web and --android-unsafe")
 	}
 	if android {
@@ -630,7 +633,7 @@ func zeppUsesAndroidLogin(stderr io.Writer, flags map[string]string) (bool, erro
 
 		return true, nil
 	}
-	if _, ok := flags[zeppWebLoginFlag]; ok {
+	if web {
 		fmt.Fprintln(stderr, zeppWebAliasMessage)
 	}
 

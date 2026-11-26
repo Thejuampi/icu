@@ -323,3 +323,51 @@ func TestRunRedirectSink(t *testing.T) {
 		t.Fatalf("bad host with sink = %d", code)
 	}
 }
+
+func TestZeppAuthHitsCountsAndroidAndWeb(t *testing.T) {
+	t.Parallel()
+
+	ts, _ := newRedirectTestServer(t)
+	if got := zeppAuthHitsOf(t, ts.URL); got != (zeppAuthHits{}) {
+		t.Fatalf("hits before login = %+v, want zero", got)
+	}
+
+	if _, err := icu.ZeppWebLogin("fixture@example.invalid", "synthetic-password", ts.URL); err != nil {
+		t.Fatalf("web login: %v", err)
+	}
+	if got := zeppAuthHitsOf(t, ts.URL); got.AndroidTokens != 0 || got.AndroidLogins != 0 ||
+		got.WebRegistrations != 1 || got.WebLogins != 1 {
+		t.Fatalf("after web login = %+v, want 0 android and 1 web registration+login", got)
+	}
+
+	if _, err := icu.ZeppLoginWithURLs(ts.URL+mockZeppTokensPath, ts.URL+mockZeppLoginPath, "u@example.invalid", "synthetic"); err != nil {
+		t.Fatalf("android login: %v", err)
+	}
+	if got := zeppAuthHitsOf(t, ts.URL); got.AndroidTokens != 1 || got.AndroidLogins != 1 ||
+		got.WebRegistrations != 1 || got.WebLogins != 1 {
+		t.Fatalf("after android login = %+v, want 1 android token+login and preserved web counts", got)
+	}
+
+	if code, _ := do(t, http.MethodPost, ts.URL+"/_mock/reset", ""); code != http.StatusOK {
+		t.Fatalf("reset = %d", code)
+	}
+	if got := zeppAuthHitsOf(t, ts.URL); got != (zeppAuthHits{}) {
+		t.Fatalf("hits after reset = %+v, want zero", got)
+	}
+}
+
+func zeppAuthHitsOf(t *testing.T, base string) zeppAuthHits {
+	t.Helper()
+
+	code, body := do(t, http.MethodGet, base+"/_mock/zepp-auth-hits", "")
+	if code != http.StatusOK {
+		t.Fatalf("zepp-auth-hits = %d %s", code, body)
+	}
+
+	var hits zeppAuthHits
+	if err := json.Unmarshal([]byte(body), &hits); err != nil {
+		t.Fatal(err)
+	}
+
+	return hits
+}

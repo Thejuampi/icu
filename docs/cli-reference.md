@@ -628,7 +628,7 @@ the raw components.
 
 - `token`
   Invocation: `icu zepp token --email EMAIL [--password PASSWORD] [--web] [--android-unsafe] [--zepp-base-url URL] [--allow-insecure-zepp-host]`
-  Notes: Obtain Zepp API tokens without saving to config. The default is the web login; `--web` is a deprecated alias. `--android-unsafe` uses the Android login and can sign out the phone app. This debugging command outputs the tokens in plaintext.
+  Notes: Obtain Zepp API tokens without saving to config. The default is the web login; `--web` is a deprecated alias and can be omitted (one-line note on stderr). `--web=false` does not select the Android path. `--android-unsafe` uses the Android login and can sign out the phone app; `--android-unsafe --web=false` is allowed and uses the Android path. This debugging command outputs the tokens in plaintext.
   Example: `icu zepp token --email jane@example.com` (the CLI will prompt for the password if it is not provided).
 
 - `login`
@@ -637,12 +637,15 @@ the raw components.
   in the config file. The default is the web login (`com.huami.webapp`). It
   uses `/registrations/<email>/tokens` and `/v2/client/login`, reuses the
   saved config for subsequent reads, and preserves any existing Android
-  installation UUID. `--web` is a deprecated alias for that default.
+  installation UUID. `--web` is a deprecated alias for that default and
+  can be omitted; the CLI prints `Note: --web is the default and can be
+  omitted.` on stderr. `--web=false` does not select the Android path.
   `--android-unsafe` uses the older Android login (`com.huami.midong`). It
   can sign out the phone Zepp app. That path reuses `zeppDeviceId` or saves
   a generated UUID on first success. No other command, flag, environment
-  variable or default reaches the Android login. `--web` and
-  `--android-unsafe` cannot be combined. With saved credentials, login
+  variable or default reaches the Android login. `--web` or `--web=true`
+  cannot be combined with `--android-unsafe`. `--android-unsafe --web=false`
+  is allowed and uses the Android path. With saved credentials, login
   requires `--reauthenticate` before prompting or making requests.
   `--zepp-base-url URL` sends both requests to the specified base. It must
   use HTTPS or a loopback host. Non-Zepp HTTPS hosts require
