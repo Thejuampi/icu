@@ -17,14 +17,16 @@ import (
 //	/_redirect/<mode>/<path>  answers <path> with a redirect instead:
 //	    cross307, cross308  -> 307/308 to the sink, same <path> and query
 //	    same307, same308    -> 307/308 to <path> on this host:port
-//	  The Zepp tokens endpoint under the prefix is served normally (so login
-//	  reaches the code-bearing login call) unless <mode> ends in "-tokens".
+//	  The Zepp Android tokens and web registration endpoints under the prefix
+//	  are served normally (so login reaches the code-bearing login call)
+//	  unless <mode> ends in "-tokens".
 //	POST /v2/registrations/tokens  synthetic Zepp step 1: 303 with
 //	    access=mockZeppAccessCode in the Location (never followed)
 //	POST /registrations/<email>/tokens  synthetic web step 1: JSON access code
 //	POST /v2/client/login          synthetic Zepp step 2: token_info when
 //	    the form carries a matching access code and web identity if applicable
 //	GET  /_mock/leaks              what the sink received, secrets redacted
+//	GET  /_mock/zepp-auth-hits     Android vs web login request counts
 //
 // The sink records every request (method, path, query keys, headers, body
 // size) and reports booleans for an access code, an API key (Authorization)
@@ -168,16 +170,23 @@ func (s *server) serveRedirectMode(w http.ResponseWriter, r *http.Request) bool 
 	case strings.HasPrefix(r.URL.Path, redirectPrefix):
 		s.handleRedirect(w, r)
 	case r.URL.Path == mockZeppTokensPath && r.Method == http.MethodPost:
+		s.addZeppAuthHit("androidTokens")
 		_, _ = io.Copy(io.Discard, io.LimitReader(r.Body, maxBodyBytes))
 		w.Header().Set("Location", "https://mock.invalid/callback?access="+mockZeppAccessCode+"&refresh=mock-refresh&country_code=US")
 		w.WriteHeader(http.StatusSeeOther)
 	case isMockZeppWebRegistrationPath(r.URL.EscapedPath()) && r.Method == http.MethodPost:
+		s.addZeppAuthHit("webRegistrations")
 		serveMockZeppWebRegistration(w, r)
 	case r.URL.Path == mockZeppLoginPath && r.Method == http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			writeError(w, http.StatusUnauthorized, "invalid login form")
 
 			return true
+		}
+		if r.PostForm.Get("app_name") == mockWebZeppAppName && r.PostForm.Get("device_model") == "web" {
+			s.addZeppAuthHit("webLogins")
+		} else {
+			s.addZeppAuthHit("androidLogins")
 		}
 		body := mockZeppLoginResponse(r.PostForm)
 		if body == "" {
@@ -263,7 +272,7 @@ func (s *server) handleRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rest == mockZeppTokensPath && !tokensOnly {
+	if !tokensOnly && (rest == mockZeppTokensPath || isMockZeppWebRegistrationPath(rest)) {
 		r.URL.Path = rest
 		s.ServeHTTP(w, r)
 

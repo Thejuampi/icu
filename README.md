@@ -101,12 +101,15 @@ The `zepp` resource reads the same data the official Zepp mobile app shows
 Zepp offers a separate OAuth platform for approved partners.
 
 After a successful login, the CLI saves the tokens in the config file and
-reuses them for reads. The default Android login also saves an installation
-UUID. In the November 19 incident, an explicit Android login displaced the
-phone session even with a reused UUID. `icu zepp login --web` selects an
-experimental web login verified against `icu-mock`. Coexistence with the
-phone still needs production validation. A password login with saved
-credentials requires `--reauthenticate`.
+reuses them for reads. `icu zepp login` uses the web login
+(`com.huami.webapp`). `--web` is a deprecated alias for that default and
+can be omitted; the CLI prints a one-line note on stderr
+(`Note: --web is the default and can be omitted.`). `--web=false` does
+not select the Android path. `--android-unsafe` keeps the older Android
+login; it can sign out the phone Zepp app, and no other command, flag,
+environment variable or default reaches that path.
+`--android-unsafe --web=false` is allowed and uses the Android path. The Android login also saves an installation
+UUID. A password login with saved credentials requires `--reauthenticate`.
 [Zepp session analysis and mock walkthrough](docs/zepp-session.md).
 
 ```bash

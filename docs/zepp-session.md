@@ -141,13 +141,19 @@ clients. [ha-zepp implementation](https://github.com/yardeff/ha-zepp/blob/9142ca
 [ha-zepp README](https://github.com/yardeff/ha-zepp/blob/9142ca6fb10af15611a587894580cbdaaaf6def6/README.md),
 [amazfit-mcp implementation](https://github.com/fjuliofontes/amazfit-mcp/blob/adf63107c437b8209aa66e761d1f278f0a201cdf/zepp_client.py#L76-L165).
 
-`icu zepp login --web` runs the two-step exchange published by `ha-zepp`.
-The web app name is explicit in both forms and both requests. The server's
-country takes precedence over the returned region, with `US` as fallback.
-The web flow uses the reference's fixed web device identifier. Successful
-login saves the token bundle for the normal read commands. The CLI writes
-the bundle only after both requests succeed. Either flow requires
-`--reauthenticate` to replace an existing bundle.
+`icu zepp login` now runs that web exchange by default. `--web` is a
+deprecated alias for the same path and can be omitted (one-line note on
+stderr). `--web=false` does not select the Android path.
+`--android-unsafe` keeps the older Android login and can sign out the
+phone Zepp app; no other command, flag, environment variable or default
+reaches it. `--android-unsafe --web=false` is allowed and uses the
+Android path. The web app name is explicit
+in both forms and both requests. The server's country takes precedence
+over the returned region, with `US` as fallback. The web flow uses the
+reference's fixed web device identifier. Successful login saves the token
+bundle for the normal read commands. The CLI writes the bundle only after
+both requests succeed. Either flow requires `--reauthenticate` to replace
+an existing bundle.
 
 ### Production verification
 
@@ -204,12 +210,12 @@ $env:HOME = $env:USERPROFILE = $scratch
 $env:ICU_CONFIG_DIR = Join-Path $scratch 'config'
 $env:ICU_BASE_URL = $env:ZEPP_BASE_URL = $env:ZEPP_EVENTS_URL = $mock
 
-& "$scratch/icu.exe" zepp login --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
+& "$scratch/icu.exe" zepp login --android-unsafe --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
 & "$scratch/icu.exe" zepp sleep --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp heart-rate --source band --oldest 2026-08-10 --newest 2026-08-10
-& "$scratch/icu.exe" zepp hrv --oldest 2026-08-10 --newest 2026-08-10
-& "$scratch/icu.exe" zepp login --email fixture@example.invalid --zepp-base-url $mock
-& "$scratch/icu.exe" zepp login --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock --reauthenticate
+& "$scratch/icu.exe" zepp hrv --metric rmssd --oldest 2026-08-10 --newest 2026-08-10
+& "$scratch/icu.exe" zepp login --android-unsafe --email fixture@example.invalid --zepp-base-url $mock
+& "$scratch/icu.exe" zepp login --android-unsafe --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock --reauthenticate
 ```
 
 The second login exits with a message about `--reauthenticate`. The explicit
@@ -222,14 +228,14 @@ The mock serves the full CLI surface with synthetic data: profile, band data
 hrv-rmssd, body-battery, hybridcharge, biocharge, health-summary, mood,
 skin-temp, stress-minute, respiratory-rate, blood-pressure), sport-load, vo2,
 weight, manual-data, second-heart-rate, spo2-windows, workouts and workout.
-Only the `zepp login`/`zepp status` auth paths are not covered by the mock
-(they exercise the auth flow itself).
+The auth paths are covered by the redirect mode described above.
 
-Use a second config in the same loopback environment to verify the web path.
+Use a second config in the same loopback environment to verify the default
+web path (`--web` is a deprecated alias for the same requests).
 
 ```powershell
 $env:ICU_CONFIG_DIR = Join-Path $scratch 'web-config'
-& "$scratch/icu.exe" zepp login --web --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
+& "$scratch/icu.exe" zepp login --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
 & "$scratch/icu.exe" zepp sleep --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp heart-rate --source band --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp readiness --oldest 2026-08-10 --newest 2026-08-10

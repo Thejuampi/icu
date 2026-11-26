@@ -20,11 +20,13 @@ func newZeppAuthMock(t *testing.T, hits *atomic.Int32) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
 
-		switch r.URL.Path {
-		case "/v2/registrations/tokens": // literal on purpose: pins the real Zepp path
+		switch {
+		case r.URL.Path == "/v2/registrations/tokens": // literal on purpose: pins the real Zepp path
 			w.Header().Set("Location", "https://example.com/callback?access=atok&country_code=US")
 			w.WriteHeader(http.StatusSeeOther)
-		case "/v2/client/login": // literal on purpose: pins the real Zepp path
+		case strings.HasPrefix(r.URL.Path, "/registrations/") && strings.HasSuffix(r.URL.Path, "/tokens"):
+			_, _ = w.Write([]byte(`{"access":"atok","country_code":"US"}`))
+		case r.URL.Path == "/v2/client/login": // literal on purpose: pins the real Zepp path
 			_, _ = w.Write([]byte(`{"result":"ok","token_info":{"login_token":"lt","app_token":"at","user_id":"u1"}}`))
 		default:
 			http.NotFound(w, r)
