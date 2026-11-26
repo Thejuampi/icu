@@ -30,13 +30,14 @@ func ZeppWebLogin(email, password, baseURL string) (*ZeppAuthResult, error) {
 		accountBase = registrationBase
 	}
 
-	client := &http.Client{Timeout: zeppAuthTimeout, CheckRedirect: stopZeppAuthRedirect}
-	registration, err := registerZeppWeb(client, registrationBase, email, password)
+	registrationClient := &http.Client{Timeout: zeppAuthTimeout, CheckRedirect: stopZeppAuthRedirect}
+	registration, err := registerZeppWeb(registrationClient, registrationBase, email, password)
 	if err != nil {
 		return nil, fmt.Errorf("web registration: %w", err)
 	}
 
-	auth, err := exchangeZeppWebAccess(client, accountBase, registration)
+	loginClient := &http.Client{Timeout: zeppAuthTimeout, CheckRedirect: SameOriginRedirects}
+	auth, err := exchangeZeppWebAccess(loginClient, accountBase, registration)
 	if err != nil {
 		return nil, fmt.Errorf("web session: %w", err)
 	}

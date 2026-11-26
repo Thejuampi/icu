@@ -12,9 +12,27 @@ metadata:
 
 ## Authentication
 
-Zepp has no OAuth or browser-based token flow. Auth is entirely API-based:
+Zepp has no OAuth or browser-based token flow. Auth is entirely API-based.
 
-### Login Flow (email/password → tokens)
+### Default login (web)
+
+`icu zepp login --email E` uses the web client (`com.huami.webapp`). This is
+the same flow the former `--web` flag selected. `--web` is still accepted as
+a deprecated alias (one-line note on stderr) and does not change the request.
+
+1. POST `api-user.huami.com/registrations/<email>/tokens` with
+   `app_name=com.huami.webapp`, `client_id=HuaMi`, `json_response=true`
+2. POST `account.huami.com/v2/client/login` with `grant_type=access_token`,
+   `app_name=com.huami.webapp`, `third_name=huami`, `device_model=web`, and
+   the fixed web `device_id`
+3. Server returns JSON with `login_token`, `app_token`, `user_id`
+
+### Unsafe Android login
+
+`icu zepp login --android-unsafe` uses the Android app identity
+(`com.huami.midong`). **It can sign out the phone Zepp app.** Do not use it
+unless you have been asked to. No other command, flag, environment variable
+or default reaches this path. `--web` and `--android-unsafe` cannot be combined.
 
 1. POST encrypted credentials to `api-user-us2.zepp.com/v2/registrations/tokens`
    - Payload is URL-encoded, then AES-128-CBC encrypted (key=`xeNtBVqzDc6tuNTh`, iv=`MAAAYAAAAAAAAABg`), then PKCS#7 padded
@@ -30,8 +48,10 @@ Use `promptPasswordFlagOrInteractive(flagValue)` in cmd code. Falls back to `gol
 
 ### Commands
 
-- `icu zepp token --email E` — outputs raw tokens as JSON, does NOT save to config
-- `icu zepp login --email E` — logs in and saves tokens to `~/.icu/config.json`
+- `icu zepp login --email E` — web login; saves tokens to `~/.icu/config.json`
+- `icu zepp login --web --email E` — deprecated alias for the default web login
+- `icu zepp login --android-unsafe --email E` — Android login; can sign out the phone app
+- `icu zepp token --email E` — same path selection as login; outputs raw tokens as JSON and does NOT save to config
 - Password is never stored; only `login_token`, `app_token`, `user_id`, `country_code` are saved
 
 ### Token Resolution Order

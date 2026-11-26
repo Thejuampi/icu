@@ -627,28 +627,29 @@ readiness/body-battery/health-summary inputs available when you need to inspect
 the raw components.
 
 - `token`
-  Invocation: `icu zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL] [--allow-insecure-zepp-host]`
-  Notes: Obtain Zepp API tokens without saving to config. This debugging command starts a new login that can displace the phone session and outputs the tokens in plaintext.
+  Invocation: `icu zepp token --email EMAIL [--password PASSWORD] [--web] [--android-unsafe] [--zepp-base-url URL] [--allow-insecure-zepp-host]`
+  Notes: Obtain Zepp API tokens without saving to config. The default is the web login; `--web` is a deprecated alias. `--android-unsafe` uses the Android login and can sign out the phone app. This debugging command outputs the tokens in plaintext.
   Example: `icu zepp token --email jane@example.com` (the CLI will prompt for the password if it is not provided).
 
 - `login`
-  Invocation: `icu zepp login --email EMAIL [--password PASSWORD] [--web] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--reauthenticate]`
+  Invocation: `icu zepp login --email EMAIL [--password PASSWORD] [--web] [--android-unsafe] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--reauthenticate]`
   Persists `zeppLoginToken`, `zeppAppToken`, `zeppUserId` and `zeppCountryCode`
-  in the config file. The default Android login reuses `zeppDeviceId` or
-  saves a generated UUID on first success. With saved credentials, either
-  login requires `--reauthenticate` before prompting or making requests.
-  A password login can displace a session.
-  `--web` selects the experimental web client. It uses
-  `/registrations/<email>/tokens` and `/v2/client/login`, reuses the saved
-  config for subsequent reads, and preserves any Android installation UUID.
-  Pass `--web` again for an explicit web reauthentication. Phone
-  coexistence still needs production validation.
+  in the config file. The default is the web login (`com.huami.webapp`). It
+  uses `/registrations/<email>/tokens` and `/v2/client/login`, reuses the
+  saved config for subsequent reads, and preserves any existing Android
+  installation UUID. `--web` is a deprecated alias for that default.
+  `--android-unsafe` uses the older Android login (`com.huami.midong`). It
+  can sign out the phone Zepp app. That path reuses `zeppDeviceId` or saves
+  a generated UUID on first success. No other command, flag, environment
+  variable or default reaches the Android login. `--web` and
+  `--android-unsafe` cannot be combined. With saved credentials, login
+  requires `--reauthenticate` before prompting or making requests.
   `--zepp-base-url URL` sends both requests to the specified base. It must
   use HTTPS or a loopback host. Non-Zepp HTTPS hosts require
   `--allow-insecure-zepp-host`. In Android mode the registration path is
   `/v2/registrations/tokens`. Without a base override the Android mode
-  accepts `ZEPP_TOKENS_URL` and `ZEPP_LOGIN_URL` together. In web mode,
-  use `--zepp-base-url` when either variable is set. The global
+  accepts `ZEPP_TOKENS_URL` and `ZEPP_LOGIN_URL` together. In the default
+  web mode, use `--zepp-base-url` when either variable is set. The global
   intervals.icu `--base-url` only applies to that API.
   The command `icu zepp login --email jane@example.com` prompts for the password.
   [Zepp mock walkthrough](zepp-session.md#verify-with-icu-mock).

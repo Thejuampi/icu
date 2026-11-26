@@ -42,7 +42,7 @@ func TestZeppLoginReusesInstallationIdentity(t *testing.T) {
 	mock := httptest.NewServer(mux)
 	t.Cleanup(mock.Close)
 
-	login := []string{"icu", "zepp", "login", "--email", "fixture@example.invalid", "--zepp-base-url", mock.URL}
+	login := []string{"icu", "zepp", "login", "--android-unsafe", "--email", "fixture@example.invalid", "--zepp-base-url", mock.URL}
 	loginWithPassword := slices.Concat(login, []string{"--password", "synthetic-password"})
 	runZeppSuccess(t, loginWithPassword)
 	firstID := nextZeppDeviceID(t, deviceIDs)
@@ -98,7 +98,7 @@ func TestZeppLoginProtectsLegacyConfig(t *testing.T) {
 	var hits atomic.Int32
 	mock := newZeppAuthMock(t, &hits)
 	var stderr bytes.Buffer
-	args := []string{"icu", "zepp", "login", "--email", "fixture@example.invalid", "--password", "synthetic-password", "--zepp-base-url", mock.URL}
+	args := []string{"icu", "zepp", "login", "--android-unsafe", "--email", "fixture@example.invalid", "--password", "synthetic-password", "--zepp-base-url", mock.URL}
 	if code := run(args, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "--reauthenticate") || hits.Load() != 0 {
 		t.Fatalf("stored legacy credentials should block password login, code=%d stderr=%s hits=%d", code, &stderr, hits.Load())
 	}
@@ -121,7 +121,7 @@ func TestZeppLoginRejectsPartialURLOverrides(t *testing.T) {
 	t.Setenv("ZEPP_LOGIN_URL", "")
 
 	var stderr bytes.Buffer
-	args := []string{"icu", "zepp", "login", "--email", "fixture@example.invalid", "--password", "synthetic-password"}
+	args := []string{"icu", "zepp", "login", "--android-unsafe", "--email", "fixture@example.invalid", "--password", "synthetic-password"}
 	if code := run(args, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "specify both") || hits.Load() != 0 {
 		t.Fatalf("partial auth overrides should fail locally, code=%d stderr=%s hits=%d", code, &stderr, hits.Load())
 	}
@@ -214,6 +214,177 @@ func TestZeppLoginRejectsInvalidWebFlagBeforeSendingCredentials(t *testing.T) {
 	if code := run(args, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "--web must be a boolean") || hits.Load() != 0 {
 		t.Fatal("invalid web flag should fail locally")
 	}
+}
+
+func TestZeppLoginDefaultUsesWebEndpoints(t *testing.T) {
+	assertZeppWebLoginRequest(t, nil, "")
+}
+
+func TestZeppLoginWebAliasUsesWebEndpoints(t *testing.T) {
+	stderr := assertZeppWebLoginRequest(t, []string{"--web"}, "")
+	if !strings.Contains(stderr, zeppWebAliasMessage) {
+		t.Fatalf("expected --web deprecation note, stderr=%s", stderr)
+	}
+}
+
+func TestZeppLoginReauthenticateWorksWithDefault(t *testing.T) {
+	withZeppTestEnv(t)
+	registrations, logins, mock := newZeppWebLoginMock(t)
+	login := []string{"icu", "zepp", "login", "--email", "fixture@example.invalid", "--zepp-base-url", mock.URL}
+	loginWithPassword := slices.Concat(login, []string{"--password", "synthetic-password"})
+	runZeppSuccess(t, loginWithPassword)
+	if registrations.Load() != 1 || logins.Load() != 1 {
+		t.Fatalf("first default login hits: registrations=%d logins=%d", registrations.Load(), logins.Load())
+	}
+
+	var stderr bytes.Buffer
+	if code := run(login, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "--reauthenticate") ||
+		strings.Contains(stderr.String(), "Password:") || registrations.Load() != 1 || logins.Load() != 1 {
+		t.Fatalf("saved session should block a second default login, code=%d stderr=%s hits=%d/%d", code, &stderr, registrations.Load(), logins.Load())
+	}
+
+	runZeppSuccess(t, slices.Concat(loginWithPassword, []string{"--reauthenticate"}))
+	if registrations.Load() != 2 || logins.Load() != 2 {
+		t.Fatalf("--reauthenticate with the default login should repeat the web exchange, hits=%d/%d", registrations.Load(), logins.Load())
+	}
+}
+
+func TestZeppLoginAndroidUnsafeUsesAndroidPath(t *testing.T) {
+	withZeppTestEnv(t)
+	var tokens, logins atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v2/registrations/tokens", func(w http.ResponseWriter, _ *http.Request) {
+		tokens.Add(1)
+		w.Header().Set("Location", "https://mock.invalid/callback?access=synthetic-code&country_code=US")
+		w.WriteHeader(http.StatusSeeOther)
+	})
+	mux.HandleFunc("POST /registrations/fixture@example.invalid/tokens", func(http.ResponseWriter, *http.Request) {
+		t.Error("android-unsafe login hit the web registration path")
+	})
+	mux.HandleFunc("POST /v2/client/login", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil || r.PostForm.Get("code") != "synthetic-code" ||
+			r.PostForm.Get("app_name") != "com.huami.midong" || r.PostForm.Get("device_model") != "android_phone" ||
+			r.PostForm.Get("grant_type") != "access_token" || r.PostForm.Get("device_id") == "" ||
+			r.PostForm.Get("device_id") == "02:00:00:00:00:00" {
+			t.Errorf("android-unsafe login form = %v", r.PostForm)
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+		logins.Add(1)
+		if _, err := io.WriteString(w, `{"token_info":{"login_token":"android-login","app_token":"android-app","user_id":"android-user"}}`); err != nil {
+			t.Error(err)
+		}
+	})
+	mock := httptest.NewServer(mux)
+	t.Cleanup(mock.Close)
+
+	var stderr bytes.Buffer
+	args := []string{"icu", "zepp", "login", "--android-unsafe", "--email", "fixture@example.invalid", "--password", "synthetic-password", "--zepp-base-url", mock.URL}
+	if code := run(args, io.Discard, &stderr); code != 0 {
+		t.Fatalf("android-unsafe login exited %d, stderr=%s", code, &stderr)
+	}
+	if !strings.Contains(stderr.String(), zeppAndroidUnsafeWarning) {
+		t.Fatalf("expected android-unsafe warning, stderr=%s", &stderr)
+	}
+	if tokens.Load() != 1 || logins.Load() != 1 {
+		t.Fatalf("android-unsafe hits: tokens=%d logins=%d", tokens.Load(), logins.Load())
+	}
+}
+
+func TestZeppLoginRejectsWebAndAndroidUnsafeTogether(t *testing.T) {
+	withZeppTestEnv(t)
+	var hits atomic.Int32
+	mock := newZeppAuthMock(t, &hits)
+	var stderr bytes.Buffer
+	args := []string{"icu", "zepp", "login", "--web", "--android-unsafe", "--email", "fixture@example.invalid", "--password", "synthetic-password", "--zepp-base-url", mock.URL}
+	if code := run(args, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "cannot combine --web and --android-unsafe") || hits.Load() != 0 {
+		t.Fatalf("combined flags should fail locally, code=%d stderr=%s hits=%d", code, &stderr, hits.Load())
+	}
+}
+
+func TestZeppTokenDefaultUsesWebEndpoints(t *testing.T) {
+	assertZeppWebLoginRequest(t, nil, "token")
+}
+
+func TestZeppLoginRejectsInvalidAndroidUnsafeFlagBeforeSendingCredentials(t *testing.T) {
+	withZeppTestEnv(t)
+	var hits atomic.Int32
+	mock := newZeppAuthMock(t, &hits)
+	var stderr bytes.Buffer
+	args := []string{"icu", "zepp", "login", "--android-unsafe=typo", "--email", "fixture@example.invalid", "--zepp-base-url", mock.URL, "--password", "synthetic-password"}
+	if code := run(args, io.Discard, &stderr); code == 0 || !strings.Contains(stderr.String(), "--android-unsafe must be a boolean") || hits.Load() != 0 {
+		t.Fatal("invalid android-unsafe flag should fail locally")
+	}
+}
+
+func assertZeppWebLoginRequest(t *testing.T, extra []string, action string) string {
+	t.Helper()
+	if action == "" {
+		action = "login"
+	}
+	withZeppTestEnv(t)
+	registrations, logins, mock := newZeppWebLoginMock(t)
+	args := slices.Concat([]string{"icu", "zepp", action, "--email", "fixture@example.invalid", "--password", "synthetic-password", "--zepp-base-url", mock.URL}, extra)
+	var stdout, stderr bytes.Buffer
+	if code := run(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("%s %v exited %d, stderr=%s", action, extra, code, &stderr)
+	}
+	if registrations.Load() != 1 || logins.Load() != 1 {
+		t.Fatalf("%s %v did not use the web endpoints, registrations=%d logins=%d", action, extra, registrations.Load(), logins.Load())
+	}
+	if action == "login" {
+		cfg, err := icu.LoadConfig()
+		if err != nil || cfg.ZeppLoginToken != "web-login" || cfg.ZeppAppToken != "web-app" || cfg.ZeppUserID != "web-user" {
+			t.Fatalf("web login did not persist the mock session, cfg=%+v err=%v", cfg, err)
+		}
+	}
+	if action == "token" && !strings.Contains(stdout.String(), `"loginToken": "web-login"`) {
+		t.Fatalf("web token output = %q", stdout.String())
+	}
+
+	return stderr.String()
+}
+
+func newZeppWebLoginMock(t *testing.T) (*atomic.Int32, *atomic.Int32, *httptest.Server) {
+	t.Helper()
+	var registrations, logins atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v2/registrations/tokens", func(http.ResponseWriter, *http.Request) {
+		t.Error("web login hit the Android registration path")
+	})
+	mux.HandleFunc("POST /registrations/fixture@example.invalid/tokens", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil || r.PostForm.Get("app_name") != "com.huami.webapp" ||
+			r.Header.Get("App_name") != "com.huami.webapp" || r.PostForm.Get("json_response") != "true" {
+			t.Errorf("web registration form=%v headers=%v", r.PostForm, r.Header)
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+		registrations.Add(1)
+		if _, err := io.WriteString(w, `{"access":"fixture-code","country_code":"DE"}`); err != nil {
+			t.Error(err)
+		}
+	})
+	mux.HandleFunc("POST /v2/client/login", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil || r.PostForm.Get("app_name") != "com.huami.webapp" ||
+			r.PostForm.Get("third_name") != "huami" || r.PostForm.Get("grant_type") != "access_token" ||
+			r.PostForm.Get("device_model") != "web" || r.PostForm.Get("device_id") != "02:00:00:00:00:00" ||
+			r.PostForm.Get("code") != "fixture-code" {
+			t.Errorf("web login form = %v", r.PostForm)
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+		logins.Add(1)
+		if _, err := io.WriteString(w, `{"token_info":{"login_token":"web-login","app_token":"web-app","user_id":"web-user"}}`); err != nil {
+			t.Error(err)
+		}
+	})
+	mock := httptest.NewServer(mux)
+	t.Cleanup(mock.Close)
+
+	return &registrations, &logins, mock
 }
 
 func runZeppSuccess(t *testing.T, args []string) {

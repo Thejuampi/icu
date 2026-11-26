@@ -141,13 +141,16 @@ clients. [ha-zepp implementation](https://github.com/yardeff/ha-zepp/blob/9142ca
 [ha-zepp README](https://github.com/yardeff/ha-zepp/blob/9142ca6fb10af15611a587894580cbdaaaf6def6/README.md),
 [amazfit-mcp implementation](https://github.com/fjuliofontes/amazfit-mcp/blob/adf63107c437b8209aa66e761d1f278f0a201cdf/zepp_client.py#L76-L165).
 
-`icu zepp login --web` runs the two-step exchange published by `ha-zepp`.
-The web app name is explicit in both forms and both requests. The server's
-country takes precedence over the returned region, with `US` as fallback.
-The web flow uses the reference's fixed web device identifier. Successful
-login saves the token bundle for the normal read commands. The CLI writes
-the bundle only after both requests succeed. Either flow requires
-`--reauthenticate` to replace an existing bundle.
+`icu zepp login` now runs that web exchange by default. `--web` is a
+deprecated alias for the same path. `--android-unsafe` keeps the older
+Android login and can sign out the phone Zepp app; no other command, flag,
+environment variable or default reaches it. The web app name is explicit
+in both forms and both requests. The server's country takes precedence
+over the returned region, with `US` as fallback. The web flow uses the
+reference's fixed web device identifier. Successful login saves the token
+bundle for the normal read commands. The CLI writes the bundle only after
+both requests succeed. Either flow requires `--reauthenticate` to replace
+an existing bundle.
 
 ### Production verification
 
@@ -204,12 +207,12 @@ $env:HOME = $env:USERPROFILE = $scratch
 $env:ICU_CONFIG_DIR = Join-Path $scratch 'config'
 $env:ICU_BASE_URL = $env:ZEPP_BASE_URL = $env:ZEPP_EVENTS_URL = $mock
 
-& "$scratch/icu.exe" zepp login --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
+& "$scratch/icu.exe" zepp login --android-unsafe --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
 & "$scratch/icu.exe" zepp sleep --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp heart-rate --source band --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp hrv --metric rmssd --oldest 2026-08-10 --newest 2026-08-10
-& "$scratch/icu.exe" zepp login --email fixture@example.invalid --zepp-base-url $mock
-& "$scratch/icu.exe" zepp login --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock --reauthenticate
+& "$scratch/icu.exe" zepp login --android-unsafe --email fixture@example.invalid --zepp-base-url $mock
+& "$scratch/icu.exe" zepp login --android-unsafe --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock --reauthenticate
 ```
 
 The second login exits with a message about `--reauthenticate`. The explicit
@@ -217,11 +220,12 @@ login succeeds and uses the first login's UUID. The focused tests assert the
 wire device ID, local persistence, failed reauthentication and migration from
 configs without a UUID.
 
-Use a second config in the same loopback environment to verify the web path.
+Use a second config in the same loopback environment to verify the default
+web path (`--web` is a deprecated alias for the same requests).
 
 ```powershell
 $env:ICU_CONFIG_DIR = Join-Path $scratch 'web-config'
-& "$scratch/icu.exe" zepp login --web --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
+& "$scratch/icu.exe" zepp login --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
 & "$scratch/icu.exe" zepp sleep --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp heart-rate --source band --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp readiness --oldest 2026-08-10 --newest 2026-08-10
