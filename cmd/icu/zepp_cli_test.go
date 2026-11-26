@@ -113,26 +113,25 @@ func TestRunZeppLoginRequiresPassword(t *testing.T) {
 }
 
 func TestRunZeppLoginPersistsTokensOnSuccess(t *testing.T) {
-	tokensSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Location", "https://example.com/callback?access=atok&country_code=US")
-		w.WriteHeader(http.StatusSeeOther)
+	authSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/registrations/") && strings.HasSuffix(r.URL.Path, "/tokens"):
+			_, _ = w.Write([]byte(`{"access":"atok","country_code":"US"}`))
+		case r.URL.Path == "/v2/client/login":
+			_, _ = w.Write([]byte(`{"result":"ok","token_info":{"login_token":"lt","app_token":"at","user_id":"u1"}}`))
+		default:
+			http.NotFound(w, r)
+		}
 	}))
-	t.Cleanup(tokensSrv.Close)
-
-	loginSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"result":"ok","token_info":{"login_token":"lt","app_token":"at","user_id":"u1"}}`))
-	}))
-	t.Cleanup(loginSrv.Close)
+	t.Cleanup(authSrv.Close)
 
 	registry := NewCommandRegistry()
 	registerZeppCommands(registry)
 
 	withZeppTestEnv(t)
-	t.Setenv("ZEPP_TOKENS_URL", tokensSrv.URL+"/v2/registrations/tokens")
-	t.Setenv("ZEPP_LOGIN_URL", loginSrv.URL+"/v2/client/login")
 
 	cmd, _ := registry.Lookup("zepp", "login")
-	if err := cmd.Run(nil, map[string]string{"email": "u@example.com", "password": "secret"}, nil, io.Discard, io.Discard); err != nil {
+	if err := cmd.Run(nil, map[string]string{"email": "u@example.com", "password": "secret", "zepp-base-url": authSrv.URL}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("login: %v", err)
 	}
 
@@ -1053,7 +1052,8 @@ func TestRunZeppTokenPrintsTokensWithoutSaving(t *testing.T) {
 	t.Setenv("ZEPP_TOKENS_URL", tokensSrv.URL+"/v2/registrations/tokens")
 	t.Setenv("ZEPP_LOGIN_URL", loginSrv.URL+"/v2/client/login")
 
-	out, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, "u@example.com", "secret", "") })
+	input := zeppLoginInput{email: "u@example.com", password: "secret"}
+	out, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, input, true) })
 	if err != nil || !strings.Contains(out, `"loginToken": "lt"`) {
 		t.Fatalf("out=%s err=%v", out, err)
 	}
@@ -1061,7 +1061,7 @@ func TestRunZeppTokenPrintsTokensWithoutSaving(t *testing.T) {
 		t.Fatal("zepp token saved config")
 	}
 	t.Setenv("ZEPP_LOGIN_URL", tokensSrv.URL+"/missing")
-	if _, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, "u@example.com", "secret", "") }); err == nil {
+	if _, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, input, true) }); err == nil {
 		t.Fatal("failed login accepted")
 	}
 }

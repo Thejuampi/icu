@@ -129,6 +129,7 @@ func TestRedirectModeLocations(t *testing.T) {
 		{"/_redirect/same307/v2/client/login", "/v2/client/login", http.StatusTemporaryRedirect},
 		{"/_redirect/same308/v1/data/band_data.json", "/v1/data/band_data.json", http.StatusPermanentRedirect},
 		{"/_redirect/cross307-tokens/v2/registrations/tokens", sink.URL + "/v2/registrations/tokens", http.StatusTemporaryRedirect},
+		{"/_redirect/cross307-tokens/registrations/fixture@example.invalid/tokens", sink.URL + "/registrations/fixture@example.invalid/tokens", http.StatusTemporaryRedirect},
 	}
 
 	for _, tc := range cases {
@@ -146,11 +147,18 @@ func TestRedirectModeLocations(t *testing.T) {
 		t.Errorf("unknown status = %d, want 404", resp.StatusCode)
 	}
 
-	// The tokens endpoint under a plain mode is served normally (303 with the
-	// synthetic access code), so a login reaches the code-bearing call.
+	// The Android tokens and web registration endpoints under a plain mode
+	// are served normally, so a login reaches the code-bearing call.
 	resp := send(t, noFollowClient(), http.MethodPost, ts.URL+"/_redirect/cross307/v2/registrations/tokens", "", nil)
 	if resp.StatusCode != http.StatusSeeOther || !strings.Contains(resp.Header.Get("Location"), "access="+mockZeppAccessCode) {
 		t.Fatalf("tokens under cross307 = %d %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+
+	webForm := url.Values{"password": {"synthetic"}, "client_id": {"HuaMi"}, "app_name": {mockWebZeppAppName}, "json_response": {"true"}}.Encode()
+	webHeaders := map[string]string{"App_name": mockWebZeppAppName, "Content-Type": "application/x-www-form-urlencoded"}
+	resp = send(t, noFollowClient(), http.MethodPost, ts.URL+"/_redirect/same307/registrations/fixture@example.invalid/tokens", webForm, webHeaders)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("web registration under same307 = %d", resp.StatusCode)
 	}
 
 	if got := leaks(t, ts.URL); got.Count != 0 {
@@ -202,8 +210,13 @@ func TestRedirectModeSyntheticZeppWebLogin(t *testing.T) {
 		t.Fatalf("incomplete web registration: HTTP %d, want 400", resp.StatusCode)
 	}
 
+	auth, err = icu.ZeppWebLogin("fixture@example.invalid", "synthetic-password", ts.URL+"/_redirect/same307")
+	if err != nil || auth == nil || auth.AppToken != "mock-web-app-token" {
+		t.Fatalf("web login under same307 should follow the login redirect, err=%v", err)
+	}
+
 	if _, err := icu.ZeppWebLogin("fixture@example.invalid", "synthetic-password", ts.URL+"/_redirect/cross307"); err == nil {
-		t.Fatal("web registration followed a redirect")
+		t.Fatal("web login followed a cross-host login redirect")
 	}
 	if got := leaks(t, ts.URL); got.Count != 0 {
 		t.Fatalf("unexpected request to the redirect sink %s", sink.URL)

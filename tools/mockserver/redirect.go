@@ -17,8 +17,9 @@ import (
 //	/_redirect/<mode>/<path>  answers <path> with a redirect instead:
 //	    cross307, cross308  -> 307/308 to the sink, same <path> and query
 //	    same307, same308    -> 307/308 to <path> on this host:port
-//	  The Zepp tokens endpoint under the prefix is served normally (so login
-//	  reaches the code-bearing login call) unless <mode> ends in "-tokens".
+//	  The Zepp Android tokens and web registration endpoints under the prefix
+//	  are served normally (so login reaches the code-bearing login call)
+//	  unless <mode> ends in "-tokens".
 //	POST /v2/registrations/tokens  synthetic Zepp step 1: 303 with
 //	    access=mockZeppAccessCode in the Location (never followed)
 //	POST /registrations/<email>/tokens  synthetic web step 1: JSON access code
@@ -263,7 +264,7 @@ func (s *server) handleRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rest == mockZeppTokensPath && !tokensOnly {
+	if !tokensOnly && (rest == mockZeppTokensPath || isMockZeppWebRegistrationPath(rest)) {
 		r.URL.Path = rest
 		s.ServeHTTP(w, r)
 

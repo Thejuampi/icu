@@ -25,8 +25,14 @@ const (
 	zeppAllowInsecureHostFlag = "allow-insecure-zepp-host"
 	zeppReauthenticateFlag    = "reauthenticate"
 	zeppWebLoginFlag          = "web"
+	zeppAndroidUnsafeFlag     = "android-unsafe"
 	zeppTokensPath            = "/v2/registrations/tokens"
 	zeppLoginPathPart         = "/v2/client/login"
+)
+
+const (
+	zeppAndroidUnsafeWarning = "Warning: --android-unsafe uses the Android Zepp login and can sign out the phone app."
+	zeppWebAliasMessage      = "Note: --web is the default and can be omitted." //nolint:gosec // CLI deprecation message, not a credential
 )
 
 func registerZeppCommands(registry *CommandRegistry) {
@@ -116,23 +122,31 @@ func readZeppLoginInput(stderr io.Writer, flags map[string]string) (zeppLoginInp
 
 func zeppTokenCommand() *Command {
 	return zeppAuthCommand(
-		"zepp token --email EMAIL [--password PASSWORD] [--zepp-base-url URL] [--allow-insecure-zepp-host]",
-		"[debug] Get Zepp API tokens. WARNING: outputs tokens in plaintext. Use 'zepp login' for normal auth. Use this only when you need to inspect or manually manage tokens.", //nolint:lll // security warning
+		"zepp token --email EMAIL [--password PASSWORD] [--web] [--android-unsafe] [--zepp-base-url URL] [--allow-insecure-zepp-host]",
+		"[debug] Get Zepp API tokens via the default web login. WARNING: outputs tokens in plaintext. Use 'zepp login' for normal auth. --android-unsafe uses the Android login and can sign out the phone app.", //nolint:lll // security warning
 		func(stdout, stderr io.Writer, flags map[string]string) error {
+			android, err := zeppUsesAndroidLogin(stderr, flags)
+			if err != nil {
+				return err
+			}
+			if err := rejectAndroidAuthOverrides(flags, android); err != nil {
+				return err
+			}
+
 			input, err := readZeppLoginInput(stderr, flags)
 			if err != nil {
 				return err
 			}
 
-			return runZeppToken(stdout, input.email, input.password, input.baseURL)
+			return runZeppToken(stdout, input, android)
 		},
 	)
 }
 
 func zeppLoginCommand() *Command {
 	return zeppAuthCommand(
-		"zepp login --email EMAIL [--password PASSWORD] [--web] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--reauthenticate]",
-		"Save a Zepp login. --web selects the experimental web login. Use --reauthenticate when credentials are already saved.",
+		"zepp login --email EMAIL [--password PASSWORD] [--web] [--android-unsafe] [--zepp-base-url URL] [--allow-insecure-zepp-host] [--reauthenticate]",
+		"Save a Zepp login. The default is the web login. --web is a deprecated alias for the default. --android-unsafe uses the Android login and can sign out the phone app. Use --reauthenticate when credentials are already saved.", //nolint:lll // command summary
 		runZeppLogin,
 	)
 }
@@ -517,8 +531,8 @@ func zeppLogin(email, password, zeppBaseURL, deviceID string) (*icu.ZeppSession,
 	return auth, nil
 }
 
-func runZeppToken(stdout io.Writer, email, password, zeppBaseURL string) error {
-	auth, err := zeppLogin(email, password, zeppBaseURL, "")
+func runZeppToken(stdout io.Writer, input zeppLoginInput, android bool) error {
+	auth, err := authenticateZeppLogin(input, "", android)
 	if err != nil {
 		return wrapCommandError(fmt.Errorf("zepp token failed: %w", err))
 	}
@@ -536,16 +550,17 @@ func runZeppLogin(stdout, stderr io.Writer, flags map[string]string) error {
 	if err != nil {
 		return wrapCommandError(fmt.Errorf("loading config: %w", err))
 	}
-	if (previous.ZeppLoginToken != "" || previous.ZeppAppToken != "") && !BoolFlag(flags, zeppReauthenticateFlag) {
-		return errors.New("credentials for Zepp are already saved. Use them for reads, or pass --reauthenticate to sign in again and risk signing out the phone")
-	}
-
-	if err := validateCommandFlag(CommandFlag{Name: zeppWebLoginFlag, Kind: commandFlagBoolean}, flags[zeppWebLoginFlag]); err != nil {
+	android, err := zeppUsesAndroidLogin(stderr, flags)
+	if err != nil {
 		return err
 	}
-	web := BoolFlag(flags, zeppWebLoginFlag)
-	if web && icu.StringFlag(flags, zeppBaseURLFlag, "") == "" && (osGetenv("ZEPP_TOKENS_URL") != "" || osGetenv("ZEPP_LOGIN_URL") != "") {
-		return errors.New("use --zepp-base-url for custom auth endpoints with --web")
+
+	if (previous.ZeppLoginToken != "" || previous.ZeppAppToken != "") && !BoolFlag(flags, zeppReauthenticateFlag) {
+		return errors.New("credentials for Zepp are already saved. Use them for reads, or pass --reauthenticate to sign in again")
+	}
+
+	if err := rejectAndroidAuthOverrides(flags, android); err != nil {
+		return err
 	}
 
 	input, err := readZeppLoginInput(stderr, flags)
@@ -555,7 +570,7 @@ func runZeppLogin(stdout, stderr io.Writer, flags map[string]string) error {
 
 	fmt.Fprintln(stdout, "Authenticating with Zepp...")
 
-	auth, err := authenticateZeppLogin(input, previous.ZeppDeviceID, web)
+	auth, err := authenticateZeppLogin(input, previous.ZeppDeviceID, android)
 	if err != nil {
 		return wrapCommandError(fmt.Errorf("zepp login failed: %w", err))
 	}
@@ -583,8 +598,8 @@ func runZeppLogin(stdout, stderr io.Writer, flags map[string]string) error {
 	return nil
 }
 
-func authenticateZeppLogin(input zeppLoginInput, deviceID string, web bool) (*icu.ZeppSession, error) {
-	if !web {
+func authenticateZeppLogin(input zeppLoginInput, deviceID string, android bool) (*icu.ZeppSession, error) {
+	if android {
 		return zeppLogin(input.email, input.password, input.baseURL, deviceID)
 	}
 
@@ -594,6 +609,43 @@ func authenticateZeppLogin(input zeppLoginInput, deviceID string, web bool) (*ic
 	}
 
 	return &icu.ZeppSession{ZeppAuthResult: auth}, nil
+}
+
+// zeppUsesAndroidLogin reports whether the caller opted into the Android
+// login. Every other combination, including the deprecated --web alias,
+// uses the web path. The Android path is reached only through this flag.
+func zeppUsesAndroidLogin(stderr io.Writer, flags map[string]string) (bool, error) {
+	if err := validateCommandFlag(CommandFlag{Name: zeppWebLoginFlag, Kind: commandFlagBoolean}, flags[zeppWebLoginFlag]); err != nil {
+		return false, err
+	}
+	if err := validateCommandFlag(CommandFlag{Name: zeppAndroidUnsafeFlag, Kind: commandFlagBoolean}, flags[zeppAndroidUnsafeFlag]); err != nil {
+		return false, err
+	}
+	android := BoolFlag(flags, zeppAndroidUnsafeFlag)
+	if android && BoolFlag(flags, zeppWebLoginFlag) {
+		return false, errors.New("cannot combine --web and --android-unsafe")
+	}
+	if android {
+		fmt.Fprintln(stderr, zeppAndroidUnsafeWarning)
+
+		return true, nil
+	}
+	if _, ok := flags[zeppWebLoginFlag]; ok {
+		fmt.Fprintln(stderr, zeppWebAliasMessage)
+	}
+
+	return false, nil
+}
+
+func rejectAndroidAuthOverrides(flags map[string]string, android bool) error {
+	if android || icu.StringFlag(flags, zeppBaseURLFlag, "") != "" {
+		return nil
+	}
+	if osGetenv("ZEPP_TOKENS_URL") != "" || osGetenv("ZEPP_LOGIN_URL") != "" {
+		return errors.New("use --zepp-base-url for custom auth endpoints")
+	}
+
+	return nil
 }
 
 func runZeppLogout(stdout io.Writer) error {
