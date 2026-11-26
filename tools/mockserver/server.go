@@ -38,6 +38,16 @@ type server struct {
 	sink *redirectSink
 	// fault is the injected failure (fault.go); nil = off.
 	fault *fault
+	// zeppAuthHits counts Zepp login requests (Android vs web paths).
+	zeppAuthHits zeppAuthHits
+}
+
+// zeppAuthHits is the JSON body of GET /_mock/zepp-auth-hits.
+type zeppAuthHits struct {
+	AndroidTokens    int `json:"androidTokens"`
+	AndroidLogins    int `json:"androidLogins"`
+	WebRegistrations int `json:"webRegistrations"`
+	WebLogins        int `json:"webLogins"`
 }
 
 func newServer(dir string, log io.Writer) (*server, error) {
@@ -108,6 +118,12 @@ func fixtureKey(reqPath string) string {
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/_mock/zepp-auth-hits" && r.Method == http.MethodGet {
+		s.handleZeppAuthHits(w)
+
+		return
+	}
+
 	if s.serveRedirectMode(w, r) {
 		return
 	}
@@ -156,6 +172,7 @@ func (s *server) handleReset(w http.ResponseWriter) {
 	s.writes = nil
 	s.overlay = map[string][]byte{}
 	s.fault = nil
+	s.zeppAuthHits = zeppAuthHits{}
 	s.mu.Unlock()
 
 	if s.sink != nil {
@@ -163,6 +180,37 @@ func (s *server) handleReset(w http.ResponseWriter) {
 	}
 
 	writeJSON(w, http.StatusOK, []byte(`{"reset":true}`))
+}
+
+func (s *server) handleZeppAuthHits(w http.ResponseWriter) {
+	s.mu.Lock()
+	hits := s.zeppAuthHits
+	s.mu.Unlock()
+
+	body, err := json.Marshal(hits)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "encode zepp auth hits")
+
+		return
+	}
+
+	writeJSON(w, http.StatusOK, body)
+}
+
+func (s *server) addZeppAuthHit(kind string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	switch kind {
+	case "androidTokens":
+		s.zeppAuthHits.AndroidTokens++
+	case "androidLogins":
+		s.zeppAuthHits.AndroidLogins++
+	case "webRegistrations":
+		s.zeppAuthHits.WebRegistrations++
+	case "webLogins":
+		s.zeppAuthHits.WebLogins++
+	}
 }
 
 func (s *server) lookup(key string) ([]byte, bool) {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Zepp login uses the web path (`com.huami.webapp`) by default (#56). `--web` is a deprecated alias for that default and can be omitted; the CLI prints a one-line note on stderr. `--android-unsafe` keeps the older Android login and warns that it can sign out the phone app. `--web=false` does not select Android; `--android-unsafe --web=false` is allowed and uses the Android path. `--web` / `--web=true` cannot be combined with `--android-unsafe`.
+
 - Fix: `zepp heart-rate --source band` returned only `{timestamp:0,bpm:0}`. The band `data_hr` blob is one unsigned byte per minute (1440 bytes a day), but it was decoded as 2-byte little-endian shorts, so nearly every value read as a sentinel. It now decodes one byte per minute; sentinels 254/255 stay in place as bpm 0 with their real minute timestamp (they used to get timestamp 0). Tests use a synthetic full-day fixture with the real wire shape. `--source app` (the `/users/{id}/heartRate` endpoint) is unchanged: its response was not verified.
 
 - Zone pricing follow-ups (#48 review):

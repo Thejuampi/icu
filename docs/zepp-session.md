@@ -142,9 +142,12 @@ clients. [ha-zepp implementation](https://github.com/yardeff/ha-zepp/blob/9142ca
 [amazfit-mcp implementation](https://github.com/fjuliofontes/amazfit-mcp/blob/adf63107c437b8209aa66e761d1f278f0a201cdf/zepp_client.py#L76-L165).
 
 `icu zepp login` now runs that web exchange by default. `--web` is a
-deprecated alias for the same path. `--android-unsafe` keeps the older
-Android login and can sign out the phone Zepp app; no other command, flag,
-environment variable or default reaches it. The web app name is explicit
+deprecated alias for the same path and can be omitted (one-line note on
+stderr). `--web=false` does not select the Android path.
+`--android-unsafe` keeps the older Android login and can sign out the
+phone Zepp app; no other command, flag, environment variable or default
+reaches it. `--android-unsafe --web=false` is allowed and uses the
+Android path. The web app name is explicit
 in both forms and both requests. The server's country takes precedence
 over the returned region, with `US` as fallback. The web flow uses the
 reference's fixed web device identifier. Successful login saves the token
