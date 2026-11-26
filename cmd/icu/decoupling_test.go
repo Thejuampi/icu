@@ -425,6 +425,7 @@ func TestDecouplingCacheHelpers(t *testing.T) {
 	}
 	t.Setenv("ICU_CONFIG_DIR", "")
 	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 	if !strings.HasPrefix(decouplingCacheDir(), dir) {
 		t.Fatalf("home cache dir = %s", decouplingCacheDir())
 	}

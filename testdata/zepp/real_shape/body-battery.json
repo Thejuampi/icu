@@ -1,0 +1,36 @@
+{
+  "items": [
+    {
+      "userId": "[redacted]",
+      "eventType": "Charge",
+      "subType": "real_data",
+      "timestamp": 1894579200000,
+      "value": {
+        "startTime": 1894597200000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "total": 61,
+            "mental": 41.8,
+            "physical": 75.3,
+            "status": 0,
+            "jsonExtra": "{}"
+          },
+          {
+            "s": 60000,
+            "total": 61,
+            "mental": 41.9,
+            "physical": 75.1,
+            "status": 0,
+            "jsonExtra": "{}"
+          }
+        ]
+      }
+    }
+  ]
+}

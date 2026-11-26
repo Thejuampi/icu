@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -411,7 +412,10 @@ func TestWriteFileAtomicReplacesWithoutLeftovers(t *testing.T) {
 	entries, _ := os.ReadDir(dir)
 	data, _ := os.ReadFile(path)
 	info, _ := os.Stat(path)
-	if len(entries) != 1 || string(data) != "new" || info.Mode().Perm() != eventBackupFileMode {
+	if len(entries) != 1 || string(data) != "new" {
+		t.Fatalf("entries %v data %q mode %v", entries, data, info.Mode())
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != eventBackupFileMode {
 		t.Fatalf("entries %v data %q mode %v", entries, data, info.Mode())
 	}
 	if err := writeFileAtomic(filepath.Join(dir, "missing", "x.json"), []byte("x")); err == nil {

@@ -646,6 +646,58 @@ production validation. [Zepp web login evidence and mock](zepp-session.md).
    type names only); plus the structure of a real redacted response kept with
    synthetic values in `testdata/zepp/real_shape/`.
 
+   **V2 object payloads.** Some `/v2/users/me/events` presets carry `value` as
+   an object, not a scalar. The anonymized real-shape fixtures and a live
+   backend capture (2026-11-26) confirm this for readiness/watch_score
+   (`value.sleepHRV`, `rdnsScore`, `hrvScore`, …), Charge/insight_data
+   (`value.samples[]`), Charge/real_data (body battery `samples[]` with
+   `total`/`mental`/`physical`/`status`/`jsonExtra`), DailyHealth/summary
+   (`samples[]` with `totalSteps`/`totalCalories`/…), Charge/stress_data
+   (`samples[]` with `s`/`u`/`stressInfo`/`minuteOfDay`) and
+   RespiratoryRate/real_data (`measurements` base64, `timeZone`): the
+   decoders keep the full object under `extra.value` and report
+   `score`/`level`/`value`/`stress`/`rate` as 0 — the CLI never invents a
+   scalar from an object. HRV RMSSD/sdnn object payloads are
+   handled (mean of valid samples); HybridCharge/readiness object payloads
+   are kept raw.
+
+   **Sleep stages.** `BandDataSleep.Stages[]` carries the raw `mode`
+   (minutes-since-midnight `start`/`stop` plus `startEpoch`/`endEpoch`) and a
+   derived `modeLabel` via `SleepStageModeLabel`: `4` = light, `5` = deep,
+   `7` = awake, `8` = REM, anything else = `"unknown"`. The label is
+   best-effort and not part of the wire format; the raw mode is always
+   available. `startEpoch`/`endEpoch` are anchored to the day's midnight
+   for the stages before the first midnight wrap and to the next day's
+   midnight for stages after it (stop < start marks a wrap), so epochs are
+   contiguous across the night. Verified against a live backend capture
+   (2026-11-26).
+
+   **Health summary.** `HealthSummaryDays` returns the day's `timestamp`,
+   `date` and `extra` for each `DailyHealth/summary` event. The real shape
+   carries `value` as an object (`samples[]` with `totalSteps`/
+   `totalCalories`/`totalBurningDuration`/`stepGoal`/`calorieGoal`/
+   `burningDurationGoal`/`hyroxCount`/`dateString`), so no scalar `value` is
+   available: the record keeps `value: 0` and the full payload stays under
+   `extra.value` (verified against a live backend capture and the anonymized
+   real-shape fixture).
+
+   **Heart rate (app source).** `HeartRateEndpoint` calls
+   `/users/{id}/heartRate` on the regional data host. The endpoint returns
+   one flat item per 7-day window (`type`, `generatedTime` in epoch seconds,
+   `deviceSource`, `timeZone`, `heartRateData` base64, `deviceId`), not
+   per-day items with timestamp+value. The CLI stamps the item at
+   `generatedTime * 1000` and keeps the base64 payload in `extra`; the
+   per-minute heart-rate series is not decoded (the payload format is not
+   documented).
+
+   **Second heart rate.** `SecondHeartRateFiles` returns the COS file index
+   from `/users/me/fileInfo/events` (`Timestamp`, `Date`, `URL`, `Extra`). The
+   per-second blobs are not downloaded or parsed: the blob format is not
+   documented anywhere in the repo or in prior plans, and it is not invented
+   here. The library keeps the raw `URL` for programmatic callers that fetch
+   blobs themselves; the CLI redacts it (userinfo, query and fragment
+   stripped) in its output because the URL may carry a temporary signature.
+
 ```go
 import (
 	"context"
@@ -711,7 +763,8 @@ decoded typed form so downstream code can do whichever is convenient:
   `StepSeries` are decoded from Zepp's delta-encoded 2-byte shorts back into
   absolute values. The first short is absolute, each subsequent short is the
   signed delta from the previous one. The cumulative sum reconstructs the
-  absolute series.
+  absolute series. The detail response itself is unverified against the live
+  backend (the live capture returned an empty `trackId`).
 
 ### V2 wellness events
 

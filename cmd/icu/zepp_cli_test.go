@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -702,6 +703,13 @@ func TestZeppV2WellnessCommandsHitCorrectEndpoint(t *testing.T) {
 			subType:   "real_data",
 		},
 		{
+			name:      "hrv-sleephrv",
+			cmdName:   "hrv",
+			flags:     map[string]string{"metric": "sleephrv", "oldest": "2026-06-01", "newest": "2026-06-01"},
+			eventType: "readiness",
+			subType:   "watch_score",
+		},
+		{
 			name:      "readiness",
 			cmdName:   "readiness",
 			flags:     map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"},
@@ -905,6 +913,51 @@ func TestZeppHRVCommandRejectsInvalidMetric(t *testing.T) {
 	}
 }
 
+func TestZeppHRVCommandSleephrvDecodesValue(t *testing.T) {
+	withZeppTestEnv(t)
+
+	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
+		if req.Path != v2EventsPathCLI {
+			return http.StatusNotFound, err404CLI
+		}
+
+		if !strings.Contains(req.Query, "eventType=readiness") || !strings.Contains(req.Query, "subType=watch_score") {
+			return http.StatusBadRequest, errMissingEventTypeCLI
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"eventType":"readiness","subType":"watch_score","value":{"sleepHRV":44,"hrvBaseline":40,"hrvScore":66,"timestamp":1780262400000}}]}`
+	})
+	t.Cleanup(srv.Close)
+	t.Setenv("ZEPP_EVENTS_URL", srv.URL())
+
+	registry := NewCommandRegistry()
+	registerZeppCommands(registry)
+
+	cmd, _ := registry.Lookup("zepp", "hrv")
+
+	var stdout bytes.Buffer
+	if err := cmd.Run(nil, map[string]string{"metric": "sleephrv", "oldest": "2026-06-01", "newest": "2026-06-01"}, nil, &stdout, io.Discard); err != nil {
+		t.Fatalf("hrv sleephrv: %v", err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("decode output: %v\noutput: %s", err, stdout.String())
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("got %d records, want 1\noutput: %s", len(got), stdout.String())
+	}
+
+	if got[0]["value"] != 44.0 {
+		t.Fatalf("value = %v, want 44\noutput: %s", got[0]["value"], stdout.String())
+	}
+
+	if got[0]["metric"] != "sleephrv" {
+		t.Fatalf("metric = %v, want sleephrv\noutput: %s", got[0]["metric"], stdout.String())
+	}
+}
+
 func TestZeppHeartRateCommandAppSource(t *testing.T) {
 	withZeppTestEnv(t)
 
@@ -913,7 +966,7 @@ func TestZeppHeartRateCommandAppSource(t *testing.T) {
 			return http.StatusNotFound, err404CLI
 		}
 
-		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"value":68}]}`
+		return http.StatusOK, `{"items":[{"type":2,"generatedTime":1780272000,"deviceSource":1,"timeZone":"-5","heartRateData":"bW9jaw==","deviceId":"MOCKDEVICE0000"}]}`
 	})
 	t.Cleanup(srv.Close)
 	t.Setenv("ZEPP_BASE_URL", srv.URL())
@@ -1002,6 +1055,37 @@ func TestZeppSecondHeartRateCommandHitsEndpoint(t *testing.T) {
 	cmd, _ := registry.Lookup("zepp", "second-heart-rate")
 	if err := cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("second-heart-rate: %v", err)
+	}
+}
+
+func TestZeppSecondHeartRateCommandRedactsSignedURL(t *testing.T) {
+	withZeppTestEnv(t)
+
+	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
+		if req.Path != "/users/me/fileInfo/events" {
+			return http.StatusNotFound, err404CLI
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"url":"https://cos.example/1.zip?token=secret&expires=123"}]}`
+	})
+	t.Cleanup(srv.Close)
+	t.Setenv("ZEPP_BASE_URL", srv.URL())
+
+	registry := NewCommandRegistry()
+	registerZeppCommands(registry)
+
+	cmd, _ := registry.Lookup("zepp", "second-heart-rate")
+	out, err := captureStdout(t, func(stdout io.Writer) error {
+		return cmd.Run(nil, map[string]string{"oldest": "2026-06-01", "newest": "2026-06-01"}, nil, stdout, io.Discard)
+	})
+	if err != nil {
+		t.Fatalf("second-heart-rate: %v", err)
+	}
+	if !strings.Contains(out, "https://cos.example/1.zip") {
+		t.Fatalf("output should keep the file URL path: %s", out)
+	}
+	if strings.Contains(out, "token=secret") || strings.Contains(out, "expires=123") {
+		t.Fatalf("output must redact the signed URL query: %s", out)
 	}
 }
 

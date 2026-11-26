@@ -478,4 +478,33 @@ func TestSportTypeNameMapsAllBranches(t *testing.T) {
 	}
 }
 
+func TestSleepStageModeLabel(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		mode int
+		want string
+	}{
+		{4, "light"},
+		{5, "deep"},
+		{7, "awake"},
+		{8, "rem"},
+		{0, "unknown"},
+		{3, "unknown"},
+		{6, "unknown"},
+		{9, "unknown"},
+		{999, "unknown"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.want, func(t *testing.T) {
+			t.Parallel()
+
+			if got := icu.SleepStageModeLabel(tc.mode); got != tc.want {
+				t.Fatalf("SleepStageModeLabel(%d) = %q, want %q", tc.mode, got, tc.want)
+			}
+		})
+	}
+}
+
 var _ = strings.Contains

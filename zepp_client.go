@@ -1421,11 +1421,21 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 	}
 
 	const secondsPerMinute = 60
+	const minutesPerDay = 24 * 60
 
+	// Stage start/stop are minutes since midnight on a 0..1439 clock. Stages
+	// after a midnight wrap (stop < start) land on the next day, so track the
+	// day offset instead of re-anchoring every stage to the day's midnight.
+	dayOffset := int64(0)
 	for i := range sleepRaw.Stages {
-		sleepRaw.Stages[i].StartEpoch = midnightSec + int64(sleepRaw.Stages[i].Start*secondsPerMinute)
+		stage := &sleepRaw.Stages[i]
+		stage.StartEpoch = midnightSec + dayOffset*(minutesPerDay*secondsPerMinute) + int64(stage.Start*secondsPerMinute)
 		// A stage crossing midnight has Stop < Start (see SleepStageMinutes).
-		sleepRaw.Stages[i].EndEpoch = sleepRaw.Stages[i].StartEpoch + int64(SleepStageMinutes(sleepRaw.Stages[i])*secondsPerMinute)
+		stage.EndEpoch = stage.StartEpoch + int64(SleepStageMinutes(*stage)*secondsPerMinute)
+		stage.ModeLabel = SleepStageModeLabel(stage.Mode)
+		if stage.Stop < stage.Start {
+			dayOffset++
+		}
 	}
 
 	return &BandDataSleep{

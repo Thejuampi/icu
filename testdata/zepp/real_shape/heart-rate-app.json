@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "type": 2,
+      "generatedTime": 123456789,
+      "deviceSource": 1,
+      "timeZone": "[redacted]",
+      "heartRateData": "bW9jaw==",
+      "deviceId": "[redacted]"
+    }
+  ]
+}

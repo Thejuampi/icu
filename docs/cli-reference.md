@@ -667,48 +667,70 @@ the raw components.
 - `profile`
   Invocation: `icu zepp profile`
   Notes: Calls `/v2/user/info` on the regional data host. Falls back to the
-  global host on error.
+  global host on error. Verified against the real backend (2026-11-26).
   Example: `icu zepp profile`
 
 - `summary`
   Invocation: `icu zepp summary --oldest DATE --newest DATE`
   Notes: Calls `/v1/data/band_data.json` and decodes the base64-packed
-  `summary` field into step and sleep totals.
+  `summary` field into step and sleep totals. Verified against the real
+  backend (2026-11-26): 8 days, steps/calories/distance/stages present.
   Example: `icu zepp summary --oldest 2026-05-01 --newest 2026-05-07`
 
 - `sleep`
   Invocation: `icu zepp sleep --oldest DATE --newest DATE`
   Notes: Decodes the `slp` block (light/deep minutes, stages) from
-  `band_data.json`.
+  `band_data.json`. Stages carry the raw `mode` (minutes-since-midnight
+  `start`/`stop`, plus `startEpoch`/`endEpoch`) and a derived `modeLabel`:
+  `4` = light, `5` = deep, `7` = awake, `8` = REM; any other mode reports
+  `"unknown"`. Cross-midnight stages are counted with wrap-around, and
+  stages after a wrap are anchored to the next day (epochs stay contiguous
+  across the night). Verified against the real backend (2026-11-26):
+  the stages, mode mapping and epoch anchoring match the real response.
   Example: `icu zepp sleep --oldest 2026-05-01 --newest 2026-05-07`
 
 - `heart-rate`
   Invocation: `icu zepp heart-rate --source band|app --oldest DATE --newest DATE`
-  Notes: Default source `band` decodes the binary `data_hr` field (1440
-  bytes per day, one unsigned byte per minute) from `band_data.json`; sentinel
+  Notes: Calls `/v1/data/band_data.json` and decodes the binary `data_hr`
+  field (1440 bytes per day, one unsigned byte per minute); sentinel
   values 254 (no read) and 255 (not required) are mapped to bpm 0 and keep
-  their minute timestamp (UTC midnight of the day + minute). Source `app` calls
-  `/users/{id}/heartRate` on the regional data host.
+  their minute timestamp (UTC midnight of the day + minute). Source `app`
+  calls `/users/{id}/heartRate` on the regional data host and returns one
+  flat item per 7-day window (`type`, `generatedTime` in epoch seconds,
+  `deviceSource`, `timeZone`, `heartRateData` base64, `deviceId`) — not
+  per-day items. The CLI stamps the item at `generatedTime * 1000`, keeps
+  the base64 payload in `extra`, and reports heart rate as 0 (the payload
+  format is not decoded). Verified against the real backend (2026-11-26):
+  band source returns 1440 points per day (e.g. 56/78/66/66/65/55/64/63
+  bpm at minute 0); app source returns one flat item per 7-day window
+  (`heartRateData` base64, `hr: 0`).
   Example: `icu zepp heart-rate --source app --oldest 2026-05-01 --newest 2026-05-01`
 
 - `spo2`
   Invocation: `icu zepp spo2 --oldest DATE --newest DATE`
   Notes: Calls `/users/{id}/events?eventType=blood_oxygen` on the events host
   `api-mifit.zepp.com`. The `extra` field is a JSON-encoded string parsed into
-  a typed `SpO2Reading.Extra` map.
+  a typed `SpO2Reading.Extra` map. The legacy events endpoint returned a 500
+  on the real backend (2026-11-26, single-day and multi-day), so this series
+  is unverified — the ODI windows are available via `spo2-windows` instead.
   Example: `icu zepp spo2 --oldest 2026-05-01 --newest 2026-05-07`
 
 - `stress`
   Invocation: `icu zepp stress --oldest DATE --newest DATE`
   Notes: Calls `/users/{id}/events?eventType=all_day_stress` on the events
-  host. Returns per-day min/max/avg/relax%/normal%/medium%/high%.
+  host. Returns per-day min/max/avg/relax%/normal%/medium%/high%. The legacy
+  events endpoint returned a 500 on the real backend (2026-11-26, single-day
+  and multi-day), so this series is unverified — the per-minute stress
+  series (`stress-minute`) is verified and available instead.
   Example: `icu zepp stress --oldest 2026-05-01 --newest 2026-05-07`
 
 - `pai`
   Invocation: `icu zepp pai --oldest DATE --newest DATE`
   Notes: Calls `/users/{id}/events?eventType=PaiHealthInfo` on the events
   host. Returns per-day PAI score, resting HR, max HR, and per-zone
-  minutes/PAI.
+  minutes/PAI. The legacy events endpoint returned a 500 on the real
+  backend (2026-11-26, single-day and multi-day), so this series is
+  unverified.
   Example: `icu zepp pai --oldest 2026-05-01 --newest 2026-05-07`
 
 - `events`
@@ -717,114 +739,178 @@ the raw components.
   `api-mifit.zepp.com`. Presets map
   to Zepp `eventType`/`subType` pairs (e.g. `body-battery` →
   `Charge`/`real_data`). Use `icu zepp events --help` to list presets.
+  Verified against the real backend (2026-11-26): `body-battery` returns
+  the real object payload (8 days, `extra.value` with `samples[]`).
   Example: `icu zepp events --preset body-battery --oldest 2026-06-01 --newest 2026-06-07`
   Notes: Non-numeric `value` payloads (objects, JSON-in-string) are kept under `extra.value`. `--raw` prints the Zepp response as received with defense-in-depth redaction to `"[redacted]"`: (1) denylist: keys naming identifiers, personal data, location, secrets or links (case-insensitive, `_`/`-`/`.` ignored; e.g. userId, uid, deviceId(s), sn, serial, imei/imsi/iccid, uuid/guid, mac, email, phone, name, birthday, gender, lat/lon, gps, address, ip, ssid, timezone, token, access/refresh, auth, sign/signature, key, session, cookie, url, avatar, account, and any key ending in `id`/`ids`/`url`/`key`/`token`/`name` except words like `valid`, `paid`) lose their value whatever its type; (2) allowlist: every other string is redacted unless its key is a known-safe field and the string has that field's shape: ISO date/time, `HH:MM`/`HH:MM:SS`, or a 10-digit (s) / 13-digit (ms) epoch between 2000 and 2100 for date/day/time/timestamp/startTime/endTime; only a known Zepp enum (the v2 preset eventType/subType values such as `Charge`, `HRVRMSSD`, `watch_score`, plus `OK`/`SUCCESS`/...), compared ignoring case and `_`/`-`/`.`/space, for eventType/subType/type/unit/status/result, and under `unit` also a known unit with its exact spelling (`ms`, `bpm`, `kg`, `%`, ...); there is no pattern fallback, so any name in code case is redacted; a number of up to 6 digits (optional sign and decimals) for value/hrv/sdnn/rmssd/sleepHRV/score/samples/skinTemp*; up to 8 digits for `s` (sample offset in ms); inside `samples[]`, numbers under `s`, `e` and `u` are kept only as non-negative integers up to 86,400,000 (one day in ms); outside `samples[]`, `u` and `e` only up to 65535; the same bounds apply when these values are numeric strings; strings inside arrays are never allowlisted; numbers and booleans are kept, except numbers whose integer part has 9+ digits (floats and exponents included, e.g. `123456789.0`, `1.23456789e8`), unless an integer 10/13-digit epoch between 2000 and 2100 under a time key; also denied: any key containing device (deviceSource, deviceType, deviceModel, ...), firmware, hardware, hwVer/fwVer, productId/productVer, vendor, brand, model, bluetooth, sourceId, meid, esn, plus birth, dob, zip, postcode, city, country, region, geo, coord, position, owner, friend, member, wearer, host, msisdn, and `ip` as an exact key or ipaddr/ipv4/ipv6/clientIp-style names (not as a fragment, so tip/trip/chip stay); (3) value scrubbing: emails, MACs, JWTs, UUIDs, URLs, IPv4/IPv6 addresses, 24+ char base64 or 12+ char hex blobs and JSON-looking strings that do not parse are redacted even under safe keys; (4) JSON inside strings (also double-encoded) is redacted with the same rules; (5) object keys that are only digits or 8+ hex chars become `[redacted-key-N]`. Responses over 32 MiB are refused. Accepted risks: a number of up to 6 digits under a metric key, an integer of up to 8 digits under any non-denied key are printed; an identifier in one of those forms would show. A non-JSON response is not printed.
 
 - `hrv`
-  Invocation: `icu zepp hrv --metric sdnn|rmssd --oldest YYYY-MM-DD --newest YYYY-MM-DD`
+  Invocation: `icu zepp hrv --metric sdnn|rmssd|sleephrv --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Fetches nightly HRV from `/v2/users/me/events`. Default metric is
-  `sdnn`; use `rmssd` for the RMSSD variant.
-  Example: `icu zepp hrv --metric rmssd --oldest 2026-06-01 --newest 2026-06-07`
+  `sleephrv` — the nightly value the Zepp app shows (readiness `sleepHRV`,
+  the source `wellness sync` writes). `rmssd` is the mean of the night's
+  samples (an approximation, not the app's nightly value). `sdnn` may be
+  empty. Verified against the real backend (2026-11-26): `rmssd` returns
+  the mean of each night's samples (e.g. 43.2/38.5/39/41.6/43.2/43.7/44.5/41.8
+  ms across 8 days), `sleephrv` returns the nightly value (43/33/35/36/39/36/41/44/42
+  ms), `sdnn` returns no items (empty for this account, Sep 1 – Nov 26).
+  Example: `icu zepp hrv --oldest 2026-06-01 --newest 2026-06-07`
 
 - `readiness`
   Invocation: `icu zepp readiness --oldest YYYY-MM-DD --newest YYYY-MM-DD [--raw]`
-  Notes: Daily readiness scores from `/v2/users/me/events`.
+  Notes: Daily readiness scores from `/v2/users/me/events`. The real shape
+  carries `value` as an object (`sleepHRV`, `rdnsScore`, `hrvScore`, …),
+  so no scalar `score` is available: the record keeps `score: 0` and the
+  full object under `extra.value` (verified against the real backend
+  2026-11-26). Read the nightly HRV via `zepp hrv --metric sleephrv`.
   Example: `icu zepp readiness --oldest 2026-06-01 --newest 2026-06-07`
 
 - `body-battery`
   Invocation: `icu zepp body-battery --oldest YYYY-MM-DD --newest YYYY-MM-DD`
-  Notes: Body-battery / Charge levels from `/v2/users/me/events`.
+  Notes: Body-battery / Charge levels from `/v2/users/me/events`
+  (`Charge`/`real_data`). The real shape carries `value` as an object
+  (`startTime`, `samples[]` with `s`/`total`/`mental`/`physical`/`status`/
+  `jsonExtra`) — verified against the real backend (2026-11-26: 1440 samples
+  per day) and the anonymized real-shape fixture. No scalar `level` is
+  available: the record keeps `level: 0` and the full object under
+  `extra.value`.
   Example: `icu zepp body-battery --oldest 2026-06-01 --newest 2026-06-07`
 
 - `hybridcharge`
   Invocation: `icu zepp hybridcharge --oldest YYYY-MM-DD --newest YYYY-MM-DD`
-  Notes: HybridCharge energy scores from `/v2/users/me/events` using `Charge/insight_data`. Zepp app 10.4+ renamed BioCharge to HybridCharge.
+  Notes: HybridCharge energy scores from `/v2/users/me/events` using `Charge/insight_data`. Zepp app 10.4+ renamed BioCharge to HybridCharge. The real shape carries `value` as an object with `samples` (verified against the real backend 2026-11-26, and the anonymized real-shape fixture), so no scalar `score` is available: the record keeps `score: 0` and the full object under `extra.value`.
   Example: `icu zepp hybridcharge --oldest 2026-06-01 --newest 2026-06-07`
 
 - `biocharge`
   Invocation: `icu zepp biocharge --oldest YYYY-MM-DD --newest YYYY-MM-DD`
-  Notes: Alias for `zepp hybridcharge` for older Zepp terminology.
+  Notes: Alias for `zepp hybridcharge` for older Zepp terminology. Same caveat: the real shape is an object payload, so `score` stays 0 and `extra.value` carries the full object. Verified against the real backend (2026-11-26).
   Example: `icu zepp biocharge --oldest 2026-06-01 --newest 2026-06-07`
 
 - `health-summary`
   Invocation: `icu zepp health-summary --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Daily health summaries from `/v2/users/me/events`
-  (`DailyHealth/summary`).
+  (`DailyHealth/summary`). The real shape carries `value` as an object
+  (`samples[]` with `totalSteps`/`totalCalories`/`totalBurningDuration`/
+  `stepGoal`/`calorieGoal`/`burningDurationGoal`/`hyroxCount`/`dateString`,
+  timestamped at `startTime`) — verified against the real backend (2026-11-26:
+  e.g. 2360 steps, 811 cal for 2026-11-19) and the anonymized real-shape
+  fixture. No scalar `value` is available: the record keeps `value: 0` and
+  the full object under `extra.value`.
   Example: `icu zepp health-summary --oldest 2026-06-01 --newest 2026-06-07`
 
 - `mood`
   Invocation: `icu zepp mood --oldest YYYY-MM-DD --newest YYYY-MM-DD`
-  Notes: Mood / emotion readings from `/v2/users/me/events`.
+  Notes: Mood / emotion readings from `/v2/users/me/events`
+  (`Emotion/real_data`). The real backend returned no mood items for the
+  Sep 1 – Nov 26 range, so the shape is unverified; the decoder keeps any
+  payload under `extra.value`.
   Example: `icu zepp mood --oldest 2026-06-01 --newest 2026-06-07`
 
 - `skin-temp`
   Invocation: `icu zepp skin-temp --oldest YYYY-MM-DD --newest YYYY-MM-DD`
-  Notes: Skin temperature delta readings from `/v2/users/me/events`.
+  Notes: Skin temperature delta readings from `/v2/users/me/events`
+  (`skinTemp/real_data`). The real backend returned no skin-temp items for
+  the Sep 1 – Nov 26 range, so the shape is unverified; the decoder keeps
+  any payload under `extra.value`.
   Example: `icu zepp skin-temp --oldest 2026-06-01 --newest 2026-06-07`
 
 - `weight`
   Invocation: `icu zepp weight --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Weight measurements from `/users/{id}/members/-1/weightRecords` on
-  the regional data host.
+  the regional data host. The real backend returned no weight items for the
+  Sep 1 – Nov 26 range, so the shape is unverified.
   Example: `icu zepp weight --oldest 2026-06-01 --newest 2026-06-07`
 
 - `manual-data`
   Invocation: `icu zepp manual-data --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Manually entered wellness records from `/v1/user/manualData.json`
-  on the regional data host.
+  on the regional data host. The live backend returned a 400 (2026-11-26,
+  single-day and multi-day), so the shape is unverified.
   Example: `icu zepp manual-data --oldest 2026-06-01 --newest 2026-06-07`
 
 - `second-heart-rate`
   Invocation: `icu zepp second-heart-rate --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Per-second heart-rate COS file index from
-  `/users/me/fileInfo/events`. Blobs are not downloaded.
+  `/users/me/fileInfo/events`. Blobs are not downloaded or parsed (the blob
+  format is not documented and is not invented here). The URL in each entry
+  may carry a temporary signature, so the CLI redacts it (userinfo, query and
+  fragment stripped) in its output — do not paste CLI output into shared
+  places. The library (`ZeppClient.SecondHeartRateFiles`) keeps the raw URL
+  for programmatic callers that download the blobs themselves. The live
+  backend returned no file-index items for the Sep 1 – Nov 26 range, so the
+  shape is unverified.
   Example: `icu zepp second-heart-rate --oldest 2026-06-01 --newest 2026-06-07`
 
 - `spo2-windows`
   Invocation: `icu zepp spo2-windows --date YYYY-MM-DD [--timezone TZ]`
   Notes: SpO2 ODI windows for a single day from
-  `/users/{id}/events/dateString`. Defaults to `UTC`.
+  `/users/{id}/events/dateString`. Defaults to `UTC`. Verified against the
+  real backend (2026-11-26): 2026-11-24 returns one ODI window (odi 2.02,
+  score 96).
   Example: `icu zepp spo2-windows --date 2026-06-07`
 
 - `stress-minute`
   Invocation: `icu zepp stress-minute --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Per-minute stress readings from `/v2/users/me/events`
-  (`Charge`/`stress_data`).
+  (`Charge`/`stress_data`). The real shape carries `value` as an object
+  (`startTime`, `samples[]` with `s`/`u`/`stressInfo`/`minuteOfDay`, some
+  samples with `e`) — verified against the real backend (2026-11-26) and the
+  anonymized real-shape fixture. No scalar `stress` is available: the record
+  keeps `stress: 0` and the full object under `extra.value`.
   Example: `icu zepp stress-minute --oldest 2026-06-01 --newest 2026-06-07`
 
 - `respiratory-rate`
   Invocation: `icu zepp respiratory-rate --oldest YYYY-MM-DD --newest YYYY-MM-DD`
-  Notes: Overnight respiratory rate readings from `/v2/users/me/events`.
+  Notes: Overnight respiratory rate readings from `/v2/users/me/events`
+  (`RespiratoryRate/real_data`). The real shape carries `value` as an object
+  (`measurements` base64-encoded, `timeZone`) — verified against the real
+  backend (2026-11-26) and the anonymized real-shape fixture. No scalar `rate`
+  is available: the record keeps `rate: 0` and the full object under
+  `extra.value`.
   Example: `icu zepp respiratory-rate --oldest 2026-06-01 --newest 2026-06-07`
 
 - `blood-pressure`
   Invocation: `icu zepp blood-pressure --source watch|user --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Blood-pressure readings. Default source `watch` uses
-  `/v2/users/me/events`; `user` uses `/users/me/bloodPressure`.
+  `/v2/users/me/events` (`blood_pressure/real_data`); `user` uses
+  `/users/me/bloodPressure`. Both are unverified: the live backend returned
+  no watch items for the Sep 1 – Nov 26 range and a 400 from the user
+  endpoint (2026-11-26, single-day and multi-day).
   Example: `icu zepp blood-pressure --source user --oldest 2026-06-01 --newest 2026-06-07`
 
 - `sport-load`
   Invocation: `icu zepp sport-load --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Daily training load from `/v2/watch/users/{id}/WatchSportStatistics/SPORT_LOAD`.
+  The live backend returned a 500 (2026-11-26, single-day and multi-day), so the shape is unverified.
   Example: `icu zepp sport-load --oldest 2026-06-01 --newest 2026-06-07`
 
 - `vo2`
   Invocation: `icu zepp vo2 --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: VO2 max estimates from `/v2/watch/users/{id}/WatchSportStatistics/VO2_MAX`.
+  The live backend returned a 500 (2026-11-26, single-day and multi-day), so the shape is unverified.
   Example: `icu zepp vo2 --oldest 2026-06-01 --newest 2026-06-07`
 
 - `workouts`
   Invocation: `icu zepp workouts [--sport NAME] --oldest DATE --newest DATE`
   Notes: Calls `/v1/sport/{sport}/history.json` (default `run`). Supports
   pagination via the internal `next` cursor (the CLI follows it
-  transparently).
+  transparently). The newest-first ordering is verified against the real
+  backend (2026-11-26): 10 workouts, newest-first, with trackId/sportType/
+  endTime/duration.
   Example: `icu zepp workouts --sport walking --oldest 2026-05-01 --newest 2026-05-31`
 
 - `workout`
   Invocation: `icu zepp workout [--sport NAME] TRACKID`
   Notes: Calls `/v1/sport/{sport}/detail.json` (default `run`) and decodes
-  the delta-encoded HR/pace/altitude/power/step series.
+  the delta-encoded HR/pace/altitude/power/step series. The delta-encoded
+  series shape is documented in the skill. The live backend returned an
+  empty `trackId` (2026-11-26, multiple trackIds), so the detail response
+  shape is unverified.
   Example: `icu zepp workout 1717200000`
+
+Note: no electrocardiogram (ECG/EKG) series exists in the CLI and the US
+backend does not support it — ECG is not available for US accounts
+(checked 2026-11-26).
 
 ## workouts
 

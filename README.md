@@ -88,7 +88,7 @@ API base URL resolution order:
 `--base-url` may appear before the resource (`icu --base-url URL athlete show`) or among the command flags. It only redirects intervals.icu calls and HTTP redirects to a different scheme or host are refused. Two outside services ignore it:
 
 - **Open-Meteo** (weather for `activity estimate-power` and `activity estimate-power-backtest`): pass `--no-weather` when testing against the mock. Only those two commands fetch weather and accept `--no-weather`; other commands (for example `analysis coaching`) make no weather calls and reject it as an unknown flag.
-- **Zepp** (`zepp ...`) has synthetic login, band data and event endpoints in `icu-mock`. Login and token take `--zepp-base-url URL`, which overrides `ZEPP_TOKENS_URL` and `ZEPP_LOGIN_URL`. Reads use `ZEPP_BASE_URL` and `ZEPP_EVENTS_URL`. [Zepp mock walkthrough](docs/zepp-session.md#verify-with-icu-mock).
+- **Zepp** (`zepp ...`) has synthetic login and the full read surface in `icu-mock` (profile, band data with sleep stages, all V2 wellness presets, sport statistics, weight, manual data, second-heart-rate, SpO2 windows, workouts). Login and token take `--zepp-base-url URL`, which overrides `ZEPP_TOKENS_URL` and `ZEPP_LOGIN_URL`. Reads use `ZEPP_BASE_URL` and `ZEPP_EVENTS_URL`. The mock serves the real shapes verified against a live backend capture (object payloads for body-battery/hybridcharge/stress-minute/respiratory-rate/health-summary, one flat item per 7-day window for the heart-rate app source); see [Zepp mock walkthrough](docs/zepp-session.md#verify-with-icu-mock).
 
 `icu config show` prints the config file path and shows only a 12-character SHA256 fingerprint for the stored API key (never partial or raw characters).
 `icu config diagnose` prints source resolution details and a non-reversible fingerprint, not the raw secret.
@@ -123,7 +123,7 @@ icu zepp heart-rate --source band --oldest 2026-06-01 --newest 2026-06-01
 icu zepp spo2    --oldest 2026-06-01 --newest 2026-06-07
 icu zepp stress  --oldest 2026-06-01 --newest 2026-06-07
 icu zepp pai     --oldest 2026-06-01 --newest 2026-06-07
-icu zepp hrv     --metric rmssd --oldest 2026-06-01 --newest 2026-06-07
+icu zepp hrv     --oldest 2026-06-01 --newest 2026-06-07
 icu zepp hybridcharge --oldest 2026-06-01 --newest 2026-06-07
 icu zepp body-battery --oldest 2026-06-01 --newest 2026-06-07
 icu zepp sport-load --oldest 2026-06-01 --newest 2026-06-07
@@ -133,6 +133,12 @@ icu zepp spo2-windows --date 2026-06-07
 icu zepp workouts --sport run --oldest 2026-06-01 --newest 2026-06-30
 icu zepp workout --sport run 1717200000
 ```
+
+Note on `second-heart-rate`: the command returns only the COS file index
+(timestamp, date, URL) — the per-second blobs are not downloaded or parsed
+(the blob format is not documented). The URL in each entry may carry a
+temporary signature, so the CLI redacts it (userinfo, query and fragment
+stripped) in its output; don't paste CLI output into shared places.
 
 The auth flow returns a `country_code` that picks the regional data host
 automatically: `api-mifit.huami.com` for US/global, `api-mifit-cn.huami.com`

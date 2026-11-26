@@ -207,7 +207,7 @@ $env:ICU_BASE_URL = $env:ZEPP_BASE_URL = $env:ZEPP_EVENTS_URL = $mock
 & "$scratch/icu.exe" zepp login --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock
 & "$scratch/icu.exe" zepp sleep --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp heart-rate --source band --oldest 2026-08-10 --newest 2026-08-10
-& "$scratch/icu.exe" zepp hrv --metric rmssd --oldest 2026-08-10 --newest 2026-08-10
+& "$scratch/icu.exe" zepp hrv --oldest 2026-08-10 --newest 2026-08-10
 & "$scratch/icu.exe" zepp login --email fixture@example.invalid --zepp-base-url $mock
 & "$scratch/icu.exe" zepp login --email fixture@example.invalid --password synthetic-only --zepp-base-url $mock --reauthenticate
 ```
@@ -216,6 +216,14 @@ The second login exits with a message about `--reauthenticate`. The explicit
 login succeeds and uses the first login's UUID. The focused tests assert the
 wire device ID, local persistence, failed reauthentication and migration from
 configs without a UUID.
+
+The mock serves the full CLI surface with synthetic data: profile, band data
+(summary/steps/sleep/HR), all V2 wellness presets (readiness, hrv-sdnn,
+hrv-rmssd, body-battery, hybridcharge, biocharge, health-summary, mood,
+skin-temp, stress-minute, respiratory-rate, blood-pressure), sport-load, vo2,
+weight, manual-data, second-heart-rate, spo2-windows, workouts and workout.
+Only the `zepp login`/`zepp status` auth paths are not covered by the mock
+(they exercise the auth flow itself).
 
 Use a second config in the same loopback environment to verify the web path.
 

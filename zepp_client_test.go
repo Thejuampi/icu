@@ -258,6 +258,14 @@ func TestZeppClientBandDataDecodesSummary(t *testing.T) { //nolint:gocyclo,cyclo
 		t.Fatalf("stage1 endEpoch = %d, want %d", day.Summary.Sleep.Stages[1].EndEpoch, midnight2026_06_01+120*60)
 	}
 
+	if day.Summary.Sleep.Stages[0].ModeLabel != "deep" {
+		t.Fatalf("stage0 modeLabel = %q, want deep", day.Summary.Sleep.Stages[0].ModeLabel)
+	}
+
+	if day.Summary.Sleep.Stages[1].ModeLabel != "light" {
+		t.Fatalf("stage1 modeLabel = %q, want light", day.Summary.Sleep.Stages[1].ModeLabel)
+	}
+
 	if day.Summary.Goal != 8000 {
 		t.Fatalf("goal = %d, want 8000", day.Summary.Goal)
 	}
@@ -1044,24 +1052,36 @@ func TestDecodeReadiness(t *testing.T) {
 func TestDecodeBodyBattery(t *testing.T) {
 	t.Parallel()
 
-	var raw string = zeppV2EventRaw
+	// Real backend shape: value is an object with samples, never a scalar.
+	raw := `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"real_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"total":55,"mental":41.8,"physical":75.3,"status":0,"jsonExtra":"{}"}]}}]}`
 
-	var events []icu.ZeppBodyBatteryEvent
-	var err error
-	events, err = icu.DecodeBodyBattery([]byte(raw))
+	events, err := icu.DecodeBodyBattery([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeBodyBattery: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Level != 42.5 {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	// The object payload is preserved; no scalar level is invented.
+	if events[0].Level != 0 {
+		t.Fatalf("level = %v, want 0 (real shape is an object)", events[0].Level)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	samples, ok := val["samples"].([]any)
+	if !ok || len(samples) != 1 {
+		t.Fatalf("samples = %v, want 1 sample", val["samples"])
 	}
 }
 
 func TestDecodeHybridCharge(t *testing.T) {
 	t.Parallel()
 
-	var raw string = `{"items":[{"timestamp":1780272000000,"value":90,"phase":"wake","source":"watch"}]}`
+	// Real backend shape: value is an object with samples, never a scalar.
+	var raw string = `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"insight_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"u":12345,"type":4,"insight":98,"insightId":"MOCKINSIGHT000","diff":0,"slope":0.0,"thres":0.0,"trackId":"MOCKTRACK00000000","jsonExtra":"{}"}]}}]}`
 
 	var events []icu.ZeppHybridChargeEvent
 	var err error
@@ -1070,23 +1090,46 @@ func TestDecodeHybridCharge(t *testing.T) {
 		t.Fatalf("DecodeHybridCharge: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Score != 90 || events[0].Extra["phase"] != "wake" {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Score != 0 {
+		t.Fatalf("score = %v, want 0 (real shape is an object)", events[0].Score)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	samples, ok := val["samples"].([]any)
+	if !ok || len(samples) != 1 {
+		t.Fatalf("samples = %v, want 1 sample", val["samples"])
 	}
 }
 
 func TestDecodeHealthSummary(t *testing.T) {
 	t.Parallel()
 
-	raw := `{"items":[{"timestamp":1780272000000,"extra":"z"}]}`
+	// Real backend shape: value is an object with samples, never a scalar.
+	raw := `{"items":[{"timestamp":1780272000000,"type":"DailyHealth","subType":"summary","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"u":12345,"dateString":"2026-06-01","totalSteps":5000,"totalCalories":450,"totalBurningDuration":60,"stepGoal":10000,"calorieGoal":400,"burningDurationGoal":45,"hyroxCount":0}]}}]}`
 
 	events, err := icu.DecodeHealthSummary([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeHealthSummary: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Extra["extra"] != "z" {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Value != 0 {
+		t.Fatalf("value = %v, want 0 (real shape is an object)", events[0].Value)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	samples, ok := val["samples"].([]any)
+	if !ok || len(samples) != 1 {
+		t.Fatalf("samples = %v, want 1 sample", val["samples"])
 	}
 }
 
@@ -1166,6 +1209,46 @@ func TestZeppClientReadinessDaysHitsV2Endpoint(t *testing.T) {
 	}
 }
 
+func TestZeppClientSleepHRVDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "readiness", "watch_score")
+	if _, err := client.SleepHRVDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("SleepHRVDays: %v", err)
+	}
+}
+
+func TestZeppClientSleepHRVDaysDecodesSleepHRV(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/v2/users/me/events" {
+			return http.StatusNotFound, err404
+		}
+
+		if !strings.Contains(record.Query, "eventType=readiness") || !strings.Contains(record.Query, "subType=watch_score") {
+			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"eventType":"readiness","subType":"watch_score","value":{"sleepHRV":44,"hrvBaseline":40,"hrvScore":66,"timestamp":1780262400000}}]}`
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	got, err := client.SleepHRVDays(t.Context(), "2026-06-01", "2026-06-01")
+	if err != nil {
+		t.Fatalf("SleepHRVDays: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Value != 44 {
+		t.Fatalf("got %+v, want one reading of 44", got)
+	}
+
+	if got[0].Source != "readiness.sleepHRV" {
+		t.Fatalf("source = %q, want readiness.sleepHRV", got[0].Source)
+	}
+}
+
 func TestZeppClientBodyBatteryDaysHitsV2Endpoint(t *testing.T) {
 	t.Parallel()
 
@@ -1214,30 +1297,53 @@ func TestZeppClientSkinTempDaysHitsV2Endpoint(t *testing.T) {
 func TestDecodeStressMinute(t *testing.T) {
 	t.Parallel()
 
-	raw := zeppV2EventRaw
+	// Real backend shape: value is an object with samples.
+	raw := `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"stress_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"u":1000,"stressInfo":"mock","minuteOfDay":493},{"s":0,"e":86399999,"u":1001,"stressInfo":"mock","minuteOfDay":541}]}}]}`
 
 	events, err := icu.DecodeStressMinute([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeStressMinute: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Stress != 42.5 {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Stress != 0 {
+		t.Fatalf("stress = %v, want 0 (real shape is an object)", events[0].Stress)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	samples, ok := val["samples"].([]any)
+	if !ok || len(samples) != 2 {
+		t.Fatalf("samples = %v, want 2 samples", val["samples"])
 	}
 }
 
 func TestDecodeRespiratoryRate(t *testing.T) {
 	t.Parallel()
 
-	raw := zeppV2EventRaw
+	// Real backend shape: value is an object with measurements + timeZone.
+	raw := `{"items":[{"timestamp":1780272000000,"type":"RespiratoryRate","subType":"real_data","userId":"mock-user","value":{"measurements":"bW9jaw==","timeZone":"-5"}}]}`
 
 	events, err := icu.DecodeRespiratoryRate([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeRespiratoryRate: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Rate != 42.5 {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Rate != 0 {
+		t.Fatalf("rate = %v, want 0 (real shape is an object)", events[0].Rate)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	if val["timeZone"] != "-5" {
+		t.Fatalf("extra.value.timeZone = %v, want -5", val["timeZone"])
 	}
 }
 
@@ -1779,13 +1885,31 @@ func TestDecodeV2EventsHandlesEmptyItems(t *testing.T) {
 func TestDecodeHeartRateEndpoint(t *testing.T) {
 	t.Parallel()
 
-	events, err := icu.DecodeHeartRateEndpoint([]byte(zeppV2EventRaw))
+	// Real backend shape: one flat item per window, no timestamp/value fields.
+	raw := `{"items":[{"type":2,"generatedTime":1780272000,"deviceSource":1,"timeZone":"-5","heartRateData":"bW9jaw==","deviceId":"MOCKDEVICE0000"}]}`
+
+	events, err := icu.DecodeHeartRateEndpoint([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeHeartRateEndpoint: %v", err)
 	}
 
-	if len(events) != 1 || events[0].HR != 42.5 {
-		t.Fatalf("events = %+v", events)
+	if len(events) != 1 {
+		t.Fatalf("events = %+v, want 1", events)
+	}
+	// generatedTime is epoch seconds and the reading timestamp is ms.
+	if events[0].Timestamp != 1780272000000 {
+		t.Fatalf("timestamp = %d, want 1780272000000", events[0].Timestamp)
+	}
+	if events[0].Date != "2026-06-01" {
+		t.Fatalf("date = %q, want 2026-06-01", events[0].Date)
+	}
+	// HR is not decodable from the base64 payload (format unverified) and
+	// stays 0; the raw fields are preserved in Extra.
+	if events[0].HR != 0 {
+		t.Fatalf("HR = %v, want 0 (payload format unverified)", events[0].HR)
+	}
+	if events[0].Extra["timeZone"] != "-5" {
+		t.Fatalf("extra = %+v, want timeZone -5", events[0].Extra)
 	}
 }
 
