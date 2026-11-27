@@ -47,6 +47,11 @@ const (
 	mockZeppTokenExpired    = "mock-expired"
 	mockZeppTokenEventsDown = "mock-events-down"
 	mockZeppFirstDay        = "2026-01-01"
+	// mockWorkoutSource is the synthetic history `source` of every workout.
+	mockWorkoutSource = "mock.watch.source"
+	// mockLegacyEventsMaxLimit is the largest page the legacy events mock
+	// accepts.
+	mockLegacyEventsMaxLimit = 500
 	// mockZeppHRVHourUTC puts each night's HRV reading at 03:30 UTC of the
 	// day, i.e. the previous local evening in the Americas: it exercises the
 	// evening-rolls-forward day mapping.
@@ -654,21 +659,25 @@ func (s *server) zeppUserInfo(w http.ResponseWriter) {
 // zeppManualData serves /v1/user/manualData.json: one synthetic entry per day.
 func (s *server) zeppManualData(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	days, ok := mockZeppDayList(q, "from", "to")
-	if !ok {
-		writeError(w, http.StatusBadRequest, "from/to must be epoch millis")
+	// The real backend answered the earlier from/to form (no userid, no
+	// type) with HTTP 400.
+	if q.Get("userid") == "" || q.Get("type") == "" {
+		writeError(w, http.StatusBadRequest, "userid and type are required")
 
 		return
 	}
 
 	items := []map[string]any{}
-	for _, day := range days {
-		at, _ := time.Parse(time.DateOnly, day)
-		items = append(items, map[string]any{
-			mockKeyTimestamp: at.Add(12 * time.Hour).UnixMilli(),
-			"type":           "manual",
-			mockKeyValue:     map[string]any{"note": "mock"},
-		})
+	if q.Get("type") == "sleep" {
+		start, _ := time.Parse(time.DateOnly, mockZeppFirstDay)
+		for _, day := range mockZeppDays(start, start.AddDate(1, 0, -1)) {
+			at, _ := time.Parse(time.DateOnly, day)
+			items = append(items, map[string]any{
+				mockKeyTimestamp: at.Add(12 * time.Hour).UnixMilli(),
+				"type":           "sleep",
+				mockKeyValue:     map[string]any{"note": "mock"},
+			})
+		}
 	}
 
 	writeJSON(w, http.StatusOK, mustMarshal(map[string]any{"code": 1, mockKeyMessage: mockSuccess, mockKeyItems: items}))
@@ -679,12 +688,16 @@ func (s *server) zeppManualData(w http.ResponseWriter, r *http.Request) {
 //nolint:mnd // synthetic blood-pressure values
 func (s *server) zeppBloodPressureUser(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	days, ok := mockZeppDayList(q, "from", "to")
-	if !ok {
-		writeError(w, http.StatusBadRequest, "from/to must be epoch millis")
+	// The real backend answered the earlier from/to form with HTTP 400.
+	toDate, errTo := time.Parse(time.DateOnly, q.Get("toDate"))
+	count, errDays := strconv.Atoi(q.Get("days"))
+	if errTo != nil || errDays != nil || count <= 0 || q.Get("sourceArrayStr") == "" {
+		writeError(w, http.StatusBadRequest, "days, toDate and sourceArrayStr are required")
 
 		return
 	}
+
+	days := mockZeppDays(toDate.AddDate(0, 0, 1-count), toDate)
 
 	items := []map[string]any{}
 	for _, day := range days {
@@ -816,16 +829,14 @@ func (s *server) zeppWeightRecords(w http.ResponseWriter, r *http.Request) {
 func (s *server) zeppSportStatistics(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	statType := path.Base(r.URL.Path)
-	fromMS, errFrom := strconv.ParseInt(q.Get("from"), 10, 64)
-	toMS, errTo := strconv.ParseInt(q.Get("to"), 10, 64)
-	if errFrom != nil || errTo != nil {
-		writeError(w, http.StatusBadRequest, "from/to must be epoch millis")
+	// The real backend answered the earlier from/to epoch form with HTTP 500.
+	from, errFrom := time.Parse(time.DateOnly, q.Get("startDay"))
+	to, errTo := time.Parse(time.DateOnly, q.Get("endDay"))
+	if errFrom != nil || errTo != nil || q.Get("limit") == "" {
+		writeError(w, http.StatusInternalServerError, "startDay/endDay (YYYY-MM-DD) and limit are required")
 
 		return
 	}
-
-	from := time.UnixMilli(fromMS).UTC().Truncate(24 * time.Hour)
-	to := time.UnixMilli(toMS).UTC()
 	items := []map[string]any{}
 	for _, day := range mockZeppDays(from, to) {
 		at, _ := time.Parse(time.DateOnly, day)
@@ -891,6 +902,7 @@ func (s *server) zeppSport(w http.ResponseWriter, r *http.Request) {
 			"avg_pace":       "0",
 			"avg_heart_rate": strconv.Itoa(v.RestingHR),
 			"type":           1,
+			"source":         mockWorkoutSource,
 		})
 	}
 
@@ -911,6 +923,21 @@ func (s *server) zeppSportDetail(w http.ResponseWriter, r *http.Request) {
 	trackID := q.Get("trackid")
 	if trackID == "" {
 		writeError(w, http.StatusBadRequest, "trackid is required")
+
+		return
+	}
+
+	// The real backend serves every sport's detail under /v1/sport/run/
+	// (other segments 404) and returns an empty detail when `source` does
+	// not match the workout's history source.
+	if r.URL.Path != "/v1/sport/run/detail.json" {
+		writeError(w, http.StatusNotFound, "no detail under "+r.URL.Path)
+
+		return
+	}
+
+	if q.Get("source") != mockWorkoutSource || q.Get("userid") == "" {
+		writeJSON(w, http.StatusOK, mustMarshal(map[string]any{"code": 1, mockKeyMessage: mockSuccess, "data": map[string]any{}}))
 
 		return
 	}
@@ -955,6 +982,21 @@ func (s *server) zeppOldEvents(w http.ResponseWriter, r *http.Request) {
 	toMS, errTo := strconv.ParseInt(q.Get("to"), 10, 64)
 	if errFrom != nil || errTo != nil {
 		writeError(w, http.StatusBadRequest, "from/to must be epoch millis")
+
+		return
+	}
+
+	// The real backend answered the earlier form (no app headers, no
+	// userId) with HTTP 500; mirror that so the client form stays pinned.
+	if r.Header.Get("Appname") == "" || r.Header.Get("Appplatform") == "" || q.Get(mockKeyUserID) == "" {
+		writeError(w, http.StatusInternalServerError, "legacy events need app headers and userId")
+
+		return
+	}
+
+	limit, errLimit := strconv.Atoi(q.Get("limit"))
+	if errLimit != nil || limit <= 0 || limit > mockLegacyEventsMaxLimit {
+		writeError(w, http.StatusInternalServerError, "legacy events limit out of range")
 
 		return
 	}
@@ -1008,5 +1050,11 @@ func (s *server) zeppOldEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, mustMarshal(map[string]any{mockKeyItems: items}))
+	body := map[string]any{mockKeyItems: items}
+	if len(items) > limit {
+		body[mockKeyItems] = items[:limit]
+		body["next"] = map[string]any{mockKeyTimestamp: items[limit][mockKeyTimestamp]}
+	}
+
+	writeJSON(w, http.StatusOK, mustMarshal(body))
 }

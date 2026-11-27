@@ -568,8 +568,10 @@ func TestZeppClientWorkoutDecodesDeltaSeries(t *testing.T) {
 			return http.StatusNotFound, err404
 		}
 
-		if !strings.Contains(record.Query, "trackid=1717200000") {
-			return http.StatusOK, `{"code":1,"message":"missing trackid"}`
+		if !strings.Contains(record.Query, "trackid=1717200000") ||
+			!strings.Contains(record.Query, "source=hist.source") ||
+			!strings.Contains(record.Query, "userid=u1") {
+			return http.StatusOK, `{"code":1,"message":"missing trackid, source or userid"}`
 		}
 
 		body := `{"code":1,"message":"success","data":{"trackid":"1717200000","type":1,"startTime":1717200000,"endTime":1717203600,"duration":3600,"distance":10000,"calories":450,"avgHR":150,"maxHR":175,"minHR":120,"hr_split":"` + encodedHR + `"}}` //nolint:lll // long JSON fixture
@@ -580,7 +582,7 @@ func TestZeppClientWorkoutDecodesDeltaSeries(t *testing.T) {
 
 	client := newTestZeppClient(srv)
 
-	detail, err := client.Workout(t.Context(), "run", "1717200000")
+	detail, err := client.WorkoutWithSource(t.Context(), "1717200000", "hist.source")
 	if err != nil {
 		t.Fatalf("Workout: %v", err)
 	}
@@ -1487,12 +1489,10 @@ func TestWatchSportStatisticsURLBuildsCorrectPath(t *testing.T) {
 		t.Fatalf("WatchSportStatisticsURL: %v", err)
 	}
 
-	if !strings.Contains(got, "/v2/watch/users/u1/WatchSportStatistics/SPORT_LOAD?") {
-		t.Fatalf("url missing path: %s", got)
-	}
-
-	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
-		t.Fatalf("url missing query: %s", got)
+	want := "https://api-mifit.huami.com/v2/watch/users/u1/WatchSportStatistics/SPORT_LOAD?" +
+		"endDay=2026-06-07&isReverse=true&limit=900&startDay=2026-06-01"
+	if got != want {
+		t.Fatalf("url = %s, want %s", got, want)
 	}
 }
 
@@ -1626,26 +1626,9 @@ func TestWeightRecordsURLRejectsInvalidDate(t *testing.T) {
 func TestManualDataURLBuildsCorrectPath(t *testing.T) {
 	t.Parallel()
 
-	got, err := icu.ManualDataURL("https://api-mifit.huami.com", "2026-06-01", "2026-06-07")
-	if err != nil {
-		t.Fatalf("ManualDataURL: %v", err)
-	}
-
-	if !strings.Contains(got, "/v1/user/manualData.json?") {
-		t.Fatalf("url missing path: %s", got)
-	}
-
-	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
-		t.Fatalf("url missing query: %s", got)
-	}
-}
-
-func TestManualDataURLRejectsInvalidDate(t *testing.T) {
-	t.Parallel()
-
-	_, err := icu.ManualDataURL("https://api-mifit.huami.com", "not-a-date", "2026-06-07")
-	if err == nil {
-		t.Fatalf("expected error for invalid date")
+	got := icu.ManualDataURL("https://api-mifit.huami.com", "u1", "sleep")
+	if got != "https://api-mifit.huami.com/v1/user/manualData.json?type=sleep&userid=u1" {
+		t.Fatalf("url = %s", got)
 	}
 }
 
@@ -1657,12 +1640,19 @@ func TestBloodPressureUserURLBuildsCorrectPath(t *testing.T) {
 		t.Fatalf("BloodPressureUserURL: %v", err)
 	}
 
-	if !strings.Contains(got, "/users/me/bloodPressure?") {
-		t.Fatalf("url missing path: %s", got)
+	want := "https://api-mifit.huami.com/users/me/bloodPressure?days=7&" +
+		"sourceArrayStr=com.huami.midong.associated%2Ccom.huami.midong&toDate=2026-06-07"
+	if got != want {
+		t.Fatalf("url = %s, want %s", got, want)
 	}
+}
 
-	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
-		t.Fatalf("url missing query: %s", got)
+func TestBloodPressureUserURLRejectsInvertedRange(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.BloodPressureUserURL("https://api-mifit.huami.com", "2026-06-07", "2026-06-01")
+	if !errors.Is(err, icu.ErrZeppDateRange) {
+		t.Fatalf("err = %v, want ErrZeppDateRange", err)
 	}
 }
 
@@ -1900,8 +1890,10 @@ func TestDecodeHeartRateEndpoint(t *testing.T) {
 	if events[0].Timestamp != 1780272000000 {
 		t.Fatalf("timestamp = %d, want 1780272000000", events[0].Timestamp)
 	}
-	if events[0].Date != "2026-06-01" {
-		t.Fatalf("date = %q, want 2026-06-01", events[0].Date)
+	// The date follows the item's own timeZone ("-5"): 00:00 UTC is the
+	// previous evening there.
+	if events[0].Date != "2026-05-31" {
+		t.Fatalf("date = %q, want 2026-05-31", events[0].Date)
 	}
 	// HR is not decodable from the base64 payload (format unverified) and
 	// stays 0; the raw fields are preserved in Extra.

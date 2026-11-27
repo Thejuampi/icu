@@ -209,6 +209,7 @@ type PAIDay struct {
 // etc. The actual sport mapping is in ZeppSportType below.
 type WorkoutSummary struct {
 	TrackID   string `json:"trackId"`
+	Source    string `json:"source,omitempty"`
 	Type      int    `json:"type,omitempty"`
 	SportType int    `json:"sportType,omitempty"`
 	StartTime int64  `json:"startTime,omitempty"`
@@ -764,7 +765,7 @@ func DecodeHeartRateEndpoint(raw []byte) ([]ZeppHeartRateReading, error) {
 		ts := item.GeneratedTime * zeppEpochSecondsToMillis
 		readings = append(readings, ZeppHeartRateReading{
 			Timestamp: ts,
-			Date:      time.UnixMilli(ts).UTC().Format("2006-01-02"),
+			Date:      time.UnixMilli(ts).In(zeppItemLocation(item.TimeZone)).Format("2006-01-02"),
 			Extra: map[string]any{
 				"type":          item.Type,
 				"generatedTime": item.GeneratedTime,
@@ -778,6 +779,36 @@ func DecodeHeartRateEndpoint(raw []byte) ([]ZeppHeartRateReading, error) {
 
 	return readings, nil
 }
+
+// zeppItemLocation returns the IANA location an item names in its
+// `timeZone` field, or UTC when the field is empty or unknown. The date of
+// an item follows its own zone, like the band heart-rate dates follow the
+// local or --tz zone.
+func zeppItemLocation(name string) *time.Location {
+	if name == "" {
+		return time.UTC
+	}
+
+	if loc, err := time.LoadLocation(name); err == nil {
+		return loc
+	}
+
+	// Offset forms: hours ("-5", "+5.5") or "±HH:MM".
+	if hours, err := strconv.ParseFloat(name, 64); err == nil && hours >= -14 && hours <= 14 {
+		return time.FixedZone(name, int(hours*zeppSecondsPerHour))
+	}
+
+	if t, err := time.Parse("-07:00", name); err == nil {
+		_, offset := t.Zone()
+
+		return time.FixedZone(name, offset)
+	}
+
+	return time.UTC
+}
+
+// zeppSecondsPerHour converts an hour offset into seconds.
+const zeppSecondsPerHour = 3600
 
 // ZeppWeightRecord is one weight measurement from /users/{id}/members/-1/weightRecords.
 type ZeppWeightRecord struct {

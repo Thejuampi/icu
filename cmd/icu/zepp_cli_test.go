@@ -471,8 +471,8 @@ func TestZeppWorkoutCommandHitsSportDetailEndpoint(t *testing.T) {
 			return http.StatusNotFound, err404CLI
 		}
 
-		if !strings.Contains(req.Query, "trackid=track1") {
-			return http.StatusOK, `{"code":1,"message":"missing trackid"}`
+		if !strings.Contains(req.Query, "trackid=track1") || !strings.Contains(req.Query, "source=s.src") {
+			return http.StatusOK, `{"code":1,"message":"missing trackid or source"}`
 		}
 
 		body := `{"code":1,"message":"success","data":{"trackid":"track1","type":1,"avgHR":150}}`
@@ -486,8 +486,54 @@ func TestZeppWorkoutCommandHitsSportDetailEndpoint(t *testing.T) {
 	registerZeppCommands(registry)
 
 	cmd, _ := registry.Lookup("zepp", "workout")
-	if err := cmd.Run([]string{"track1"}, map[string]string{}, nil, io.Discard, io.Discard); err != nil {
+	if err := cmd.Run([]string{"track1"}, map[string]string{"source": "s.src"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("workout: %v", err)
+	}
+}
+
+func TestZeppWorkoutCommandLooksUpSourceAndManualDataType(t *testing.T) {
+	withZeppTestEnv(t)
+
+	srv := newZeppMockServer(func(req zeppMockRequest) (int, string) {
+		switch req.Path {
+		case "/v1/sport/run/history.json":
+			return http.StatusOK, `{"code":1,"data":{"next":-1,"summary":[{"trackid":"1717200000","source":"h.src"}]}}`
+		case "/v1/sport/run/detail.json":
+			if !strings.Contains(req.Query, "source=h.src") {
+				return http.StatusOK, `{"code":1,"data":{}}`
+			}
+
+			return http.StatusOK, `{"code":1,"data":{"trackid":"1717200000"}}`
+		case "/v1/user/manualData.json":
+			if !strings.Contains(req.Query, "type=weight") {
+				return http.StatusBadRequest, `{}`
+			}
+
+			return http.StatusOK, `{"items":[]}`
+		}
+
+		return http.StatusNotFound, err404CLI
+	})
+	t.Cleanup(srv.Close)
+	t.Setenv("ZEPP_BASE_URL", srv.URL())
+
+	registry := NewCommandRegistry()
+	registerZeppCommands(registry)
+
+	cmd, _ := registry.Lookup("zepp", "workout")
+	if err := cmd.Run([]string{"1717200000"}, map[string]string{}, nil, io.Discard, io.Discard); err != nil {
+		t.Fatalf("workout: %v", err)
+	}
+
+	manual, _ := registry.Lookup("zepp", "manual-data")
+	flags := map[string]string{"type": "weight", "oldest": "2026-06-01", "newest": "2026-06-01"}
+	if err := manual.Run(nil, flags, nil, io.Discard, io.Discard); err != nil {
+		t.Fatalf("manual-data: %v", err)
+	}
+
+	flags["type"] = "sleep"
+	if err := manual.Run(nil, flags, nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "fetch manual-data") {
+		t.Fatalf("manual-data sleep err = %v", err)
 	}
 }
 

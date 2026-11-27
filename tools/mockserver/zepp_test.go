@@ -17,6 +17,8 @@ func zeppGet(t *testing.T, url, token string) (int, map[string]any) {
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
 	if token != "" {
 		req.Header.Set("Apptoken", token)
+		req.Header.Set("Appname", "com.xiaomi.hm.health")
+		req.Header.Set("Appplatform", "web")
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -240,7 +242,7 @@ func TestZeppMockOldEvents(t *testing.T) {
 
 	from := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC).UnixMilli()
 	to := time.Date(2026, 8, 11, 23, 59, 59, 0, time.UTC).UnixMilli()
-	q := "&from=" + itoa(from) + "&to=" + itoa(to)
+	q := "&from=" + itoa(from) + "&to=" + itoa(to) + "&userId=u1&limit=200"
 
 	// stress: one item per mock day with the legacy stress shape.
 	code, body := zeppGet(t, srv.URL+"/users/u1/events?eventType=all_day_stress"+q, "tok")

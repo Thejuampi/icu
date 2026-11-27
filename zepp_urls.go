@@ -33,6 +33,9 @@ func SportHistoryURL(base, sport string) string {
 }
 
 // SportDetailURL composes the /v1/sport/{sport}/detail.json URL.
+//
+// The real backend serves the detail of every sport under the `run`
+// segment (see ZeppWorkoutDetailSegment); other segments 404.
 func SportDetailURL(base, sport string) string {
 	return base + "/v1/sport/" + sport + "/detail.json"
 }
@@ -83,13 +86,29 @@ func V2EventsURL(base string, preset V2EventPreset, oldest, newest string) (stri
 
 // WatchSportStatisticsURL composes a /v2/watch/users/{userID}/WatchSportStatistics/{statType}
 // URL for a date range. The base URL is the regional data host.
+//
+// The endpoint takes calendar days, not epoch bounds: `startDay` and `endDay`
+// as YYYY-MM-DD plus `limit` and `isReverse`. This is the form used by
+// zepp-health-cli (sport_load/vo2_max) and ha-zepp (async_fetch_sport_load).
+// The earlier `from`/`to` epoch-millisecond form got HTTP 500 from the real
+// backend.
 func WatchSportStatisticsURL(base, userID, statType, oldest, newest string) (string, error) {
-	return buildZeppDateRangeURL(
-		base, "/v2/watch/users/"+userID+"/WatchSportStatistics/"+statType, oldest, newest,
-		url.Values{},
-		"from", "to",
-		parseDateToMillis, parseDateEndOfDayMillis,
-	)
+	if _, err := parseDateToMillis(oldest); err != nil {
+		return "", fmt.Errorf("parse oldest date: %w", err)
+	}
+
+	if _, err := parseDateToMillis(newest); err != nil {
+		return "", fmt.Errorf("parse newest date: %w", err)
+	}
+
+	query := url.Values{
+		"startDay":     {oldest},
+		"endDay":       {newest},
+		zeppParamLimit: {zeppWatchStatisticsLimit},
+		"isReverse":    {"true"},
+	}
+
+	return base + "/v2/watch/users/" + userID + "/WatchSportStatistics/" + statType + "?" + query.Encode(), nil
 }
 
 // UserHeartRateURL composes the /users/{userID}/heartRate URL.
@@ -119,13 +138,24 @@ func WeightRecordsURL(base, userID, oldest, newest string) (string, error) {
 }
 
 // BloodPressureUserURL composes the /users/me/bloodPressure URL.
+//
+// The endpoint takes a day count ending at a calendar day: `days`,
+// `toDate` (YYYY-MM-DD) and `sourceArrayStr`, the form used by
+// zepp-health-cli (blood_pressure_me). The earlier `from`/`to`
+// epoch-millisecond form got HTTP 400 from the real backend.
 func BloodPressureUserURL(base, oldest, newest string) (string, error) {
-	return buildZeppDateRangeURL(
-		base, "/users/me/bloodPressure", oldest, newest,
-		url.Values{},
-		"from", "to",
-		parseDateToMillis, parseDateEndOfDayMillis,
-	)
+	days, err := zeppInclusiveDays(oldest, newest)
+	if err != nil {
+		return "", err
+	}
+
+	query := url.Values{
+		"days":           {strconv.Itoa(days)},
+		"toDate":         {newest},
+		"sourceArrayStr": {zeppBloodPressureSources},
+	}
+
+	return base + "/users/me/bloodPressure?" + query.Encode(), nil
 }
 
 // SecondHeartRateFilesURL composes the /users/me/fileInfo/events URL used to
@@ -175,13 +205,38 @@ func SpO2WindowsURL(base, userID, date, tz string) (string, error) {
 }
 
 // ManualDataURL composes the /v1/user/manualData.json URL.
-func ManualDataURL(base, oldest, newest string) (string, error) {
-	return buildZeppDateRangeURL(
-		base, "/v1/user/manualData.json", oldest, newest,
-		url.Values{},
-		"from", "to",
-		parseDateToMillis, parseDateEndOfDayMillis,
-	)
+//
+// The endpoint has no date bounds: it takes `userid` and a record `type`
+// (zepp-health-cli manual_data, default type "sleep"). The earlier
+// `from`/`to` form, without `userid` or `type`, got HTTP 400 from the real
+// backend. Callers filter the returned records by date.
+func ManualDataURL(base, userID, manualType string) string {
+	query := url.Values{
+		zeppParamUserIDLower: {userID},
+		"type":               {manualType},
+	}
+
+	return base + "/v1/user/manualData.json?" + query.Encode()
+}
+
+// zeppInclusiveDays returns the number of calendar days from oldest to
+// newest, both included.
+func zeppInclusiveDays(oldest, newest string) (int, error) {
+	from, err := parseDateToMillis(oldest)
+	if err != nil {
+		return 0, fmt.Errorf("parse oldest date: %w", err)
+	}
+
+	to, err := parseDateToMillis(newest)
+	if err != nil {
+		return 0, fmt.Errorf("parse newest date: %w", err)
+	}
+
+	if to < from {
+		return 0, fmt.Errorf("%w: newest %s is before oldest %s", ErrZeppDateRange, newest, oldest)
+	}
+
+	return int((to-from)/zeppDayMillis) + 1, nil
 }
 
 func buildZeppDateRangeURL(

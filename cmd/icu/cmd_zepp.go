@@ -50,7 +50,7 @@ func registerZeppCommands(registry *CommandRegistry) {
 	registry.Register("zepp", "events", zeppEventsCommand())
 	registry.Register("zepp", "hrv", zeppHRVCommand())
 	registry.Register("zepp", "weight", zeppSimpleCommand("weight", "Weight measurements from /users/{id}/members/-1/weightRecords.", (*icu.ZeppClient).WeightRecords))
-	registry.Register("zepp", "manual-data", zeppSimpleCommand("manual-data", "Manually entered wellness records from /v1/user/manualData.json.", (*icu.ZeppClient).ManualData))
+	registry.Register("zepp", "manual-data", zeppManualDataCommand())
 	registry.Register("zepp", "second-heart-rate", zeppSecondHeartRateCommand())
 	registry.Register("zepp", "spo2-windows", zeppSingleDateCommand("spo2-windows", "SpO2 ODI windows for a single day from /users/{id}/events/dateString.", (*icu.ZeppClient).SpO2Windows))
 
@@ -193,6 +193,27 @@ func zeppSimpleCommand[T any](name, description string, fetch func(*icu.ZeppClie
 				records, err := fetch(client, ctx, oldest, newest)
 				if err != nil {
 					return fmt.Errorf("fetch %s: %w", name, err)
+				}
+
+				return writeJSON(stdout, records)
+			})
+		},
+	}
+}
+
+func zeppManualDataCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "zepp manual-data [--type TYPE] --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		Description: "Manually entered wellness records of one type (default sleep) from /v1/user/manualData.json, filtered by date.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, _ io.Writer) error {
+			oldest, newest := zeppDateRange(flags)
+			manualType := icu.StringFlag(flags, "type", icu.ZeppManualDataDefaultType)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				records, err := client.ManualDataType(ctx, manualType, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch manual-data: %w", err)
 				}
 
 				return writeJSON(stdout, records)
@@ -472,8 +493,8 @@ func zeppWorkoutsCommand() *Command {
 func zeppWorkoutCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "zepp workout [--sport NAME] <id>",
-		Description: "Fetch a single workout detail (HR, pace, altitude series). Default sport=run.",
+		Usage:       "zepp workout [--sport NAME] [--source SOURCE] <id>",
+		Description: "Fetch a single workout detail (HR, pace, altitude series). Default sport=run. Without --source the history source is looked up.",
 		Run: func(args []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "run")
 
@@ -484,7 +505,17 @@ func zeppWorkoutCommand() *Command {
 			trackID := args[0]
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
-				detail, err := client.Workout(ctx, sport, trackID)
+				var (
+					detail icu.WorkoutDetail
+					err    error
+				)
+
+				if source := icu.StringFlag(flags, "source", ""); source != "" {
+					detail, err = client.WorkoutWithSource(ctx, trackID, source)
+				} else {
+					detail, err = client.Workout(ctx, sport, trackID)
+				}
+
 				if err != nil {
 					return fmt.Errorf("fetch workout detail: %w", err)
 				}

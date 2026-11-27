@@ -702,7 +702,8 @@ the raw components.
   calls `/users/{id}/heartRate` on the regional data host and returns one
   flat item per 7-day window (`type`, `generatedTime` in epoch seconds,
   `deviceSource`, `timeZone`, `heartRateData` base64, `deviceId`) — not
-  per-day items. The CLI stamps the item at `generatedTime * 1000`, keeps
+  per-day items. The item's `date` follows its own `timeZone` (IANA name or
+  hour offset such as `-5`; UTC when missing). The CLI stamps the item at `generatedTime * 1000`, keeps
   the base64 payload in `extra`, and reports heart rate as 0 (the payload
   format is not decoded). Verified 2026-11-26: the band source returns one
   point per minute; the app source returns one flat item per 7-day window
