@@ -155,7 +155,9 @@ func postZeppWebForm(client *http.Client, endpoint string, form url.Values) (*ht
 
 	resp, err := client.Do(req)
 	if err != nil {
-		// A transport error can include the registration URL with the email.
+		// A transport error can include the registration URL with the email
+		// (or a rejected redirect Location). Keep a generic message; the
+		// Android login and data reads use wrapZeppTransport instead.
 		return nil, errors.New("web authentication request failed")
 	}
 

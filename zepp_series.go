@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -293,9 +294,33 @@ func (t *zeppTrackIDString) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// wrapZeppTransport returns a transport error that keeps the endpoint path
-// shape but never includes the raw URL, query or user id. Nested url.Error
-// values are peeled so their URL is not written through Error().
+// zeppRedactedError is a transport error whose Error() text is sanitized
+// (no raw URL, query or user id) but which Unwraps to the inner cause so
+// errors.Is/As still see context.Canceled, DeadlineExceeded and net.Error.
+type zeppRedactedError struct {
+	msg   string
+	cause error
+}
+
+func (e *zeppRedactedError) Error() string { return e.msg }
+func (e *zeppRedactedError) Unwrap() error { return e.cause }
+
+func (e *zeppRedactedError) Timeout() bool {
+	var netErr net.Error
+
+	return errors.As(e.cause, &netErr) && netErr.Timeout()
+}
+
+func (e *zeppRedactedError) Temporary() bool {
+	var netErr net.Error
+
+	return errors.As(e.cause, &netErr) && netErr.Temporary() //nolint:staticcheck // Temporary is deprecated but still used by some callers
+}
+
+// wrapZeppTransport peels *url.Error values so the raw URL never appears,
+// then wraps the inner cause. When the cause's own text is already clean
+// it uses %w; otherwise a zeppRedactedError keeps a sanitized Error() and
+// still Unwraps to the cause.
 func wrapZeppTransport(op, endpoint, userID string, err error) error {
 	shape := redactZeppEndpoint(endpoint)
 	cause := err
@@ -314,17 +339,62 @@ func wrapZeppTransport(op, endpoint, userID string, err error) error {
 		cause = urlErr.Err
 	}
 
-	msg := "request failed"
-	if cause != nil {
-		msg = redactUserID(cause.Error(), userID)
+	if cause == nil {
+		cause = errors.New("request failed")
 	}
 
-	return fmt.Errorf("%s: %s %s: %s", op, verb, shape, msg)
+	if transportMessageNeedsRedaction(cause.Error(), userID, endpoint) {
+		return &zeppRedactedError{
+			msg:   fmt.Sprintf("%s: %s %s: %s", op, verb, shape, redactTransportMessage(cause.Error(), userID, endpoint)),
+			cause: cause,
+		}
+	}
+
+	return fmt.Errorf("%s: %s %s: %w", op, verb, shape, cause)
+}
+
+func transportMessageNeedsRedaction(msg, userID, endpoint string) bool {
+	if userID != "" && strings.Contains(msg, userID) {
+		return true
+	}
+
+	if endpoint == "" {
+		return false
+	}
+
+	if strings.Contains(msg, endpoint) {
+		return true
+	}
+
+	u, err := url.Parse(endpoint)
+	if err != nil || u.RawQuery == "" {
+		return false
+	}
+
+	return strings.Contains(msg, strings.TrimSuffix(endpoint, "?"+u.RawQuery))
+}
+
+func redactTransportMessage(msg, userID, endpoint string) string {
+	msg = redactUserID(msg, userID)
+	if endpoint == "" {
+		return msg
+	}
+
+	shape := redactZeppEndpoint(endpoint)
+	if shape != "{redacted}" {
+		msg = strings.ReplaceAll(msg, endpoint, shape)
+		if u, err := url.Parse(endpoint); err == nil && u.RawQuery != "" {
+			msg = strings.ReplaceAll(msg, strings.TrimSuffix(endpoint, "?"+u.RawQuery), shape)
+		}
+	}
+
+	return redactUserID(msg, userID)
 }
 
 // redactZeppEndpoint keeps the scheme, host and path shape of a Zepp URL,
-// replaces a user id in the path with `{id}`, and drops userinfo, query and
-// fragment. The path is built by hand so `{id}` is not percent-encoded.
+// replaces a user id or registration identity in the path with `{id}`, and
+// drops userinfo, query and fragment. The path is built by hand so `{id}`
+// is not percent-encoded.
 func redactZeppEndpoint(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Path == "" && u.Host == "") {
@@ -333,8 +403,15 @@ func redactZeppEndpoint(raw string) string {
 
 	parts := strings.Split(u.Path, "/")
 	for i := 1; i < len(parts); i++ {
-		if parts[i-1] == "users" && parts[i] != "" && parts[i] != "me" {
-			parts[i] = "{id}"
+		switch parts[i-1] {
+		case "users":
+			if parts[i] != "" && parts[i] != "me" {
+				parts[i] = "{id}"
+			}
+		case "registrations":
+			if parts[i] != "" && parts[i] != "tokens" {
+				parts[i] = "{id}"
+			}
 		}
 	}
 

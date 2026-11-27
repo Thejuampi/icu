@@ -1,6 +1,7 @@
 package icu_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -321,8 +322,8 @@ func TestZeppLegacyEventsErrorsWhenPageCapIsHit(t *testing.T) {
 		t.Fatalf("pages = %d, want 100", pages)
 	}
 
-	if msg := err.Error(); !strings.Contains(msg, "all_day_stress") || strings.Contains(msg, "u1") {
-		t.Fatalf("message %q should name the series path and omit the user id", msg)
+	if msg := err.Error(); !strings.Contains(msg, "zepp stress") || !strings.Contains(msg, "all_day_stress") || strings.Contains(msg, "u1") {
+		t.Fatalf("message %q should name the series and omit the user id", msg)
 	}
 }
 
@@ -392,5 +393,84 @@ func TestZeppTransportErrorOmitsUserID(t *testing.T) {
 
 	if !strings.Contains(msg, "connection refused") {
 		t.Fatalf("transport error %q should keep the cause", msg)
+	}
+}
+
+func TestZeppTransportPreservesContextErrorsAndOmitsUserID(t *testing.T) {
+	t.Parallel()
+
+	const uid = "mock-user-42"
+	srv := newZeppTestServer(func(zeppRequestRecord) (int, string) {
+		t.Error("the canceled client should not have issued a request")
+
+		return http.StatusOK, `{"items":[]}`
+	})
+	t.Cleanup(srv.Close)
+
+	auth := &icu.ZeppAuthResult{
+		LoginToken:  "tok-abc",
+		AppToken:    "test-app-token",
+		UserID:      uid,
+		CountryCode: "US",
+	}
+	client := icu.NewZeppClientFromAuth(
+		auth,
+		icu.WithZeppBaseURL(srv.server.URL),
+		icu.WithZeppEventsURL(srv.server.URL),
+		icu.WithZeppHTTPClient(srv.server.Client()),
+	)
+
+	type callFunc func(context.Context) error
+	calls := []struct {
+		name string
+		kind string
+		call callFunc
+	}{
+		{"stress canceled", "canceled", func(ctx context.Context) error {
+			_, err := client.StressDays(ctx, "2026-06-01", "2026-06-01")
+			return err
+		}},
+		{"stress deadline", "deadline", func(ctx context.Context) error {
+			_, err := client.StressDays(ctx, "2026-06-01", "2026-06-01")
+			return err
+		}},
+		{"doGet canceled", "canceled", func(ctx context.Context) error {
+			_, err := client.BandData(ctx, "2026-06-01", "2026-06-01")
+			return err
+		}},
+		{"v2 events canceled", "canceled", func(ctx context.Context) error {
+			_, err := client.ReadinessDays(ctx, "2026-06-01", "2026-06-01")
+			return err
+		}},
+		{"data-host canceled", "canceled", func(ctx context.Context) error {
+			_, err := client.WeightRecords(ctx, "2026-06-01", "2026-06-01")
+			return err
+		}},
+	}
+
+	for _, tc := range calls {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, stop := context.WithCancel(t.Context())
+			want := context.Canceled
+			if tc.kind == "deadline" {
+				stop()
+				ctx, stop = context.WithTimeout(t.Context(), 0)
+				want = context.DeadlineExceeded
+			} else {
+				stop()
+			}
+			defer stop()
+
+			err := tc.call(ctx)
+			if !errors.Is(err, want) {
+				t.Fatalf("err = %v, want %v", err, want)
+			}
+
+			if msg := err.Error(); strings.Contains(msg, uid) || strings.Contains(msg, "userId=") {
+				t.Fatalf("error leaked the user id: %q", msg)
+			}
+		})
 	}
 }

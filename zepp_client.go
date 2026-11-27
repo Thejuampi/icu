@@ -225,7 +225,7 @@ func (c *ZeppClient) doGet(ctx context.Context, path string, query url.Values) (
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, wrapZeppTransport("create request", endpoint, c.userID, err)
 	}
 
 	req.Header.Set("Apptoken", c.appToken)
@@ -234,7 +234,7 @@ func (c *ZeppClient) doGet(ctx context.Context, path string, query url.Values) (
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, wrapZeppTransport("do request", endpoint, c.userID, err)
 	}
 
 	return resp, nil
@@ -960,7 +960,7 @@ func (c *ZeppClient) FetchV2Events(ctx context.Context, preset V2EventPreset, ol
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, wrapZeppTransport("create request", endpoint, c.userID, err)
 	}
 
 	req.Header.Set("Apptoken", c.appToken)
@@ -969,7 +969,7 @@ func (c *ZeppClient) FetchV2Events(ctx context.Context, preset V2EventPreset, ol
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, wrapZeppTransport("do request", endpoint, c.userID, err)
 	}
 	defer resp.Body.Close()
 
@@ -1283,7 +1283,7 @@ func (c *ZeppClient) fetchDataHostURL(ctx context.Context, endpoint string) ([]b
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, wrapZeppTransport("create request", endpoint, c.userID, err)
 	}
 
 	req.Header.Set("Apptoken", c.appToken)
@@ -1292,7 +1292,7 @@ func (c *ZeppClient) fetchDataHostURL(ctx context.Context, endpoint string) ([]b
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, wrapZeppTransport("do request", endpoint, c.userID, err)
 	}
 	defer resp.Body.Close()
 

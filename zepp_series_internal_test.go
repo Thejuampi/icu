@@ -1,7 +1,10 @@
 package icu
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -84,6 +87,11 @@ func TestRedactZeppEndpoint(t *testing.T) {
 		}
 	}
 
+	reg := "https://api-user.huami.com/registrations/" + "fixture@example.invalid" + "/tokens"
+	if got := redactZeppEndpoint(reg); got != "https://api-user.huami.com/registrations/{id}/tokens" {
+		t.Fatalf("registrations: got %q", got)
+	}
+
 	// Build the userinfo form at runtime so static scanners do not treat
 	// it as a committed credential.
 	raw := "https://" + "fixture-user" + ":" + "fixture-token" + "@host/users/me/bloodPressure?days=7"
@@ -98,5 +106,74 @@ func TestWrapZeppTransportWithoutURLError(t *testing.T) {
 	err := wrapZeppTransport("do request", "https://h/users/mock-user-42/events?userId=mock-user-42", "mock-user-42", errors.New("dial mock-user-42 failed"))
 	if msg := err.Error(); strings.Contains(msg, "mock-user-42") || !strings.Contains(msg, "/users/{id}/events") {
 		t.Fatalf("err = %q", msg)
+	}
+}
+
+type timeoutError struct{}
+
+func (timeoutError) Error() string   { return "i/o timeout" }
+func (timeoutError) Timeout() bool   { return true }
+func (timeoutError) Temporary() bool { return true }
+
+func TestWrapZeppTransportPreservesUnwrapAndTimeout(t *testing.T) {
+	t.Parallel()
+
+	canceled := wrapZeppTransport("do request", "https://h/users/mock-user-42/events?userId=mock-user-42", "mock-user-42", context.Canceled)
+	if !errors.Is(canceled, context.Canceled) {
+		t.Fatalf("canceled: %v", canceled)
+	}
+
+	deadline := wrapZeppTransport("do request", "https://h/users/u1/events", "u1", context.DeadlineExceeded)
+	if !errors.Is(deadline, context.DeadlineExceeded) {
+		t.Fatalf("deadline: %v", deadline)
+	}
+
+	// The inner text still names the user id, so a redacted wrapper is used,
+	// but Unwrap must still reach the sentinel (and the context error).
+	inner := fmt.Errorf("dial mock-user-42 at https://h/users/mock-user-42/events: %w", context.Canceled)
+	got := wrapZeppTransport("do request", "https://h/users/mock-user-42/events?userId=mock-user-42", "mock-user-42", inner)
+	if !errors.Is(got, context.Canceled) {
+		t.Fatalf("redacted wrapper lost Unwrap: %v", got)
+	}
+	if msg := got.Error(); strings.Contains(msg, "mock-user-42") {
+		t.Fatalf("redacted wrapper leaked the user id: %q", msg)
+	}
+
+	timeout := wrapZeppTransport("do request", "https://h/v2/client/login", "", timeoutError{})
+	var netErr net.Error
+	if !errors.As(timeout, &netErr) || !netErr.Timeout() {
+		t.Fatalf("timeout: err = %v, as net.Error = %v", timeout, netErr)
+	}
+}
+
+func TestZeppLoginTransportErrorPreservesTimeoutAndOmitsEmail(t *testing.T) {
+	// Listen but never Accept so the HTTP client blocks until its timeout,
+	// without a handler that could pin httptest.Server.Close.
+	ln, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	old := zeppAuthTimeout
+	zeppAuthTimeout = 80 * time.Millisecond
+	t.Cleanup(func() { zeppAuthTimeout = old })
+
+	email := "fixture@example.invalid"
+	base := "http://" + ln.Addr().String()
+	_, err = ZeppLoginWithURLs(base+"/v2/registrations/tokens", base+"/v2/client/login", email, "synthetic-only")
+	if err == nil {
+		t.Fatalf("expected a timeout")
+	}
+
+	if msg := err.Error(); strings.Contains(msg, email) {
+		t.Fatalf("login error leaked the email: %q", msg)
+	}
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		var netErr net.Error
+		if !errors.As(err, &netErr) || !netErr.Timeout() {
+			t.Fatalf("login err = %v, want a timeout or deadline", err)
+		}
 	}
 }
