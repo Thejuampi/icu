@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,6 +47,9 @@ var (
 	ErrZeppWorkoutEmpty = errors.New("zepp workout detail is empty")
 	// ErrZeppWorkoutNotFound reports a trackid missing from the history.
 	ErrZeppWorkoutNotFound = errors.New("zepp workout not found in history")
+	// ErrZeppTooManyPages reports that a paged series reached the
+	// zeppLegacyEventsMaxPages cap with more items still advertised.
+	ErrZeppTooManyPages = errors.New("zepp events exceeded the page limit")
 )
 
 // zeppSeriesStatusError turns a non-200 status into an error that names the
@@ -69,7 +73,7 @@ func (c *ZeppClient) getWithAppHeaders(ctx context.Context, endpoint string) (in
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
-		return 0, nil, fmt.Errorf("create request: %w", err)
+		return 0, nil, wrapZeppTransport("create request", endpoint, c.userID, err)
 	}
 
 	req.Header.Set("Apptoken", c.appToken)
@@ -78,7 +82,7 @@ func (c *ZeppClient) getWithAppHeaders(ctx context.Context, endpoint string) (in
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("do request: %w", err)
+		return 0, nil, wrapZeppTransport("do request", endpoint, c.userID, err)
 	}
 	defer resp.Body.Close()
 
@@ -121,6 +125,7 @@ func (c *ZeppClient) legacyEvents(ctx context.Context, series, eventType string,
 	items := []json.RawMessage{}
 	seen := map[string]bool{}
 	cursor := from
+	more := true
 
 	for range zeppLegacyEventsMaxPages {
 		query := url.Values{
@@ -163,10 +168,17 @@ func (c *ZeppClient) legacyEvents(ctx context.Context, series, eventType string,
 		}
 
 		if page.Next == nil || page.Next.Timestamp <= cursor || added == 0 {
+			more = false
+
 			break
 		}
 
 		cursor = page.Next.Timestamp
+	}
+
+	if more {
+		return nil, fmt.Errorf("%w: zepp %s: stopped after %d pages of up to %d items at %s",
+			ErrZeppTooManyPages, series, zeppLegacyEventsMaxPages, zeppLegacyEventsPageSize, label)
 	}
 
 	out, err := json.Marshal(map[string][]json.RawMessage{"items": items})
@@ -279,4 +291,69 @@ func (t *zeppTrackIDString) UnmarshalJSON(b []byte) error {
 	*t = zeppTrackIDString(n.String())
 
 	return nil
+}
+
+// wrapZeppTransport returns a transport error that keeps the endpoint path
+// shape but never includes the raw URL, query or user id. Nested url.Error
+// values are peeled so their URL is not written through Error().
+func wrapZeppTransport(op, endpoint, userID string, err error) error {
+	shape := redactZeppEndpoint(endpoint)
+	cause := err
+	verb := "request"
+
+	for {
+		var urlErr *url.Error
+		if !errors.As(cause, &urlErr) || urlErr.Err == nil {
+			break
+		}
+
+		if urlErr.Op != "" {
+			verb = urlErr.Op
+		}
+
+		cause = urlErr.Err
+	}
+
+	msg := "request failed"
+	if cause != nil {
+		msg = redactUserID(cause.Error(), userID)
+	}
+
+	return fmt.Errorf("%s: %s %s: %s", op, verb, shape, msg)
+}
+
+// redactZeppEndpoint keeps the scheme, host and path shape of a Zepp URL,
+// replaces a user id in the path with `{id}`, and drops userinfo, query and
+// fragment. The path is built by hand so `{id}` is not percent-encoded.
+func redactZeppEndpoint(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Path == "" && u.Host == "") {
+		return "{redacted}"
+	}
+
+	parts := strings.Split(u.Path, "/")
+	for i := 1; i < len(parts); i++ {
+		if parts[i-1] == "users" && parts[i] != "" && parts[i] != "me" {
+			parts[i] = "{id}"
+		}
+	}
+
+	var b strings.Builder
+	if u.Scheme != "" {
+		b.WriteString(u.Scheme)
+		b.WriteString("://")
+	}
+
+	b.WriteString(u.Host)
+	b.WriteString(strings.Join(parts, "/"))
+
+	return b.String()
+}
+
+func redactUserID(msg, userID string) string {
+	if userID == "" || !strings.Contains(msg, userID) {
+		return msg
+	}
+
+	return strings.ReplaceAll(msg, userID, "{id}")
 }

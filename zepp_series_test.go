@@ -2,8 +2,10 @@ package icu_test
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -293,5 +295,102 @@ func TestZeppWorkoutDetailRejectionNamesTheSource(t *testing.T) {
 	_, err := newTestZeppClient(srv).WorkoutWithSource(t.Context(), "1717200000", "x.source")
 	if !errors.Is(err, icu.ErrZeppSeriesRejected) || !strings.Contains(err.Error(), `source "x.source"`) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestZeppLegacyEventsErrorsWhenPageCapIsHit(t *testing.T) {
+	t.Parallel()
+
+	pages := 0
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		pages++
+		q, _ := url.ParseQuery(record.Query)
+		cur, _ := strconv.ParseInt(q.Get("from"), 10, 64)
+		next := cur + 1
+
+		return http.StatusOK, fmt.Sprintf(`{"items":[{"timestamp":%d,"avgStress":40}],"next":{"timestamp":%d}}`, cur, next)
+	})
+	t.Cleanup(srv.Close)
+
+	_, err := newTestZeppClient(srv).StressDays(t.Context(), "2026-06-01", "2026-06-07")
+	if !errors.Is(err, icu.ErrZeppTooManyPages) {
+		t.Fatalf("err = %v, want ErrZeppTooManyPages", err)
+	}
+
+	if pages != 100 {
+		t.Fatalf("pages = %d, want 100", pages)
+	}
+
+	if msg := err.Error(); !strings.Contains(msg, "all_day_stress") || strings.Contains(msg, "u1") {
+		t.Fatalf("message %q should name the series path and omit the user id", msg)
+	}
+}
+
+func TestZeppLegacyEventsSucceedsAtExactlyThePageCap(t *testing.T) {
+	t.Parallel()
+
+	pages := 0
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		pages++
+		q, _ := url.ParseQuery(record.Query)
+		cur, _ := strconv.ParseInt(q.Get("from"), 10, 64)
+		item := fmt.Sprintf(`{"timestamp":%d,"avgStress":%d}`, cur, pages)
+		if pages == 100 {
+			return http.StatusOK, `{"items":[` + item + `]}`
+		}
+
+		return http.StatusOK, fmt.Sprintf(`{"items":[%s],"next":{"timestamp":%d}}`, item, cur+1)
+	})
+	t.Cleanup(srv.Close)
+
+	days, err := newTestZeppClient(srv).StressDays(t.Context(), "2026-06-01", "2026-06-07")
+	if err != nil {
+		t.Fatalf("StressDays: %v", err)
+	}
+
+	if pages != 100 || len(days) != 100 {
+		t.Fatalf("pages = %d, days = %d, want 100 and 100", pages, len(days))
+	}
+}
+
+type failRoundTrip struct{}
+
+func (failRoundTrip) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, errors.New("connection refused")
+}
+
+func TestZeppTransportErrorOmitsUserID(t *testing.T) {
+	t.Parallel()
+
+	const uid = "mock-user-42"
+	auth := &icu.ZeppAuthResult{
+		LoginToken:  "tok-abc",
+		AppToken:    "test-app-token",
+		UserID:      uid,
+		CountryCode: "US",
+	}
+	client := icu.NewZeppClientFromAuth(
+		auth,
+		icu.WithZeppBaseURL("https://zepp.example.invalid"),
+		icu.WithZeppEventsURL("https://zepp.example.invalid"),
+		icu.WithZeppHTTPClient(&http.Client{Transport: failRoundTrip{}}),
+	)
+
+	_, err := client.StressDays(t.Context(), "2026-06-01", "2026-06-01")
+	if err == nil {
+		t.Fatalf("expected a transport error")
+	}
+
+	msg := err.Error()
+	if strings.Contains(msg, uid) || strings.Contains(msg, "userId=") || strings.Contains(msg, "/users/"+uid) {
+		t.Fatalf("transport error leaked the user id: %q", msg)
+	}
+
+	if !strings.Contains(msg, "/users/{id}/events") {
+		t.Fatalf("transport error %q should keep the path shape", msg)
+	}
+
+	if !strings.Contains(msg, "connection refused") {
+		t.Fatalf("transport error %q should keep the cause", msg)
 	}
 }

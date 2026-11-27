@@ -208,6 +208,10 @@ func zeppManualDataCommand() *Command {
 		Description: "Manually entered wellness records of one type (default sleep) from /v1/user/manualData.json, filtered by date.",
 		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, _ io.Writer) error {
 			oldest, newest := zeppDateRange(flags)
+			if err := rejectEmptyFlag(flags, "type"); err != nil {
+				return err
+			}
+
 			manualType := icu.StringFlag(flags, "type", icu.ZeppManualDataDefaultType)
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
@@ -503,6 +507,9 @@ func zeppWorkoutCommand() *Command {
 			}
 
 			trackID := args[0]
+			if err := rejectEmptyFlag(flags, "source"); err != nil {
+				return err
+			}
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
 				var (
@@ -524,6 +531,16 @@ func zeppWorkoutCommand() *Command {
 			})
 		},
 	}
+}
+
+// rejectEmptyFlag errors when the caller passed a flag with an empty value
+// (for example `--type=` or `--source=`). An omitted flag is not an error.
+func rejectEmptyFlag(flags map[string]string, name string) error {
+	if v, ok := flags[name]; ok && strings.TrimSpace(v) == "" {
+		return fmt.Errorf("%w: zepp --%s must not be empty", errMissingRequired, name)
+	}
+
+	return nil
 }
 
 func zeppDateRange(flags map[string]string) (string, string) { //nolint:gocritic // unnamed results are clearer here
