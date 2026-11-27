@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "userId": "[redacted]",
+      "eventType": "RespiratoryRate",
+      "subType": "real_data",
+      "timestamp": 1894579200000,
+      "value": {
+        "measurements": "bW9jaw==",
+        "timeZone": "[redacted]"
+      }
+    }
+  ]
+}

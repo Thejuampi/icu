@@ -304,6 +304,21 @@ func TestSleepCrossingMidnightFixture(t *testing.T) {
 	if wrap.EndEpoch-wrap.StartEpoch != 70*60 {
 		t.Fatalf("wrapped stage epochs %d..%d", wrap.StartEpoch, wrap.EndEpoch)
 	}
+
+	// Stages after the midnight wrap land on the next day (not the summary day).
+	midnight, err := parseDateToSecondsUTC("2026-08-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextDay := midnight + 24*60*60
+	deep := sleep.Stages[2]
+	if deep.StartEpoch != nextDay+40*60 || deep.EndEpoch != nextDay+130*60 {
+		t.Fatalf("post-wrap stage epochs %d..%d", deep.StartEpoch, deep.EndEpoch)
+	}
+	rem := sleep.Stages[4]
+	if rem.StartEpoch != nextDay+130*60 || rem.EndEpoch != nextDay+400*60 {
+		t.Fatalf("post-wrap stage epochs %d..%d", rem.StartEpoch, rem.EndEpoch)
+	}
 }
 
 func TestBuildZeppWellnessDaysTieIsOrderIndependent(t *testing.T) {

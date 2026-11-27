@@ -12,6 +12,9 @@ const (
 	zeppSubTypeRealData = "real_data"
 	zeppParamEventType  = "eventType"
 	zeppParamLimit      = "limit"
+	// zeppEpochSecondsToMillis converts the epoch-second generatedTime of the
+	// heart-rate app endpoint into milliseconds.
+	zeppEpochSecondsToMillis = 1000
 )
 
 // Zepp DTOs reflect the real Zepp/Amazfit cloud API as reverse-engineered
@@ -86,6 +89,25 @@ type BandDataStage struct {
 
 // BandDataSleep is the decoded structure inside summary.slp.
 // st/ed are epoch seconds. dp = deep sleep minutes, lt = light sleep minutes.
+// SleepStageModeLabel maps a Zepp sleep-stage mode to its label. The mapping
+// is the one observed in real band data: 4 = light, 5 = deep, 7 = awake,
+// 8 = REM. Unknown modes (e.g. new modes added by newer firmware) return
+// "unknown" rather than an invented label.
+func SleepStageModeLabel(mode int) string {
+	switch mode {
+	case 4:
+		return "light"
+	case 5:
+		return "deep"
+	case 7:
+		return "awake"
+	case 8:
+		return "rem"
+	default:
+		return "unknown"
+	}
+}
+
 // mode 4 = light, mode 5 = deep, mode 7 = awake, mode 8 = REM.
 type BandDataSleep struct {
 	StartEpoch   int64 `json:"st,omitempty"`
@@ -100,11 +122,12 @@ type BandDataSleep struct {
 }
 
 type BandDataSleepStage struct {
-	Start      int   `json:"start,omitempty"`      // minutes since midnight
-	Stop       int   `json:"stop,omitempty"`       // minutes since midnight
-	StartEpoch int64 `json:"startEpoch,omitempty"` // converted to epoch seconds
-	EndEpoch   int64 `json:"endEpoch,omitempty"`   // converted to epoch seconds
-	Mode       int   `json:"mode,omitempty"`
+	Start      int    `json:"start,omitempty"`      // minutes since midnight
+	Stop       int    `json:"stop,omitempty"`       // minutes since midnight
+	StartEpoch int64  `json:"startEpoch,omitempty"` // converted to epoch seconds
+	EndEpoch   int64  `json:"endEpoch,omitempty"`   // converted to epoch seconds
+	Mode       int    `json:"mode,omitempty"`
+	ModeLabel  string `json:"modeLabel,omitempty"` // derived: light/deep/awake/rem/unknown
 }
 
 // BandDataHeartPoint is one minute of heart rate (decoded from DataHRRaw).
@@ -186,6 +209,7 @@ type PAIDay struct {
 // etc. The actual sport mapping is in ZeppSportType below.
 type WorkoutSummary struct {
 	TrackID   string `json:"trackId"`
+	Source    string `json:"source,omitempty"`
 	Type      int    `json:"type,omitempty"`
 	SportType int    `json:"sportType,omitempty"`
 	StartTime int64  `json:"startTime,omitempty"`
@@ -519,6 +543,7 @@ func DecodeHybridCharge(raw []byte) ([]ZeppHybridChargeEvent, error) {
 type ZeppHealthSummaryEvent struct {
 	Timestamp int64          `json:"timestamp"`
 	Date      string         `json:"date"`
+	Value     float64        `json:"value"`
 	Extra     map[string]any `json:"extra,omitempty"`
 }
 
@@ -528,6 +553,7 @@ func DecodeHealthSummary(raw []byte) ([]ZeppHealthSummaryEvent, error) {
 		return ZeppHealthSummaryEvent{
 			Timestamp: ev.Timestamp,
 			Date:      ev.Date,
+			Value:     ev.Value,
 			Extra:     ev.Extra,
 		}
 	})
@@ -707,16 +733,82 @@ type ZeppHeartRateReading struct {
 }
 
 // DecodeHeartRateEndpoint decodes a raw /users/{id}/heartRate response.
+//
+// The real backend serves one flat item per 7-day window:
+// {"items":[{"type":2,"generatedTime":<epoch seconds>,"deviceSource":<id>,
+// "timeZone":"<zone>","heartRateData":"<base64>","deviceId":"<id>"}]}
+// with no timestamp/value/userId fields. Timestamp and Date come from
+// generatedTime; HR stays 0 because the base64 payload format is unverified
+// and is kept verbatim in Extra rather than guessed.
 func DecodeHeartRateEndpoint(raw []byte) ([]ZeppHeartRateReading, error) {
-	return decodeV2EventsAs(raw, func(ev ZeppV2Event) ZeppHeartRateReading {
-		return ZeppHeartRateReading{
-			Timestamp: ev.Timestamp,
-			Date:      ev.Date,
-			HR:        ev.Value,
-			Extra:     ev.Extra,
-		}
-	})
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	var payload struct {
+		Items []struct {
+			Type          int64  `json:"type"`
+			GeneratedTime int64  `json:"generatedTime"`
+			DeviceSource  int64  `json:"deviceSource"`
+			TimeZone      string `json:"timeZone"`
+			HeartRateData string `json:"heartRateData"`
+			DeviceID      string `json:"deviceId"`
+		} `json:"items"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("decode heart rate endpoint: %w", err)
+	}
+
+	readings := make([]ZeppHeartRateReading, 0, len(payload.Items))
+	for _, item := range payload.Items {
+		ts := item.GeneratedTime * zeppEpochSecondsToMillis
+		readings = append(readings, ZeppHeartRateReading{
+			Timestamp: ts,
+			Date:      time.UnixMilli(ts).In(zeppItemLocation(item.TimeZone)).Format("2006-01-02"),
+			Extra: map[string]any{
+				"type":          item.Type,
+				"generatedTime": item.GeneratedTime,
+				"deviceSource":  item.DeviceSource,
+				"timeZone":      item.TimeZone,
+				"heartRateData": item.HeartRateData,
+				"deviceId":      item.DeviceID,
+			},
+		})
+	}
+
+	return readings, nil
 }
+
+// zeppItemLocation returns the IANA location an item names in its
+// `timeZone` field, or UTC when the field is empty or unknown. The date of
+// an item follows its own zone, like the band heart-rate dates follow the
+// local or --tz zone.
+func zeppItemLocation(name string) *time.Location {
+	if name == "" {
+		return time.UTC
+	}
+
+	if loc, err := time.LoadLocation(name); err == nil {
+		return loc
+	}
+
+	// Offset forms: hours ("-5", "+5.5") or "±HH:MM".
+	if hours, err := strconv.ParseFloat(name, 64); err == nil && hours >= -14 && hours <= 14 {
+		return time.FixedZone(name, int(hours*zeppSecondsPerHour))
+	}
+
+	if t, err := time.Parse("-07:00", name); err == nil {
+		_, offset := t.Zone()
+
+		return time.FixedZone(name, offset)
+	}
+
+	return time.UTC
+}
+
+// zeppSecondsPerHour converts an hour offset into seconds.
+const zeppSecondsPerHour = 3600
 
 // ZeppWeightRecord is one weight measurement from /users/{id}/members/-1/weightRecords.
 type ZeppWeightRecord struct {

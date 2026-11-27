@@ -258,6 +258,14 @@ func TestZeppClientBandDataDecodesSummary(t *testing.T) { //nolint:gocyclo,cyclo
 		t.Fatalf("stage1 endEpoch = %d, want %d", day.Summary.Sleep.Stages[1].EndEpoch, midnight2026_06_01+120*60)
 	}
 
+	if day.Summary.Sleep.Stages[0].ModeLabel != "deep" {
+		t.Fatalf("stage0 modeLabel = %q, want deep", day.Summary.Sleep.Stages[0].ModeLabel)
+	}
+
+	if day.Summary.Sleep.Stages[1].ModeLabel != "light" {
+		t.Fatalf("stage1 modeLabel = %q, want light", day.Summary.Sleep.Stages[1].ModeLabel)
+	}
+
 	if day.Summary.Goal != 8000 {
 		t.Fatalf("goal = %d, want 8000", day.Summary.Goal)
 	}
@@ -560,8 +568,10 @@ func TestZeppClientWorkoutDecodesDeltaSeries(t *testing.T) {
 			return http.StatusNotFound, err404
 		}
 
-		if !strings.Contains(record.Query, "trackid=1717200000") {
-			return http.StatusOK, `{"code":1,"message":"missing trackid"}`
+		if !strings.Contains(record.Query, "trackid=1717200000") ||
+			!strings.Contains(record.Query, "source=hist.source") ||
+			!strings.Contains(record.Query, "userid=u1") {
+			return http.StatusOK, `{"code":1,"message":"missing trackid, source or userid"}`
 		}
 
 		body := `{"code":1,"message":"success","data":{"trackid":"1717200000","type":1,"startTime":1717200000,"endTime":1717203600,"duration":3600,"distance":10000,"calories":450,"avgHR":150,"maxHR":175,"minHR":120,"hr_split":"` + encodedHR + `"}}` //nolint:lll // long JSON fixture
@@ -572,7 +582,7 @@ func TestZeppClientWorkoutDecodesDeltaSeries(t *testing.T) {
 
 	client := newTestZeppClient(srv)
 
-	detail, err := client.Workout(t.Context(), "run", "1717200000")
+	detail, err := client.WorkoutWithSource(t.Context(), "1717200000", "hist.source")
 	if err != nil {
 		t.Fatalf("Workout: %v", err)
 	}
@@ -1044,24 +1054,36 @@ func TestDecodeReadiness(t *testing.T) {
 func TestDecodeBodyBattery(t *testing.T) {
 	t.Parallel()
 
-	var raw string = zeppV2EventRaw
+	// Real backend shape: value is an object with samples, never a scalar.
+	raw := `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"real_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"total":55,"mental":20.5,"physical":60.5,"status":0,"jsonExtra":"{}"}]}}]}`
 
-	var events []icu.ZeppBodyBatteryEvent
-	var err error
-	events, err = icu.DecodeBodyBattery([]byte(raw))
+	events, err := icu.DecodeBodyBattery([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeBodyBattery: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Level != 42.5 {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	// The object payload is preserved; no scalar level is invented.
+	if events[0].Level != 0 {
+		t.Fatalf("level = %v, want 0 (real shape is an object)", events[0].Level)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	samples, ok := val["samples"].([]any)
+	if !ok || len(samples) != 1 {
+		t.Fatalf("samples = %v, want 1 sample", val["samples"])
 	}
 }
 
 func TestDecodeHybridCharge(t *testing.T) {
 	t.Parallel()
 
-	var raw string = `{"items":[{"timestamp":1780272000000,"value":90,"phase":"wake","source":"watch"}]}`
+	// Real backend shape: value is an object with samples, never a scalar.
+	var raw string = `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"insight_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"u":12345,"type":4,"insight":98,"insightId":"MOCKINSIGHT000","diff":0,"slope":0.0,"thres":0.0,"trackId":"MOCKTRACK00000000","jsonExtra":"{}"}]}}]}`
 
 	var events []icu.ZeppHybridChargeEvent
 	var err error
@@ -1070,23 +1092,46 @@ func TestDecodeHybridCharge(t *testing.T) {
 		t.Fatalf("DecodeHybridCharge: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Score != 90 || events[0].Extra["phase"] != "wake" {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Score != 0 {
+		t.Fatalf("score = %v, want 0 (real shape is an object)", events[0].Score)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	samples, ok := val["samples"].([]any)
+	if !ok || len(samples) != 1 {
+		t.Fatalf("samples = %v, want 1 sample", val["samples"])
 	}
 }
 
 func TestDecodeHealthSummary(t *testing.T) {
 	t.Parallel()
 
-	raw := `{"items":[{"timestamp":1780272000000,"extra":"z"}]}`
+	// Real backend shape: value is an object with samples, never a scalar.
+	raw := `{"items":[{"timestamp":1780272000000,"type":"DailyHealth","subType":"summary","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"u":12345,"dateString":"2026-06-01","totalSteps":5000,"totalCalories":450,"totalBurningDuration":60,"stepGoal":10000,"calorieGoal":400,"burningDurationGoal":45,"hyroxCount":0}]}}]}`
 
 	events, err := icu.DecodeHealthSummary([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeHealthSummary: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Extra["extra"] != "z" {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Value != 0 {
+		t.Fatalf("value = %v, want 0 (real shape is an object)", events[0].Value)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	samples, ok := val["samples"].([]any)
+	if !ok || len(samples) != 1 {
+		t.Fatalf("samples = %v, want 1 sample", val["samples"])
 	}
 }
 
@@ -1166,6 +1211,46 @@ func TestZeppClientReadinessDaysHitsV2Endpoint(t *testing.T) {
 	}
 }
 
+func TestZeppClientSleepHRVDaysHitsV2Endpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newZeppV2EventTestServer(t, "readiness", "watch_score")
+	if _, err := client.SleepHRVDays(t.Context(), "2026-06-01", "2026-06-01"); err != nil {
+		t.Fatalf("SleepHRVDays: %v", err)
+	}
+}
+
+func TestZeppClientSleepHRVDaysDecodesSleepHRV(t *testing.T) {
+	t.Parallel()
+
+	srv := newZeppTestServer(func(record zeppRequestRecord) (int, string) {
+		if record.Path != "/v2/users/me/events" {
+			return http.StatusNotFound, err404
+		}
+
+		if !strings.Contains(record.Query, "eventType=readiness") || !strings.Contains(record.Query, "subType=watch_score") {
+			return http.StatusOK, `{"code":0,"message":"missing eventType"}`
+		}
+
+		return http.StatusOK, `{"items":[{"timestamp":1780272000000,"eventType":"readiness","subType":"watch_score","value":{"sleepHRV":44,"hrvBaseline":40,"hrvScore":66,"timestamp":1780262400000}}]}`
+	})
+	t.Cleanup(srv.Close)
+
+	client := newTestZeppClient(srv)
+	got, err := client.SleepHRVDays(t.Context(), "2026-06-01", "2026-06-01")
+	if err != nil {
+		t.Fatalf("SleepHRVDays: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Value != 44 {
+		t.Fatalf("got %+v, want one reading of 44", got)
+	}
+
+	if got[0].Source != "readiness.sleepHRV" {
+		t.Fatalf("source = %q, want readiness.sleepHRV", got[0].Source)
+	}
+}
+
 func TestZeppClientBodyBatteryDaysHitsV2Endpoint(t *testing.T) {
 	t.Parallel()
 
@@ -1214,30 +1299,53 @@ func TestZeppClientSkinTempDaysHitsV2Endpoint(t *testing.T) {
 func TestDecodeStressMinute(t *testing.T) {
 	t.Parallel()
 
-	raw := zeppV2EventRaw
+	// Real backend shape: value is an object with samples.
+	raw := `{"items":[{"timestamp":1780272000000,"type":"Charge","subType":"stress_data","userId":"mock-user","value":{"startTime":1780272000000,"deviceId":"MOCKDEVICE0000","samples":[{"s":0,"u":1000,"stressInfo":"mock","minuteOfDay":480},{"s":0,"e":86399999,"u":1001,"stressInfo":"mock","minuteOfDay":540}]}}]}`
 
 	events, err := icu.DecodeStressMinute([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeStressMinute: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Stress != 42.5 {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Stress != 0 {
+		t.Fatalf("stress = %v, want 0 (real shape is an object)", events[0].Stress)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	samples, ok := val["samples"].([]any)
+	if !ok || len(samples) != 2 {
+		t.Fatalf("samples = %v, want 2 samples", val["samples"])
 	}
 }
 
 func TestDecodeRespiratoryRate(t *testing.T) {
 	t.Parallel()
 
-	raw := zeppV2EventRaw
+	// Real backend shape: value is an object with measurements + timeZone.
+	raw := `{"items":[{"timestamp":1780272000000,"type":"RespiratoryRate","subType":"real_data","userId":"mock-user","value":{"measurements":"bW9jaw==","timeZone":"-5"}}]}`
 
 	events, err := icu.DecodeRespiratoryRate([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeRespiratoryRate: %v", err)
 	}
 
-	if len(events) != 1 || events[0].Rate != 42.5 {
+	if len(events) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if events[0].Rate != 0 {
+		t.Fatalf("rate = %v, want 0 (real shape is an object)", events[0].Rate)
+	}
+	val, ok := events[0].Extra["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("extra.value = %v, want object", events[0].Extra["value"])
+	}
+	if val["timeZone"] != "-5" {
+		t.Fatalf("extra.value.timeZone = %v, want -5", val["timeZone"])
 	}
 }
 
@@ -1381,12 +1489,10 @@ func TestWatchSportStatisticsURLBuildsCorrectPath(t *testing.T) {
 		t.Fatalf("WatchSportStatisticsURL: %v", err)
 	}
 
-	if !strings.Contains(got, "/v2/watch/users/u1/WatchSportStatistics/SPORT_LOAD?") {
-		t.Fatalf("url missing path: %s", got)
-	}
-
-	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
-		t.Fatalf("url missing query: %s", got)
+	want := "https://api-mifit.huami.com/v2/watch/users/u1/WatchSportStatistics/SPORT_LOAD?" +
+		"endDay=2026-06-07&isReverse=true&limit=900&startDay=2026-06-01"
+	if got != want {
+		t.Fatalf("url = %s, want %s", got, want)
 	}
 }
 
@@ -1520,26 +1626,9 @@ func TestWeightRecordsURLRejectsInvalidDate(t *testing.T) {
 func TestManualDataURLBuildsCorrectPath(t *testing.T) {
 	t.Parallel()
 
-	got, err := icu.ManualDataURL("https://api-mifit.huami.com", "2026-06-01", "2026-06-07")
-	if err != nil {
-		t.Fatalf("ManualDataURL: %v", err)
-	}
-
-	if !strings.Contains(got, "/v1/user/manualData.json?") {
-		t.Fatalf("url missing path: %s", got)
-	}
-
-	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
-		t.Fatalf("url missing query: %s", got)
-	}
-}
-
-func TestManualDataURLRejectsInvalidDate(t *testing.T) {
-	t.Parallel()
-
-	_, err := icu.ManualDataURL("https://api-mifit.huami.com", "not-a-date", "2026-06-07")
-	if err == nil {
-		t.Fatalf("expected error for invalid date")
+	got := icu.ManualDataURL("https://api-mifit.huami.com", "u1", "sleep")
+	if got != "https://api-mifit.huami.com/v1/user/manualData.json?type=sleep&userid=u1" {
+		t.Fatalf("url = %s", got)
 	}
 }
 
@@ -1551,12 +1640,19 @@ func TestBloodPressureUserURLBuildsCorrectPath(t *testing.T) {
 		t.Fatalf("BloodPressureUserURL: %v", err)
 	}
 
-	if !strings.Contains(got, "/users/me/bloodPressure?") {
-		t.Fatalf("url missing path: %s", got)
+	want := "https://api-mifit.huami.com/users/me/bloodPressure?days=7&" +
+		"sourceArrayStr=com.huami.midong.associated%2Ccom.huami.midong&toDate=2026-06-07"
+	if got != want {
+		t.Fatalf("url = %s, want %s", got, want)
 	}
+}
 
-	if !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
-		t.Fatalf("url missing query: %s", got)
+func TestBloodPressureUserURLRejectsInvertedRange(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.BloodPressureUserURL("https://api-mifit.huami.com", "2026-06-07", "2026-06-01")
+	if !errors.Is(err, icu.ErrZeppDateRange) {
+		t.Fatalf("err = %v, want ErrZeppDateRange", err)
 	}
 }
 
@@ -1779,13 +1875,33 @@ func TestDecodeV2EventsHandlesEmptyItems(t *testing.T) {
 func TestDecodeHeartRateEndpoint(t *testing.T) {
 	t.Parallel()
 
-	events, err := icu.DecodeHeartRateEndpoint([]byte(zeppV2EventRaw))
+	// Real backend shape: one flat item per window, no timestamp/value fields.
+	raw := `{"items":[{"type":2,"generatedTime":1780272000,"deviceSource":1,"timeZone":"-5","heartRateData":"bW9jaw==","deviceId":"MOCKDEVICE0000"}]}`
+
+	events, err := icu.DecodeHeartRateEndpoint([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodeHeartRateEndpoint: %v", err)
 	}
 
-	if len(events) != 1 || events[0].HR != 42.5 {
-		t.Fatalf("events = %+v", events)
+	if len(events) != 1 {
+		t.Fatalf("events = %+v, want 1", events)
+	}
+	// generatedTime is epoch seconds and the reading timestamp is ms.
+	if events[0].Timestamp != 1780272000000 {
+		t.Fatalf("timestamp = %d, want 1780272000000", events[0].Timestamp)
+	}
+	// The date follows the item's own timeZone ("-5"): 00:00 UTC is the
+	// previous evening there.
+	if events[0].Date != "2026-05-31" {
+		t.Fatalf("date = %q, want 2026-05-31", events[0].Date)
+	}
+	// HR is not decodable from the base64 payload (format unverified) and
+	// stays 0; the raw fields are preserved in Extra.
+	if events[0].HR != 0 {
+		t.Fatalf("HR = %v, want 0 (payload format unverified)", events[0].HR)
+	}
+	if events[0].Extra["timeZone"] != "-5" {
+		t.Fatalf("extra = %+v, want timeZone -5", events[0].Extra)
 	}
 }
 

@@ -50,11 +50,8 @@ func registerZeppCommands(registry *CommandRegistry) {
 	registry.Register("zepp", "events", zeppEventsCommand())
 	registry.Register("zepp", "hrv", zeppHRVCommand())
 	registry.Register("zepp", "weight", zeppSimpleCommand("weight", "Weight measurements from /users/{id}/members/-1/weightRecords.", (*icu.ZeppClient).WeightRecords))
-	registry.Register("zepp", "manual-data", zeppSimpleCommand("manual-data", "Manually entered wellness records from /v1/user/manualData.json.", (*icu.ZeppClient).ManualData))
-	registry.Register(
-		"zepp", "second-heart-rate",
-		zeppSimpleCommand("second-heart-rate", "Per-second heart-rate COS file index from /users/me/fileInfo/events. Blobs are not downloaded.", (*icu.ZeppClient).SecondHeartRateFiles),
-	)
+	registry.Register("zepp", "manual-data", zeppManualDataCommand())
+	registry.Register("zepp", "second-heart-rate", zeppSecondHeartRateCommand())
 	registry.Register("zepp", "spo2-windows", zeppSingleDateCommand("spo2-windows", "SpO2 ODI windows for a single day from /users/{id}/events/dateString.", (*icu.ZeppClient).SpO2Windows))
 
 	registerV2EventCommand(registry, "readiness", mustV2EventPreset("readiness"), icu.DecodeReadiness, "Daily readiness scores from /v2/users/me/events.")
@@ -204,6 +201,27 @@ func zeppSimpleCommand[T any](name, description string, fetch func(*icu.ZeppClie
 	}
 }
 
+func zeppManualDataCommand() *Command {
+	return &Command{
+		Name:        "",
+		Usage:       "zepp manual-data [--type TYPE] --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		Description: "Manually entered wellness records of one type (default sleep) from /v1/user/manualData.json, filtered by date.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, _ io.Writer) error {
+			oldest, newest := zeppDateRange(flags)
+			manualType := icu.StringFlag(flags, "type", icu.ZeppManualDataDefaultType)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				records, err := client.ManualDataType(ctx, manualType, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch manual-data: %w", err)
+				}
+
+				return writeJSON(stdout, records)
+			})
+		},
+	}
+}
+
 func zeppHeartRateCommand() *Command {
 	return zeppSwitchCommand(
 		"zepp heart-rate --source band|app --oldest YYYY-MM-DD --newest YYYY-MM-DD",
@@ -215,13 +233,68 @@ func zeppHeartRateCommand() *Command {
 }
 
 func zeppHRVCommand() *Command {
-	return zeppSwitchCommand(
-		"zepp hrv --metric sdnn|rmssd --oldest YYYY-MM-DD --newest YYYY-MM-DD",
-		"Nightly HRV from /v2/users/me/events: rmssd is the mean of the night's samples (an approximation; the app's nightly HRV is readiness sleepHRV, see zepp readiness and wellness sync); sdnn may be empty.",
-		"metric", "sdnn", "sdnn", "rmssd",
-		(*icu.ZeppClient).HRVSDNNDays,
-		(*icu.ZeppClient).HRVRMSSDDays,
-	)
+	return &Command{
+		Name:  "",
+		Usage: "zepp hrv --metric sdnn|rmssd|sleephrv --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		Description: "Nightly HRV from /v2/users/me/events. " +
+			"sleephrv is the nightly value the Zepp app shows (readiness sleepHRV, the source wellness sync writes); " +
+			"rmssd is the mean of the night's samples (an approximation); sdnn may be empty.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
+			metric := icu.StringFlag(flags, "metric", "sleephrv")
+			if metric != "sdnn" && metric != "rmssd" && metric != "sleephrv" {
+				return fmt.Errorf("invalid metric %q: must be sdnn, rmssd or sleephrv", metric)
+			}
+
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				var records any
+
+				var err error
+
+				switch metric {
+				case "sdnn":
+					records, err = client.HRVSDNNDays(ctx, oldest, newest)
+				case "rmssd":
+					records, err = client.HRVRMSSDDays(ctx, oldest, newest)
+				case "sleephrv":
+					records, err = client.SleepHRVDays(ctx, oldest, newest)
+				}
+
+				if err != nil {
+					return fmt.Errorf("fetch hrv %s: %w", metric, err)
+				}
+
+				return writeJSON(stdout, records)
+			})
+		},
+	}
+}
+
+func zeppSecondHeartRateCommand() *Command {
+	return &Command{
+		Name:  "",
+		Usage: "zepp second-heart-rate --oldest YYYY-MM-DD --newest YYYY-MM-DD",
+		Description: "Per-second heart-rate COS file index from /users/me/fileInfo/events. " +
+			"Blobs are not downloaded or parsed (the blob format is not documented). " +
+			"URLs are redacted (userinfo, query and fragment stripped) because they may carry temporary signatures.",
+		Run: func(_ []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
+			oldest, newest := zeppDateRange(flags)
+
+			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
+				records, err := client.SecondHeartRateFiles(ctx, oldest, newest)
+				if err != nil {
+					return fmt.Errorf("fetch second-heart-rate: %w", err)
+				}
+
+				for i := range records {
+					records[i].URL, _ = redactURL(records[i].URL)
+				}
+
+				return writeJSON(stdout, records)
+			})
+		},
+	}
 }
 
 func zeppEventsCommand() *Command {
@@ -420,8 +493,8 @@ func zeppWorkoutsCommand() *Command {
 func zeppWorkoutCommand() *Command {
 	return &Command{
 		Name:        "",
-		Usage:       "zepp workout [--sport NAME] <id>",
-		Description: "Fetch a single workout detail (HR, pace, altitude series). Default sport=run.",
+		Usage:       "zepp workout [--sport NAME] [--source SOURCE] <id>",
+		Description: "Fetch a single workout detail (HR, pace, altitude series). Default sport=run. Without --source the history source is looked up.",
 		Run: func(args []string, flags map[string]string, _ *icu.Client, stdout, stderr io.Writer) error {
 			sport := icu.StringFlag(flags, "sport", "run")
 
@@ -432,7 +505,17 @@ func zeppWorkoutCommand() *Command {
 			trackID := args[0]
 
 			return runZeppWithClient(func(ctx context.Context, client *icu.ZeppClient) error {
-				detail, err := client.Workout(ctx, sport, trackID)
+				var (
+					detail icu.WorkoutDetail
+					err    error
+				)
+
+				if source := icu.StringFlag(flags, "source", ""); source != "" {
+					detail, err = client.WorkoutWithSource(ctx, trackID, source)
+				} else {
+					detail, err = client.Workout(ctx, sport, trackID)
+				}
+
 				if err != nil {
 					return fmt.Errorf("fetch workout detail: %w", err)
 				}

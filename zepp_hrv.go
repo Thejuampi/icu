@@ -221,7 +221,7 @@ func DecodeSleepHRV(raw []byte) ([]ZeppHRVEvent, error) {
 		if ts <= 0 {
 			ts, _ = rawNumber(item.Timestamp)
 		}
-		ev := ZeppHRVEvent{Timestamp: int64(ts), Metric: "rmssd", Value: v, Source: zeppHRVSourceSleep}
+		ev := ZeppHRVEvent{Timestamp: int64(ts), Metric: "sleephrv", Value: v, Source: zeppHRVSourceSleep}
 		if ev, ok := finishHRV(ev); ok {
 			out = append(out, ev)
 		}

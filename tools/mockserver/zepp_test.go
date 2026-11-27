@@ -17,6 +17,8 @@ func zeppGet(t *testing.T, url, token string) (int, map[string]any) {
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
 	if token != "" {
 		req.Header.Set("Apptoken", token)
+		req.Header.Set("Appname", "com.xiaomi.hm.health")
+		req.Header.Set("Appplatform", "web")
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -47,12 +49,38 @@ func TestZeppMockBandAndEvents(t *testing.T) {
 	}
 	var summary struct {
 		Slp struct {
-			RHR int `json:"rhr"`
-			SS  int `json:"ss"`
+			RHR   int `json:"rhr"`
+			SS    int `json:"ss"`
+			DP    int `json:"dp"`
+			LT    int `json:"lt"`
+			Stage []struct {
+				Start int `json:"start"`
+				Stop  int `json:"stop"`
+				Mode  int `json:"mode"`
+			} `json:"stage"`
 		} `json:"slp"`
 	}
 	if json.Unmarshal(raw, &summary) != nil || summary.Slp.RHR != want.RestingHR || summary.Slp.SS != want.SleepScore {
 		t.Fatalf("summary %s want %+v", raw, want)
+	}
+	// dp/lt are derived from the stages, so they must agree with the stage sum.
+	deep := 0
+	light := 0
+	for _, st := range summary.Slp.Stage {
+		minutes := 0
+		if st.Stop > st.Start {
+			minutes = st.Stop - st.Start
+		} else if st.Stop < st.Start {
+			minutes = st.Stop + 1440 - st.Start
+		}
+		if st.Mode == 5 {
+			deep += minutes
+		} else if st.Mode == 4 {
+			light += minutes
+		}
+	}
+	if len(summary.Slp.Stage) == 0 || deep != summary.Slp.DP || light != summary.Slp.LT {
+		t.Fatalf("stages %+v dp=%d lt=%d want dp=%d lt=%d", summary.Slp.Stage, deep, light, summary.Slp.DP, summary.Slp.LT)
 	}
 
 	hrEncoded, _ := first["data_hr"].(string)
@@ -206,4 +234,59 @@ func TestMockPartialSleepScenario(t *testing.T) {
 		return
 	}
 	t.Fatalf("fixture day %s missing", mockPartialSleepDay)
+}
+
+func TestZeppMockOldEvents(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t)
+
+	from := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC).UnixMilli()
+	to := time.Date(2026, 8, 11, 23, 59, 59, 0, time.UTC).UnixMilli()
+	q := "&from=" + itoa(from) + "&to=" + itoa(to) + "&userId=u1&limit=200"
+
+	// stress: one item per mock day with the legacy stress shape.
+	code, body := zeppGet(t, srv.URL+"/users/u1/events?eventType=all_day_stress"+q, "tok")
+	items, _ := body["items"].([]any)
+	if code != http.StatusOK || len(items) != 2 {
+		t.Fatalf("stress code=%d body=%v", code, body)
+	}
+	stress0, _ := items[0].(map[string]any)
+	if _, ok := stress0["avgStress"]; !ok {
+		t.Fatalf("stress item %v", stress0)
+	}
+
+	// spo2: legacy blood_oxygen shape with extra JSON string.
+	code, body = zeppGet(t, srv.URL+"/users/u1/events?eventType=blood_oxygen"+q, "tok")
+	items, _ = body["items"].([]any)
+	if code != http.StatusOK || len(items) != 2 {
+		t.Fatalf("spo2 code=%d body=%v", code, body)
+	}
+	spo20, _ := items[0].(map[string]any)
+	if _, ok := spo20["odi"]; !ok {
+		t.Fatalf("spo2 item %v", spo20)
+	}
+	if extra, _ := spo20["extra"].(string); extra == "" || !strings.Contains(extra, "spo2") {
+		t.Fatalf("spo2 extra %v", spo20)
+	}
+
+	// pai: legacy PaiHealthInfo shape.
+	code, body = zeppGet(t, srv.URL+"/users/u1/events?eventType=PaiHealthInfo"+q, "tok")
+	items, _ = body["items"].([]any)
+	if code != http.StatusOK || len(items) != 2 {
+		t.Fatalf("pai code=%d body=%v", code, body)
+	}
+	pai0, _ := items[0].(map[string]any)
+	if _, ok := pai0["dailyPai"]; !ok {
+		t.Fatalf("pai item %v", pai0)
+	}
+
+	// Unknown event type: empty list, not an error.
+	if code, body = zeppGet(t, srv.URL+"/users/u1/events?eventType=Unknown"+q, "tok"); code != http.StatusOK || listLen(body["items"]) != 0 {
+		t.Fatalf("unknown type code=%d body=%v", code, body)
+	}
+
+	// Bad params: 400.
+	if code, _ := zeppGet(t, srv.URL+"/users/u1/events?eventType=all_day_stress&from=x&to=2", "tok"); code != http.StatusBadRequest {
+		t.Fatalf("bad from/to code=%d", code)
+	}
 }

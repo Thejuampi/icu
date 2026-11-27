@@ -223,6 +223,16 @@ login succeeds and uses the first login's UUID. The focused tests assert the
 wire device ID, local persistence, failed reauthentication and migration from
 configs without a UUID.
 
+The mock serves the full CLI surface with synthetic data: profile, band data
+(summary/steps/sleep/HR), all V2 wellness presets (readiness, hrv-sdnn,
+hrv-rmssd, body-battery, hybridcharge, biocharge, health-summary, mood,
+skin-temp, stress-minute, respiratory-rate, blood-pressure), sport-load, vo2,
+weight, manual-data, second-heart-rate, spo2-windows, workouts and workout.
+The auth paths are covered too: in `-redirect-sink` mode the mock serves
+the web login (the default) and the Android login (`--android-unsafe`), and
+counts their hits at `GET /_mock/zepp-auth-hits`, so `zepp login`,
+`zepp token` and `zepp status` run against it.
+
 Use a second config in the same loopback environment to verify the default
 web path (`--web` is a deprecated alias for the same requests).
 

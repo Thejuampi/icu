@@ -73,6 +73,11 @@ func TestDecodeSleepHRV(t *testing.T) {
 	if len(got) != 2 || got[0].Value != 38 || got[0].Timestamp != 1793332800000 || got[1].Value != 44 || got[1].Timestamp != 1793692800000 {
 		t.Fatalf("got %+v", got)
 	}
+	for _, ev := range got {
+		if ev.Metric != "sleephrv" || ev.Source != zeppHRVSourceSleep {
+			t.Fatalf("sleepHRV event must be stamped sleephrv/readiness.sleepHRV, got %+v", ev)
+		}
+	}
 }
 
 func TestBuildZeppWellnessDaysRealShapeDayMapping(t *testing.T) {

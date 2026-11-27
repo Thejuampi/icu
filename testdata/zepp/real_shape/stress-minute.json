@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "userId": "[redacted]",
+      "eventType": "Charge",
+      "subType": "stress_data",
+      "timestamp": 1894579200000,
+      "value": {
+        "startTime": 1894597200000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "stressInfo": "[redacted]",
+            "minuteOfDay": 480
+          },
+          {
+            "s": 0,
+            "e": 86399999,
+            "u": 7,
+            "stressInfo": "[redacted]",
+            "minuteOfDay": 540
+          }
+        ]
+      }
+    }
+  ]
+}

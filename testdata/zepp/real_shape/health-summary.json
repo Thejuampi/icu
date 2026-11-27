@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "userId": "[redacted]",
+      "eventType": "DailyHealth",
+      "subType": "summary",
+      "timestamp": 1894579200000,
+      "value": {
+        "startTime": 1894597200000,
+        "deviceId": "[redacted]",
+        "deviceSN": "[redacted]",
+        "deviceSource": "[redacted]",
+        "deviceType": "[redacted]",
+        "timeZone": "[redacted]",
+        "samples": [
+          {
+            "s": 0,
+            "u": 7,
+            "dateString": "2030-01-01",
+            "totalSteps": 1234,
+            "totalCalories": 321,
+            "totalBurningDuration": 30,
+            "stepGoal": 5000,
+            "calorieGoal": 500,
+            "burningDurationGoal": 45,
+            "hyroxCount": 0
+          }
+        ]
+      }
+    }
+  ]
+}
