@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1193,5 +1194,24 @@ func TestRunZeppTokenPrintsTokensWithoutSaving(t *testing.T) {
 	t.Setenv("ZEPP_LOGIN_URL", tokensSrv.URL+"/missing")
 	if _, err := captureStdout(t, func(stdout io.Writer) error { return runZeppToken(stdout, input, true) }); err == nil {
 		t.Fatal("failed login accepted")
+	}
+}
+
+func TestZeppManualDataAndWorkoutRejectEmptyFlags(t *testing.T) {
+	withZeppTestEnv(t)
+
+	registry := NewCommandRegistry()
+	registerZeppCommands(registry)
+
+	manual, _ := registry.Lookup("zepp", "manual-data")
+	err := manual.Run(nil, map[string]string{"type": "", "oldest": "2026-06-01", "newest": "2026-06-01"}, nil, io.Discard, io.Discard)
+	if !errors.Is(err, errMissingRequired) || !strings.Contains(err.Error(), "--type") {
+		t.Fatalf("empty --type err = %v", err)
+	}
+
+	workout, _ := registry.Lookup("zepp", "workout")
+	err = workout.Run([]string{"1717200000"}, map[string]string{"source": "   "}, nil, io.Discard, io.Discard)
+	if !errors.Is(err, errMissingRequired) || !strings.Contains(err.Error(), "--source") {
+		t.Fatalf("empty --source err = %v", err)
 	}
 }

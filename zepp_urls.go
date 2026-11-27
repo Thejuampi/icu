@@ -93,12 +93,8 @@ func V2EventsURL(base string, preset V2EventPreset, oldest, newest string) (stri
 // The earlier `from`/`to` epoch-millisecond form got HTTP 500 from the real
 // backend.
 func WatchSportStatisticsURL(base, userID, statType, oldest, newest string) (string, error) {
-	if _, err := parseDateToMillis(oldest); err != nil {
-		return "", fmt.Errorf("parse oldest date: %w", err)
-	}
-
-	if _, err := parseDateToMillis(newest); err != nil {
-		return "", fmt.Errorf("parse newest date: %w", err)
+	if _, err := zeppInclusiveDays(oldest, newest); err != nil {
+		return "", err
 	}
 
 	query := url.Values{

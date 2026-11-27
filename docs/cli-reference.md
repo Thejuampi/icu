@@ -828,8 +828,9 @@ the raw components.
   Invocation: `icu zepp manual-data [--type TYPE] --oldest YYYY-MM-DD --newest YYYY-MM-DD`
   Notes: Manually entered wellness records from `/v1/user/manualData.json`
   on the regional data host. The endpoint takes `userid` and a record
-  `type` (default `sleep`), not a date range, so the CLI filters the
-  records by date (form from zepp-health-cli). The earlier `from`/`to` form
+  `type` (default `sleep` when `--type` is omitted; an empty `--type` is an
+  error), not a date range, so the CLI filters the records by date (form
+  from zepp-health-cli). The earlier `from`/`to` form
   got a 400. The shape is unverified; a rejected request names the series
   and the likely cause.
   Example: `icu zepp manual-data --oldest 2026-06-01 --newest 2026-06-07`
@@ -910,7 +911,7 @@ the raw components.
   Notes: Calls `/v1/sport/run/detail.json` for every sport (other segments
   404) with `trackid`, `userid` and the workout's own `source` from the
   history summary. Without `--source` the CLI looks the source up in
-  `/v1/sport/run/history.json`. Form from amazfit-mcp and the Mi Fit and
+  `/v1/sport/run/history.json`. An empty `--source` is an error. Form from amazfit-mcp and the Mi Fit and
   Zepp workout exporter; the earlier per-sport path with a made-up
   `source` returned an empty detail. An empty detail is reported as an
   error naming the trackid and source. The delta-encoded series shape is

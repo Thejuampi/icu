@@ -116,7 +116,7 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 
 	req, err := http.NewRequest(http.MethodPost, tokensURL, bytes.NewReader(encrypted)) //nolint:noctx // internal auth, context not plumbed
 	if err != nil {
-		return "", "", fmt.Errorf("create request: %w", err)
+		return "", "", wrapZeppTransport("create request", tokensURL, email, err)
 	}
 
 	req.Header.Set("App_name", "com.huami.midong")
@@ -138,7 +138,7 @@ func getAccessTokenWithURL(tokensURL, email, password string) (string, string, e
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("do request: %w", err)
+		return "", "", wrapZeppTransport("do request", tokensURL, email, err)
 	}
 	defer resp.Body.Close()
 
@@ -193,7 +193,7 @@ func performLoginWithURL(loginURL, accessToken, countryCode, deviceID string) (*
 
 	req, err := http.NewRequest(http.MethodPost, loginURL, strings.NewReader(payload.Encode())) //nolint:noctx // internal auth, context not plumbed
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, wrapZeppTransport("create request", loginURL, "", err)
 	}
 
 	req.Header.Set("App_name", webZeppAppName)
@@ -211,7 +211,7 @@ func performLoginWithURL(loginURL, accessToken, countryCode, deviceID string) (*
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, wrapZeppTransport("do request", loginURL, "", err)
 	}
 	defer resp.Body.Close()
 

@@ -1571,6 +1571,15 @@ func TestWatchSportStatisticsURLRejectsInvalidDate(t *testing.T) {
 	}
 }
 
+func TestWatchSportStatisticsURLRejectsInvertedRange(t *testing.T) {
+	t.Parallel()
+
+	_, err := icu.WatchSportStatisticsURL("https://api-mifit.huami.com", "u1", "SPORT_LOAD", "2026-06-07", "2026-06-01")
+	if !errors.Is(err, icu.ErrZeppDateRange) {
+		t.Fatalf("err = %v, want ErrZeppDateRange", err)
+	}
+}
+
 func TestUserHeartRateURLBuildsCorrectPath(t *testing.T) {
 	t.Parallel()
 
