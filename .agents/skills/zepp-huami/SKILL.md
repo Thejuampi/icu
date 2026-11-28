@@ -96,6 +96,8 @@ For records without verified capture timing, the existing export anchors the min
 
 To reinterpret a slot or discard a sample during a clock change, first verify the encoding with a relevant capture or an authoritative endpoint contract. Synthetic fixtures can verify the CLI's behavior. Treat the source encoding as unverified until there is evidence from the source.
 
+The same rule applies to every historical Zepp export (sleep stages, HRV, app source, app/fileInfo, workouts, and any other historical series), not only heart rate. A flag or default that reinterprets or discards samples requires capture evidence or an authoritative endpoint contract before anything is added; when the source cannot establish the encoding, keep the stable default and drop the flag entirely — do not ship it as an opt-in. Synthetic fixtures can verify the CLI's behavior, never the source's semantics. Changing the meaning of an existing historical export is an explicit user decision, not a default.
+
 ### 6. Sleep Stage Minutes
 
 Sleep `start`/`stop` in stage arrays are **minutes since midnight**, not epoch. Add date context from the parent day.

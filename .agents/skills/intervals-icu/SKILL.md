@@ -21,6 +21,7 @@ Use this skill when the task is about reading, changing, importing, exporting, o
 - Prefer narrow reads with date ranges, `--fields`, and resource-specific filters.
 - Never print, store, or invent API keys. Use `icu config diagnose` for safe credential checks.
 - For destructive or broad writes, confirm intent unless the user already gave explicit instructions.
+- Commits, pushes to feature branches, and PRs are safe territory — nothing breaks. When a history gets too long, squash it (not stash). PRs are declined or reviewed: surface the state and the recommendation, and let the user decide whether to review or decline; never merge or close a PR on your own recommendation.
 - After every write (`events create/update/delete/revert`, `plan accept`, `rebalance accept`, `sports update`, `wellness update`, `activity update`, ...), re-read what you wrote (`icu events get <id>`, `icu events list --oldest D --newest D`, `icu sports get TYPE`, ...) and verify type, date, name, description line breaks, `moving_time` and `icu_training_load` match what you intended. Intervals.icu may recalculate or normalize fields. Report any mismatch; do not assume a write succeeded as sent.
 - Put multi-line descriptions in a file and pass `--desc-file PATH`. The CLI rejects literal `\n`, `\r`, `\t` sequences in descriptions. For non-cycling workouts (`WeightTraining`, `Run`, ...) set `--type` and give `--moving-time`/`--training-load`; `--calculate-load` is FTP-based and cycling-only.
 
