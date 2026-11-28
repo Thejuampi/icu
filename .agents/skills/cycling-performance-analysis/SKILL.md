@@ -1,7 +1,7 @@
 ---
 name: cycling-performance-analysis
 description: Use when coaching from the icu CLI — completed rides from original FIT and full samples, weekly reports, 4-week plans, daily "should I train" decisions, calendar NOTE review, post-illness/surgery/injury or off-bike weeks, load pressure, recovery, CTL/ATL/TSB, HRV, wellness, adaptation, planned events, or a missing analysis metric.
-compatibility: opencode, claude
+compatibility: opencode
 metadata:
   cli: icu
   domain: cycling-training
