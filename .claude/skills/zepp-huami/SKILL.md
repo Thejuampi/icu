@@ -96,6 +96,8 @@ For records without verified capture timing, the existing export anchors the min
 
 To reinterpret a slot or discard a sample during a clock change, first verify the encoding with a relevant capture or an authoritative endpoint contract. Synthetic fixtures can verify the CLI's behavior. Treat the source encoding as unverified until there is evidence from the source.
 
+Apply that evidence requirement to every historical Zepp export. Before adding a flag or changing a default, check the current export against the task and identify which requirement remains unmet. If capture semantics remain uncertain, keep the documented compatible behavior while gathering the evidence needed for the requested change.
+
 ### 6. Sleep Stage Minutes
 
 Sleep `start`/`stop` in stage arrays are **minutes since midnight**, not epoch. Add date context from the parent day.
