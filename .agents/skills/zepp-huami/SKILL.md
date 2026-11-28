@@ -90,7 +90,11 @@ HR per-minute values 254 and 255 are sentinels ("no read" / "not required"). Map
 
 ### 5. Heart Rate Timestamps
 
-`decodeBandDataHeartRate` must receive the date string to compute per-minute timestamps (midnight + index * 60s). Without a date, timestamps are 0.
+The inspected `band_data` capture provides a calendar day in `date_time` and one minute slot per `data_hr` byte. It does not establish the recording timezone, the offset for an individual slot, or how slots are encoded when the clocks change. The `sync` and `st`/`ed` timestamps alone are insufficient to place the heart-rate samples on a timeline.
+
+For records without verified capture timing, the existing export anchors the minute index at UTC midnight for compatibility. With the same input and options, timestamps must stay stable across host timezones, athlete profile changes, and profile service failures. Use capture timing when the source establishes the zone or offset for the relevant samples. Evaluate any change to the meaning of an existing export explicitly.
+
+To reinterpret a slot or discard a sample during a clock change, first verify the encoding with a relevant capture or an authoritative endpoint contract. Synthetic fixtures can verify the CLI's behavior. Treat the source encoding as unverified until there is evidence from the source.
 
 ### 6. Sleep Stage Minutes
 

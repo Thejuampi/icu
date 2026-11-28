@@ -100,9 +100,15 @@ func TestZeppMockServesTheFullReadSurface(t *testing.T) {
 	ms := "&from=1786320000000&to=1786492799000"
 
 	presets := [][2]string{
-		{"hrv_sdnn", "real_data"}, {"Charge", "real_data"}, {"Charge", "insight_data"},
-		{"Charge", "stress_data"}, {"RespiratoryRate", "real_data"}, {"DailyHealth", "summary"},
-		{"blood_pressure", "real_data"}, {"Emotion", "real_data"}, {"skinTemp", "real_data"},
+		{"hrv_sdnn", "real_data"},
+		{"Charge", "real_data"},
+		{"Charge", "insight_data"},
+		{"Charge", "stress_data"},
+		{"RespiratoryRate", "real_data"},
+		{"DailyHealth", "summary"},
+		{"blood_pressure", "real_data"},
+		{"Emotion", "real_data"},
+		{"skinTemp", "real_data"},
 	}
 	for _, p := range presets {
 		code, body := zeppGet(t, srv.URL+mockZeppEventsPath+"?eventType="+p[0]+"&subType="+p[1]+"&limit=1000"+ms, "tok")
