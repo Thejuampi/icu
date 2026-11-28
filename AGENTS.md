@@ -4,9 +4,9 @@
 
 `icu` is a cross-platform Go CLI for the full [Intervals.icu](https://intervals.icu) REST API. Zero external dependencies beyond the Go standard library.
 
-## OpenCode Skills
+## Skills
 
-Project skills live under `.agents/skills/<name>/SKILL.md`. Keep them there instead of duplicating them under `.opencode/skills`; OpenCode loads `.agents/skills` directly, and duplicate skill names across discovery paths can hide or reject skills.
+Project skills live under `.agents/skills/<name>/SKILL.md` — the single canonical location. The project does not adapt to a harness: harnesses that do not natively discover `.agents/skills/` must adapt to it (e.g. configure their own skill directories to point at it), not the other way around. Do not copy, symlink, or reference skills from harness-specific paths (e.g. `.claude/skills/` or `.opencode/skills/`). OpenCode and Copilot CLI discover `.agents/skills/` directly, and duplicate skill names across discovery paths can hide or reject skills.
 
 Keep `AGENTS.md` focused on project-wide contributor policy: architecture, quality gates, documentation rules, testing, and repository-wide workflow expectations. Put domain-specific operating procedures, CLI playbooks, coaching heuristics, and lessons learned under the relevant `.agents/skills/<name>/SKILL.md` file instead. If a lesson applies only when a specific skill is active, it belongs in that skill, not in `AGENTS.md`.
 
