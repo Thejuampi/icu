@@ -1447,6 +1447,13 @@ func decodeSleep(raw json.RawMessage, date string) (*BandDataSleep, error) {
 // in place (so the index stays the minute of the day) with BPM 0 and the real
 // minute timestamp. dateStr is the ISO date (e.g. "2026-06-03") used to
 // compute the timestamps (UTC midnight + minute, in milliseconds).
+//
+// The band_data capture carries no zone or offset evidence (only date_time,
+// sync/st/ed epochs and the per-minute byte index), so the instant of minute
+// i cannot be reconstructed from the capture. The timestamps are anchored to
+// UTC midnight of the day and never read the current profile, the system
+// timezone, or the machine: re-exporting the same record yields the same
+// timestamps regardless of where the CLI runs or which profile is configured.
 func decodeBandDataHeartRate(encoded, dateStr string) ([]BandDataHeartPoint, error) {
 	if encoded == "" {
 		return nil, errors.New("empty data_hr")

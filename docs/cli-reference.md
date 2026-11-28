@@ -698,7 +698,17 @@ the raw components.
   Notes: Calls `/v1/data/band_data.json` and decodes the binary `data_hr`
   field (1440 bytes per day, one unsigned byte per minute); sentinel
   values 254 (no read) and 255 (not required) are mapped to bpm 0 and keep
-  their minute timestamp (UTC midnight of the day + minute). Source `app`
+  their minute timestamp. Timestamps are anchored to UTC midnight of the
+  day plus the minute offset — the band_data capture carries no zone or
+  offset evidence (only `date_time`, `sync`/`st`/`ed` epochs and the
+  per-minute byte index), so the instant of minute i cannot be
+  reconstructed from the capture. The default never reads the current
+  profile, the system timezone or the machine, so re-exporting the same
+  record yields the same timestamps regardless of where the CLI runs or
+  which profile is configured. Any change to the meaning of a past record
+  (e.g. reinterpreting the minutes as local wall-clock time) requires
+  explicit evidence of the capture's encoding and a deliberate decision.
+  Source `app`
   calls `/users/{id}/heartRate` on the regional data host and returns one
   flat item per 7-day window (`type`, `generatedTime` in epoch seconds,
   `deviceSource`, `timeZone`, `heartRateData` base64, `deviceId`) — not

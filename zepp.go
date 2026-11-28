@@ -44,8 +44,11 @@ type ZeppUserInfo struct {
 // BandDataDay is one day of data from /v1/data/band_data.json.
 // SummaryRaw is the base64-packed JSON returned by the API; Summary is the
 // decoded structure (steps, sleep with stages, goal, serial, last-sync).
-// DataHRRaw is the base64-packed binary blob with one unsigned byte per minute
-// (1440 bytes/day); HeartRate is the decoded per-minute series.
+// DataHRRaw is the base64-packed binary blob with one unsigned byte per
+// minute (1440 bytes/day); HeartRate is the decoded per-minute series. The
+// capture carries no zone or offset evidence, so the timestamps are anchored
+// to UTC midnight of the day and never to the current profile, the system
+// timezone, or the machine.
 type BandDataDay struct {
 	Date       string                 `json:"date"`
 	UID        string                 `json:"uid,omitempty"`
@@ -782,8 +785,7 @@ func DecodeHeartRateEndpoint(raw []byte) ([]ZeppHeartRateReading, error) {
 
 // zeppItemLocation returns the IANA location an item names in its
 // `timeZone` field, or UTC when the field is empty or unknown. The date of
-// an item follows its own zone, like the band heart-rate dates follow the
-// local or --tz zone.
+// an item follows its own zone.
 func zeppItemLocation(name string) *time.Location {
 	if name == "" {
 		return time.UTC
